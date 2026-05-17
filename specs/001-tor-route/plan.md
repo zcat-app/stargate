@@ -33,7 +33,7 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 
 - **Data plane**: Go (toolchain pinned via `go.mod` `toolchain` directive — concrete patch fixed during scaffold task; v1.23.x line per `NEEDS CLARIFICATION` resolved in research.md §1).
 - **Control plane**: JDK 25 LTS + Quarkus 3.33 LTS (constitution Tech Stack pin). This feature builds the *JVM-mode* artefact; native-image is not load-bearing for this slice (spec Assumption "Reproducibility holds for the Go data plane in this feature").
-- **Extension**: WebExtensions MV2, vanilla JavaScript (ES2022), no build step (arch §12.3, Principle VI — avoid npm supply chain on a privacy-critical component).
+- **Extension**: WebExtensions MV2, vanilla JavaScript (ES2022), no build step (arch §12.3, Principle VI — avoid npm supply chain on a privacy-critical component). **Node 20 LTS** is pinned as a *CI-only* dependency for extension JS unit tests (`node:test` runner, see research.md §10); no Node deps ship to the user.
 - **Sidecar**: Tor (from `deb.torproject.org`) on pinned `debian:12-slim` base, built by Stargate's Dockerfile at `sidecars/tor/`.
 
 **Primary Dependencies**:
@@ -55,6 +55,7 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 - **Control plane**: JUnit 5 via Quarkus Test framework; gRPC server tested against an in-process client.
 - **Contract tests**: at `tests/contract/tor/` (Tor SOCKS surface), `tests/contract/error-template/` (privacy-safe template invariants), and `tests/contract/torrc/` (rendered config invariants). Harness language: **Go** (research.md §5) so the suite runs in the same toolchain as the data plane and can spin sidecars via the docker SDK.
 - **Reproducibility**: `tests/reproducibility/` builds the Go binary twice in clean containers and `cmp`s the output (arch §12.1).
+- **Extension JS units**: Node 20 LTS + built-in `node:test` runner; MV2 background scripts are loaded into the test via `vm.runInNewContext()` with a synthesized `browser` global, so production code stays in idiomatic browser-script style (no UMD wrapper, no test-only export branch). Used in this feature for the FR-004 hardening-audit test (research.md §10).
 - **Browser-level**: Mullvad Browser integration tests are run manually for the SC-001 walkthrough in this feature; automation is deferred (no headless privacy-safe Mullvad Browser harness exists in v1).
 
 **Target Platform**: Linux x86_64 (the local Compose profile). Mullvad Browser on Linux desktop for the user-facing walkthrough. `arm64` data-plane builds are produced by CI for distribution but not exercised by this feature's integration harness.
@@ -212,6 +213,8 @@ stargate/
 │   ├── contract/tor/                 # FR-016                  (new)
 │   ├── contract/error-template/      # arch §10.3              (new)
 │   ├── contract/torrc/               # FR-011 byte-match       (new)
+│   ├── contract/socks5/              # SOCKS5+CONNECT inbound  (new)
+│   ├── contract/control-grpc/        # inter-plane RPC surface (new)
 │   ├── integration/onion_load_test.go        # US1             (new)
 │   ├── integration/stream_isolation_test.go  # US2             (new)
 │   ├── integration/error_template_test.go    # US3             (new)

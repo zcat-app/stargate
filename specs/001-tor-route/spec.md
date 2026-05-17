@@ -374,11 +374,14 @@ tests-first suite (Principle VII) before implementation lands.
   its last-known token list if the control plane is unreachable
   (Principle II; architecture spec §5.5).
 - **FR-014**: The control plane MUST emit a `SidecarEvent` with kind
-  `HEALTHY` / `UNHEALTHY` / `STARTED` / `STOPPED` for the Tor sidecar
-  (architecture spec §5.2 events). The `detail` field MUST be a
-  fixed-vocabulary token from the enum, not free text from Tor logs.
-  The data plane consumes these events to decide whether to return
-  `ROUTE_DOWN` on requests.
+  `STARTED` / `HEALTHY` / `UNHEALTHY` / `STOPPED` / `CRASHED` /
+  `RESTARTED` for the Tor sidecar (architecture spec §5.2 events). The
+  `detail` field MUST be a fixed-vocabulary token from the enum, not
+  free text from Tor logs. The data plane consumes these events to
+  decide whether to return `ROUTE_DOWN` on requests: `UNHEALTHY`,
+  `STOPPED`, and `CRASHED` each transition `routeEnableMask[TOR]` to
+  DISABLED (data-model.md §2); `RESTARTED` is informational and arms
+  the data plane to re-enable on the next `HEALTHY` event.
 
 #### Build and contract testing
 

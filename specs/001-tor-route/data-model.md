@@ -258,6 +258,26 @@ Validation in the options page:
   `storage.local` and not a credential-grade keyring (research.md §6 —
   this is always the case in v1, so the warning always shows).
 
+### 5.1 Canonical `storage.local` warning text
+
+The warning text rendered in `extension/options/options.html` MUST be
+exactly the following string (locked here as the single source of
+truth; T056's inline test asserts byte-for-byte equality):
+
+> Your bearer token will be saved to disk in this extension's
+> storage.local, inside your browser profile directory. Any local
+> process with read access to that directory can read it. Firefox ESR
+> offers no credential-grade alternative for extensions.
+
+Devs reading this section: the rationale for accepting `storage.local`
+as the storage path despite the residual filesystem-read risk is in
+research.md §6 and aligns with THREAT-MODEL §3.1's local-execution
+assumption. That justification is **not** carried into the user-facing
+string — users see a clean factual notice, not a doc cross-reference.
+
+Drift between `options.html`'s rendered text and the string above is a
+contract violation; the test gates against silent edits to either side.
+
 ---
 
 ## 6. Compose / volume identities

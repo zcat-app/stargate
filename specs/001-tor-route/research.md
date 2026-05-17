@@ -345,6 +345,71 @@ the 2 bytes); it is meaningful for the CONNECT path.
 
 ---
 
+## 10. JS test toolchain pin (added by /speckit-analyze C1 remediation)
+
+**Decision**: pin **Node 20 LTS** as a CI-only dependency for extension
+JavaScript unit tests. Use Node's built-in `node:test` runner (no third-
+party JS libraries) with `node:assert` for assertions. Browser-style
+global scripts (MV2 `background.scripts` entries) are loaded into the
+test by `vm.runInNewContext()` with a synthesized `browser` global —
+no source-code wrapper (UMD, conditional `module.exports`, etc.) is
+added to the extension to make it testable.
+
+**Rationale**:
+
+- C1 remediation requires a JS unit test for `extension/background/
+  hardening.js` (FR-004; Principle VII). Some JS-side test runner is
+  unavoidable for any unit-test strategy; the choice is which one.
+- `node:test` is stable in Node 20 LTS and 22 LTS. Built-in API for
+  `describe`/`it`, structured output, optional JUnit XML reporter for
+  CI. Zero npm install — no `package.json` required for the test
+  files when used with `vm` loading.
+- The "no third-party JS deps" constraint in plan.md §"Technical
+  Context" is about the **extension's runtime code** (the bytes that
+  ship to users), not about CI tooling. A CI-only Node binary is the
+  same category of dep as Go, Java, or Docker — all already pinned
+  for CI. Principle VI's supply-chain motivation (avoid npm on a
+  privacy-critical component) is not violated.
+- MV2 background scripts are loaded as browser globals, not ES
+  modules. `vm.runInNewContext()` with a synthesized `browser` global
+  keeps `hardening.js` (and any sibling background script added
+  later) authored in idiomatic browser style — no UMD wrapper, no
+  test-only export branch. The vm approach contains the
+  ESM/CJS/global mismatch in the test file, not in the production
+  code.
+
+**Alternatives considered**:
+
+- Hand-rolled assertion harness (`function it(name, fn) { ... }` over
+  `node:assert`): rejected. Same Node-as-CI-dep, fewer features (no
+  JUnit XML for CI, no parallel test execution if needed later), and
+  a maintenance surface that `node:test` provides for free.
+- `web-ext` (Mozilla's official extension tooling): rejected. Test
+  surface is anaemic; pulls a large npm tree; arguably violates the
+  "no third-party JS deps" principle even for CI use.
+- Karma / Mocha / Jest / Vitest: rejected. All require npm installs
+  and dependency trees; `node:test` reaches the same destination with
+  zero install. No JSDOM-style browser-env simulation is needed
+  because the test mocks the `browser` global directly.
+- Hand-driven verification only (markdown checklist like T034a /
+  T077): rejected. FR-004 is privacy-critical (Principle III
+  hardening invariants); a release-cadence check is too weak a
+  regression gate for code that gates whether routing happens at
+  all.
+- No JS-side tests; document Principle VII waiver in
+  SECURITY-DECISIONS.md: rejected. The hardening audit is the
+  Principle III enforcement point for the extension; a waiver would
+  set a precedent that extension privacy code can ship without
+  tests.
+
+**Follow-up**: when a second extension JS test task lands (e.g.,
+router.js block-flag verification, currently surfaced as a separate
+gap from C1 in the analyze report), reuse the `vm.runInNewContext` +
+`browser` mock pattern. If a third sibling materializes, consider
+extracting the mock to a shared `extension/test-mocks/browser.js`.
+
+---
+
 ## Outstanding open questions (none blocking)
 
 All architectural open questions enumerated in arch §15 that affect this
