@@ -1,0 +1,1 @@
+Immutable per-run audit docs from the adversarial reviewers (Constitution Principle VIII). One file per run: `redteam-YYYYMMDD-<short-commit>.md` or `perf-YYYYMMDD-<short-commit>.md`. Agents do not read prior files here — fresh eyes per run. Actionable Blocker/Major findings additionally land in `../redteam/findings/open/` as the mutable worklist for fixer sessions.

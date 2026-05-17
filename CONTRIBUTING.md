@@ -1,0 +1,405 @@
+# Contributing to Stargate
+
+## Welcome
+
+Stargate is an open-source, multi-protocol privacy-routing proxy. A browser
+extension picks the route per request (Tor, I2P, Nym mixnet, Direct); the
+proxy forwards bytes to the appropriate sidecar. It is designed to be
+family-shareable, Docker-deployed, and honest about what it does and does
+not protect against.
+
+We welcome contributions — code, specs, threat-model entries, documentation,
+review. Privacy discipline is non-negotiable: the principles in
+`.specify/memory/constitution.md` are binding, not aspirational. The process
+of getting work merged, on the other hand, is meant to be collaborative and
+unintimidating. This document explains how those two things fit together.
+
+## License & Developer Certificate of Origin
+
+Stargate is licensed under **Apache License 2.0** (see `LICENSE`). New
+source files carry the standard Apache 2.0 header.
+
+There is **no CLA**. Contributions are accepted under the
+[Developer Certificate of Origin](https://developercertificate.org/) (DCO).
+Sign off on every commit:
+
+```bash
+git commit -s -m "feat(007): add stream-isolation contract test"
+```
+
+`-s` appends a `Signed-off-by: Your Name <your@email>` line to the commit
+message. By doing so you certify the DCO terms — namely that you have the
+right to submit the contribution under the project's license. Commits
+without a sign-off will be asked to amend or rebase before merge.
+
+## Code of Conduct
+
+This project follows the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
+See `CODE_OF_CONDUCT.md` for the full text and the contact channel for
+reporting incidents.
+
+> **TODO**: author `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1) with the
+> maintainer's contact address.
+
+In short: be kind, assume good faith, accept review, give review with the
+same respect you want to receive. Privacy work attracts strong opinions —
+disagree about the technical substance, not the people holding it.
+
+## Reporting security issues
+
+**Do not open a public GitHub issue for security bugs.**
+
+Report privately via GitHub Security Advisories:
+
+> `https://github.com/<org>/stargate/security/advisories/new`
+
+The maintainer aims to acknowledge new advisories within **7 days**. A fix
+timeline is agreed per finding. If you have not received an acknowledgement
+within that window, ping the maintainer through any public channel
+*without* disclosing the bug — for example, "I filed a security advisory
+on YYYY-MM-DD and would appreciate a status update."
+
+Coordinated disclosure is the default. Once a fix is released, the
+advisory is published with credit to the reporter (unless they ask
+otherwise). If you discover that a privacy property documented in
+`THREAT-MODEL.md` does not hold, that is a security issue — please report
+it through the same channel.
+
+## Development environment
+
+### Prerequisites
+
+- **Go** — version pinned in `data-plane/go.mod` via the `toolchain`
+  directive. `[fill in once architecture spec lands: concrete Go version]`.
+- **JDK 25 LTS** — pinned in `control-plane/pom.xml` via
+  `<maven.compiler.release>25`. Any JDK 25 distribution (Temurin,
+  Liberica, Zulu, Corretto) works for local development; the release
+  artefact pins one specific distribution for byte-reproducible builds.
+- **Quarkus 3.33 LTS** — pinned in `control-plane/pom.xml` via the
+  `<quarkus.platform.version>` property and managed by the Quarkus
+  platform BOM. Do not bump this casually; LTS-to-LTS upgrades follow
+  the same documented process as sidecar image bumps (constitution
+  Principle IV).
+- **Maven** — version that ships with the JDK or via a wrapper
+  (`mvnw`). `[fill in once architecture spec lands: pinned Maven version]`.
+- **Docker** and **Docker Compose v2** — required for any integration or
+  end-to-end work. The compose stack lives under `compose/`.
+- **Mullvad Browser** — the first-class target browser. Install from
+  <https://mullvad.net/en/download/browser>. **LibreWolf** is the
+  tested-secondary target. Chromium-family browsers are explicitly
+  unsupported (constitution: Tech Stack).
+- **GraalVM / Mandrel** — required only for building Quarkus native-image
+  artefacts. **Mandrel 25** (the JDK 25 native-image builder) is pinned by
+  digest in the parent POM; for local native builds, match that digest.
+  `[fill in once architecture spec lands: Mandrel 25 builder image digest,
+  pinned at first release tag once Quarkus 3.33 LTS / JDK 25 compatibility
+  is verified — arch spec §15 open question 10]`.
+
+### One-shot setup
+
+A bootstrap script is planned at `scripts/dev-setup.sh` (or `make setup`)
+that verifies tool versions and warms the build caches.
+`[fill in once architecture spec lands: confirmed entry-point name and
+flags]`. Until that script exists, the manual sequence is:
+
+```bash
+# 1. clone
+git clone https://github.com/<org>/stargate.git
+cd stargate
+
+# 2. data plane
+cd data-plane && go mod download && go build ./... && cd ..
+
+# 3. control plane
+cd control-plane && ./mvnw -B verify -DskipTests && cd ..
+
+# 4. bring up a local stack for manual smoke testing
+./scripts/stargate init --profile local
+```
+
+The `scripts/stargate` entry-point is described in
+`specs/000-architecture/spec.md` §9; subcommands are
+`init | enroll | export | import | wipe | status | update`.
+
+### Editor configuration
+
+- An `.editorconfig` file ships at the repo root and is honoured by most
+  editors out of the box.
+  `[fill in once architecture spec lands: confirm .editorconfig is checked
+  in]`.
+- **Go**: enable `gofmt`/`goimports` on save. `staticcheck` and
+  `golangci-lint` as your linter front-end.
+- **Java**: use the Quarkus formatter configuration (Spotless or
+  equivalent) — `./mvnw spotless:apply` if configured. IntelliJ users can
+  import the project's code style from `control-plane/.idea/` if provided.
+- **JavaScript/TypeScript** (extension): ESLint with the repo's
+  `extension/.eslintrc` config. Prettier on save.
+- **Markdown**: soft-wrap at 100 columns, hard-wrap at 120. Most editors
+  with the `.editorconfig` plugin handle this.
+
+## Running tests locally
+
+Tests are layered. Run the layer that matches the area you touched.
+
+### Go data plane — unit tests
+
+```bash
+cd data-plane
+go test ./...
+# verbose, single package:
+go test -v -count=1 ./internal/forward/...
+```
+
+### Go data plane — contract tests (per sidecar)
+
+Contract tests live at `tests/contract/<sidecar>/` and assert the narrow
+interface Stargate depends on against the actual sidecar image. They are
+slow (they pull images and spin up containers) but they are the most
+important tests in the repository.
+
+```bash
+# From the repo root:
+go test ./tests/contract/tor/...
+go test ./tests/contract/i2pd/...
+go test ./tests/contract/nym/...
+go test ./tests/contract/wireguard/...
+go test ./tests/contract/error-template/...
+```
+
+Set `STARGATE_CONTRACT_KEEP_CONTAINERS=1` to leave containers running after
+a failure so you can inspect logs.
+`[fill in once architecture spec lands: confirm env-var name in test
+harness]`.
+
+### Quarkus control plane
+
+```bash
+cd control-plane
+
+# JVM tests (fast loop):
+./mvnw -B test
+
+# Including @QuarkusIntegrationTest against a packaged JAR:
+./mvnw -B verify
+
+# Native-image tests (slow; the native build itself takes minutes):
+./mvnw -B verify -Pnative
+```
+
+### Browser extension
+
+```bash
+cd extension
+# Static checks first:
+npx eslint .
+# Unit tests (jest or vitest — confirm in extension/package.json):
+npm test
+```
+
+`[fill in once architecture spec lands: confirmed test runner for the
+extension; the architecture spec leaves the build step out of v1 to avoid
+npm supply-chain risk, so a no-npm test path may be preferred]`.
+
+### Reproducibility tests
+
+```bash
+go test ./tests/reproducibility/...
+```
+
+These build the data-plane binary, the control-plane JAR, and the
+extension zip twice in clean containers and `cmp` the outputs. They must
+pass on every release tag.
+
+## Spec-driven workflow
+
+**No non-trivial change merges without a spec.** Bug fixes do not require
+a full spec but **require a regression test** that fails before the fix
+and passes after.
+
+The flow uses spec-kit slash commands inside an AI-assisted editor (or the
+equivalent manual sequence — these are just templates and conventions):
+
+1. `/speckit-specify` — produces `specs/NNN-feature/spec.md`.
+2. `/speckit-clarify` — optional, surfaces ambiguities before planning.
+3. `/speckit-plan` — produces `specs/NNN-feature/plan.md`. The plan
+   **must include an explicit Constitution Check** verifying that no
+   principle is violated. A plan that cannot pass Constitution Check is
+   either revised or escalated to a constitution amendment — never silently
+   merged.
+4. `/speckit-tasks` — produces an actionable, dependency-ordered task list.
+5. `/speckit-implement` — drives implementation against the tasks.
+
+The Constitution Check gate is **binding**. If a reviewer flags a
+principle violation that the plan glossed over, the PR is held until the
+plan is revised or the constitution is amended through the documented
+governance process (see `.specify/memory/constitution.md` § Governance).
+
+> **What counts as "non-trivial"?** A typo fix, a dependency-version bump
+> covered by automation, a doc-only correction, or a comment polish does
+> not need a spec. Anything that changes behaviour, adds a code path,
+> alters a public contract, or touches a privacy-critical surface (DNS,
+> routing, headers, auth, sidecar contracts) does.
+
+## AI-assisted workflow
+
+This project is developed in collaboration with AI coding assistants —
+Claude Code, in particular. The conventions below apply whether you are
+the human pair or the AI agent is doing the typing.
+
+- **The constitution is the authoritative context.** Point your assistant
+  at `.specify/memory/constitution.md` before any non-trivial task. The
+  `CLAUDE.md` file at the repo root is a short hand-off; the constitution
+  is the source of truth.
+- **Tests first for privacy-critical paths.** Ask the assistant to write
+  failing tests derived from the spec (`specs/NNN-feature/spec.md`)
+  *before* it writes implementation. Then drive the implementation to
+  green. Do not accept code without tests. This is Constitution
+  Principle VII; it has no AI exception.
+- **AI-generated code carries the same review burden.** A `stargate-redteam`
+  pass is required on every feature spec and every release, regardless of
+  who authored the code. Principle VIII has no AI exception either.
+- **Suggested model usage.** Long-context planning, spec authoring, threat
+  modelling, and adversarial review benefit from an Opus-class model.
+  Routine implementation, refactoring, and test-writing once the spec is
+  stable are well-served by a Sonnet-class model.
+- **Do not paste secrets into prompts.** No bearer tokens, no admin
+  enrollment codes, no private keys, no production database dumps.
+- **Cite the principle when constraining the assistant.** "Principle I
+  says the data plane must not parse payloads — rewrite without the
+  header inspection" is a precise instruction; "make it more private" is
+  not.
+
+## PR norms
+
+- **One feature or bug per PR.** Link to the feature spec
+  (`specs/NNN-feature/spec.md`) in the PR description, or to the issue
+  for bug-only fixes.
+- **PR title format** (conventional-commits flavour, lightweight):
+  - `feat(NNN): short description` — new behaviour from feature spec NNN
+  - `fix: short description` — bug fix (link the regression test)
+  - `docs: short description` — docs only
+  - `chore: short description` — tooling, deps, repo hygiene
+  - `test: short description` — tests only
+  - `refactor: short description` — no behaviour change
+- **Required checks before merge**:
+  - All relevant contract tests pass.
+  - `stargate-redteam` review has run and either passed clean or its
+    Blocker/Major findings are resolved or accepted (with a rationale
+    entry in `SECURITY-DECISIONS.md`).
+  - Reproducibility tests pass (where touched).
+  - Plan's Constitution Check section is filled in and accurate.
+- **Squash-merge** is the default. The squashed commit message ends with
+  the `Signed-off-by:` line from the original commits, plus
+  `Co-authored-by:` lines for everyone who contributed.
+- **No force-pushes to `main`.** Force-push inside an open PR branch is
+  fine until review starts; once a reviewer is reading, prefer additional
+  commits and let the squash-merge fold them.
+- **Rebase before merge** to keep `main` linear, or use the GitHub
+  "Squash and merge" button — either is acceptable.
+
+## Code style
+
+### Go (data plane)
+
+- `gofmt` + `goimports` clean. CI fails on unformatted code.
+- `go vet ./...` clean.
+- `staticcheck ./...` clean.
+- `gosec ./...` reviewed; non-trivial findings get a comment with
+  rationale or an inline `//nolint:gosec // reason: ...`.
+- **Never `panic` in the request path.** Errors are values; wrap with
+  `fmt.Errorf("forwarding to %s: %w", route, err)` so `errors.Is` /
+  `errors.As` keep working.
+- No `init()` functions for anything beyond `flag` or driver
+  registration — they are invisible at call sites.
+- Goroutines have a documented exit condition. No "fire and forget" in
+  the data plane.
+
+### Java / Quarkus (control plane)
+
+- Formatter: Spotless (or the Quarkus-default formatter) applied via
+  `./mvnw spotless:apply`.
+- Standard Java naming (`UpperCamelCase` types, `lowerCamelCase` methods).
+- **Never use `Object.notify()` / `wait()` / `notifyAll()`.** Use
+  `java.util.concurrent` primitives or, preferably, Mutiny `Uni`/`Multi`.
+- **Never call blocking code on the Quarkus event-loop thread.** Use
+  `@Blocking`, or shift to a worker pool with
+  `uni.runSubscriptionOn(executor)`. The `stargate-perf` agent will
+  flag blocking-on-event-loop as a Major finding.
+- Persistence uses Hibernate Panache; migrations go through Flyway. Do
+  not write raw `Statement` SQL outside migration scripts.
+- Log at `INFO` for admin actions, `DEBUG` for control-plane internals;
+  **never** log per-request data — that would violate Principle III.
+
+### Browser extension (JavaScript / TypeScript)
+
+- **TypeScript preferred** for any new module. Existing plain-JS modules
+  may be migrated opportunistically.
+  `[fill in once architecture spec lands: the architecture spec defers
+  the build-step decision to avoid npm supply-chain risk. Confirm whether
+  TS is compiled at build-time or whether v1 stays pure JS]`.
+- ESLint default config plus the repo's `extension/.eslintrc` overrides.
+- **No `innerHTML` or `dangerouslySetInnerHTML`-style sinks.** Build DOM
+  with `document.createElement` / `textContent`.
+- **No `fetch` (or `XMLHttpRequest`) to anything outside the user's
+  configured proxy.** No telemetry. No update-check pings. No "phone
+  home". Principle III is enforced here in code, not policy.
+- The blocklist is shipped in-package; never fetched at runtime.
+
+### Markdown
+
+- Soft wrap at 100 columns, hard wrap at 120.
+- Use ATX headings (`#`, `##`, `###`).
+- Reference links over inline links when the same URL appears multiple
+  times.
+- Code blocks have a language tag (` ```go `, ` ```bash `, ` ```sql `).
+
+## Documentation expectations
+
+Some changes pull adjacent docs along with them. A PR is not done until
+those edits land too:
+
+- **Threat model.** If a PR changes behaviour referenced in
+  `THREAT-MODEL.md` (per-route protections, per-mode bind safety, leak
+  surface, trusted parties), the threat-model entry updates **in the
+  same PR**. A doc-lag PR is rejected.
+- **Security decisions.** If `stargate-redteam` raises a Blocker or
+  Major finding that the PR accepts rather than fixes, the rationale is
+  appended to `SECURITY-DECISIONS.md` (append-only) in the same PR.
+- **Build diffs.** If a change is expected to alter the reproducibility
+  diff surface (new build flag, new bundled asset, native-image
+  reachability config), document the expected variation in
+  `BUILD-DIFFS.md`.
+- **Architecture.** If a PR shifts module boundaries, port assignments,
+  or the inter-plane contract, update `specs/000-architecture/spec.md`
+  and `ARCHITECTURE.md` accordingly.
+- **Constitution.** If a PR cannot pass Constitution Check without
+  amending a principle, the constitution amendment goes through the
+  governance flow (`.specify/memory/constitution.md` § Governance) —
+  not bundled with the code change.
+
+## Issue triage labels (suggested)
+
+Maintainer applies on triage; contributors can suggest in the PR body.
+
+- **Priority**: `priority/blocker`, `priority/high`, `priority/medium`,
+  `priority/low`.
+- **Area**: `area/data-plane`, `area/control-plane`, `area/extension`,
+  `area/infra`, `area/docs`.
+- **Kind**: `kind/bug`, `kind/feature`, `kind/docs`, `kind/test`,
+  `kind/refactor`, `kind/chore`.
+- **Security**: `security/yes` — flags an issue that should have been
+  filed privately. Public-issue triage will move these to a private
+  advisory and close the public copy.
+- **Process**:
+  - `needs-spec` — issue is actionable but blocked on a spec.
+  - `needs-clarify` — spec exists but has open `NEEDS CLARIFICATION`
+    markers.
+  - `good-first-issue` — well-scoped, documented, with a clear
+    completion criterion. Ideal for new contributors.
+  - `help-wanted` — maintainer welcomes contributions; not necessarily
+    beginner-friendly.
+
+---
+
+If something in this document is wrong, unclear, or out of date, that
+itself is a `docs:` PR worth opening. Thanks for contributing.

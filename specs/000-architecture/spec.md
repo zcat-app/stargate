@@ -6,7 +6,7 @@
 
 **Created**: 2026-05-17
 
-**Derives from**: `.specify/memory/constitution.md` v1.0.0
+**Derives from**: `.specify/memory/constitution.md` v1.1.0
 
 **Supersedes**: nothing (this is the foundational system-shape spec)
 
@@ -633,12 +633,22 @@ X") before the user confirms.
 
 ### 12.2 Control plane (Quarkus)
 
-- JDK pinned in `pom.xml` `<maven.compiler.release>` plus a CI matrix lock.
+- **JDK 25 LTS** pinned in `control-plane/pom.xml` via
+  `<maven.compiler.release>25` plus a CI matrix lock. Concrete JDK
+  distribution (Temurin / Liberica / Zulu / Corretto) is interchangeable
+  for bytecode reproducibility; the CI build pins one for the release
+  artefact.
+- **Quarkus 3.33 LTS** pinned in the parent POM via the
+  `<quarkus.platform.version>` property; managed by the Quarkus platform
+  BOM. Subsequent Quarkus upgrades follow the same digest-promoted flow
+  as sidecar image updates (Principle IV).
 - JVM bytecode reproducibility via `reproducible-build-maven-plugin`
   configured at the parent POM. `mvn -B clean package -DskipTests=false`.
 - Native-image build via `mvn package -Pnative`, with
   `-Dquarkus.native.reproducible-build=true` and a pinned
-  `quay.io/quarkus/ubi-quarkus-mandrel-builder-image` digest.
+  `quay.io/quarkus/ubi-quarkus-mandrel-builder-image` digest for the
+  **Mandrel 25** (JDK 25) builder, matching the Quarkus 3.33 LTS
+  compatibility matrix.
 - Reproducibility tier: **JVM bytecode = byte-reproducible**; **native-image
   = best-effort** with expected variations enumerated in `BUILD-DIFFS.md`
   (Principle VI). CI runs both builds twice and diffs; expected-variation
@@ -694,12 +704,16 @@ The backup tarball contains:
 - `control.db` (SQLite, copied with `.backup` to be consistent).
 - Inter-plane keys from `stargate-keys` volume.
 - Sidecar persistent state that is meaningful across reinstalls:
-  - Tor: nothing (we explicitly avoid persistent client state — Principle
-    III; entry-guards are an intentional trade-off discussed in
-    THREAT-MODEL.md).  
-    `NEEDS CLARIFICATION`: do we persist Tor entry guards across reinstalls
-    to preserve guard-rotation properties? This is a Principle V honesty
-    question.
+  - Tor: the sidecar's `DataDirectory` is included, **including the
+    entry-guard state file**. Rationale: Tor's guard design assumes
+    persistence; cycling guards faster than the natural rotation period
+    increases statistical exposure to malicious guards. `export` /
+    `import` therefore preserve guards; `wipe` discards them. See
+    `THREAT-MODEL.md` §4.2 "Stargate-specific notes" and §3.3 (backup
+    encryption is load-bearing for the linkability property this
+    creates). No other Tor state is intentionally persisted; the
+    `AvoidDiskWrites 1` torrc directive minimises incidental writes
+    beyond guards.
   - i2pd: router info and netdb cache (functional, low-sensitivity).
   - Nym: client identity keypair (otherwise re-enrollment is required).
 - `metadata.json` describing schema versions and Stargate release that
@@ -880,20 +894,22 @@ relies on it can be planned.
    standard?
 5. **§13.1 Backup encryption** — `age` (preferred) vs `gpg --symmetric`
    (more ecosystem familiarity)?
-6. **§13.1 Tor entry guards** — Persist across reinstalls to preserve
-   guard-rotation properties, or wipe on reinstall? This is a Principle V
-   honesty question — whichever we pick, document it in
-   `THREAT-MODEL.md`.
-7. **§14.1 Manifest version** — Confirm MV2 support on Mullvad Browser at
+6. **§14.1 Manifest version** — Confirm MV2 support on Mullvad Browser at
    v1 release window; if MV2 is gone, redesign the proxy decision path
    for MV3.
-8. **§14.3 First-encounter behaviour** — Prompt the user on first
+7. **§14.3 First-encounter behaviour** — Prompt the user on first
    encounter of a new domain, or apply the configured default silently?
    (UX-vs-security trade-off; surfaces a privacy decision to the user but
    adds friction.)
-9. **§14.4 Token storage** — Does Mullvad Browser expose a credential-grade
+8. **§14.4 Token storage** — Does Mullvad Browser expose a credential-grade
    storage API for the device bearer token, or do we accept `storage.local`
    with a documented residual risk?
+9. **§12.2 Quarkus / JDK / Mandrel compatibility matrix** — Confirm
+    Quarkus 3.33 LTS officially targets JDK 25 as a runtime, and pin the
+    matching Mandrel 25 builder image digest at first release tag. If
+    Quarkus 3.33 LTS lags JDK 25 support, fall back to the highest Quarkus
+    LTS that does and reopen the constitution amendment that introduced
+    these pins (constitution v1.1.0).
 
 None of these are deviations from the constitution; they are unresolved
 implementation choices within the space the constitution allows.

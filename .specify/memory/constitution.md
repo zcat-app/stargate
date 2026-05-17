@@ -1,4 +1,48 @@
 <!--
+Sync Impact Report — Constitution v1.1.0
+========================================
+
+Version change: 1.0.0 → 1.1.0
+Reason: Pin control-plane platform from JDK 21+ (open-ended) to JDK 25 LTS
+and Quarkus 3.33 LTS, with matching Mandrel 25 native-image builder.
+
+Principles modified: none.
+Sections modified:
+  - Tech Stack, Deployment Model, and Non-Goals → Tech Stack (v1) bullet
+    for control plane (concrete platform versions pinned).
+
+Templates reviewed against this amendment:
+  ✅ .specify/templates/plan-template.md      — no edit required.
+  ✅ .specify/templates/spec-template.md      — no edit required.
+  ✅ .specify/templates/tasks-template.md     — no edit required.
+
+Follow-up artefacts updated in this PR:
+  ✅ specs/000-architecture/spec.md §12.2  — JDK / Quarkus / Mandrel pins.
+  ✅ specs/000-architecture/spec.md §15    — added open question 10
+                                            (Quarkus/JDK compat matrix).
+  ✅ CONTRIBUTING.md prerequisites         — JDK / Quarkus / Mandrel pins.
+
+Deferred:
+  - Concrete Mandrel 25 builder image digest pinned at first release tag
+    once Quarkus 3.33 LTS / JDK 25 runtime compatibility is verified
+    against the Quarkus platform matrix (tracked in arch spec §15 #10).
+
+Governance note:
+  This amendment was applied during the pre-GitHub scaffolding phase, before
+  the repo had a public remote. The formal governance flow defined in this
+  constitution (PR + 7-day public comment window + stargate-redteam pass
+  for privacy-critical principles) was not executable at the time:
+    - No public remote existed, so no PR or comment window was possible.
+    - The stargate-redteam subagent definition is still a TODO.
+  This is recorded here so future readers (and any later redteam pass over
+  repo history) see plainly that v1.1.0 was a maintainer-only change made
+  before the governance mechanism was operational — not a skipped step.
+  Principles I, III, V are unchanged by this amendment, so the redteam
+  requirement would not have applied even once available.
+  The full governance flow becomes binding the day the repo gets a public
+  remote; subsequent amendments follow it without exception.
+
+
 Sync Impact Report — Constitution v1.0.0 (initial ratification)
 ================================================================
 
@@ -254,10 +298,10 @@ what agents miss. Both are required for credibility.
 
 - **Data plane**: Go (pinned toolchain version). Network primitives via the
   standard library and `golang.org/x/net/proxy`. Static binary, `-trimpath`.
-- **Control plane**: Quarkus on JDK 21+, packaged as native-image for releases
-  and JVM-mode for development. Hibernate ORM with Panache over SQLite (WAL
-  mode). Qute templates for the admin UI; a React frontend is a v1.5+
-  consideration.
+- **Control plane**: **Quarkus 3.33 LTS on JDK 25 LTS**, packaged as
+  native-image for releases and JVM-mode for development. Hibernate ORM with
+  Panache over SQLite (WAL mode). Qute templates for the admin UI; a React
+  frontend is a v1.5+ consideration.
 - **Inter-plane transport**: gRPC over Unix-domain socket; protobuf v3 with
   explicit semantic versioning.
 - **Browser extension**: WebExtensions API, Firefox-ESR RFP-safe subset.
@@ -427,4 +471,4 @@ gate. Pull requests that introduce code violating a principle are blocked
 until either the code is changed or the constitution is amended through
 the process above.
 
-**Version**: 1.0.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-17
+**Version**: 1.1.0 | **Ratified**: 2026-05-17 | **Last Amended**: 2026-05-17
