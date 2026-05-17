@@ -128,7 +128,7 @@ Schema (informal):
 }
 ```
 
-Note: `routeEnableMask` is deliberately NOT in the snapshot. The mask is process-local in the data plane and changes on every `SidecarEvent` HEALTHY/UNHEALTHY transition (§2); persisting it only on `ReloadTokens` would mean cold-start would restore a possibly hours-stale value. The cleaner invariant — and what §2 specifies — is: cold-start unconditionally begins DISABLED and waits for the first `HEALTHY` event from the control plane.
+Note: `routeEnableMask` is deliberately NOT in the snapshot. See §2 for the state-machine rationale (cold-start unconditionally begins DISABLED and waits for the first `HEALTHY` event).
 
 The snapshot contains hashed tokens only — never plaintext. It is
 restored at data-plane cold start when the control plane is unreachable
@@ -226,9 +226,17 @@ Columns are defined in architecture spec §6.4; restated here for clarity:
 | `request_count` | INTEGER | Incremented by 1 on each SOCKS5 or HTTP CONNECT through port 8881 that passes authentication. Auth failures are NOT counted (Principle III — counting them would be a side channel for token-guessing attacks, since an attacker can submit tokens at will). Route failures (`ROUTE_DOWN`, `ROUTE_REFUSED`, `ROUTE_TIMEOUT`) DO count: they are not attacker-controlled in the same way, and the gap between `request_count` and "the fraction of `byte_count > 0` per hour" gives the admin sidecar-health visibility at negligible privacy cost. |
 | `byte_count`    | INTEGER | Incremented by the total bytes **forwarded between client and upstream** in both directions at request close. The error-template body synthesised by the data plane for `AUTH_REQUIRED` / `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT` is NOT included — `byte_count` reflects actual cross-network transfer only. |
 
-The data plane buffers increments in-memory and flushes to the control
-plane via the next `StatusResponse` (pull-based, arch §5.2). The control
-plane writes to SQLite via Hibernate Panache.
+The data plane buffers increments in-memory only in this feature. The
+CP→DP `GetStatus` pull (arch §5.2) is the documented flush mechanism
+but its wiring is **deferred to the admin-UI feature** — `GetStatus`
+is listed under "RPCs explicitly NOT used by this feature" in
+`contracts/control-grpc.md`. In v1 the counters live in the data
+plane's process memory and are lost on DP restart. The FR-008
+invariant (no per-request data, hour-bucketed aggregates only) holds
+regardless: deferring persistence does not relax what the DP records,
+only where the counts ultimately reach. When the admin-UI feature
+wires `GetStatus`, the CP writes the pulled rows to SQLite via
+Hibernate Panache.
 
 **Invariants**:
 

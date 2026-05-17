@@ -44,8 +44,8 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 
 **Storage**:
 
-- **Control plane**: SQLite (WAL) at `/var/lib/stargate/control.db` mounted from named volume `stargate-control-state`. This feature populates `audit_log` (one row per token load) and reads/writes `enrolled_devices` indirectly via the YAML loader (token records are derived from the file; the row is created in the DB for audit but never used as the source of truth in v1).
-- **Data plane**: in-memory `tokenList` plus on-disk fallback at `/var/lib/stargate/dp-snapshot.json` (arch §5.5) — last-known token hash list, route enable mask, restored at cold start if control plane is unreachable.
+- **Control plane**: SQLite (WAL) at `/var/lib/stargate/control.db` mounted from named volume `stargate-control-state`. This feature populates `audit_log` with one row per `enrolled` / `revoked` / `config_error` / `sidecar_healthy` / `sidecar_unhealthy` action (the five fixed-vocabulary actions enumerated in data-model.md §4) and reads/writes `enrolled_devices` indirectly via the YAML loader: `enrolled_devices` is **not** the source of truth for the live token list (that role belongs to `tokens.yaml` + the in-memory generation in the data plane) — the table is diffed across loads to derive the `enrolled` vs `revoked` audit-log rows in T035.
+- **Data plane**: in-memory `tokenList` plus on-disk fallback at `/var/lib/stargate/dp-snapshot.json` (arch §5.5) — last-known token hash list (the snapshot deliberately omits the route enable mask per data-model.md §1.4 / §2; cold-start unconditionally begins DISABLED and waits for the first HEALTHY event), restored at cold start when the control plane is unreachable.
 - **Extension**: `storage.local` per arch §14.4. Bearer token stored in `storage.local` with a visible warning in the options UI (resolves arch §15 #8 for v1 — see research.md §6).
 - **Tor sidecar**: `/var/lib/tor/` mounted from named volume `stargate-tor-state` (entry-guard state persists across container restarts — THREAT-MODEL §4.2 "Stargate-specific notes").
 
@@ -63,6 +63,20 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 **Project Type**: Multi-language monorepo — three language planes (Go data plane, Quarkus control plane, JS extension) + Docker-orchestrated sidecars + cross-cutting contract tests. Layout is defined in architecture spec §3; this feature populates a vertical slice through that layout.
 
 **Performance Goals**:
+
+**Reference workstation (measurement baseline for SC-001, SC-003, SC-005,
+plan.md §"Scale/Scope", data-model.md §1.5)**: Linux x86_64 desktop;
+≥8 physical cores at ≥3 GHz (Zen 3 / Alder Lake or newer); ≥16 GiB RAM;
+NVMe SSD; not under thermal throttling at measurement time. The hand-driven
+T077 walkthrough and the T034a Wireshark capture record the concrete CPU
+model used at the time the artefact is produced in their respective
+markdown outputs, so a reader can verify the number against the hardware it
+was measured on. The "~50 ms/hash" argon2id figure in data-model.md §1.5
+and the "16 cores" figure in SC-005's measurement model below are valid
+against this baseline; weaker hardware should expect proportional
+degradation but the *invariants* (no DNS leak, no leak-corpus matches,
+byte-for-byte template render, stream isolation, no retained allocations)
+hold regardless of wall-clock numbers.
 
 - ≥200 concurrent `.onion` CONNECTs in the integration harness (SC-005). Measured against a *synthetic* SOCKS5 backend that mimics the Tor sidecar's accept-and-relay surface (research.md §7) — driving 200 concurrent live circuits through the real Tor network would flood guards and is not the property under test.
 
@@ -239,6 +253,15 @@ both planes import from one source. Tests are split: contract tests live
 at the repo top under `tests/contract/<sidecar>/` per arch §3's rationale
 (they outlive any single plane), integration tests under
 `tests/integration/`, reproducibility under `tests/reproducibility/`.
+
+**Naming convention — data plane**: the Go binary is `cmd/stargate-proxy/main.go`,
+but the compose service, the runtime UID, and the state volume all use the
+shorter form `stargate-dp` / `stargate-dp-state` (T015). The user-facing
+artefact name kept the `-proxy` suffix because that is what the user invokes
+(`./scripts/stargate ...` shells into the proxy); the compose-side artefacts
+took the `-dp` abbreviation because it is what shows up in `docker ps` output
+and journal lines, where "data plane" is referenced often. The split is
+intentional and is recorded here so future readers don't treat it as drift.
 
 ---
 

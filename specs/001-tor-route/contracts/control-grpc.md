@@ -129,6 +129,26 @@ enum EventKind {
   `{"healthcheck_pass", "healthcheck_fail", "container_exit",
   "container_start", "config_render"}`. The data plane and the
   contract test treat unknown `detail` values as a contract violation.
+  In v1 of the Tor-route feature the emitted subset is
+  `{"container_start", "healthcheck_pass", "healthcheck_fail",
+  "container_exit"}` with these `(kind, detail)` pairings (per T039 / T074):
+  `STARTED → container_start`, `HEALTHY → healthcheck_pass`,
+  `UNHEALTHY → healthcheck_fail`, `STOPPED → container_exit`,
+  `CRASHED → container_exit`, `RESTARTED → container_start`.
+  `RESTARTED` reuses `container_start` because `detail`'s role is to
+  describe the container action, not to disambiguate `kind` (which the
+  `kind` field already does); keeping the closed set stable across this
+  feature avoids a future-compat vocabulary bump for a purely
+  informational event.
+  `config_render` is reserved for `EVENT_KIND_CONFIG_RELOADED`, which
+  the **bridges feature** will emit when `UseBridges` / `Bridge`
+  lines are toggled and `TorrcRenderer` re-renders live; this feature
+  renders `torrc` once at startup (T037) and emits no
+  `CONFIG_RELOADED` event. Keeping `config_render` in the closed set
+  now (rather than adding it later) prevents a future minor-version
+  vocabulary bump that would force the data-plane contract test to
+  treat a previously-unknown `detail` value as a contract violation
+  during the bridges-feature rollout window.
 - The control plane MUST NOT include log lines, version strings, or
   any other free text from the sidecar in `detail` (arch §5.2).
 - The stream is long-lived. On disconnect, the data plane reconnects

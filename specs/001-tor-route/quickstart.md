@@ -53,6 +53,14 @@ Expected output (truncated):
 └──────────────┴──────────┴────────────┴──────────────────────┘
 ```
 
+> **`docker ps` will also list a fourth container,
+> `docker-socket-proxy`.** This is an infrastructure dependency that
+> brokers the control plane's read-only access to the Docker Engine
+> API (see tasks.md T015 / T017a for the trust rationale). It is
+> intentionally omitted from the user-facing status table because it
+> is not a user-facing component — `init` reports the status of the
+> three components an operator actually interacts with.
+
 If `init` exits non-zero, see arch §9.1 step 7 for the error-code
 table. The most common first-time failure is missing Docker socket
 access; the fix is documented in the error message.

@@ -334,7 +334,20 @@ tests-first suite (Principle VII) before implementation lands.
   pass authentication increment `request_count`; auth failures leave
   the counter unchanged (Principle III — counting them would be a
   side channel for token-guessing attacks; `data-model.md` §3
-  records the rule).
+  records the rule). Route failures (`ROUTE_DOWN`, `ROUTE_REFUSED`,
+  `ROUTE_TIMEOUT`) DO increment `request_count` once authentication
+  has passed: unlike auth failures they are not attacker-controlled
+  in the same way (the attacker cannot induce a route failure at
+  will without already routing), and the gap between `request_count`
+  and the fraction of buckets with `byte_count > 0` gives the
+  operator sidecar-health visibility at negligible privacy cost
+  (data-model.md §3 records the asymmetry). **v1 persistence note**:
+  in this feature, the aggregates live in data-plane process memory
+  only; persistence to the `aggregate_counters` SQLite table via the
+  CP→DP `GetStatus` pull (arch §5.2) is deferred to the admin-UI
+  feature (data-model.md §3 / `contracts/control-grpc.md` "RPCs
+  explicitly NOT used"). The invariant on *what* is counted (this FR)
+  is independent of the deferral on *where* the counts persist.
 - **FR-009**: When the Tor sidecar is unreachable (no TCP connection),
   unhealthy (gRPC `Sidecar` health status reports UNHEALTHY in
   architecture spec §5.2), or refuses the SOCKS5 target, the data
