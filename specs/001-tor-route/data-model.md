@@ -122,12 +122,13 @@ Schema (informal):
   "schemaVersion": 1,
   "generation": 7,
   "loadedAt": "2026-05-17T14:00:00Z",
-  "routeEnableMask": { "TOR": true, "I2P": false, "NYM": false, "DIRECT": false },
   "hashes": [
     { "hash": "<base64 32B>", "salt": "<base64 16B>" }
   ]
 }
 ```
+
+Note: `routeEnableMask` is deliberately NOT in the snapshot. The mask is process-local in the data plane and changes on every `SidecarEvent` HEALTHY/UNHEALTHY transition (§2); persisting it only on `ReloadTokens` would mean cold-start would restore a possibly hours-stale value. The cleaner invariant — and what §2 specifies — is: cold-start unconditionally begins DISABLED and waits for the first `HEALTHY` event from the control plane.
 
 The snapshot contains hashed tokens only — never plaintext. It is
 restored at data-plane cold start when the control plane is unreachable
@@ -200,12 +201,16 @@ State transitions:
    DISABLED ─────────────────────────────► ENABLED
 ```
 
-The state is **process-local in the data plane**, not persisted; on cold
-start, the data plane begins in DISABLED and waits for the control plane
-to push the first `HEALTHY` event (or for the `dp-snapshot.json` to
-indicate the route was enabled at last shutdown, in which case the data
-plane optimistically enables and the first failed forward to the sidecar
-transitions it to DISABLED via its own SOCKS5-connect error).
+The state is **process-local in the data plane** and not persisted. On
+cold start the data plane unconditionally begins in DISABLED and waits
+for the control plane to push the first `HEALTHY` event for `tor`
+before transitioning to ENABLED. There is no optimistic-enable path:
+serving a request through a sidecar that may already be unhealthy
+would risk returning a non-privacy-safe error or leaking destination
+metadata via a partial connect, whereas the brief startup window in
+which DISABLED returns `ROUTE_DOWN` is a clean failure mode the
+browser already knows how to surface. The snapshot at §1.4 therefore
+omits `routeEnableMask` by design.
 
 ---
 

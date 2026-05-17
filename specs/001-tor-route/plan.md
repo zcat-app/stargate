@@ -65,6 +65,10 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 **Performance Goals**:
 
 - ≥200 concurrent `.onion` CONNECTs in the integration harness (SC-005). Measured against a *synthetic* SOCKS5 backend that mimics the Tor sidecar's accept-and-relay surface (research.md §7) — driving 200 concurrent live circuits through the real Tor network would flood guards and is not the property under test.
+
+  **Measurement model for SC-005**: "200 concurrent CONNECTs" means 200 client connections established and held open simultaneously through port 8881, each having completed its SOCKS5/CONNECT handshake (including argon2id auth) and bridged to the synthetic upstream. The CONNECT-setup throughput required to reach that steady state is bounded below by `(200 × N × ~50ms) / (cores_available / argon2id_parallelism)` where N is the configured token-list size (data-model.md §1.5; N ≤ 4 in v1). On a reference workstation with 16 cores and N=1, that floor is ~2.5s wall-clock to fill the 200-connection pool; on N=4 it's ~10s. SC-005 is met if the pool fills within 30s and the connections remain stable for ≥60s of bidirectional traffic. T079's `stargate-perf` run uses this measurement model; the steady-state and the fill-time are reported as separate numbers in its findings document, not collapsed into a single throughput figure.
+
+  **Burst CONNECT scenario (not in SC-005 but tracked here)**: a realistic worst-case user burst is Mullvad Browser session-restore or "open all bookmarks in tabs" — 30 to 100 parallel CONNECTs in a few seconds. At v1's N ≤ 4 ceiling the math gives ~400ms wall-clock for 30 CONNECTs at N=1, ~1.5s at N=4; for 100 CONNECTs it's ~1.25s at N=1 and ~5s at N=4. The N=4 / 100-tab corner is at the edge of the operational "tabs feel as responsive as direct browsing" target. Migration trigger: if either (a) a future feature pushes N > 4, or (b) a user-observable burst-latency report shows session-restore meaningfully slower than direct browsing, the migration path is data-model.md §1.5's forward note — switch to a shared per-generation salt so auth becomes O(1). The gRPC contract `TokenHash { hash, salt }` is already forward-compatible; the change lives in `data-plane/internal/auth/token.go` (T044) and warrants a `SECURITY-DECISIONS.md` entry plus a `stargate-redteam` pass at the time it ships, NOT now.
 - Data-plane forwarding path: no per-request allocation that retains beyond request lifetime (SC-005, `stargate-perf` agent verifies on completion).
 - Cold-start of the data plane: ≤2 s to first port-accept (operational target; not a hard FR but tracked).
 
@@ -211,6 +215,7 @@ stargate/
 │
 ├── tests/
 │   ├── contract/tor/                 # FR-016                  (new)
+│   ├── contract/sidecar-proxy/      # C1 remediation; T019c   (new)
 │   ├── contract/error-template/      # arch §10.3              (new)
 │   ├── contract/torrc/               # FR-011 byte-match       (new)
 │   ├── contract/socks5/              # SOCKS5+CONNECT inbound  (new)
