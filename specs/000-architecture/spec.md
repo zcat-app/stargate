@@ -390,7 +390,7 @@ opens a PR with a newer digest and contract tests pass.
 
 | Sidecar     | Candidate image                                  | Digest pinning                                          |
 |-------------|--------------------------------------------------|---------------------------------------------------------|
-| Tor         | `NEEDS CLARIFICATION: no official Tor Project Docker image exists; candidate maintained forks include `containrrr/torproxy` and `dperson/torproxy`. Choice requires maintainer assessment of trustworthiness and an explicit `SECURITY-DECISIONS.md` entry per Principle IV.` | `NEEDS CLARIFICATION`             |
+| Tor         | **`stargate/tor`** — Stargate-built image installing `tor` from `deb.torproject.org` (Tor Project's official Debian apt repository) on a pinned Debian-slim base. Dockerfile lives in `sidecars/tor/`. Tor Project signing key pinned by fingerprint and verified at build time. Resolved by `specs/001-tor-route/` §Clarifications 2026-05-17 Q1. | `NEEDS CLARIFICATION` — pin both the Debian-slim base and the final composed image at first release tag |
 | i2pd        | `purplei2p/i2pd` (upstream maintainer)           | `NEEDS CLARIFICATION` — pin at first release tag        |
 | Nym client  | `NEEDS CLARIFICATION: Nym's official Docker distribution status is not resolved in this spec; either pin an upstream image if maintained or build from a pinned `nymtech/nym` source tree.` | `NEEDS CLARIFICATION` |
 | WireGuard   | `linuxserver/wireguard`                          | `NEEDS CLARIFICATION` — pin at first release tag        |
@@ -400,6 +400,12 @@ opens a PR with a newer digest and contract tests pass.
 flags that the maintainer must resolve, with an `SECURITY-DECISIONS.md`
 entry per sidecar covering: who maintains the image, how its provenance is
 verified, and what the contract test suite asserts about it.
+
+**Outstanding follow-up for the Tor row**: the trust-rationale narrative
+required by Principle IV must land in `SECURITY-DECISIONS.md` once that
+file is authored (constitution Sync Impact Report lists it as TODO).
+Until then, the rationale lives inline above (Tor Project as upstream
+package maintainer; their signing infrastructure as the trust root).
 
 ---
 
@@ -539,6 +545,7 @@ an error-channel side channel.
 | `ROUTE_DOWN`      | Sidecar is unreachable or unhealthy                        | 502         |
 | `ROUTE_TIMEOUT`   | Upstream did not respond within the configured timeout     | 504         |
 | `ROUTE_REFUSED`   | Sidecar accepted the SOCKS handshake but refused the target| 502         |
+| `AUTH_REQUIRED`   | Bearer token missing or invalid (introduced by `specs/001-tor-route/` FR-006) | 407 (CONNECT framing) / SOCKS5 auth-fail equivalent |
 | `BIND_REFUSED`    | Bind-safety check would publish on a non-tunnel interface  | 500 (only at start-up; never per-request) |
 
 ### 10.2 Response body template (HTML, for browser display)
@@ -880,10 +887,13 @@ scope for this spec).
 Consolidated list. Each must be resolved before the feature spec that
 relies on it can be planned.
 
-1. **§7 Sidecar image trust** — Which Tor and Nym Docker images are we
-   pinning, and what is the `SECURITY-DECISIONS.md` rationale for trusting
-   each? (Tor has no official image; Nym's official Docker support status
-   needs verification.)
+1. **§7 Sidecar image trust** — ~~Which Tor~~ **Tor: resolved** by
+   `specs/001-tor-route/` §Clarifications 2026-05-17 Q1 (Stargate-built
+   image from `deb.torproject.org` on pinned Debian-slim). **Nym
+   remains open**: Nym's official Docker support status needs
+   verification; either pin an upstream image if maintained, or build
+   from a pinned `nymtech/nym` source tree. `SECURITY-DECISIONS.md`
+   rationale entries still owed for both once that file is authored.
 2. **§7 Image digests** — Concrete sha256 digests for Tor, i2pd, Nym
    client, WireGuard, distroless base, and the Quarkus native builder
    image. To be pinned at first release tag.

@@ -87,10 +87,12 @@
   This affects FR-001/FR-002/FR-003 (extension proxy API surface). It can
   be resolved at `/speckit-plan` time if Mullvad Browser still supports
   MV2 at planning, or earlier if a contingency plan is desired.
-- Architecture-spec follow-up edits triggered by Q1 above:
-  1. §7 — replace the Tor row's `NEEDS CLARIFICATION` with the resolved
-     image strategy. Add a `SECURITY-DECISIONS.md` entry recording the
-     trust rationale.
-  2. §10.1 — add `AUTH_REQUIRED` to the error-code table (introduced by
-     FR-006 of this feature; HTTP 407 / SOCKS5 auth-fail). Small edit,
-     not a redesign.
+- Architecture-spec follow-up edits triggered by Q1 above — **landed**:
+  1. §7 — Tor row rewritten with the resolved image strategy.
+  2. §10.1 — `AUTH_REQUIRED` added to the error-code table.
+  3. §15 #1 — Tor portion marked resolved; Nym portion remains open.
+- Remaining owed (not blocking `/speckit-plan`):
+  - `SECURITY-DECISIONS.md` trust-rationale entry for the Tor sidecar
+    image, once that file is authored (constitution Sync Impact Report
+    lists it as TODO). The rationale lives inline in architecture spec
+    §7 until then.
