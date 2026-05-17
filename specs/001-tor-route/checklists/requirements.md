@@ -73,14 +73,24 @@
 
 ## Notes
 
-- All items pass on first review. The spec is ready for `/speckit-clarify` (if
-  further nailing-down is wanted) or `/speckit-plan` directly.
-- Two architecture-spec `NEEDS CLARIFICATION` items (Tor sidecar image choice;
-  Mullvad Browser MV2 support window) remain upstream of this feature. They
-  must be resolved before `/speckit-plan` produces an implementable plan for
-  FR-015 (digest pinning) and FR-001/FR-002/FR-003 (extension proxy API
-  surface), respectively. Flagged here so the reader does not lose them.
-- `AUTH_REQUIRED` is introduced by this feature as a new error code beyond the
-  five enumerated in architecture spec §10.1. The architecture spec must be
-  amended to add it before the corresponding contract test (FR-016) can land.
-  This is a small follow-up edit, not a redesign.
+- All items pass on first review. The spec is ready for `/speckit-plan` once
+  the architecture-spec follow-ups noted below land.
+- `/speckit-clarify` session 2026-05-17 resolved three open items (recorded
+  in spec.md `## Clarifications`):
+  1. Tor sidecar image (FR-015) — Stargate-built image installing `tor` from
+     `deb.torproject.org` on pinned Debian-slim, sha256-pinned.
+  2. Token file reload semantics (FR-018) — startup-only in v1.
+  3. Bearer-token format (FR-017) — 128-bit hex, 32 chars, `openssl rand
+     -hex 16`.
+- One architecture-spec `NEEDS CLARIFICATION` item remains upstream:
+  Mullvad Browser MV2 support window (architecture spec §14.1 / §15 #6).
+  This affects FR-001/FR-002/FR-003 (extension proxy API surface). It can
+  be resolved at `/speckit-plan` time if Mullvad Browser still supports
+  MV2 at planning, or earlier if a contingency plan is desired.
+- Architecture-spec follow-up edits triggered by Q1 above:
+  1. §7 — replace the Tor row's `NEEDS CLARIFICATION` with the resolved
+     image strategy. Add a `SECURITY-DECISIONS.md` entry recording the
+     trust rationale.
+  2. §10.1 — add `AUTH_REQUIRED` to the error-code table (introduced by
+     FR-006 of this feature; HTTP 407 / SOCKS5 auth-fail). Small edit,
+     not a redesign.
