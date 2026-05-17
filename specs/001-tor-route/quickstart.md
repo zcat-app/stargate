@@ -158,7 +158,7 @@ DuckDuckGo's onion mirror renders.
 
 If the page does not render:
 
-- Check `docker compose -f compose/docker-compose.local.yml logs stargate-tor` for bootstrap failures.
+- Check `docker compose -f compose/docker-compose.local.yml logs tor` for bootstrap failures.
 - Check that the token in the extension matches the token in `tokens.yaml` (case-sensitive 32-char hex).
 - Verify the data plane's journal for `AUTH_REQUIRED` or `ROUTE_DOWN`
   entries.
@@ -194,7 +194,7 @@ volume). Each first-party domain should attach to a distinct circuit.
 Stop the Tor sidecar:
 
 ```bash
-docker compose -f compose/docker-compose.local.yml stop stargate-tor
+docker compose -f compose/docker-compose.local.yml stop tor
 ```
 
 Refresh a `.onion` page. The browser shows the privacy-safe error
@@ -208,7 +208,7 @@ template body with:
 Restart the sidecar to recover:
 
 ```bash
-docker compose -f compose/docker-compose.local.yml start stargate-tor
+docker compose -f compose/docker-compose.local.yml start tor
 ```
 
 ---

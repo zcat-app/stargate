@@ -330,7 +330,11 @@ tests-first suite (Principle VII) before implementation lands.
   bodies, or any per-request timestamp at finer resolution than the
   ≥1-hour aggregate bucket defined in architecture spec §6.4
   (`aggregate_counters`). Only the per-route, per-hour
-  `(request_count, byte_count)` pair is recorded.
+  `(request_count, byte_count)` pair is recorded. Only requests that
+  pass authentication increment `request_count`; auth failures leave
+  the counter unchanged (Principle III — counting them would be a
+  side channel for token-guessing attacks; `data-model.md` §3
+  records the rule).
 - **FR-009**: When the Tor sidecar is unreachable (no TCP connection),
   unhealthy (gRPC `Sidecar` health status reports UNHEALTHY in
   architecture spec §5.2), or refuses the SOCKS5 target, the data

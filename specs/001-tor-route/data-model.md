@@ -198,8 +198,8 @@ Columns are defined in architecture spec §6.4; restated here for clarity:
 |-----------------|---------|----------------------------------------------------------------------------------------|
 | `route`         | TEXT    | Always `'TOR'` for rows produced by this feature.                                       |
 | `hour_bucket`   | INTEGER | Current `time.Now().Unix() / 3600`, computed at increment time.                         |
-| `request_count` | INTEGER | Incremented by 1 on each successful SOCKS5 CONNECT or HTTP CONNECT through port 8881 that the data plane forwards (i.e., past the auth check). Auth-failed requests are NOT counted (Principle III — they would be a side channel for guessing attacks). |
-| `byte_count`    | INTEGER | Incremented by the total bytes forwarded in both directions at request close.           |
+| `request_count` | INTEGER | Incremented by 1 on each SOCKS5 or HTTP CONNECT through port 8881 that passes authentication. Auth failures are NOT counted (Principle III — counting them would be a side channel for token-guessing attacks, since an attacker can submit tokens at will). Route failures (`ROUTE_DOWN`, `ROUTE_REFUSED`, `ROUTE_TIMEOUT`) DO count: they are not attacker-controlled in the same way, and the gap between `request_count` and "the fraction of `byte_count > 0` per hour" gives the admin sidecar-health visibility at negligible privacy cost. |
+| `byte_count`    | INTEGER | Incremented by the total bytes **forwarded between client and upstream** in both directions at request close. The error-template body synthesised by the data plane for `AUTH_REQUIRED` / `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT` is NOT included — `byte_count` reflects actual cross-network transfer only. |
 
 The data plane buffers increments in-memory and flushes to the control
 plane via the next `StatusResponse` (pull-based, arch §5.2). The control
