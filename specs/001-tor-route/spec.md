@@ -380,10 +380,13 @@ tests-first suite (Principle VII) before implementation lands.
   `torrc` for this feature (bridges are a separate feature spec).
   **A contract test MUST verify the rendered `torrc` contains exactly
   these directives** for v1 of this feature.
-- **FR-012**: The Tor sidecar's `SocksPort` MUST NOT be published to
-  the host or to any compose network mapping. It is reachable only
-  internally on the compose bridge network shared with the data plane
-  container. (Architecture spec §4.2.)
+- **FR-012**: The Tor sidecar's `SocksPort` (9050) and `ControlPort`
+  (9051, cookie-authenticated) MUST NOT be published to the host or to
+  any compose network mapping. Both are reachable only internally on the
+  compose bridge network shared with the data plane container, and only
+  the data plane container needs SocksPort access while only the
+  contract-test harness needs ControlPort access (via the cookie file
+  on the `stargate-tor-state` volume; see T062). (Architecture spec §4.2.)
 
 #### Inter-plane integration
 
@@ -454,13 +457,19 @@ tests-first suite (Principle VII) before implementation lands.
   Filesystem-watch and SIGHUP-reload paths are explicitly deferred to
   the dashboard-UI feature.
 - **FR-019**: The bearer token configured in the extension's
-  `storage.local` (or browser credential store; architecture spec
-  §14.4 `NEEDS CLARIFICATION` carried forward) MUST match one of the
-  tokens in the control plane's config file. The extension UX for
-  pasting/storing this token is in scope for this feature at a minimum
-  level: an options page with a single field for the token, persisted
-  to `storage.local` (or the available credential store), with a
-  visible warning if `storage.local` is the fallback path.
+  `storage.local` MUST match one of the tokens in the control plane's
+  config file. The extension UX for pasting/storing this token is in
+  scope for this feature at a minimum level: an options page with a
+  single field for the token, persisted to `storage.local`, with a
+  visible warning that `storage.local` is not credential-grade storage
+  (the canonical warning text is pinned in `data-model.md` §5.1; the
+  rationale for accepting `storage.local` rather than a keyring path
+  in v1 is in `research.md` §6 — Firefox ESR exposes no credential-
+  grade storage API to extensions). The architecture spec §14.4
+  `NEEDS CLARIFICATION` is **resolved-for-v1 by this FR** in
+  combination with `research.md` §6; a future feature may revisit the
+  decision if WebExtensions on Firefox ESR gain a credential-grade
+  storage API.
 
 ### Key Entities
 

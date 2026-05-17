@@ -325,7 +325,8 @@ Named volumes this feature creates (referenced by name in
 | `stargate-control-config`    | control-plane container                       | operator-authored `tokens.yaml`                |
 | `stargate-control-state`     | control-plane container                       | SQLite DB and Flyway state                     |
 | `stargate-dp-state`          | data-plane container                          | `dp-snapshot.json`                             |
-| `stargate-tor-state`         | Tor sidecar container                         | Tor `DataDirectory` — entry-guard persistence (THREAT-MODEL §4.2) |
+| `stargate-tor-state`         | Tor sidecar container                         | Tor `DataDirectory` — entry-guard persistence (THREAT-MODEL §4.2). The control-port cookie file (`/var/lib/tor/control_auth_cookie`) also lives here; the contract-test harness reads it via T062 — see `contracts/torrc.md` for the auth flow. |
+| `stargate-tor-config`        | control-plane RW; Tor sidecar RO              | rendered `torrc` written atomically by `TorrcRenderer` (T037). The Tor sidecar reads it at startup; the in-sidecar mount path and the mechanism by which Tor is told to read the file are owned by `sidecars/tor/Dockerfile` (T014) and `contracts/torrc.md`. Kept on a distinct volume from `stargate-tor-state` so CP-authoritative config and Tor-authoritative runtime state have different writers and different mount semantics. |
 
 These volumes are the unit `scripts/stargate wipe` operates on (out of
 scope for this feature — wipe ships in a later feature).

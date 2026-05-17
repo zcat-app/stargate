@@ -410,6 +410,86 @@ extracting the mock to a shared `extension/test-mocks/browser.js`.
 
 ---
 
+## 11. Minimum-subset `GetStatus` RPC in v1 proto (added by /speckit-analyze F3 remediation)
+
+**Decision**: declare a minimum-subset `GetStatus` RPC in v1's proto
+now — `rpc GetStatus(StatusRequest) returns (StatusResponse);` with
+`StatusRequest {}` and `StatusResponse { repeated RouteCounter
+counters; }` and `RouteCounter { string route; uint64 hour_bucket;
+uint64 request_count; uint64 byte_count; }`. The RPC is hosted by the
+data plane on `/run/stargate/dp.sock` (T007 / T045) and is exercised
+only by the contract tests T025c and T025d in this feature. The
+production CP→DP pull and SQLite persistence remain deferred to the
+admin-UI feature, exactly as `data-model.md` §3 already records.
+
+**Rationale**:
+
+- `data-model.md` §3 already commits to "in v1 the counters live in
+  the data plane's process memory only and are lost on DP restart"
+  and lists `GetStatus` under `contracts/control-grpc.md` "RPCs
+  explicitly NOT used by this feature". That records the
+  *production* deferral. The choice here is the orthogonal question
+  of where the RPC's *declaration* lives — `stargate.v1` proto now,
+  or `stargate.v2` proto later.
+- Declaring it in `stargate.v1` is a purely additive minor-version
+  change (constitution Inter-Plane Contract section explicitly
+  permits additive minor changes; the gate is a backwards-compat
+  test). Declaring it in `stargate.v2` would require a major-version
+  bump — a much larger ceremony for what is one new RPC plus two
+  messages.
+- T025c (auth-fail counter non-increment) and T025d (auth-pass
+  counter increment) need to read counters from the data plane to
+  assert the FR-008 invariant from both directions. The two clean
+  paths to do that are (a) the public gRPC surface the admin-UI
+  feature will eventually consume, or (b) a test-only side channel
+  (e.g. a `/debug` HTTP endpoint, an exported package variable, a
+  Unix-socket probe distinct from the gRPC server). Path (a) keeps
+  the test exercising the same observation surface production will
+  use; path (b) adds a parallel test-only surface with its own
+  privacy review burden and risks drift from the eventual
+  production path.
+- The cost of (a) for the lifetime of this feature is a single
+  always-on gRPC handler that returns the current in-memory counter
+  snapshot. No new privacy surface — the counters are already
+  hour-bucketed aggregates (FR-008) and the UDS is in
+  `stargate-ipc`, not host-published.
+
+**Alternatives considered**:
+
+- **Defer the declaration to `stargate.v2`** (the path before this
+  decision): rejected. Forces a major-version bump in the next
+  feature for a purely additive RPC; forces T025c/T025d to use a
+  test-only sideline that the production observation path will not
+  share.
+- **Test-only `/debug` HTTP endpoint on the data plane**: rejected.
+  Adds a parallel network listener to the DP whose privacy
+  properties (what it leaks, who can dial it, whether it survives a
+  bind-safety regression) need their own reasoning and their own
+  contract tests. The gRPC surface already has a transport-invariant
+  contract (`contracts/control-grpc.md` §"Transport invariants",
+  T022) that covers all the access-control concerns.
+- **Skip counter-invariant tests in v1 entirely**: rejected. FR-008
+  is privacy-critical (Principle III's "Logs contain only aggregate
+  counters at ≥1 hour resolution"). Principle VII's discipline
+  table puts auth and logging-restraint code in the test-first
+  mandatory tier; deferring the gate would ship the invariant
+  without a regression line.
+- **Inline the counter probe in the data-plane test binary** (a
+  test-only Go API call bypassing the RPC): rejected. The data
+  plane is built with `-trimpath` and ships as the production
+  binary; adding a build-tag-gated test surface diverges the test
+  binary from production and weakens the SC-005 perf-pass
+  guarantee.
+
+**Forward note (out of scope for v1)**: when the admin-UI feature
+lands, it wires the CP-side caller and the SQLite persistence layer
+on top of this same RPC declaration. The protobuf contract above is
+the long-lived shape; the only follow-up is CP-side code, not a
+schema change. `T025c` and `T025d` remain valid at that point and
+should keep passing without modification.
+
+---
+
 ## Outstanding open questions (none blocking)
 
 All architectural open questions enumerated in arch §15 that affect this
