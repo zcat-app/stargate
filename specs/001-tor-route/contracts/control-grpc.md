@@ -201,10 +201,35 @@ UDS file binds one listener, so two servers means two sockets.
 | `/run/stargate/dp.sock`      | data plane     | `ReloadTokens`       | control plane  |
 
 Each socket is owned by the runtime user of the plane that hosts it
-(e.g. `stargate-cp` for `control.sock`, `stargate-dp` for `dp.sock`).
-The `0600` mode therefore enforces role separation as well as access
-control: the CP cannot accidentally accept a `ReloadTokens` request,
-and the DP cannot accidentally emit a `SidecarEvent`.
+(`stargate-cp` for `control.sock`, `stargate-dp` for `dp.sock`) and
+group-owned by the shared `stargate-ipc` group (GID 5100). Both planes
+are members of that group. Mode is `0660`:
+
+- **Role separation comes from `bind(2)`, not from the file mode.**
+  Only the hosting plane is wired to call `bind(2)` on its socket
+  path; the OS rejects a second `bind(2)` against an existing socket.
+  The CP cannot accidentally accept a `ReloadTokens` request because
+  it never opens a listening FD on `dp.sock`; the DP cannot
+  accidentally emit a `SidecarEvent` because it never opens a
+  listening FD on `control.sock`.
+- **Mode `0660` + shared group lets the peer plane dial.**
+  `connect(2)` on a UDS requires write permission on the socket
+  file; with `0600` and distinct hosting UIDs the peer plane cannot
+  connect at all. The shared `stargate-ipc` group is the kernel-
+  enforced "loopback-equivalent" gate that keeps random unprivileged
+  same-host processes from dialling without granting access to every
+  local user.
+- **Distinct hosting UIDs are preserved** as defense-in-depth: a
+  compromise of one plane does not yield filesystem-write access to
+  the other plane's state (`stargate-control-state` is `stargate-cp`-
+  owned, `stargate-dp-state` is `stargate-dp`-owned). The shared
+  group covers only the IPC volume.
+
+Mutual ed25519 authentication on each socket is the second, primary
+gate against any caller that *does* manage to connect (e.g., a
+future LAN/VPS profile that exposes the proxy differently); the
+mode/group scheme is not load-bearing for authentication, only for
+keeping the dial surface small in the local profile.
 
 ### Invariants
 
@@ -212,8 +237,10 @@ and the DP cannot accidentally emit a `SidecarEvent`.
 |---------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | No TCP transport on either side                                                 | Contract test asserts each plane refuses to dial a TCP gRPC address.                                                                                                                                                                                                                                                            |
 | DP dials only `/run/stargate/control.sock`; CP dials only `/run/stargate/dp.sock` | Contract test points each plane at the *other* socket path and asserts the dial is rejected before any RPC is attempted.                                                                                                                                                                                                        |
-| `/run/stargate/control.sock` mode `0600`, owned by the control-plane user       | Contract test stats the socket file after init.                                                                                                                                                                                                                                                                                 |
-| `/run/stargate/dp.sock` mode `0600`, owned by the data-plane user               | Contract test stats the socket file after init.                                                                                                                                                                                                                                                                                 |
+| `/run/stargate/control.sock` mode `0660`, owned `stargate-cp:stargate-ipc`      | Contract test stats the socket file after init.                                                                                                                                                                                                                                                                                 |
+| `/run/stargate/dp.sock` mode `0660`, owned `stargate-dp:stargate-ipc`           | Contract test stats the socket file after init.                                                                                                                                                                                                                                                                                 |
+| Peer plane can `connect(2)` its dial-direction socket                            | Contract test as the *peer-plane UID* (in the `stargate-ipc` group) opens the dial-direction socket — the DP-uid process must succeed connecting `control.sock`; the CP-uid process must succeed connecting `dp.sock`. Regression gate against accidental revert to `0600` (which would silently break inter-plane comms).                                                                                                       |
+| Same-host process outside the `stargate-ipc` group cannot dial either socket    | Contract test as an arbitrary UID outside the group: both `connect(2)` calls fail with `EACCES`. Verifies the mode/group scheme actually narrows the dial surface and isn't equivalent to `0666`.                                                                                                                                |
 | Mutual auth: both planes have ed25519 keys                                      | Contract test verifies the data plane refuses a peer cert it cannot validate against `/etc/stargate/keys/control.pub` (on `control.sock`), and the control plane refuses a peer cert it cannot validate against `/etc/stargate/keys/dp.pub` (on `dp.sock`).                                                                     |
 | Schema-version handshake                                                        | Contract test simulates a `stargate.v2` peer offering an unknown major-version marker on either socket → the receiving plane logs to journal and exits non-zero (arch §5.5 row 4).                                                                                                                                              |
 | Plane-down survival                                                             | Contract test stops the control plane after a successful `ReloadTokens`; the data plane MUST continue accepting proxy requests on port 8881 and authenticating them. (When the CP comes back, it re-dials `dp.sock` and pushes the current generation; the DP re-dials `control.sock` with the §"WatchEvents" backoff schedule.) |

@@ -118,6 +118,54 @@ VER STATUS
 
 ---
 
+## SOCKS5 request-phase failures (post-auth)
+
+After username/password sub-negotiation succeeds, the client sends the
+SOCKS5 request (RFC 1928 §4); the data plane dials the Tor sidecar
+and bridges. If the route is DISABLED (`routeEnableMask[TOR]=false`),
+or the upstream connect fails, the data plane MUST reply with an
+RFC 1928 §6 SOCKS5 reply with the following mapping:
+
+| Stargate condition                            | RFC 1928 §6 `REP` | Mnemonic              |
+|-----------------------------------------------|-------------------|-----------------------|
+| `ROUTE_DOWN` (sidecar unreachable / unhealthy; `routeEnableMask[TOR]=false`)        | `0x03`            | Network unreachable   |
+| `ROUTE_REFUSED` (sidecar accepted SOCKS5 but refused the target — e.g. onion service unreachable) | `0x04` | Host unreachable      |
+| `ROUTE_TIMEOUT` (upstream dial+I/O deadline exceeded)                               | `0x06`            | TTL expired           |
+
+The reply byte sequence is:
+
+```
+VER REP RSV ATYP BND.ADDR     BND.PORT
+0x05 <c> 0x00 0x01 0x00 0x00 0x00 0x00 0x00 0x00
+```
+
+— a 10-byte response. `ATYP=0x01` (IPv4); `BND.ADDR=0.0.0.0` and
+`BND.PORT=0` are **always zeroed on failure**. The data plane MUST
+NOT echo the request's target address, the upstream sidecar's bind
+address, or any port-derived value into `BND.ADDR`/`BND.PORT` — those
+fields would be a destination-metadata leak on the failure path
+(Principle III; FR-008 — no per-request metadata in side channels).
+
+After writing the 10-byte reply, the data plane MUST close the
+connection. No further bytes are written. There is no body and no
+`X-Stargate-Error` header on the SOCKS5 path — those belong to the
+HTTP CONNECT response shape (`contracts/error-template.md`).
+
+### Invariants enforced by the contract test
+
+| Invariant                                                                                              | Test method                                                                                                                                                                |
+|--------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Route-disabled `ROUTE_DOWN` reply is exactly `05 03 00 01 00 00 00 00 00 00`                           | Stop the Tor sidecar (or arrange `routeEnableMask[TOR]=false` via withheld HEALTHY event); send authenticated SOCKS5 CONNECT; assert byte-exact 10-byte reply, then close. |
+| `ROUTE_REFUSED` reply is exactly `05 04 00 01 00 00 00 00 00 00`                                        | Tor up, target an unreachable `.onion`; assert byte-exact 10-byte reply.                                                                                                   |
+| `ROUTE_TIMEOUT` reply is exactly `05 06 00 01 00 00 00 00 00 00`                                        | Substitute the `slow` mode of `tests/integration/fake_socks5_tor.go` (T019a); assert byte-exact 10-byte reply.                                                              |
+| `BND.ADDR` and `BND.PORT` never carry destination, sidecar, or token-derived bytes                     | Leak-corpus scan over every reply byte (corpus per `contracts/error-template.md` §"Leak-corpus invariant"); zero hits.                                                     |
+| No additional bytes are written after the 10-byte reply, on any of the three failure codes              | Read until EOF after the reply; assert exactly 10 bytes received.                                                                                                          |
+| No HTTP-template bytes appear on the SOCKS5 path on any failure code                                    | Scan reply for the literal substring `<!doctype html>` (the template's first bytes per `contracts/error-template.md` §"Response body"); zero hits.                          |
+
+These tests live at `tests/contract/socks5/request_phase_failures_test.go`.
+
+---
+
 ## HTTP CONNECT path
 
 The client opens a TCP connection and sends:

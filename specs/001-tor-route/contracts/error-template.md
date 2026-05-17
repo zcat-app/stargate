@@ -12,8 +12,13 @@ template for the error codes this feature emits:
   this feature; arch §10.1 amended in lock-step).
 
 The data plane uses this template on the **HTTP CONNECT path only**.
-SOCKS5 path failures use the binary sub-negotiation response described
-in `contracts/socks5-auth.md`; there is no body to emit on SOCKS5.
+SOCKS5 path failures emit RFC 1928 / 1929 binary replies instead —
+auth failures use the sub-negotiation response (`contracts/socks5-auth.md`
+§"Username/password sub-negotiation"); post-auth route failures
+(`ROUTE_DOWN`/`ROUTE_REFUSED`/`ROUTE_TIMEOUT`) use the request-phase
+reply codes from `contracts/socks5-auth.md` §"SOCKS5 request-phase
+failures (post-auth)". There is no HTML body to emit on SOCKS5 in
+either case.
 
 **Source**: architecture spec §10.1 (codes), §10.2 (body template),
 §10.3 (contract test pattern), FR-009.

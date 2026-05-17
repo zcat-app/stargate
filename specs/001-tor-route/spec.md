@@ -349,13 +349,21 @@ tests-first suite (Principle VII) before implementation lands.
   explicitly NOT used"). The invariant on *what* is counted (this FR)
   is independent of the deferral on *where* the counts persist.
 - **FR-009**: When the Tor sidecar is unreachable (no TCP connection),
-  unhealthy (gRPC `Sidecar` health status reports UNHEALTHY in
-  architecture spec §5.2), or refuses the SOCKS5 target, the data
-  plane MUST return the privacy-safe error template defined in
-  architecture spec §10.2 with status and `{CODE}` chosen per §10.1
-  (`ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT` as applicable),
-  and `{ROUTE_LABEL} = "Tor"`. Response headers MUST be exactly the
-  four headers enumerated in architecture spec §10.3.
+  unhealthy (the `WatchEvents` stream has reported `EVENT_KIND_UNHEALTHY`
+  for `tor`; architecture spec §5.2), or refuses the SOCKS5 target,
+  the data plane MUST return a privacy-safe failure response with
+  `{CODE}` chosen per architecture spec §10.1 (`ROUTE_DOWN` /
+  `ROUTE_REFUSED` / `ROUTE_TIMEOUT` as applicable) and shape chosen
+  per the inbound protocol:
+  - **HTTP CONNECT path**: HTML template from architecture spec §10.2
+    with `{ROUTE_LABEL} = "Tor"` and the exactly-four headers
+    enumerated in §10.3. Detailed contract: `contracts/error-template.md`.
+  - **SOCKS5 path**: 10-byte RFC 1928 §6 reply with `BND.ADDR`/`BND.PORT`
+    zeroed, then close. The `REP` mapping is `ROUTE_DOWN→0x03`,
+    `ROUTE_REFUSED→0x04`, `ROUTE_TIMEOUT→0x06`; detailed contract:
+    `contracts/socks5-auth.md` §"SOCKS5 request-phase failures (post-auth)".
+  - **Both paths** MUST NOT carry destination, upstream, token, or
+    sidecar-derived bytes in any field of the response.
 - **FR-010**: The data plane MUST refuse to start if the bind-safety
   check would publish port 8881 on a non-loopback interface in the
   local profile. (Architecture spec §4 + §9.1 step 4 verification.)

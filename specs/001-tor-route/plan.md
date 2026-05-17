@@ -179,6 +179,7 @@ stargate/
 │   │   ├── auth/token.go             # constant-time auth      (new)
 │   │   ├── forward/tor.go            # SOCKS5h to tor:9050     (new)
 │   │   ├── controlclient/client.go   # gRPC client → CP        (new)
+│   │   ├── controlclient/server.go   # DP-hosted gRPC server (ReloadTokens, GetStatus) on /run/stargate/dp.sock (new)
 │   │   ├── controlclient/snapshot.go # dp-snapshot.json        (new)
 │   │   ├── audit/counters.go         # hour-bucket aggregates  (new)
 │   │   └── errortpl/render.go        # arch §10 template       (new)
@@ -267,8 +268,9 @@ intentional and is recorded here so future readers don't treat it as drift.
 
 ## Phase 0 / Phase 1 outputs
 
-- **Phase 0**: `research.md` — resolves 9 open questions the spec/architecture
-  flagged or that surfaced while planning.
+- **Phase 0**: `research.md` — resolves 10 open questions the spec/architecture
+  flagged or that surfaced while planning (§10 was added by a later
+  `/speckit-analyze` C1 remediation for the JS test toolchain pin).
 - **Phase 1**:
   - `data-model.md` — the entities the data plane and control plane hold
     in memory or on disk for this feature.

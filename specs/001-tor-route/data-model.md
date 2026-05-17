@@ -321,7 +321,7 @@ Named volumes this feature creates (referenced by name in
 | Volume                       | Mounted into                                  | Contents                                       |
 |------------------------------|-----------------------------------------------|------------------------------------------------|
 | `stargate-keys`              | data-plane and control-plane containers       | ed25519 keypairs for inter-plane gRPC mTLS     |
-| `stargate-ipc`               | both planes                                   | the two inter-plane UDS files: `/run/stargate/control.sock` (CP-hosted, `WatchEvents`) and `/run/stargate/dp.sock` (DP-hosted, `ReloadTokens`) — see `contracts/control-grpc.md` §"Socket topology" |
+| `stargate-ipc`               | both planes                                   | the two inter-plane UDS files: `/run/stargate/control.sock` (CP-hosted, `WatchEvents`; owned `stargate-cp:stargate-ipc` mode 0660) and `/run/stargate/dp.sock` (DP-hosted, `ReloadTokens`; owned `stargate-dp:stargate-ipc` mode 0660) — see `contracts/control-grpc.md` §"Socket topology" for why the shared `stargate-ipc` group (GID 5100) is the right mechanism for "peer dials, no one else does" |
 | `stargate-control-config`    | control-plane container                       | operator-authored `tokens.yaml`                |
 | `stargate-control-state`     | control-plane container                       | SQLite DB and Flyway state                     |
 | `stargate-dp-state`          | data-plane container                          | `dp-snapshot.json`                             |
