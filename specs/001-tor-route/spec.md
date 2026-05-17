@@ -419,13 +419,23 @@ tests-first suite (Principle VII) before implementation lands.
   The trust rationale MUST be recorded in `SECURITY-DECISIONS.md` and
   the architecture spec §7 amended in lock-step to remove the
   `NEEDS CLARIFICATION` for the Tor row.
-- **FR-016**: A contract-test suite at `tests/contract/tor/` MUST exist
-  and pass in CI before this feature merges. The suite MUST exercise:
-  SOCKS5h handshake on the rendered config; SOCKS5 connection to a
-  known-reachable onion service; rejection of SOCKS5 username-less
-  requests with the configured `IsolateSOCKSAuth` setting (to verify
-  the stream-isolation knob is actually applied); response on the
-  control port for a `GETINFO version` query under cookie auth.
+- **FR-016**: Contract-test suites under `tests/contract/**/` MUST exist
+  and pass in CI before this feature merges. The v1 surface comprises
+  six directories, each gating a distinct boundary the feature depends
+  on: `tor/` (Tor sidecar SOCKS5 + control port + port-exposure
+  invariants — covers SOCKS5h handshake on the rendered config, SOCKS5
+  connection to a known-reachable onion service, rejection of
+  username-less requests under `IsolateSOCKSAuth`, and `GETINFO version`
+  under cookie auth); `torrc/` (rendered Tor config byte-match and
+  per-invariant assertions); `socks5/` (port 8881 inbound SOCKS5
+  demux, auth, leak invariants, counter side-channel resistance,
+  request-phase failures); `error-template/` (privacy-safe error
+  template invariants for all four codes plus leak-corpus scan);
+  `control-grpc/` (inter-plane RPC + transport invariants for both
+  UDS sockets); `sidecar-proxy/` (docker-socket-proxy lockdown
+  invariants for the C1 privacy-TCB property). Adding a new
+  `tests/contract/<surface>/` directory in a future feature
+  automatically extends this gate.
 
 #### Bearer token configuration (v1 manual flow)
 

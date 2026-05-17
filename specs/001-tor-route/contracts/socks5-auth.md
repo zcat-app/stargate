@@ -151,6 +151,35 @@ connection. No further bytes are written. There is no body and no
 `X-Stargate-Error` header on the SOCKS5 path — those belong to the
 HTTP CONNECT response shape (`contracts/error-template.md`).
 
+### Deadlines
+
+`ROUTE_TIMEOUT` is driven by **one** bounded deadline, applied to the
+dial-and-handshake phase only:
+
+| Phase                                                                                         | Deadline | Mapped to        |
+|-----------------------------------------------------------------------------------------------|----------|------------------|
+| Open TCP to `tor:9050` + complete SOCKS5 method + auth (if any) + write request + read BND reply | **30 s** | `ROUTE_TIMEOUT`  |
+| Post-handshake (BND reply received; data plane is now a byte pipe)                            | **none** | n/a — long-lived |
+
+Rationale: 30 s is generous against Tor's worst-case .onion descriptor
+lookup + rendezvous-circuit build (typical: 5–15 s; observed tail: 20–25 s
+under guard pressure) while keeping a clearly-finite ceiling so the
+forwarding path doesn't queue dead connections. **No idle deadline is
+applied after handshake completes** — Principle I requires the data plane
+to be a transparent byte pipe (spec §"Edge Cases" — WebSocket upgrade
+through CONNECT; HTTP/2 over the same circuit); pinning a per-frame
+idle timeout would close long-lived flows that the upstream is keeping
+deliberately quiet. The connection lives until either end closes or the
+underlying Tor circuit drops (spec §"Edge Cases" — *Tor circuit failure
+mid-request* path, covered by T070a — verifies no synthesised error
+bytes leak in that case).
+
+Implementation guidance: the 30 s value is wired as a single named
+constant in `data-plane/internal/forward/tor.go` (T072) so any future
+re-tuning is one edit; the contract test `request_phase_failures_test.go`
+(T067a) drives `fake_socks5_tor.go slow` mode at a delay strictly greater
+than this value to deterministically trigger `0x06`.
+
 ### Invariants enforced by the contract test
 
 | Invariant                                                                                              | Test method                                                                                                                                                                |
