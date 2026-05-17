@@ -23,8 +23,14 @@ Related artefacts (some may not exist yet — author when needed):
 - `BUILD-DIFFS.md` — expected variations in native-image reproducibility.
 
 <!-- SPECKIT START -->
+**Current plan**: `specs/001-tor-route/plan.md` (Tor route v1 vertical
+slice — first end-to-end working route; local profile only, manual
+bearer-token config). Phase 0/1 artefacts alongside: `research.md`,
+`data-model.md`, `quickstart.md`, `contracts/`.
+
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan.
+shell commands, and other important information, read the current plan
+and its sibling artefacts.
 <!-- SPECKIT END -->
 
 ## Architecture at a glance
