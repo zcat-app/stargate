@@ -144,13 +144,33 @@ hashLen      = 32 bytes
 saltLen      = 16 bytes
 ```
 
-Rationale: the comparison happens once per inbound proxy request, so we
-choose parameters that take ~50 ms on a reference workstation — fast
-enough that per-request overhead is negligible (the .onion connect
-latency dominates by two orders of magnitude) but slow enough that brute-
-forcing a leaked snapshot file is non-trivial. The parameters are wired
-in shared constants (`auth.Argon2idParams`) so both planes use the same
-values; mismatch is a contract violation surfaced at handshake.
+Rationale: in the v1 common case the token list contains a single
+entry, so authentication hashes the candidate token once per inbound
+proxy request — ~50 ms on a reference workstation, fast enough that
+per-request overhead is negligible (the `.onion` connect latency
+dominates by two orders of magnitude) and slow enough that brute-
+forcing a leaked snapshot file is non-trivial. Because each stored
+token has its own salt (§1.2), authentication against N stored tokens
+requires N argon2id operations to keep the comparison constant-time
+(short-circuiting on the first match would leak which slot matched).
+The v1 design point is therefore **N ≤ 4** (≤~200 ms per-request auth
+overhead); see plan.md §"Scale/Scope" for the upper-bound rationale.
+The parameters are wired in shared constants (`auth.Argon2idParams`)
+so both planes use the same values; mismatch is a contract violation
+surfaced at handshake.
+
+**Forward note (out of scope for v1)**: if a later feature (multi-device
+enrollment is the natural one) needs N > 4, the cheapest path is to
+switch to a single shared salt per token generation — auth becomes
+O(1) regardless of N. The proto contract `TokenHash { hash, salt }` is
+already forward-compatible: the control plane fills all per-token
+`salt` fields with the same value, the data plane caches the
+candidate's hash across the comparison loop, no `stargate.v2` bump
+needed. The privacy tradeoff (a snapshot-file leak lets an attacker
+test candidates with one hash op instead of N) warrants a
+`SECURITY-DECISIONS.md` entry and a fresh `stargate-redteam` pass in
+whatever feature ships the change — it does not belong in this v1
+slice.
 
 ### 1.6 Entity-level invariants
 
@@ -288,7 +308,7 @@ Named volumes this feature creates (referenced by name in
 | Volume                       | Mounted into                                  | Contents                                       |
 |------------------------------|-----------------------------------------------|------------------------------------------------|
 | `stargate-keys`              | data-plane and control-plane containers       | ed25519 keypairs for inter-plane gRPC mTLS     |
-| `stargate-ipc`               | both planes                                   | the `/run/stargate/control.sock` UDS file      |
+| `stargate-ipc`               | both planes                                   | the two inter-plane UDS files: `/run/stargate/control.sock` (CP-hosted, `WatchEvents`) and `/run/stargate/dp.sock` (DP-hosted, `ReloadTokens`) — see `contracts/control-grpc.md` §"Socket topology" |
 | `stargate-control-config`    | control-plane container                       | operator-authored `tokens.yaml`                |
 | `stargate-control-state`     | control-plane container                       | SQLite DB and Flyway state                     |
 | `stargate-dp-state`          | data-plane container                          | `dp-snapshot.json`                             |

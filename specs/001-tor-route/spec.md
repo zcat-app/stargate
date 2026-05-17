@@ -480,8 +480,9 @@ tests-first suite (Principle VII) before implementation lands.
   the steps "install Stargate extension → paste bearer token → load a
   known `.onion`" in **under 5 minutes** of wall-clock time on a
   reference workstation, **without** consulting any documentation
-  beyond the README's quick-start section. Measured by walkthrough on
-  a clean profile.
+  beyond the project quick-start (`specs/001-tor-route/quickstart.md`
+  in this feature; a top-level README will mirror or supersede it in a
+  later feature). Measured by the walkthrough in T077 on a clean profile.
 - **SC-002**: Over a run of **100 sequential CONNECTs to 100 distinct
   first-party `.onion` domains** (synthetic test corpus published in
   `tests/integration/`), the Tor sidecar reports **≥95 distinct circuit

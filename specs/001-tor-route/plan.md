@@ -81,7 +81,7 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 
 - Single device, single user, single bearer token (the manual-config flow). Multi-device enrollment is a later feature.
 - One sidecar (Tor) in this slice; I2P, Nym, Direct sidecars are out of scope.
-- The token list is expected to contain 1 entry in the common case; the data plane's auth path is designed for O(N) constant-time comparison up to ~64 tokens without performance concern.
+- The token list is expected to contain 1 entry in the common case (the manual-config flow is single-device by design). Auth latency is **linear in N** because each candidate is argon2id-hashed against every stored salt — short-circuiting on the first match would leak which slot matched, so the comparison must stay constant-time across the full list (data-model.md §1.5 makes the cost model explicit). At the §1.5 parameters (~50 ms/hash on the reference workstation) the v1 design point is **N ≤ 4** (≤~200 ms per-request auth overhead, still ~2 orders of magnitude below the `.onion` connect latency that dominates a request). Beyond N≈4 the in-memory verification scheme needs redesign (e.g. a shared per-generation salt, with the offline-batch-attack tradeoff documented) and is out of scope for v1; the multi-device-enrollment feature is the natural place that decision lands. The gRPC contract is already forward-compatible with the redesign — see data-model.md §1.5 forward note.
 
 ---
 

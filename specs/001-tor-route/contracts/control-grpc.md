@@ -164,14 +164,38 @@ by the features that own them.
 ## Transport invariants (arch §5.4)
 
 The contract tests for this feature MUST verify the transport-level
-invariants of the inter-plane channel:
+invariants of the inter-plane channel.
 
-| Invariant                                    | Test                                                                                                                                                                |
-|----------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| UDS path is `/run/stargate/control.sock`     | Contract test asserts the data plane refuses to dial a TCP grpc address.                                                                                            |
-| Socket file mode is `0600`, owner `stargate` | Contract test stats the socket file after init.                                                                                                                     |
-| Mutual auth: both planes have ed25519 keys   | Contract test verifies the data plane refuses a peer cert it cannot validate against `/etc/stargate/keys/control.pub`.                                              |
-| Schema-version handshake                     | Contract test simulates a `stargate.v2` peer offering an unknown major-version marker → data plane logs to journal and exits non-zero (arch §5.5 row 4).            |
-| Plane-down survival                          | Contract test stops the control plane after a successful `ReloadTokens`; the data plane MUST continue accepting proxy requests on port 8881 and authenticating them. |
+### Socket topology
+
+This feature uses **two** UDS files in the shared `stargate-ipc`
+volume — one per gRPC server. The split follows directly from the
+RPC directions: `WatchEvents` is server-streamed by the control
+plane (CP must be the server), and `ReloadTokens` is invoked by the
+control plane on the data plane (DP must be the server). A single
+UDS file binds one listener, so two servers means two sockets.
+
+| Socket path                  | Hosted by      | Service(s) it serves | Dialed by      |
+|------------------------------|----------------|----------------------|----------------|
+| `/run/stargate/control.sock` | control plane  | `WatchEvents`        | data plane     |
+| `/run/stargate/dp.sock`      | data plane     | `ReloadTokens`       | control plane  |
+
+Each socket is owned by the runtime user of the plane that hosts it
+(e.g. `stargate-cp` for `control.sock`, `stargate-dp` for `dp.sock`).
+The `0600` mode therefore enforces role separation as well as access
+control: the CP cannot accidentally accept a `ReloadTokens` request,
+and the DP cannot accidentally emit a `SidecarEvent`.
+
+### Invariants
+
+| Invariant                                                                       | Test                                                                                                                                                                                                                                                                                                                            |
+|---------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| No TCP transport on either side                                                 | Contract test asserts each plane refuses to dial a TCP gRPC address.                                                                                                                                                                                                                                                            |
+| DP dials only `/run/stargate/control.sock`; CP dials only `/run/stargate/dp.sock` | Contract test points each plane at the *other* socket path and asserts the dial is rejected before any RPC is attempted.                                                                                                                                                                                                        |
+| `/run/stargate/control.sock` mode `0600`, owned by the control-plane user       | Contract test stats the socket file after init.                                                                                                                                                                                                                                                                                 |
+| `/run/stargate/dp.sock` mode `0600`, owned by the data-plane user               | Contract test stats the socket file after init.                                                                                                                                                                                                                                                                                 |
+| Mutual auth: both planes have ed25519 keys                                      | Contract test verifies the data plane refuses a peer cert it cannot validate against `/etc/stargate/keys/control.pub` (on `control.sock`), and the control plane refuses a peer cert it cannot validate against `/etc/stargate/keys/dp.pub` (on `dp.sock`).                                                                     |
+| Schema-version handshake                                                        | Contract test simulates a `stargate.v2` peer offering an unknown major-version marker on either socket → the receiving plane logs to journal and exits non-zero (arch §5.5 row 4).                                                                                                                                              |
+| Plane-down survival                                                             | Contract test stops the control plane after a successful `ReloadTokens`; the data plane MUST continue accepting proxy requests on port 8881 and authenticating them. (When the CP comes back, it re-dials `dp.sock` and pushes the current generation; the DP re-dials `control.sock` with the §"WatchEvents" backoff schedule.) |
 
 These tests live at `tests/contract/control-grpc/transport_test.go`.

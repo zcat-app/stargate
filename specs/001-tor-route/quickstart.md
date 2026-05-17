@@ -121,15 +121,17 @@ The extension's icon appears in the toolbar.
 Click the Stargate icon → **Options**. Paste the token you generated in
 Step 2 into the "Bearer token" field. Click **Save**.
 
-The options page shows:
+The options page shows this warning:
 
-> ⚠️ Bearer token stored in `storage.local`. This is the only storage
-> path the WebExtensions API offers; it is protected against access by
-> other browser extensions, but any process with filesystem access to
-> the browser profile can read it. See SECURITY-DECISIONS.md for
-> rationale.
+> Your bearer token will be saved to disk in this extension's
+> storage.local, inside your browser profile directory. Any local
+> process with read access to that directory can read it. Firefox ESR
+> offers no credential-grade alternative for extensions.
 
-This warning is per spec FR-019.
+The text above is the canonical string pinned in `data-model.md` §5.1;
+T056's inline test asserts byte-for-byte equality between
+`extension/options/options.html` and that canonical string, so any
+drift in either location fails CI. The warning satisfies spec FR-019.
 
 ---
 
