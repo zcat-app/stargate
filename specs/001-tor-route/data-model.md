@@ -246,8 +246,11 @@ caller, the CP writes the pulled rows to SQLite via Hibernate Panache.
 **Invariants**:
 
 - No row contains destination, token, or sub-hour data.
-- The data plane never reads from `aggregate_counters` — it only writes
-  via the gRPC pull from the control plane.
+- The data plane never reads from or writes to the SQLite
+  `aggregate_counters` table — it holds in-memory counters only and
+  serves a snapshot of them via the DP-hosted `GetStatus` RPC. Persisting
+  the snapshot to SQLite is the CP's responsibility (deferred to the
+  admin-UI feature's CP-side caller per §3 preamble above).
 
 ---
 

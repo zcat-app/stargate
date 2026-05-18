@@ -170,9 +170,8 @@ demonstrate value without it, but a release cannot ship without it.
 (`docker compose stop tor`). Issue a request to a `.onion` URL through
 port 8881. Capture the full response (status, headers, body). Assert
 the response byte-for-byte matches the privacy-safe template from the
-architecture spec §10.2 after substitution of only the four permitted
-fields (`{ROUTE_LABEL}`, `{CODE}`, `{LOCAL_REFERENCE_ID}`, and the fixed
-title/body chrome). Run the response through the curated leak-corpus
+architecture spec §10.2 after substitution of only the three permitted
+fields (`{ROUTE_LABEL}`, `{CODE}`, `{LOCAL_REFERENCE_ID}`). Run the response through the curated leak-corpus
 check from architecture spec §10.3 to confirm no forbidden substring
 appears in any header or body byte.
 

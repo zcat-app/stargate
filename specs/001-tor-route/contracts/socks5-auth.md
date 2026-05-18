@@ -115,6 +115,8 @@ VER STATUS
 
 …and proceed to the SOCKS5 request phase (RFC 1928 §4).
 
+#### Auth failure response
+
 On auth failure (`PASSWD` does not match any hash in the current
 generation, OR the generation is empty), the data plane MUST respond:
 
@@ -123,7 +125,14 @@ VER STATUS
 0x01 0xFF         ← failure
 ```
 
-…and then close the connection. No further bytes are written.
+…and then close the connection. No further bytes are written. This
+applies symmetrically to the `AUTH_REQUIRED` case (no token offered,
+malformed token, token-list empty); the 2-byte sub-negotiation reply
+plus close is the entire SOCKS5-path failure surface — no body, no
+template, no distinguishing substring across missing/malformed/empty
+cases (FR-006 / FR-009). The invariant tests for this byte sequence
+live in the table below (rows "Auth failure response is exactly
+`0x01 0xFF`" and "Auth failure does not leak token bytes").
 
 ### Invariants enforced by the contract test
 
