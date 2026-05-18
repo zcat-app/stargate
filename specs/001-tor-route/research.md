@@ -9,9 +9,9 @@ section number is referenced from `plan.md`.
 
 ## 1. Toolchain pins (Go, JDK, Quarkus, Mandrel)
 
-**Decision**: pin the data-plane Go toolchain to the latest `1.23.x` patch
-available at the time the scaffolding task lands (`go.mod` `toolchain
-go1.23.x` directive). Pin the control-plane to JDK 25 LTS via
+**Decision**: pin the data-plane Go toolchain to the latest `1.26.x` patch
+available at the time the scaffolding task lands (`go.mod` `go 1.26` +
+`toolchain go1.26.3` as of 2026-05-18). Pin the control-plane to JDK 25 LTS via
 `<maven.compiler.release>25` plus Temurin 25 in the CI build matrix. Pin
 Quarkus to the 3.33 LTS line (`quarkus.platform.version` property in the
 parent POM, managed by the Quarkus BOM). Defer the concrete Mandrel 25
@@ -20,10 +20,14 @@ is what this feature exercises.
 
 **Rationale**:
 
-- Go 1.23 is the line that ships current `crypto/subtle` constant-time
-  primitives needed for `auth.token` (FR-006). It is widely available in
-  CI runners and distro packages, and is supported by `-trimpath` +
-  `-buildvcs=false` for the byte-reproducible build (arch §12.1).
+- Go 1.26 is the current full-support line (Go's policy: only the two
+  latest minor releases receive security backports). The earlier pin
+  considered Go 1.23.x; that line reached end-of-support when Go 1.26
+  shipped in Feb 2026, so pinning to it now would accept zero security
+  backports for the lifetime of v1. `crypto/subtle` constant-time
+  primitives (needed for `auth.token`, FR-006), the `slog` package, and
+  the `-trimpath` + `-buildvcs=false` byte-reproducible build flags
+  (arch §12.1) all continue to work in 1.26.
 - JDK 25 LTS + Quarkus 3.33 LTS is the pin set by constitution v1.1.0
   (Sync Impact Report). Quarkus 3.33's platform BOM officially supports
   JDK 25 as a runtime target.
@@ -36,11 +40,13 @@ is what this feature exercises.
 
 **Alternatives considered**:
 
-- Go 1.22.x line: rejected — `crypto/subtle` has the comparison primitives
-  in 1.22 too, but 1.23 brings additional `slog` handlers that simplify
-  the data-plane's structured-but-content-free logging.
-- Go 1.24+: rejected — too new to be considered "pinned, manually
-  promoted" (Principle IV vibes).
+- Go 1.25.x (previous full-support line): rejected — adds friction with
+  no security benefit; we'd flip the pin again in ~3 months when Go 1.27
+  ships and 1.25 drops to security-only.
+- Go 1.24.x (security-only as of 1.26's release): rejected — drops to
+  end-of-support when 1.27 ships.
+- Go 1.23.x (the prior pin, now EOL): rejected — has been EOL since
+  Feb 2026; no security backports.
 - JDK 21 LTS: rejected — constitution v1.1.0 explicitly moved off 21+.
 - Quarkus 3.20.x: rejected — not the LTS line constitution pins.
 

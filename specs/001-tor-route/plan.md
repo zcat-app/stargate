@@ -31,7 +31,7 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 
 **Language/Version**:
 
-- **Data plane**: Go (toolchain pinned via `go.mod` `toolchain` directive — concrete patch fixed during scaffold task; v1.23.x line per `NEEDS CLARIFICATION` resolved in research.md §1).
+- **Data plane**: Go (toolchain pinned via `go.mod` `go` + `toolchain` directives — concrete patch fixed during scaffold task; v1.26.x line per research.md §1).
 - **Control plane**: JDK 25 LTS + Quarkus 3.33 LTS (constitution Tech Stack pin). This feature builds the *JVM-mode* artefact; native-image is not load-bearing for this slice (spec Assumption "Reproducibility holds for the Go data plane in this feature").
 - **Extension**: WebExtensions MV2, vanilla JavaScript (ES2022), no build step (arch §12.3, Principle VI — avoid npm supply chain on a privacy-critical component). **Node 20 LTS** is pinned as a *CI-only* dependency for extension JS unit tests (`node:test` runner, see research.md §10); no Node deps ship to the user.
 - **Sidecar**: Tor (from `deb.torproject.org`) on pinned `debian:12-slim` base, built by Stargate's Dockerfile at `sidecars/tor/`.
