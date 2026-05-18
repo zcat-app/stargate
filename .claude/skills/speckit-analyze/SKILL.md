@@ -77,36 +77,25 @@ Run `.specify/scripts/bash/check-prerequisites.sh --json --require-tasks --inclu
 Abort with an error message if any required file is missing (instruct the user to run missing prerequisite command).
 For single quotes in args like "I'm Groot", use escape syntax: e.g 'I'\''m Groot' (or double-quote if possible: "I'm Groot").
 
-### 2. Load Artifacts (Progressive Disclosure)
+### 2. Load Artifacts (Read In Full)
 
-Load only the minimal necessary context from each artifact:
+Read every artefact in the feature directory in full at least once. Do not skim, sample, or load partial sections. The cost of one missed inconsistency is days of rework or a shipped privacy bug; the cost of reading a few thousand extra lines is negligible by comparison.
 
-**From spec.md:**
+**Core artefacts** (always present, always read in full):
 
-- Overview/Context
-- Functional Requirements
-- Success Criteria (measurable outcomes — e.g., performance, security, availability, user success, business impact)
-- User Stories
-- Edge Cases (if present)
+- `FEATURE_DIR/spec.md` — overview, functional requirements (FR-###), success criteria (SC-###), user stories, edge cases
+- `FEATURE_DIR/plan.md` — architecture, stack, phases, technical constraints, project-structure tree, performance goals
+- `FEATURE_DIR/tasks.md` — every task ID, description, phase grouping, parallel markers `[P]`, referenced file paths
+- `.specify/memory/constitution.md` — every principle, every MUST / SHOULD statement, governance section
 
-**From plan.md:**
+**First-class supporting artefacts** (read in full if present — these often carry the byte-level invariants that drive consistency findings):
 
-- Architecture/stack choices
-- Data Model references
-- Phases
-- Technical constraints
+- `FEATURE_DIR/data-model.md` — entities, state machines, storage layout, named invariants
+- `FEATURE_DIR/research.md` — decisions and rationale, open questions, deferred items
+- `FEATURE_DIR/quickstart.md` — operator-visible behaviour, canonical strings, step references
+- `FEATURE_DIR/contracts/*.md` — wire protocols, gRPC service definitions, error templates, configuration grammars. Each contract file is an authoritative source for the invariants it declares; drift between a contract and the spec / tasks / plan is a finding.
 
-**From tasks.md:**
-
-- Task IDs
-- Descriptions
-- Phase grouping
-- Parallel markers [P]
-- Referenced file paths
-
-**From constitution:**
-
-- Load `.specify/memory/constitution.md` for principle validation
+If an artefact is referenced from another but does not exist, that is itself a finding.
 
 ### 3. Build Semantic Models
 
@@ -117,9 +106,9 @@ Create internal representations (do not include raw artifacts in output):
 - **Task coverage mapping**: Map each task to one or more requirements or stories (inference by keyword / explicit reference patterns like IDs or key phrases)
 - **Constitution rule set**: Extract principle names and MUST/SHOULD normative statements
 
-### 4. Detection Passes (Token-Efficient Analysis)
+### 4. Detection Passes (Exhaustive)
 
-Focus on high-signal findings. Limit to 50 findings total; aggregate remainder in overflow summary.
+Report every finding you can substantiate from the artefacts. Do not cap the count. If two findings share a root cause, cluster them under a single ID with sub-points; do not drop the second one to fit a budget. Underreporting is the failure mode this command exists to prevent.
 
 #### A. Duplication Detection
 
@@ -240,12 +229,12 @@ After reporting, check if `.specify/extensions.yml` exists in the project root.
 
 ## Operating Principles
 
-### Context Efficiency
+### Completeness
 
-- **Minimal high-signal tokens**: Focus on actionable findings, not exhaustive documentation
-- **Progressive disclosure**: Load artifacts incrementally; don't dump all content into analysis
-- **Token-efficient output**: Limit findings table to 50 rows; summarize overflow
-- **Deterministic results**: Rerunning without changes should produce consistent IDs and counts
+- **Exhaustiveness over brevity**: completeness is the goal; token cost is acceptable. The downstream cost of a missed finding (rework, shipped privacy bug) dwarfs the cost of reading every artefact.
+- **Read every artefact in full** before producing findings; do not progressively disclose or sample.
+- **No finding cap**: report every substantiated finding. Cluster duplicates under one ID; do not silently drop.
+- **Deterministic results**: rerunning without changes should produce consistent IDs and counts.
 
 ### Analysis Guidelines
 
