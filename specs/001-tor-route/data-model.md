@@ -185,10 +185,13 @@ slice.
 
 ## 2. Tor route enable state
 
-A single boolean in the data plane: `routeEnableMask[TOR]`. In this
-feature it is initialised to `true` at startup if the Tor sidecar's
-`SidecarEvent` stream has reported `HEALTHY`; it transitions to `false`
-on `UNHEALTHY` or `STOPPED`.
+A single boolean in the data plane: `routeEnableMask[TOR]`. It is
+initialised to `false` (DISABLED) at process start; the first `HEALTHY`
+`SidecarEvent` for `tor` transitions it to `true` (ENABLED). Subsequent
+`UNHEALTHY`, `STOPPED`, or `CRASHED` events transition it back to
+`false`; a later `HEALTHY` returns it to `true`. The full state machine
+is in the diagram below; the cold-start rationale (why no
+optimistic-enable path) is in the paragraph after.
 
 State transitions:
 

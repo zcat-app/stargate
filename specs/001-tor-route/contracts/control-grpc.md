@@ -177,7 +177,7 @@ rpc GetStatus(StatusRequest) returns (StatusResponse);
 ```
 
 **Direction**: any caller in the `stargate-ipc` group → data plane.
-In v1 the **only** caller is the contract-test harness (T025c, T025d);
+In v1 the **only** caller is the contract-test harness (T025c, T025d, T067b);
 the production CP→DP pull and the SQLite persistence path described in
 arch §5.2 + data-model.md §3 are **deferred to the admin-UI feature**.
 The RPC ships in `stargate.v1` proto now (T007) rather than later so
@@ -231,7 +231,14 @@ message RouteCounter {
    probes `GetStatus` before and after 100 auth-passing CONNECTs each
    transferring exactly `2B` bytes; asserts `request_count` delta is
    100 and `byte_count` delta is exactly `100 × 2B`.
-3. No-side-effect: between two `GetStatus` calls separated by ≥1 s of
+3. `tests/contract/socks5/route_failure_counter_test.go` (T067b) —
+   probes `GetStatus` before and after 60 auth-pass CONNECTs (20 each
+   against `ROUTE_DOWN`, `ROUTE_REFUSED`, `ROUTE_TIMEOUT`); asserts
+   `request_count` delta is exactly 60 and `byte_count` delta is
+   exactly zero. Gates the FR-008 / data-model.md §3 asymmetry that
+   route failures DO increment `request_count` post-auth while their
+   synthesised error-template bodies do NOT contribute to `byte_count`.
+4. No-side-effect: between two `GetStatus` calls separated by ≥1 s of
    wall-clock idle (no inbound port-8881 traffic), both counter values
    are identical — verifies `GetStatus` itself does not increment
    counters. Asserted as a sandwich inside T025c.
