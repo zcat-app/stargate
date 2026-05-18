@@ -277,9 +277,11 @@ tests-first suite (Principle VII) before implementation lands.
 - **FR-002**: The extension MUST set the SOCKS5 username on each request
   to the first-party domain string used by the request, computed per
   architecture spec §14.3 (prefer `requestDetails.documentUrl` /
-  `originUrl` eTLD+1; for a top-level `.onion` navigation the document
-  URL is the onion address itself; for first-party `.onion` subresources
-  the document URL is the parent page's onion address). The SOCKS5
+  `originUrl` eTLD+1), **extended by this feature with `.onion`-specific
+  rules** that arch §14.3 does not carry: for a top-level `.onion`
+  navigation the document URL is the onion address itself; for first-
+  party `.onion` subresources the document URL is the parent page's
+  onion address. The SOCKS5
   password MUST be set to the device's bearer token. **A privacy-critical
   test MUST verify that distinct first-party domains produce distinct
   Tor circuits in the running stack** (US2 acceptance scenarios 1 & 2
@@ -357,8 +359,10 @@ tests-first suite (Principle VII) before implementation lands.
   in this feature, the aggregates live in data-plane process memory
   only; persistence to the `aggregate_counters` SQLite table via the
   CP→DP `GetStatus` pull (arch §5.2) is deferred to the admin-UI
-  feature (data-model.md §3 / `contracts/control-grpc.md` "RPCs
-  explicitly NOT used"). The invariant on *what* is counted (this FR)
+  feature (data-model.md §3 / `contracts/control-grpc.md`
+  §"GetStatus (minimum subset)", which authoritatively records both
+  the in-scope test-harness caller and the deferred production
+  caller). The invariant on *what* is counted (this FR)
   is independent of the deferral on *where* the counts persist.
 - **FR-009**: When the Tor sidecar is unreachable (no TCP connection),
   unhealthy (the `WatchEvents` stream has reported `EVENT_KIND_UNHEALTHY`
