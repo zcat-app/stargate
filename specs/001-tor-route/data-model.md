@@ -227,16 +227,18 @@ Columns are defined in architecture spec §6.4; restated here for clarity:
 | `byte_count`    | INTEGER | Incremented by the total bytes **forwarded between client and upstream** in both directions at request close. The error-template body synthesised by the data plane for `AUTH_REQUIRED` / `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT` is NOT included — `byte_count` reflects actual cross-network transfer only. |
 
 The data plane buffers increments in-memory only in this feature. The
-CP→DP `GetStatus` pull (arch §5.2) is the documented flush mechanism
-but its wiring is **deferred to the admin-UI feature** — `GetStatus`
-is listed under "RPCs explicitly NOT used by this feature" in
-`contracts/control-grpc.md`. In v1 the counters live in the data
-plane's process memory and are lost on DP restart. The FR-008
-invariant (no per-request data, hour-bucketed aggregates only) holds
-regardless: deferring persistence does not relax what the DP records,
-only where the counts ultimately reach. When the admin-UI feature
-wires `GetStatus`, the CP writes the pulled rows to SQLite via
-Hibernate Panache.
+CP→DP `GetStatus` pull (arch §5.2) is the documented flush mechanism;
+the **RPC itself ships in v1's proto and is hosted by the DP** per
+`contracts/control-grpc.md` §"GetStatus (minimum subset)", but the
+**production CP-side caller** that flushes counters to SQLite is
+**deferred to the admin-UI feature**. In v1 the only caller is the
+contract-test harness (T025c, T025d), which probes counter invariants
+without persisting anything. The counters live in the data plane's
+process memory and are lost on DP restart. The FR-008 invariant
+(no per-request data, hour-bucketed aggregates only) holds regardless:
+deferring the CP caller does not relax what the DP records, only where
+the counts ultimately reach. When the admin-UI feature wires its
+caller, the CP writes the pulled rows to SQLite via Hibernate Panache.
 
 **Invariants**:
 
@@ -254,7 +256,7 @@ This feature writes audit-log rows on:
 |--------------------------------------------------|----------------------|----------------------------|-----------------------------------------------------------------|
 | New token label encountered during file load     | `enrolled`           | `<label>`                  | `{"source": "tokens.yaml", "generation": <gen>}`                |
 | Token label removed (label present in last load but missing now) | `revoked`            | `<label>`                  | `{"source": "tokens.yaml", "generation": <gen>}`                |
-| `tokens.yaml` parse failure                      | `config_error`       | `tokens.yaml`              | `{"kind": "parse" \| "validation", "line": <int or null>}`     |
+| `tokens.yaml` load failure                       | `config_error`       | `tokens.yaml`              | `{"kind": "parse" \| "validation" \| "io", "line": <int or null>}` — `parse` for YAML syntax errors; `validation` for per-entry format violations (wrong length, non-hex); `io` for unreadable-file conditions (e.g. `AccessDeniedException`). The **missing-file** case writes no row (the legitimate first-boot state is also "file does not exist yet"; per FR-018 the CP logs a warning and proceeds with an empty token list — distinguishing missing from misconfigured-permissions is what the `io` kind exists for). |
 | Tor sidecar transition to HEALTHY                | `sidecar_healthy`    | `tor`                      | `{"generation": <gen>}`                                         |
 | Tor sidecar transition to UNHEALTHY/STOPPED/CRASHED | `sidecar_unhealthy` | `tor`                      | `{"kind": "<UNHEALTHY|STOPPED|CRASHED>"}`                       |
 

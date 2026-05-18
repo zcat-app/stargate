@@ -170,14 +170,85 @@ enum EventKind {
    bounded backoff; events delivered after reconnect are applied
    normally.
 
+### `GetStatus` (minimum subset)
+
+```
+rpc GetStatus(StatusRequest) returns (StatusResponse);
+```
+
+**Direction**: any caller in the `stargate-ipc` group → data plane.
+In v1 the **only** caller is the contract-test harness (T025c, T025d);
+the production CP→DP pull and the SQLite persistence path described in
+arch §5.2 + data-model.md §3 are **deferred to the admin-UI feature**.
+The RPC ships in `stargate.v1` proto now (T007) rather than later so
+the admin-UI feature can wire its caller without bumping the package
+to `stargate.v2` — see plan.md §"Plan-level tensions surfaced for
+review" #10 for the trade-off rationale.
+
+**Request**: `StatusRequest {}` — empty in v1.
+
+**Response**:
+
+```proto
+message StatusResponse {
+  repeated RouteCounter counters = 1;
+}
+
+message RouteCounter {
+  string route        = 1;   // "TOR" in this feature; later sidecars add their own labels
+  uint64 hour_bucket  = 2;   // unix-hour bucket per data-model.md §3
+  uint64 request_count = 3;
+  uint64 byte_count   = 4;
+}
+```
+
+**Contract**:
+
+- The data plane MUST return a snapshot of its in-memory
+  `(route, hour_bucket) → (request_count, byte_count)` aggregates per
+  data-model.md §3. The snapshot is point-in-time; no locking guarantee
+  is offered across multiple `GetStatus` calls.
+- The data plane MUST NOT increment any counter as a side-effect of
+  serving `GetStatus` — this is the property T025c's no-traffic
+  sandwich verifies; a side-effecting probe would defeat the test's
+  purpose.
+- Auth-failure / auth-pass increment semantics live in data-model.md §3
+  and FR-008; this RPC is the read surface, not the write surface.
+- In v1, counter state is process-memory only; restarting the data
+  plane resets the snapshot. The persistence path to the
+  `aggregate_counters` SQLite table is out of scope here (arch §5.2 /
+  data-model.md §3).
+- The DP hosts this RPC on `/run/stargate/dp.sock` (T045), same socket
+  as `ReloadTokens`; the mode/group scheme described in §"Socket
+  topology" gates dial access to in-group callers.
+
+**Tests**:
+
+1. `tests/contract/socks5/auth_failure_counter_test.go` (T025c) —
+   probes `GetStatus` before and after 200 auth-failure attempts;
+   asserts both counter deltas are exactly zero.
+2. `tests/contract/socks5/auth_passed_counter_test.go` (T025d) —
+   probes `GetStatus` before and after 100 auth-passing CONNECTs each
+   transferring exactly `2B` bytes; asserts `request_count` delta is
+   100 and `byte_count` delta is exactly `100 × 2B`.
+3. No-side-effect: between two `GetStatus` calls separated by ≥1 s of
+   wall-clock idle (no inbound port-8881 traffic), both counter values
+   are identical — verifies `GetStatus` itself does not increment
+   counters. Asserted as a sandwich inside T025c.
+
 ---
 
 ## RPCs explicitly NOT used by this feature
 
 `EnableProtocol`, `DisableProtocol`, `RestartSidecar`,
-`ReloadBlocklist`, `GetStatus`. Listed for completeness; the contract
-test suite for this feature does not exercise them. They are exercised
-by the features that own them.
+`ReloadBlocklist`. Listed for completeness; the contract test suite
+for this feature does not exercise them. They are exercised by the
+features that own them.
+
+(`GetStatus` was in this list before the `/speckit-analyze` F3
+remediation introduced the minimum-subset v1 declaration above;
+the production CP→DP pull is still deferred to the admin-UI feature
+but the RPC itself is now in-scope for v1 via the test-harness caller.)
 
 ---
 

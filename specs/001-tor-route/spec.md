@@ -223,14 +223,18 @@ tests-first suite (Principle VII).
   surfaces a normal connection error. **No upstream-derived information
   is propagated** to the browser through error headers or response
   bodies (the data plane has none at that layer to leak).
-- **Bearer token missing or invalid**. The data plane rejects the request
-  with HTTP 407 (Proxy Authentication Required) and a privacy-safe body
-  (per architecture spec §10 template, with `{CODE} = AUTH_REQUIRED` —
-  this is a new error code added by this feature; see FR-006). The error
-  body MUST NOT distinguish "missing token" from "invalid token" beyond
-  the fact of auth failure. The data plane MUST NOT log the token,
-  the offered token's hash, or the destination of the rejected request
-  (Principle III — no per-request metadata).
+- **Bearer token missing or invalid**. On the HTTP CONNECT path, the
+  data plane rejects the request with HTTP 407 (Proxy Authentication
+  Required) and a privacy-safe body (per architecture spec §10
+  template, with `{CODE} = AUTH_REQUIRED` — this is a new error code
+  added by this feature; see FR-006). On the SOCKS5 path, the
+  rejection is the 2-byte RFC 1929 sub-negotiation failure
+  `0x01 0xFF` followed by socket close — no body is sent
+  (`contracts/socks5-auth.md` §"Auth failure response"). The CONNECT
+  body MUST NOT distinguish "missing token" from "invalid token"
+  beyond the fact of auth failure. The data plane MUST NOT log the
+  token, the offered token's hash, or the destination of the rejected
+  request (Principle III — no per-request metadata).
 - **Hostname is `.onion` but the service is unreachable or does not
   exist**. The Tor sidecar's SOCKS5 handshake responds with a SOCKS5
   failure (e.g., `general SOCKS server failure`, `host unreachable`).
@@ -311,12 +315,19 @@ tests-first suite (Principle VII) before implementation lands.
   the CONNECT request. Tokens are compared by constant-time hash
   against the list provided by the control plane (architecture spec
   §5.2 `ReloadTokens`). On absence or mismatch, the data plane MUST
-  respond with HTTP 407 (for CONNECT framing) or a SOCKS5
-  authentication-failure response, both carrying the privacy-safe
-  template body keyed `{CODE} = AUTH_REQUIRED`. **The data plane MUST
-  NOT include the offered token, its hash, or the rejected
-  destination's hostname/port in any response, log, or counter
-  increment.**
+  respond per the inbound protocol:
+  - **HTTP CONNECT path**: HTTP 407 (Proxy Authentication Required)
+    carrying the privacy-safe template body keyed
+    `{CODE} = AUTH_REQUIRED`. Detailed contract:
+    `contracts/error-template.md`.
+  - **SOCKS5 path**: the 2-byte RFC 1929 sub-negotiation failure
+    `0x01 0xFF`, then close the connection — no body, no template
+    (the sub-negotiation framing has no body field). Detailed
+    contract: `contracts/socks5-auth.md` §"Auth failure response".
+
+  **The data plane MUST NOT include the offered token, its hash, or
+  the rejected destination's hostname/port in any response, log, or
+  counter increment.**
 - **FR-007**: The data plane MUST forward authenticated inbound bytes
   on port 8881 to the Tor sidecar's SOCKS5 endpoint
   (`tor:9050` on the compose network), passing through the
