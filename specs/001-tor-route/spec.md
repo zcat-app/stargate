@@ -622,6 +622,14 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
   design migrates per the open question in architecture spec §15 #6 —
   this feature's spec does not foreclose either path, but the v1
   delivery assumes MV2 remains available.
+- **`proxy.onRequest` failover timeout: Firefox default.** The router
+  does not set `failoverTimeout` on the returned `proxy.ProxyInfo`
+  descriptor; Firefox's 5-second default applies. Pinning the value
+  would create a magic number with no spec-level rationale. If a
+  future feature needs a tighter or looser failover (e.g. for
+  high-latency bridge transports), the change ships with a
+  justification in that feature's research doc and an amendment to
+  this assumption. See tasks.md T054 for the v1 decision.
 
 ---
 
