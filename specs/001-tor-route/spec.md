@@ -385,13 +385,17 @@ tests-first suite (Principle VII) before implementation lands.
 #### Sidecar configuration
 
 - **FR-011**: The Tor sidecar MUST be configured (via control-plane-
-  rendered `torrc`, architecture spec §8) with: `SocksPort 9050
-  IsolateClientAddr IsolateSOCKSAuth`, `ControlPort 9051`,
-  `CookieAuthentication 1`, `ClientUseIPv6 0`, `AvoidDiskWrites 1`,
-  `UseBridges 0`. Bridge lines MUST be absent from the rendered
-  `torrc` for this feature (bridges are a separate feature spec).
-  **A contract test MUST verify the rendered `torrc` contains exactly
-  these directives** for v1 of this feature.
+  rendered `torrc`, architecture spec §8) with the directive set pinned
+  byte-for-byte in `contracts/torrc.md §"Rendered file"`:
+  `SocksPort 0.0.0.0:9050 IsolateClientAddr IsolateSOCKSAuth`,
+  `ControlPort 0.0.0.0:9051`, `CookieAuthentication 1`,
+  `CookieAuthFileGroupReadable 1`, `ClientUseIPv6 0`,
+  `AvoidDiskWrites 1`, `UseBridges 0`, `Log notice stdout`,
+  `SafeLogging 1`. Bridge lines MUST be absent from the rendered `torrc`
+  for this feature (bridges are a separate feature spec). **A contract
+  test (`tests/contract/torrc/render_byte_match_test.go`, per T029) MUST
+  verify the rendered `torrc` is byte-for-byte equal to the template in
+  `contracts/torrc.md §"Rendered file"`** for v1 of this feature.
 - **FR-012**: The Tor sidecar's `SocksPort` (9050) and `ControlPort`
   (9051, cookie-authenticated) MUST NOT be published to the host or to
   any compose network mapping. Both are reachable only internally on the

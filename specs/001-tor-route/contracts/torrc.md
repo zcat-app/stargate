@@ -41,17 +41,18 @@ SafeLogging 1
 | # | Invariant                                                                           | Why                                                                                                                                              |
 |---|-------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
 | 1 | `SocksPort` line contains both `IsolateClientAddr` and `IsolateSOCKSAuth`           | FR-011, Principle III — stream isolation by first-party domain depends on `IsolateSOCKSAuth`.                                                     |
-| 2 | `SocksPort` binds `0.0.0.0:9050` (container-internal)                               | arch §4.2 — the port is reachable only on the compose bridge network, never published to the host. The bind address is `0.0.0.0` *inside* the container; the compose file does not map the port to the host. |
+| 2 | `SocksPort` binds `0.0.0.0:9050` (container-internal)                               | arch §4.2 — the port is reachable only on the compose bridge network, never published to the host. The bind address is `0.0.0.0` *inside* the container; the compose file does not map the port to the host. Explicit `0.0.0.0:9050` (rather than bare `9050`) is defensive: the bind-address is part of the byte-match contract, so a future Tor release that changes the default bind-address still produces the same rendered file and a still-passing byte-match test. |
 | 3 | `ControlPort` is present on `0.0.0.0:9051` with `CookieAuthentication 1`            | FR-011 + FR-016 — the contract test for stream isolation queries the control port; cookie auth keeps that channel privileged.                     |
-| 4 | `ClientUseIPv6 0`                                                                   | FR-011 — avoid dual-stack ambiguity in the local profile; v1 is IPv4-only.                                                                         |
-| 5 | `AvoidDiskWrites 1`                                                                 | FR-011, THREAT-MODEL §3.1 — minimise incidental writes; guard state still persists by design (THREAT-MODEL §4.2 "Stargate-specific notes").       |
-| 6 | `UseBridges 0` and no `Bridge` lines anywhere in the file                           | FR-011, spec Assumption "No bridges". Bridge support is a separate feature spec.                                                                  |
-| 7 | `Log notice stdout` and `SafeLogging 1`                                             | Notice-level logs are sufficient for the healthcheck (it looks for "Bootstrapped 100%"); `SafeLogging 1` is Tor's directive to scrub sensitive fields from logs. |
-| 8 | NO `HiddenServiceDir` or `HiddenServicePort` directives                             | This feature is a *client* of onion services, not a service.                                                                                       |
-| 9 | NO `ExitPolicy` overrides                                                           | This feature does not run an exit node.                                                                                                            |
-| 10 | NO `DataDirectory` override (default `/var/lib/tor` from the Debian package)        | The default is mounted from `stargate-tor-state` for guard persistence; an override would risk pointing somewhere ephemeral.                       |
-| 11 | NO comments containing per-user data (no labels, no token references, no domains)   | The rendered file is a Principle III boundary — it must contain no per-user content.                                                              |
-| 12 | The file ends with a single trailing `\n` (no CRLF, no missing newline at EOF)      | Determinism / byte-for-byte test reproducibility.                                                                                                  |
+| 4 | `CookieAuthFileGroupReadable 1` is present alongside `CookieAuthentication 1`       | Required so the cookie file is readable by callers sharing the volume's group (mode `0640` instead of Tor's default `0600 tor:tor`). Without it, the contract-test harness at T062 cannot read the cookie without privilege escalation. |
+| 5 | `ClientUseIPv6 0`                                                                   | FR-011 — avoid dual-stack ambiguity in the local profile; v1 is IPv4-only.                                                                         |
+| 6 | `AvoidDiskWrites 1`                                                                 | FR-011, THREAT-MODEL §3.1 — minimise incidental writes; guard state still persists by design (THREAT-MODEL §4.2 "Stargate-specific notes").       |
+| 7 | `UseBridges 0` and no `Bridge` lines anywhere in the file                           | FR-011, spec Assumption "No bridges". Bridge support is a separate feature spec.                                                                  |
+| 8 | `Log notice stdout` and `SafeLogging 1`                                             | Notice-level logs are sufficient for the healthcheck (it looks for "Bootstrapped 100%"); `SafeLogging 1` is Tor's directive to scrub sensitive fields from logs. |
+| 9 | NO `HiddenServiceDir` or `HiddenServicePort` directives                             | This feature is a *client* of onion services, not a service.                                                                                       |
+| 10 | NO `ExitPolicy` overrides                                                           | This feature does not run an exit node.                                                                                                            |
+| 11 | NO `DataDirectory` override (default `/var/lib/tor` from the Debian package)        | The default is mounted from `stargate-tor-state` for guard persistence; an override would risk pointing somewhere ephemeral.                       |
+| 12 | NO comments containing per-user data (no labels, no token references, no domains)   | The rendered file is a Principle III boundary — it must contain no per-user content.                                                              |
+| 13 | The file ends with a single trailing `\n` (no CRLF, no missing newline at EOF)      | Determinism / byte-for-byte test reproducibility.                                                                                                  |
 
 ---
 
@@ -101,5 +102,5 @@ Any change to the rendered `torrc` requires:
 2. Updating `render_byte_match_test.go` in lock-step.
 3. Justifying the change in `SECURITY-DECISIONS.md` if the change
    removes a directive that this contract listed as a privacy
-   invariant (rows 1, 4, 5, 6, 7, 11).
+   invariant (rows 1, 5, 6, 7, 8, 12).
 4. `stargate-redteam` review pass before merge.

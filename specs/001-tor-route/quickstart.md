@@ -186,7 +186,7 @@ Optional sanity checks corresponding to the spec's measurable outcomes:
 In a second terminal, before browsing:
 
 ```bash
-sudo tshark -i lo -i any \
+sudo tshark -i any \
   -Y 'dns.qry.name contains ".onion" || dns.resp.name contains ".onion"'
 ```
 
@@ -247,6 +247,6 @@ docker volume rm \
   stargate-tor-config stargate-tor-state
 ```
 
-> ⚠️ Wiping `stargate-tor-state` discards Tor's entry-guard set, which
+> **Warning**: Wiping `stargate-tor-state` discards Tor's entry-guard set, which
 > degrades anonymity if you re-install (THREAT-MODEL §4.2). Only wipe
 > if you intend a fresh installation.

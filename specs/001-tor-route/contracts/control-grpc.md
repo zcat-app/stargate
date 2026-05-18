@@ -176,7 +176,7 @@ enum EventKind {
 rpc GetStatus(StatusRequest) returns (StatusResponse);
 ```
 
-**Direction**: any caller in the `stargate-ipc` group → data plane.
+**Direction (v1)**: contract-test harness caller in the `stargate-ipc` group → data plane.
 In v1 the **only** caller is the contract-test harness (T025c, T025d, T067b);
 the production CP→DP pull and the SQLite persistence path described in
 arch §5.2 + data-model.md §3 are **deferred to the admin-UI feature**.
@@ -322,5 +322,6 @@ keeping the dial surface small in the local profile.
 | Mutual auth: both planes have ed25519 keys                                      | Contract test verifies the data plane refuses a peer cert it cannot validate against `/etc/stargate/keys/control.pub` (on `control.sock`), and the control plane refuses a peer cert it cannot validate against `/etc/stargate/keys/dp.pub` (on `dp.sock`).                                                                     |
 | Schema-version handshake                                                        | Contract test simulates a `stargate.v2` peer offering an unknown major-version marker on either socket → the receiving plane logs to journal and exits non-zero (arch §5.5 row 4).                                                                                                                                              |
 | Plane-down survival                                                             | Contract test stops the control plane after a successful `ReloadTokens`; the data plane MUST continue accepting proxy requests on port 8881 and authenticating them. (When the CP comes back, it re-dials `dp.sock` and pushes the current generation; the DP re-dials `control.sock` with the §"WatchEvents" backoff schedule.) |
+| v1: production CP MUST NOT invoke `GetStatus` on `/run/stargate/dp.sock`; only the contract-test harness invokes it | Contract test greps the control-plane production source tree (excluding `**/test/**` and `**/*Test.java`) for `GetStatus(` and asserts zero matches. Regression gate against the admin-UI feature silently wiring a production caller before research.md §11's deferral is revisited. |
 
 These tests live at `tests/contract/control-grpc/transport_test.go`.
