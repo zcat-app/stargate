@@ -434,11 +434,20 @@ tests-first suite (Principle VII) before implementation lands.
 - **FR-016**: Contract-test suites under `tests/contract/**/` MUST exist
   and pass in CI before this feature merges. The v1 surface comprises
   six directories, each gating a distinct boundary the feature depends
-  on: `tor/` (Tor sidecar SOCKS5 + control port + port-exposure
-  invariants — covers SOCKS5h handshake on the rendered config, SOCKS5
-  connection to a known-reachable onion service, rejection of
-  username-less requests under `IsolateSOCKSAuth`, and `GETINFO version`
-  under cookie auth); `torrc/` (rendered Tor config byte-match and
+  on: `tor/` (Tor sidecar behavioural invariants under the rendered
+  config — port-exposure invariants (T019b); default-circuit fallback
+  under `IsolateSOCKSAuth` when an upstream SOCKS5 client provides no
+  username (T058a, pins the threat surface T047's outbound contract is
+  defensive against); cookie-authenticated control-port helper (T062)
+  consumed by tests under `torrc/` and `integration/`. SOCKS5h handshake
+  on the rendered config is verified transitively by T029 (torrc/
+  byte-match) and T033 (integration/ onion load); reachable-onion
+  connection is verified by T033 directly; `GETINFO version` under
+  cookie auth is verified transitively by any T062-consumer test
+  passing — these three are intentionally not duplicated as `tor/`
+  tasks per analyze finding E1: direct duplication adds CI bring-up
+  cost without privacy gain); `torrc/` (rendered Tor config byte-match
+  and
   per-invariant assertions); `socks5/` (port 8881 inbound SOCKS5
   demux, auth, leak invariants, counter side-channel resistance,
   request-phase failures); `error-template/` (privacy-safe error
@@ -466,9 +475,15 @@ tests-first suite (Principle VII) before implementation lands.
   only, not the offending token bytes).
 - **FR-018**: The control plane reads `tokens.yaml` **once at startup
   only** in v1. On load, it MUST push the hashed token list to the
-  data plane via `ReloadTokens` (FR-013) and emit a single audit-log
-  entry of kind `enrolled` for each new label. If the file is missing
-  or unreadable, the control plane MUST log a warning and proceed with
+  data plane via `ReloadTokens` (FR-013) and emit audit-log entries
+  per the diff against the previous load: `enrolled` for each new
+  label, `revoked` for each label present last load but missing now,
+  and `config_error` (with sub-kind `parse` | `validation` | `io`)
+  for load failures other than the legitimate first-boot missing-file
+  case. Full row schema and the missing-file exemption (no audit row;
+  the legitimate first-boot state is also "file does not exist yet")
+  are documented in `data-model.md` §4. If the file is missing or
+  unreadable, the control plane MUST log a warning and proceed with
   an empty token list (this disables routing until a token file is
   present and the container is restarted; the proxy returns
   `AUTH_REQUIRED` on all requests — Principle II's "continue routing"
@@ -545,8 +560,13 @@ tests-first suite (Principle VII) before implementation lands.
   loading only `.onion` content** through Stargate, a Wireshark capture
   on the host's loopback interface and on its egress NIC contains
   **zero** DNS queries (A, AAAA, MX, or otherwise) for any name ending
-  in `.onion`. Measured by capture filter `dns and frame contains
-  ".onion"` returning zero packets across both interfaces.
+  in `.onion`. Canonical assertion: no DNS packet's query or answer
+  fields contain a hostname matching `*.onion`. Wireshark/tshark
+  display filter: `dns.qry.name contains ".onion" || dns.resp.name
+  contains ".onion"`; expected zero matches across both interfaces.
+  The per-PR gate (T034) implements the same assertion via `gopacket`'s
+  DNS-layer parse; the release-tag measurement (T034a) and the
+  operator quickstart sanity check use the display filter above.
 - **SC-004**: For each of the four failure modes covered by the privacy-
   safe error template in this feature (`ROUTE_DOWN`, `ROUTE_REFUSED`,
   `ROUTE_TIMEOUT`, `AUTH_REQUIRED`), the rendered response contains

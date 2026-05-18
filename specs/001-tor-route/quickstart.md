@@ -114,8 +114,10 @@ your token.
 In Mullvad Browser:
 
 1. Open `about:debugging#/runtime/this-firefox`.
-2. Click **Load Temporary Add-on**.
-3. Select `dist/stargate-extension.zip` (or its inner `manifest.json`).
+2. Extract `dist/stargate-extension.zip` to a temporary directory.
+3. Click **Load Temporary Add-on** and select the extracted
+   `manifest.json`. (Firefox's "Load Temporary Add-on" accepts an
+   unpacked `manifest.json` or a signed `.xpi`, not a raw `.zip`.)
 
 The extension's icon appears in the toolbar.
 
@@ -184,12 +186,14 @@ Optional sanity checks corresponding to the spec's measurable outcomes:
 In a second terminal, before browsing:
 
 ```bash
-sudo tcpdump -i lo -i any 'port 53'
+sudo tshark -i lo -i any \
+  -Y 'dns.qry.name contains ".onion" || dns.resp.name contains ".onion"'
 ```
 
-Browse `.onion` sites for a few minutes. The capture should be empty.
-Any line containing `.onion` is a leak (spec SC-003 requires zero such
-packets).
+Browse `.onion` sites for a few minutes. The output should be empty
+(spec SC-003 requires zero matches). Same display filter as the per-PR
+gate (T034 via `gopacket`) and the release-tag Wireshark capture
+(T034a), so the three measurement points assert the same property.
 
 ### SC-002 — Stream isolation
 
