@@ -1,0 +1,2 @@
+Copyright [YEAR] The Stargate Authors
+SPDX-License-Identifier: Apache-2.0
