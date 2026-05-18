@@ -1,1 +1,27 @@
+# JetBrains
 .idea/
+
+# Go (data-plane/)
+*.exe
+*.test
+*.out
+vendor/
+
+# Java / Maven (control-plane/)
+target/
+*.class
+*.jar
+
+# Browser extension build output
+extension/dist/
+
+# Universal
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+*.log
+
+# Per-deployment env overlays — examples committed, actuals are not
+compose/env/*.env
+!compose/env/*.env.example
