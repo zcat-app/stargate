@@ -18,14 +18,14 @@ Templates reviewed against this amendment:
 
 Follow-up artefacts updated in this PR:
   ✅ specs/000-architecture/spec.md §12.2  — JDK / Quarkus / Mandrel pins.
-  ✅ specs/000-architecture/spec.md §15    — added open question 10
+  ✅ specs/000-architecture/spec.md §15    — added open question 9
                                             (Quarkus/JDK compat matrix).
   ✅ CONTRIBUTING.md prerequisites         — JDK / Quarkus / Mandrel pins.
 
 Deferred:
   - Concrete Mandrel 25 builder image digest pinned at first release tag
     once Quarkus 3.33 LTS / JDK 25 runtime compatibility is verified
-    against the Quarkus platform matrix (tracked in arch spec §15 #10).
+    against the Quarkus platform matrix (tracked in arch spec §15 #9).
 
 Governance note:
   This amendment was applied during the pre-GitHub scaffolding phase, before

@@ -293,12 +293,13 @@ tests-first suite (Principle VII) before implementation lands.
   scenario 3 encodes this).
 - **FR-004**: Before issuing routed requests, the extension MUST verify
   the hardening preconditions from architecture spec §14.5 (DoH off,
-  WebRTC restricted to `disable_non_proxied_udp` or stricter, HTTP/3
-  off). If any precondition fails, the extension MUST display a
-  blocking dialog explaining the issue and MUST NOT route requests
-  through port 8881 until the user remediates. The audit details and
-  the prefs it touches live in architecture spec §14.5; this feature
-  uses that audit but does not redefine it.
+  DoT off, WebRTC fully disabled, HTTP/3 off). If any precondition
+  fails, the extension MUST display a blocking dialog explaining the
+  issue and MUST NOT route requests through port 8881 until the user
+  remediates. The audit details and the prefs it touches live in
+  architecture spec §14.5; this feature uses that audit but does not
+  redefine it. (Aligns with Constitution Principle III bullet 3 — all
+  four leak channels covered.)
 
 #### Data plane behaviour
 
@@ -377,9 +378,9 @@ tests-first suite (Principle VII) before implementation lands.
     sidecar-derived bytes in any field of the response.
 - **FR-010**: The data plane MUST refuse to start if the bind-safety
   check would publish port 8881 on a non-loopback interface in the
-  local profile. (Architecture spec §4 + §9.1 step 4 verification.)
-  In this feature, the local profile binds to `127.0.0.1` only; LAN/VPS
-  are out of scope.
+  local profile. (Architecture spec §4 bind-safety paragraph,
+  enforced in `data-plane/internal/bind`.) In this feature, the local
+  profile binds to `127.0.0.1` only; LAN/VPS are out of scope.
 
 #### Sidecar configuration
 

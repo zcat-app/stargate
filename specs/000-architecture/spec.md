@@ -317,8 +317,9 @@ Stored in the control-plane container under
 opened in **WAL mode** (constitution Tech Stack). Hibernate Panache entities
 back each table; Flyway manages migrations (`control-plane/persistence/src/main/resources/db/migration/`).
 
+### 6.1 `enrolled_devices` — devices that may use the proxy
+
 ```
--- 6.1 Devices that may use the proxy.
 CREATE TABLE enrolled_devices (
   id              INTEGER PRIMARY KEY,
   name            TEXT    NOT NULL UNIQUE,
@@ -329,8 +330,11 @@ CREATE TABLE enrolled_devices (
   revoked_at      INTEGER                       -- nullable
 );
 -- last_seen_hour is bucketed to satisfy Principle III (≥1h log resolution).
+```
 
--- 6.2 Admin login credentials (WebAuthn + ed25519 fallback).
+### 6.2 `admin_credentials` — admin login credentials (WebAuthn + ed25519 fallback)
+
+```
 CREATE TABLE admin_credentials (
   id                INTEGER PRIMARY KEY,
   kind              TEXT    NOT NULL CHECK (kind IN ('webauthn','ed25519')),
@@ -341,8 +345,11 @@ CREATE TABLE admin_credentials (
   created_at        INTEGER NOT NULL,
   revoked_at        INTEGER
 );
+```
 
--- 6.3 Tor bridges (toggleable per Constitution v1 Scope).
+### 6.3 `tor_bridges` — toggleable per Constitution v1 Scope
+
+```
 CREATE TABLE tor_bridges (
   id          INTEGER PRIMARY KEY,
   bridge_line TEXT    NOT NULL UNIQUE,          -- full "Bridge ..." torrc line
@@ -350,8 +357,11 @@ CREATE TABLE tor_bridges (
   enabled     INTEGER NOT NULL DEFAULT 0,
   added_at    INTEGER NOT NULL
 );
+```
 
--- 6.4 Aggregate routing counters at hour resolution.
+### 6.4 `aggregate_counters` — routing counters at hour resolution
+
+```
 CREATE TABLE aggregate_counters (
   route        TEXT    NOT NULL CHECK (route IN ('TOR','I2P','NYM','DIRECT')),
   hour_bucket  INTEGER NOT NULL,                -- unix-hour
@@ -360,8 +370,11 @@ CREATE TABLE aggregate_counters (
   PRIMARY KEY (route, hour_bucket)
 );
 -- No destination, no token id, no sub-hour granularity (Principle III).
+```
 
--- 6.5 Append-only admin action audit.
+### 6.5 `audit_log` — append-only admin action log
+
+```
 CREATE TABLE audit_log (
   id           INTEGER PRIMARY KEY,
   ts           INTEGER NOT NULL,                -- unix seconds (admin action time, not user request time)
@@ -854,9 +867,19 @@ storage path Mullvad Browser exposes for credential-grade secrets.
 On first run and on browser startup, the extension performs a hardening
 audit (read-only):
 
-- WebRTC must be off (`privacy.network.webRTCIPHandlingPolicy =
-  disable_non_proxied_udp` or stricter).
+- WebRTC must be fully disabled (`privacy.network.peerConnectionEnabled
+  = false`, reachable via `browser.privacy.network.peerConnectionEnabled`
+  in the WebExtensions API). The older `webRTCIPHandlingPolicy =
+  disable_non_proxied_udp` setting is insufficient — it blocks non-proxied
+  UDP but leaves SDP/ICE candidate gathering reachable over the proxy,
+  which can leak local-network info to the remote peer (Constitution
+  Principle III, bullet 3).
 - DoH must be off (`network.trr.mode = 5`, Firefox).
+- DoT must be off. Firefox-ESR does not natively speak DoT, so the audit
+  asserts that no DoT-enabling preference exists (`network.dns.over_tls.*`
+  family is absent or all-false). This is a defense-in-depth check against
+  a future ESR adding DoT support; in current Firefox-ESR it is trivially
+  satisfied.
 - HTTP/3 / QUIC must be off (`network.http.http3.enable = false`).
 - No foreign extensions other than allowlisted ones (Mullvad Browser
   default uBlock Origin is allowlisted).

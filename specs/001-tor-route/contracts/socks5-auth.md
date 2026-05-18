@@ -4,8 +4,29 @@
 
 **Scope**: defines the precise byte-level behaviour of the data plane's
 authentication step on inbound TCP connections to `127.0.0.1:8881`. The
-contract tests at `tests/contract/error-template/` (for the CONNECT path)
-and `tests/contract/socks5/` (for the SOCKS5 path) implement these.
+contract tests live under two directories, split by *what is asserted*
+rather than *which inbound framing was sent*:
+
+- `tests/contract/error-template/` — tests of the privacy-safe error
+  template (body byte-match, header set, leak-corpus, reference-ID
+  invariants). Only CONNECT-framed inbound traffic emits this template,
+  so every test here exercises CONNECT framing, but the property under
+  test is the rendered template, not the inbound framing.
+- `tests/contract/socks5/` — every other test of the port-8881 inbound
+  surface: SOCKS5 demux + auth + sub-negotiation; CONNECT-framed
+  auth-success and byte-pipe transparency (which do not emit the
+  template); multi-protocol invariants such as the counter-side-channel
+  tests that probe both SOCKS5 and CONNECT under one fixture.
+
+The split matches FR-016's enumeration of the six contract directories
+(`socks5/` is "port 8881 inbound SOCKS5 demux, auth, leak invariants,
+counter side-channel resistance, request-phase failures";
+`error-template/` is "privacy-safe error template invariants for all
+four codes plus leak-corpus scan"). Tests that span both surfaces
+(e.g. T025b long-lived bidirectional CONNECT, T025c/T025d/T067b counter
+invariants under mixed SOCKS5 + CONNECT load) live under `socks5/`
+because the property under test is the port-8881 surface, not the
+template.
 
 **Source FRs**: FR-005, FR-006, FR-007, FR-008.
 
@@ -108,11 +129,13 @@ VER STATUS
 
 | Invariant                                                                          | Test method                                                                                                                                                          |
 |------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Methods response is exactly `0x05 0x02` for clients offering `0x02`                | Assert exact 2-byte response.                                                                                                                                        |
+| Methods response is exactly `0x05 0x02` for clients offering `0x02` alone           | Assert exact 2-byte response on input `0x05 0x01 0x02`.                                                                                                              |
+| Methods response is exactly `0x05 0x02` for clients offering `[0x00, 0x02]` (mixed) | Assert exact 2-byte response on input `0x05 0x02 0x00 0x02` — USERNAME/PASSWORD selected even when NO_AUTH is also offered. Guards against accidental NO_AUTH acceptance when both methods are present (the realistic-client shape — stock SOCKS5 clients often offer both). |
 | Methods response is exactly `0x05 0xFF` for clients offering only `0x00`           | Assert exact 2-byte response. Connection closes after.                                                                                                               |
 | Auth failure response is exactly `0x01 0xFF`                                       | Assert exact 2-byte response. Connection closes after.                                                                                                               |
 | Auth failure does not leak token bytes                                              | Capture all bytes the data plane writes between the client sending the password and the close. Assert no occurrence of the offered token bytes anywhere in the capture. |
 | Constant-time comparison                                                            | Statistical timing test: two distinct invalid passwords, same length, generate close-to-equal latency distributions. (Best-effort — true constant-time verification is hard from userland.) |
+| Slot-invariance across the token list (data-model.md §1.5 "constant-time across the full list") | With N=4 stored token hashes, the auth-pass latency distribution is statistically indistinguishable whether the matching token is at slot index 0, 1, 2, or 3 (and against the all-fail case). An early-exit-on-first-match loop would fail this assertion by producing monotonically increasing latency by slot index. |
 | No per-request log on auth failure                                                  | Tail the data plane's journal during the test; assert no entry containing the destination, the token, the username, or a per-request timestamp at finer than hour resolution. |
 | Same-host processes without a token cannot proxy                                    | Open a loopback TCP connection to 8881, send SOCKS5 with `0x05 0x01 0x00` (NO_AUTH only) → connection rejected.                                                       |
 

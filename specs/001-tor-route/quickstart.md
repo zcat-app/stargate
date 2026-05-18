@@ -239,7 +239,8 @@ the operator's responsibility:
 ```bash
 docker volume rm \
   stargate-keys stargate-ipc stargate-control-config \
-  stargate-control-state stargate-dp-state stargate-tor-state
+  stargate-control-state stargate-dp-state \
+  stargate-tor-config stargate-tor-state
 ```
 
 > ⚠️ Wiping `stargate-tor-state` discards Tor's entry-guard set, which
