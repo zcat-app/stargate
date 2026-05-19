@@ -19,7 +19,7 @@ syntax = "proto3";
 
 package stargate.v1;
 
-option go_package = "github.com/zcat-app/stargate/data-plane/grpcpb";
+option go_package = "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb";
 
 service Control {
   // CP -> DP: atomically swap the bearer-token hash set. See
