@@ -24,12 +24,16 @@ cd "$(git rev-parse --show-toplevel)"
 SPDX_MARKER='SPDX-License-Identifier: Apache-2.0'
 HEAD_LINES=15
 
-# Tracked files matching the extensions T006 enumerates. Dockerfile is
-# matched in three forms to cover bare, suffixed, and prefixed naming.
+# Tracked files matching the extensions T006 enumerates. The leading
+# `*` in the Dockerfile patterns is load-bearing: in git pathspec, a
+# bare `Dockerfile` only matches a file literally at the repo root,
+# so `data-plane/Dockerfile` and similar nested cases need the leading
+# wildcard to be picked up. `*Dockerfile` covers bare-name Dockerfiles
+# at any depth; `*Dockerfile.*` covers `Dockerfile.<suffix>` variants.
 mapfile -t candidates < <(
   git ls-files -- \
     '*.go' '*.java' '*.js' '*.proto' '*.sh' '*.sql' \
-    'Dockerfile' 'Dockerfile.*' '*.Dockerfile' \
+    '*Dockerfile' '*Dockerfile.*' \
   | grep -Ev '^(\.specify/|licenses/)' \
   || true
 )
