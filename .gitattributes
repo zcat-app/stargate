@@ -1,0 +1,11 @@
+# Pin line endings by file type so platform-native wrappers/scripts don't
+# show up as spuriously "modified" when an editor or tool re-flips CRLF<->LF.
+# Surgical on purpose: only wrapper/script types are governed here, to avoid a
+# repo-wide renormalization. `text eol=crlf` stores LF in the repo and checks
+# out CRLF in the working tree (correct for Windows batch); `eol=lf` keeps
+# unix scripts LF everywhere.
+
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+mvnw   text eol=lf
+*.sh   text eol=lf
