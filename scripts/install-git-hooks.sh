@@ -12,7 +12,7 @@ repo_root="$(git rev-parse --show-toplevel)"
 git -C "$repo_root" config core.hooksPath .githooks
 chmod +x "$repo_root/.githooks/"* 2>/dev/null || true
 
-echo "✓ core.hooksPath set to .githooks (pre-commit secret scan active)."
+echo "✓ core.hooksPath set to .githooks (pre-commit secret scan + pre-push main-guard active)."
 if ! command -v gitleaks >/dev/null 2>&1; then
   echo "  note: gitleaks not found — the hook will use its built-in fallback scan."
   echo "        install gitleaks for stronger coverage (https://github.com/gitleaks/gitleaks)."
