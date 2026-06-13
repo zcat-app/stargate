@@ -269,6 +269,37 @@ the human pair or the AI agent is doing the typing.
   header inspection" is a precise instruction; "make it more private" is
   not.
 
+### Working doctrine
+
+Adopted from an external team's hard-won AI-assisted workflow. These apply to
+every change, large or small — they are what keep autonomous runs honest.
+
+- **Falsify before publishing.** Every claim, recommendation, or change is a
+  hypothesis. Before stating it, name what would make it *false* and check
+  *that* — re-checking the supporting evidence you already have is confirmation,
+  not verification. Also ask "is there a better option I haven't considered?"
+  If either step fails, revise or drop it. A five-line suggestion gets this too.
+- **Surgical changes only.** Every changed line traces to an acceptance
+  criterion, the explicit request, or an orphan your own change created. No
+  drive-by edits to adjacent code, comments, or formatting. Spotted a real bug
+  or a better approach mid-task? File a follow-up task — don't expand scope.
+- **Ground before acting.** Read the whole task and verify the relevant state
+  on disk *before* batching edits or running a build that depends on it. Don't
+  pair a read with the action that consumes it in the same blind step.
+- **No defensive code inside trust boundaries.** Validate at system *edges*
+  (external input, config parsing, deserialization, IPC, file I/O — e.g. the
+  bind-safety check, token auth, proto decode). *Inside* those boundaries,
+  internal-code-calling-internal-code is trusted: no null checks for values that
+  can't be null, no try/catch around things that can't throw. Make the contract
+  explicit (typed nullability, schema) so the paranoia is unnecessary, and let
+  the build enforce it. This is Principle I's "dumb router" generalised to a
+  coding standard for both planes.
+
+The per-task review loop these feed into — the fresh-context
+`stargate-codereview` gate, the round cap, and the escalation menu — is
+documented at `.specify/memory/review-loop.md`. The single green gate every
+"done" depends on is `scripts/verify.sh`.
+
 ## PR norms
 
 - **One feature or bug per PR.** Link to the feature spec
