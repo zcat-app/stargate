@@ -32,6 +32,16 @@ set -uo pipefail   # NOT -e: run every gate and aggregate, don't abort early.
 
 cd "$(git rev-parse --show-toplevel)"
 
+# Make the Go toolchain discoverable even when the caller's shell never sourced
+# ~/.profile — e.g. a non-interactive CI runner, or the tool-shell an autopilot
+# /loop spawns per command. go.dev's tarball installs to /usr/local/go; without
+# this, the `have go` check below false-SKIPs the Go gate while Go is in fact
+# installed — a silent green that never compiles the data plane. Pure fallback:
+# if `go` is already on PATH this is a no-op, and if Go is genuinely absent the
+# gate still SKIPs honestly.
+command -v go >/dev/null 2>&1 || PATH="$PATH:/usr/local/go/bin"
+export PATH
+
 mkdir -p target
 LOG="target/verify.log"
 : > "$LOG"
