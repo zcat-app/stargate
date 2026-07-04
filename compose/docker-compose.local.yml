@@ -1,0 +1,195 @@
+# Copyright 2026 The Stargate Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# compose/docker-compose.local.yml — Stargate local profile (T015).
+#
+# The `local` deployment profile (per THREAT-MODEL.md §3.1: assumes local
+# code execution is already game-over) brings up the full Stargate runtime
+# on a single host, with the data plane's inbound proxy port (8881) bound
+# to loopback only and every other service reachable solely on the
+# compose-internal bridge network. This file is the single source of truth
+# for service topology, runtime users, volume mounts, and the
+# docker-socket-proxy trust boundary (T017a).
+#
+# Verification:
+#   - Static structural contract test: tests/contract/compose/local_compose_test.sh
+#     (PR cadence; no daemon containers started).
+#   - Runtime port-exposure contract test: tests/contract/tor/port_exposure_test.go
+#     (T019b; brings this file up).
+#   - Runtime proxy-lockdown contract test: tests/contract/sidecar-proxy/
+#     (T019c; HTTP probes against POST=0 lockdown).
+#   - Runtime inter-plane UDS topology: tests/contract/control-grpc/ (T022).
+#
+# Out-of-scope here: the LAN (WireGuard sidecar) and VPS (WireGuard/Tailscale
+# tunnel) profiles ship as separate feature specs; this file does NOT carry
+# profile-selection switches or alternate service definitions.
+#
+# No `version:` key: Docker Compose v2 ignores it and warns if present; the
+# Compose specification (current) is the authority.
+
+# The single external image this profile pulls. Digest-pinned per Principle
+# IV; see compose/env/local.env.example for the bump procedure. The three
+# Stargate-built images (DP/CP/Tor) use `build:` directives below — their
+# content pin is the base-image digest already encoded in each Dockerfile
+# (data-plane/Dockerfile, control-plane/Dockerfile, sidecars/tor/Dockerfile).
+# Final-image digest pinning for Stargate-built images is a release-tag-time
+# concern (T017 SECURITY-DECISIONS.md rotation policy) and is intentionally
+# absent from this file in the Phase-2 scaffolding horizon.
+
+services:
+  # ─────────────────────────────────────────────────────────────────────
+  # stargate-dp — the Go data plane (Principle I: dumb router).
+  # Listens on 127.0.0.1:8881 (FR-005); dials tor:9050 (FR-007); hosts
+  # /run/stargate/dp.sock exposing ReloadTokens + minimum-subset GetStatus.
+  # UID 5102 / supplementary GID 5100 MUST match data-plane/Dockerfile and
+  # contracts/control-grpc.md §"Socket topology" exactly.
+  #
+  # NO depends_on (Constitution Principle II): the data plane MUST keep
+  # routing if the control plane is unreachable. CP-down survival is gated
+  # by the control-grpc contract test suite (T022).
+  # ─────────────────────────────────────────────────────────────────────
+  stargate-dp:
+    build:
+      context: ../data-plane
+      dockerfile: Dockerfile
+    image: stargate/stargate-dp:local
+    user: "5102:5100"
+    # Long-form port binding: explicit 127.0.0.1 prefix is load-bearing.
+    # The short form `8881:8881` would silently bind 0.0.0.0 (FR-005
+    # violation). FR-012's "no host publication" rule for Tor applies in
+    # spirit here too: the proxy is reachable ONLY from loopback.
+    ports:
+      - "127.0.0.1:8881:8881/tcp"
+    volumes:
+      - stargate-ipc:/run/stargate
+      - stargate-keys:/etc/stargate/keys:ro
+      - stargate-dp-state:/var/lib/stargate
+    networks:
+      - stargate-internal
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────────────────────────────────
+  # stargate-control — the Quarkus control plane (Principle II: control
+  # plane unreachable ≠ data plane down). Hosts /run/stargate/control.sock
+  # exposing WatchEvents; renders torrc; observes Tor lifecycle via
+  # docker-socket-proxy. UID 5101 / supplementary GID 5100 MUST match
+  # control-plane/Dockerfile exactly.
+  # ─────────────────────────────────────────────────────────────────────
+  stargate-control:
+    build:
+      context: ../control-plane
+      dockerfile: Dockerfile
+    image: stargate/stargate-control:local
+    user: "5101:5100"
+    depends_on:
+      - tor
+      - docker-socket-proxy
+    volumes:
+      - stargate-ipc:/run/stargate
+      - stargate-keys:/etc/stargate/keys
+      - stargate-control-config:/etc/stargate:ro
+      - stargate-control-state:/var/lib/stargate
+      # RW: the CP renders torrc into this volume at startup (T037
+      # TorrcRenderer). The Tor sidecar mounts the SAME volume :ro.
+      - stargate-tor-config:/etc/tor
+    networks:
+      - stargate-internal
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────────────────────────────────
+  # tor — Stargate-built Tor sidecar (T014 / FR-015). The service key MUST
+  # be `tor` so compose DNS yields the `tor:9050` dial target FR-007 and
+  # T047 depend on.
+  #
+  # FR-012: SocksPort (9050) and ControlPort (9051) are NEVER listed under
+  # `ports:` — they are compose-internal only. The contract test T019b
+  # gates this at runtime (TCP connect from host network namespace to
+  # 127.0.0.1:{9050,9051} both fail; `docker inspect tor` returns no
+  # published binding; tor:9050 reachable from inside stargate-dp).
+  # ─────────────────────────────────────────────────────────────────────
+  tor:
+    build:
+      context: ../sidecars/tor
+      dockerfile: Dockerfile
+    image: stargate/tor:local
+    # T014's Dockerfile drops to the non-root `tor` user via `USER tor`.
+    # No `user:` override here — the image's directive wins.
+    volumes:
+      - stargate-tor-config:/etc/tor:ro
+      - stargate-tor-state:/var/lib/tor
+    networks:
+      - stargate-internal
+    restart: unless-stopped
+
+  # ─────────────────────────────────────────────────────────────────────
+  # docker-socket-proxy — the ONLY service that mounts /var/run/docker.sock
+  # (T017a trust rationale). Bridges the host docker socket to a filtered
+  # HTTP API at http://docker-socket-proxy:2375 over the compose-internal
+  # network. Locked to EVENTS=1 + CONTAINERS=1 + POST=0 so the control
+  # plane can OBSERVE but cannot spawn/kill/exec (T019c gates the lockdown
+  # at runtime).
+  #
+  # NEVER add a `ports:` key here — the proxy is compose-internal only.
+  # NEVER add another service that mounts /var/run/docker.sock — T017a's
+  # trust model is "the proxy is the single point of docker.sock exposure,
+  # and a compromise of the proxy is host-root-equivalent"; adding a
+  # second mounter voids that isolation property.
+  # ─────────────────────────────────────────────────────────────────────
+  docker-socket-proxy:
+    image: ${DOCKER_SOCKET_PROXY_IMAGE}
+    volumes:
+      # NOTE on the `:ro` suffix: for a Unix-domain socket node it is
+      # convention-only, NOT a security boundary. The kernel does not
+      # enforce a read-only direction on AF_UNIX sockets — the proxy can
+      # still issue write-direction requests (POST /containers/create etc.)
+      # to the Docker daemon regardless of the mount mode. The actual
+      # enforcement of "observe but cannot mutate" is the HTTP-level filter
+      # inside the proxy (EVENTS=1, CONTAINERS=1, POST=0 below), gated at
+      # runtime by T019c. We retain `:ro` purely because it documents
+      # intent and is a harmless no-op; do NOT rely on it for isolation.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      EVENTS: 1
+      CONTAINERS: 1
+      POST: 0
+      # Every other endpoint flag is intentionally UNSET —
+      # tecnativa/docker-socket-proxy defaults unset flags to deny. Do not
+      # add EXEC, BUILD, IMAGES, INFO, NETWORKS, NODES, PLUGINS, SERVICES,
+      # SESSION, SWARM, SYSTEM, TASKS, VOLUMES, AUTH, DISTRIBUTION,
+      # SECRETS, CONFIGS, COMMIT, or GET without an explicit threat-model
+      # amendment (the contract test local_compose_test.sh M5 will fail).
+    networks:
+      - stargate-internal
+    restart: unless-stopped
+
+networks:
+  stargate-internal:
+    driver: bridge
+
+volumes:
+  # Exactly the seven named volumes from data-model.md §6 — local_compose_test.sh
+  # M7 asserts the exact set. Do not add or rename without amending the data
+  # model contract first.
+  stargate-keys:
+    # ed25519 keypairs for inter-plane gRPC mTLS; mounted into both planes
+    # at /etc/stargate/keys. CP-owned at runtime (writes cp.pub/dp.pub); DP
+    # reads via :ro.
+  stargate-ipc:
+    # The two inter-plane UDS files (control.sock, dp.sock), owned
+    # *:stargate-ipc mode 0660 per contracts/control-grpc.md §"Socket
+    # topology". Mounted into both planes at /run/stargate.
+  stargate-control-config:
+    # Operator-authored tokens.yaml (T035). Mounted into CP only, :ro.
+  stargate-control-state:
+    # SQLite DB + Flyway state (T012). Mounted into CP only.
+  stargate-dp-state:
+    # dp-snapshot.json. Mounted into DP only. Distinct from CP state —
+    # compromise of one plane does not yield write access to the other's
+    # state volume (defense-in-depth, control-grpc.md §"Socket topology").
+  stargate-tor-state:
+    # Tor DataDirectory (/var/lib/tor) — entry-guard persistence
+    # (THREAT-MODEL §4.2). Also hosts the control-port cookie file.
+  stargate-tor-config:
+    # Rendered torrc (T037 TorrcRenderer). CP writes (RW); Tor reads (:ro).
+    # Distinct volume from stargate-tor-state so config and runtime state
+    # have different writers and different mount semantics.
