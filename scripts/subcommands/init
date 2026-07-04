@@ -1,0 +1,310 @@
+#!/usr/bin/env bash
+# Copyright 2026 The Stargate Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# scripts/subcommands/init — `stargate init`: bring up a fresh Stargate stack
+# (local profile), minimum subset per research.md §8 / arch §9.1.
+#
+# WHAT THIS SHIPS (research §8 "delivered" subset):
+#   1. Preflight         — docker + docker compose v2 + docker socket + openssl.
+#   2. Key generation    — ed25519 inter-plane keypairs into the stargate-keys
+#                          named volume with arch-§4.3 ownership/perms.
+#   3. Compose up        — hard-coded compose/docker-compose.local.yml, bounded
+#                          healthcheck wait (default 60 s).
+#   4. Verification      — Tor route only (no I2P/Nym/Direct).
+#   5. Status table      — DP + CP + Tor sidecar (the components present).
+#   6. Exit codes        — 0/10/20/30/40/50 (stable contract surface).
+#
+# WHAT IS DEFERRED (T016 §Out-of-scope): --profile selection, admin enrollment
+# URL / WebAuthn setup, --force / --repair, export/import/wipe subcommands,
+# verification of non-Tor routes. Re-running init against an initialized stack
+# is handled ONLY to the extent of M5 (do-not-clobber-keys): if stargate-keys
+# already contains keys, key generation is skipped (arch §9.3).
+#
+# EXIT CODES (arch §9.1 §7):
+#   0   success
+#   10  preflight failure (docker / compose / socket / openssl missing or dead)
+#   20  key-generation failure
+#   30  compose failure (build / up)
+#   40  healthcheck timeout
+#   50  verification failure
+#
+# PRIVACY / SUPPLY-CHAIN:
+#   - No outbound network except the Docker daemon socket and the image pulls
+#     the daemon performs (Constitution III). No curl/wget, no telemetry.
+#   - The key-gen helper reuses the exact debian:12-slim digest pinned in
+#     sidecars/tor/Dockerfile (Constitution IV). The T016 contract test
+#     cross-checks the two digests match; drift fails the gate.
+#   - Private key material (cp.priv/dp.priv) lives only inside the
+#     stargate-keys named volume. Host temp dirs used during generation are
+#     0700 and shredded on exit (M11).
+#
+# RUNTIME-CORRECTNESS GATES (T016 §Analysis residue):
+#   R1/R2 key-gen correctness + key FORMAT compatibility are NOT proven by
+#   T016's own contract test (structural only). They are gated DOWNSTREAM by
+#   tests/contract/control-grpc/transport_test.go (T022): a broken key-gen or
+#   an unloadable format fails the mutual-ed25519 handshake there. If you
+#   change the key format here, re-check T022.
+
+set -uo pipefail
+
+# ---- tunables -------------------------------------------------------------
+: "${STARGATE_HEALTHCHECK_TIMEOUT:=60}"        # arch §9.1 step 4 (seconds)
+: "${STARGATE_COMPOSE_FILE:=compose/docker-compose.local.yml}"
+: "${STARGATE_KEYGEN_IMAGE:=debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df}"
+# The digest above MUST match the base-image pin in sidecars/tor/Dockerfile
+# (both stages). The T016 contract test asserts this cross-file invariant.
+
+# Inter-plane key ownership (arch §4.3; numerics match the Dockerfiles + the
+# compose user: directives — T016 M4 cross-checks all three).
+CP_UID=5101          # stargate-cp (control-plane/Dockerfile useradd --uid 5101)
+DP_UID=5102          # stargate-dp (data-plane/Dockerfile passwd stargate-dp:x:5102)
+IPC_GID=5100         # stargate-ipc (both Dockerfiles groupadd --gid 5100)
+PRIVATE_MODE=0600
+PUBLIC_MODE=0644
+
+KEYS_VOLUME="stargate-keys"
+KEY_FILES=("cp.priv" "dp.priv" "cp.pub" "dp.pub")
+
+EXIT_PREFLIGHT=10
+EXIT_KEYGEN=20
+EXIT_COMPOSE=30
+EXIT_HEALTHCHECK=40
+EXIT_VERIFY=50
+
+# ---- helpers --------------------------------------------------------------
+say()  { printf '%s\n' "$*" >&2; }
+note() { printf 'stargate init: %s\n' "$*" >&2; }
+die()  { local code="$1"; shift; printf 'stargate init: ERROR: %s\n' "$*" >&2; exit "$code"; }
+
+# tmpdir for host-side key generation; cleaned on any exit (M11).
+KEYS_TMP=""
+cleanup() {
+  if [ -n "$KEYS_TMP" ] && [ -d "$KEYS_TMP" ]; then
+    # Best-effort shred then remove. shred may be absent on macOS/BSD; fall
+    # back to rm -rf. The dir is mode 0700 under $TMPDIR.
+    if command -v shred >/dev/null 2>&1; then
+      find "$KEYS_TMP" -type f -exec shred -u {} + 2>/dev/null
+    fi
+    rm -rf "$KEYS_TMP" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT INT TERM
+
+# ---- 1. PREFLIGHT (arch §9.1 step 1) --------------------------------------
+# NOTE: docker presence is checked FIRST so that `PATH= stargate init` exits
+# 10 hermetically (T016 M3 behavioural test). Do not add PATH-dependent work
+# before this check.
+preflight() {
+  if ! command -v docker >/dev/null 2>&1; then
+    say "docker not found on PATH."
+    say "Install Docker: https://docs.docker.com/get-docker/"
+    return "$EXIT_PREFLIGHT"
+  fi
+  if ! docker compose version >/dev/null 2>&1; then
+    say "docker compose v2 plugin not available."
+    say "Install Docker Compose v2 (shipped with Docker Desktop / the docker-compose-plugin package)."
+    return "$EXIT_PREFLIGHT"
+  fi
+  if ! docker info >/dev/null 2>&1; then
+    say "Docker daemon unreachable (is the service running / your user in the docker group?)."
+    return "$EXIT_PREFLIGHT"
+  fi
+  if ! command -v openssl >/dev/null 2>&1; then
+    say "openssl not found on PATH (required to generate ed25519 inter-plane keys)."
+    return "$EXIT_PREFLIGHT"
+  fi
+  return 0
+}
+
+# ---- 2. KEY GENERATION (arch §9.1 step 3; arch §4.3) -----------------------
+# Generate ed25519 keypairs on the host with openssl (PKCS#8 PEM — loadable by
+# Go crypto/x509 and Java PKCS8EncodedKeySpec; T022 §handshake gates format
+# compatibility), then install them into the stargate-keys named volume with
+# the correct ownership and modes via a throwaway debian:12-slim container
+# (named volumes are not host-writable with arbitrary UID).
+generate_keys() {
+  # M5 (arch §9.3): never clobber existing keys — would invalidate enrolled
+  # devices. Count how many of the four expected key files already exist in
+  # the volume (0 → fresh; 4 → initialised; 1–3 → corrupt partial state).
+  # `exit 0` inside the helper so the docker-run exit status reflects success
+  # rather than the last `[ -e ]` result (redteam INFO: avoids conflating a
+  # missing last file with a probe failure).
+  local existing
+  existing=$(docker run --rm -v "${KEYS_VOLUME}:/keys:ro" "$STARGATE_KEYGEN_IMAGE" \
+    sh -c 'n=0; for f in cp.priv dp.priv cp.pub dp.pub; do [ -e "/keys/$f" ] && n=$((n+1)); done; echo "$n"; exit 0' \
+    2>/dev/null) || existing="0"
+  case "${existing:-0}" in
+    4)
+      note "stargate-keys already initialised (4/4 key files present); skipping key generation (arch §9.3)."
+      return 0
+      ;;
+    0)
+      :   # fresh volume — proceed to generate
+      ;;
+    *)
+      note "stargate-keys is partially initialised (${existing}/4 key files present) — refusing to regenerate or proceed."
+      note "Manual recovery required: inspect volume $KEYS_VOLUME and either complete or wipe it."
+      return "$EXIT_KEYGEN"
+      ;;
+  esac
+
+  # Ensure the named volume exists (idempotent).
+  docker volume create "$KEYS_VOLUME" >/dev/null 2>&1 \
+    || { note "docker volume create $KEYS_VOLUME failed"; return "$EXIT_KEYGEN"; }
+
+  # Defence-in-depth (Constitution IV): the key-gen helper image runs as root
+  # with RW on the keys volume. Refuse an unpinned override so a hostile env
+  # var (CI, dotfile) cannot silently swap in an arbitrary image. The default
+  # is digest-pinned and cross-checked against sidecars/tor/Dockerfile by the
+  # contract test; this guard covers the override path.
+  case "$STARGATE_KEYGEN_IMAGE" in
+    *@sha256:*) : ;;
+    *) note "STARGATE_KEYGEN_IMAGE must be digest-pinned (@sha256:<64hex>); refusing unpinned image: $STARGATE_KEYGEN_IMAGE"
+       return "$EXIT_KEYGEN" ;;
+  esac
+
+  # Suppress core dumps for the duration of key generation so a crash does
+  # not write private-key bytes to a host core_pattern location outside the
+  # 0700 tmpdir (redteam INFO; cheap defence-in-depth).
+  ulimit -c 0 2>/dev/null || true
+
+  KEYS_TMP="$(mktemp -d)" || { note "mktemp failed"; return "$EXIT_KEYGEN"; }
+  chmod 0700 "$KEYS_TMP"
+
+  local prefix priv pub
+  for prefix in cp dp; do
+    priv="$KEYS_TMP/$prefix.priv"
+    pub="$KEYS_TMP/$prefix.pub"
+    if ! openssl genpkey -algorithm ED25519 -out "$priv" 2>/dev/null; then
+      note "openssl genpkey ED25519 failed for $prefix"
+      return "$EXIT_KEYGEN"
+    fi
+    if ! openssl pkey -in "$priv" -pubout -out "$pub" 2>/dev/null; then
+      note "openssl pkey (pubout) failed for $prefix"
+      return "$EXIT_KEYGEN"
+    fi
+    chmod "$PRIVATE_MODE" "$priv"
+    chmod "$PUBLIC_MODE" "$pub"
+  done
+
+  # Install into the volume with correct ownership/mode. Private keys: 0600
+  # owned by the owning plane's UID. Public keys: 0644 (both planes read both
+  # pubs for the mutual handshake). All share the stargate-ipc GID.
+  # NOTE: `install` runs inside the container as root (default), so chown to
+  # arbitrary UID works. The host temp dir is mounted :ro so the container
+  # cannot mutate the source.
+  if ! docker run --rm \
+        -v "${KEYS_VOLUME}:/keys" \
+        -v "${KEYS_TMP}:/src:ro" \
+        "$STARGATE_KEYGEN_IMAGE" \
+        sh -c '
+          set -e
+          install -m '"$PRIVATE_MODE"' -o '"$CP_UID"' -g '"$IPC_GID"' /src/cp.priv /keys/cp.priv
+          install -m '"$PRIVATE_MODE"' -o '"$DP_UID"' -g '"$IPC_GID"' /src/dp.priv /keys/dp.priv
+          install -m '"$PUBLIC_MODE"'  -o '"$CP_UID"' -g '"$IPC_GID"' /src/cp.pub  /keys/cp.pub
+          install -m '"$PUBLIC_MODE"'  -o '"$DP_UID"' -g '"$IPC_GID"' /src/dp.pub  /keys/dp.pub
+        ' >/dev/null 2>&1; then
+    note "installing keys into $KEYS_VOLUME failed"
+    return "$EXIT_KEYGEN"
+  fi
+
+  note "generated ed25519 inter-plane keys in volume $KEYS_VOLUME (cp.priv/dp.priv 0600, cp.pub/dp.pub 0644)."
+  return 0
+}
+
+# ---- 3. COMPOSE UP (arch §9.1 step 4) --------------------------------------
+# Hard-coded local profile (research §8). Bounded healthcheck wait; on timeout
+# exit 40 and LEAVE CONTAINERS UP (arch §9.2) so the operator can inspect
+# `docker logs`. init never tears the stack down on failure (no destructive
+# teardown on the healthcheck-timeout path).
+compose_up() {
+  note "building + starting stack ($STARGATE_COMPOSE_FILE)..."
+  if ! docker compose -f "$STARGATE_COMPOSE_FILE" up -d --build >/dev/null 2>&1; then
+    note "docker compose up failed (see 'docker compose -f $STARGATE_COMPOSE_FILE logs' above)."
+    return "$EXIT_COMPOSE"
+  fi
+  return 0
+}
+
+# ---- 4. HEALTHCHECK WAIT (arch §9.1 step 4; arch §9.2 on timeout) ----------
+wait_healthy() {
+  # The compose file (T015) does not yet declare healthcheck: blocks, so we
+  # poll container running state as the interim signal and accept a "no
+  # healthcheck defined" container as healthy once State.Running is true.
+  # Adding real healthcheck: blocks is a separate ticket (would modify T015's
+  # contract surface); this heuristic is documented in T016 §Notes.
+  local services=(stargate-dp stargate-control tor)
+  local deadline=$(( $(date +%s) + STARGATE_HEALTHCHECK_TIMEOUT ))
+  note "waiting up to ${STARGATE_HEALTHCHECK_TIMEOUT}s for services to be healthy..."
+  local all_ok=false s
+  while [ "$(date +%s)" -lt "$deadline" ]; do
+    all_ok=true
+    for s in "${services[@]}"; do
+      local running health
+      running="$(docker inspect -f '{{.State.Running}}' "$s" 2>/dev/null || echo false)"
+      health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$s" 2>/dev/null || echo none)"
+      case "$running:$health" in
+        true:none|true:healthy) : ;;            # ok
+        *) all_ok=false ;;
+      esac
+    done
+    "$all_ok" && return 0
+    sleep 2
+  done
+  note "healthcheck timeout — services did not all report healthy within ${STARGATE_HEALTHCHECK_TIMEOUT}s."
+  note "Containers have been LEFT UP (arch §9.2) — inspect with:"
+  note "  docker compose -f $STARGATE_COMPOSE_FILE logs"
+  return "$EXIT_HEALTHCHECK"
+}
+
+# ---- 5. TOR-ONLY VERIFICATION (research §8) --------------------------------
+# Probe ONLY the Tor route surface: the data plane's loopback proxy port
+# (8881) accepts a connection. No I2P, Nym, or Direct route probe — those
+# routes are out of scope this feature. Verify failure → 50.
+verify_tor() {
+  note "verifying Tor route (loopback proxy 127.0.0.1:8881)..."
+  # A TCP connect to 127.0.0.1:8881 succeeding proves the DP listener came up.
+  # We do NOT drive a full SOCKS5 handshake here — that is the job of the
+  # downstream runtime contract tests (T019b/T019c). Keep this probe cheap.
+  if (exec 3<>/dev/tcp/127.0.0.1/8881) 2>/dev/null; then
+    exec 3>&- 3<&-
+    note "Tor route reachable on 127.0.0.1:8881."
+    return 0
+  fi
+  note "127.0.0.1:8881 not reachable — data plane listener did not come up."
+  return "$EXIT_VERIFY"
+}
+
+# ---- 6. STATUS TABLE (arch §9.1 step 6) ------------------------------------
+print_status() {
+  # Only the components present in the local profile (research §8). No
+  # placeholder rows for absent sidecars (i2pd/nym not in this feature).
+  printf '\n'
+  printf 'Stargate status (local profile):\n'
+  printf '  %-18s %-10s %-12s %s\n' "Component" "Status" "Bind" "Notes"
+  printf '  %-18s %-10s %-12s %s\n' "data plane"   "HEALTHY" "127.0.0.1" "proxy 8881 (Tor route)"
+  printf '  %-18s %-10s %-12s %s\n' "control plane" "HEALTHY" "127.0.0.1" "gRPC control.sock"
+  printf '  %-18s %-10s %-12s %s\n' "Tor sidecar"  "HEALTHY" "internal"  "SOCKS5 9050 (tor:9050)"
+  printf '\n'
+  printf 'Admin enrollment: not yet implemented (deferred to the admin-UI feature).\n'
+}
+
+# ---- main -----------------------------------------------------------------
+preflight; rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+
+generate_keys; rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+
+compose_up; rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+
+wait_healthy; rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+
+verify_tor; rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+
+print_status
+exit 0
