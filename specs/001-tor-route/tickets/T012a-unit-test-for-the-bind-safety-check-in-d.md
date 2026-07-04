@@ -7,7 +7,7 @@ last_updated: 2026-07-04
 source: tasks.md#T012a
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
-blocked_by: [T006, T013]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T006]   # corrected by hand: T012a is the test-first red for T013 (Constitution VII); does not depend on T013
 parallel: true
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true
