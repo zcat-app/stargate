@@ -1,6 +1,6 @@
 ---
 name: run
-description: Drive a stargate ticket through the full workflow unattended — start → implement → verify.sh → codereview → commit, stopping only on bright-line conditions (clarity FAIL / files_budget exceeded / verify-not-green / review round cap / redteam FINDINGS). Use when the user invokes `/run <T-NNN>` or `/run next`.
+description: Drive a stargate ticket through the full workflow unattended — start → implement → verify.sh → codereview → redteam (if privacy-critical) → commit + push to the feature branch, stopping only on bright-line conditions (clarity FAIL / files_budget exceeded / verify-not-green / review round cap / redteam FINDINGS / push rejection). Use when the user invokes `/run <T-NNN>` or `/run next`.
 argument-hint: "<T-NNN | next>"
 ---
 
@@ -29,17 +29,23 @@ and drive that.
   sentinel-file mechanism asks for (`touch target/runs/<id>.grounded` etc.).
   Where `run-task.sh` emits a prompt and waits for the caller to signal,
   `/run` does the prompted work and signals automatically.
-- It is safe because the **bright-line stops** (below) are absolute, the
-  `stargate-codereview` subagent is fresh-context and independent, and
-  `run-task.sh` never pushes — even the auto squash-merge is local and
-  revertible (`git revert <sha>`).
+- It is safe because the **bright-line stops** (below) are absolute and the
+  `stargate-codereview` subagent is fresh-context and independent. The
+  autopilot commits and pushes the ticket diff to the **current feature
+  branch** after green review (and CLEAN redteam, if privacy-critical);
+  this is reversible (`git revert <sha>` + `git push`) and is cheap
+  insurance against host-loss stranding local commits. The outward,
+  irreversible boundary — merging the feature branch to main / opening a
+  PR — stays a human step at milestone end, not autopilot's call.
 
 ## What autopilot is NOT
 
 - It does NOT remove a gate or skip a phase. The developer (this skill's
   agent, acting as the developer) still writes the code at the implement
   phase. There is no developer-subagent.
-- It does NOT push. Push stays manual — it's the outward, irreversible step.
+- It does NOT merge to main or open a PR. That is the milestone-end step
+  the user drives explicitly (`gh pr create` or `scripts/run-task.sh <id>
+  --merge` against main, then push main).
 - It does NOT self-override a bright-line stop. On any stop below, surface
   to the user and exit cleanly.
 
@@ -97,26 +103,43 @@ re-invokes. Pseudocode:
                     If verdict REWORK and round ≤ cap → loop continues
                     (run-task bumps round and transitions to in-progress).
                     If verdict REWORK at cap, or ESCALATE → STOP (bright-line 4).
-      - MERGE     → STOP (do not auto-merge in /run v1; surface to user with
-                    the exact `scripts/run-task.sh <id> --merge` command).
-                    Rationale: merging locally is reversible, but the user's
-                    explicit "drive this ticket" grant is per-ticket, not
-                    per-ticket-AND-per-merge. They confirm the merge.
-   d. Continue the loop.
+      - MERGE     → commit + push the ticket diff to the current feature
+                    branch, then exit the loop and emit the final report.
+                    Steps:
+                      1. `git add <explicit paths>` — stage ONLY the
+                         ticket's changed files plus the ticket file. Never
+                         `git add -A` (cross-cutting rule below).
+                      2. `git commit -m "<message>"` — message format
+                         mirrors the existing repo convention: subject
+                         `Implement <feature-id>: <T-NNN> <short title>`,
+                         body explains what + why, closes with the review
+                         verdict(s) and `Marks <T-NNN> [X]`.
+                      3. `git push origin <current-branch>` — one push per
+                         ticket. If push is rejected (e.g. credential scope
+                         missing, non-fast-forward), STOP and surface; do
+                         NOT force-push to make it pass.
+                    The end-of-milestone merge to main / PR open is NOT
+                    autopilot's call — the user drives that explicitly at
+                    milestone end.
+    d. Continue the loop.
 3. Privacy-critical redteam gate (only fires when ticket.privacy_critical is
    true AND the ticket has reached status: done):
    a. Spawn stargate-redteam (Task tool, subagent) against the cumulative diff.
-   b. CLEAN → continue (proceed to merge handoff).
+   b. CLEAN → proceed to the MERGE step (commit + push).
    c. FINDINGS → STOP (bright-line 5). Surface the per-severity summary and
       the recommended `scripts/run-task.sh <id> --reset` + manual review path.
 4. Final report: print the phase-by-phase summary (clarity verdict · files/
-   +/- · review verdict+round · redteam verdict if fired · final status).
-   End with: "Pushed nothing — push is your call."
+   +/- · review verdict+round · redteam verdict if fired · final status ·
+   commit sha pushed). End with the pushed commit sha and the feature
+   branch it landed on.
 ```
 
 ## Cross-cutting rules this skill must obey
 
-- **Never push.** `run-task.sh --merge` is local-only; push is the user's call.
+- **Push to the current feature branch only, never main, never force-push.**
+  Autopilot pushes per-ticket after green review + CLEAN redteam. On push
+  rejection (credential scope, non-fast-forward, protected-branch rule),
+  STOP and surface — do NOT `--force`, do NOT rebase away the rejection.
 - **No developer-subagent.** This skill's agent IS the developer (per the
   main-conversation-is-the-developer rule from workflow.md). Subagents this
   skill spawns are limited to: `stargate-codereview` at REVIEW, and
@@ -124,9 +147,9 @@ re-invokes. Pseudocode:
 - **No destructive shortcuts** (`--no-verify`, `-DskipTests`, `git reset --hard`
   to discard work, force-push) to make obstacles disappear. Escalate instead.
 - **Never `git add -A` for a ticket commit.** Stage explicit paths only —
-  the ticket's changed files plus the ticket file. (`scripts/run-task.sh`
-  does the staging for squash-merge; the rule binds you when you're staging
-  implementation changes before signaling `verified`.)
+  the ticket's changed files plus the ticket file. The MERGE step's `git add`
+  must name each path; `git add -A` would sweep untracked handoff files,
+  editor artifacts, and adjacent in-flight work into the commit.
 - **Status transitions only via `scripts/run-task.sh`.** Do not flip
   `status:` by hand — that skips the gates the driver enforces.
 - **If this skill's procedure conflicts with `docs/process/workflow.md`,
