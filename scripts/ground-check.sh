@@ -64,7 +64,15 @@ else
       ok "$df: $base @sha256:${digest:0:12}…"
       if [ "$ONLINE" = 1 ]; then
         if have docker; then
-          if docker manifest inspect "$img" >/dev/null 2>&1; then
+          # Use `docker buildx imagetools inspect`, NOT `docker manifest inspect`:
+          # the latter fails on multi-arch OCI index digests (official library
+          # images like maven/eclipse-temurin/golang/debian) with "manifest
+          # verification failed for digest" — it fetches the index but the
+          # content-vs-digest check is confused by the index-vs-manifest
+          # distinction. `buildx imagetools inspect` handles both single-manifest
+          # and multi-arch index digests correctly. Requires docker buildx
+          # (bundled with Docker CE 20.10+ and Docker Desktop).
+          if docker buildx imagetools inspect "$img" >/dev/null 2>&1; then
             ok "  └ digest resolves in registry"
           else
             err "  └ digest does NOT resolve in registry: $img"
@@ -219,8 +227,9 @@ for key in "${!refs_seen[@]}"; do
   ok "$src: $base @sha256:${digest:0:12}…"
   if [ "$ONLINE" = 1 ]; then
     if have docker; then
-      # docker manifest inspect wants the image reference; pass the tag@digest form.
-      if docker manifest inspect "$img" >/dev/null 2>&1; then
+      # docker buildx imagetools inspect handles multi-arch OCI index digests
+      # correctly (see section 1 note). Pass the tag@digest form.
+      if docker buildx imagetools inspect "$img" >/dev/null 2>&1; then
         ok "  └ digest resolves in registry"
       else
         err "  └ digest does NOT resolve in registry: $img"
