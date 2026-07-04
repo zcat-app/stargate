@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 97 |
+| pending | 91 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 11 |
+| done | 18 |
 | deferred | 0 |
-| **total** | **108** |
+| **total** | **109** |
 
 ---
 
@@ -29,11 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T010 | Wire Quarkus gRPC code generation in `control-plane/api/pom. | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T011 | Author shared Argon2id parameter constants | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
-| T012 | Author `control-plane/persistence/src/main/resources/db/migr | 2: Foundational (Blocking Prerequisites) |  |  |
-| T014 | Author `sidecars/tor/Dockerfile` | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
-| T015 | Author `compose/docker-compose.local.yml` and `compose/env/l | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T016 | Author `scripts/stargate` entrypoint and `scripts/subcommand | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T017 | Author `SECURITY-DECISIONS.md` (new file at repo root) with  | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T017a | Append to `SECURITY-DECISIONS.md` (created by T017) the **`d | 2: Foundational (Blocking Prerequisites) | ✓ |  |
@@ -134,7 +129,7 @@ _(none deferred)_
 
 ## Done
 
-_11 ticket(s) done._
+_18 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -147,3 +142,10 @@ _11 ticket(s) done._
 - T007 — Author `proto/stargate/v1/control.proto` declaring `package stargate.v
 - T008 — Author `proto/stargate/v1/events.proto` declaring the `WatchEvents` RP
 - T009 — Generate Go proto stubs into `proto/stargate/v1/grpcpb/` (in the separ
+- T010 — Wire Quarkus gRPC code generation in `control-plane/api/pom.xml` (`qua
+- T011 — Author shared Argon2id parameter constants
+- T012 — Author `control-plane/persistence/src/main/resources/db/migration/V001
+- T012a — Unit test for the bind-safety check in `data-plane/internal/bind/check
+- T013 — Implement `data-plane/internal/bind/check.go`
+- T014 — Author `sidecars/tor/Dockerfile`
+- T015 — Author `compose/docker-compose.local.yml` and `compose/env/local.env.e
