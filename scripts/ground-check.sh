@@ -77,6 +77,163 @@ else
   done
 fi
 
+# === 1b. Compose image digest pins (Principle IV) =========================
+# Compose `image:` directives and `compose/env/*.env*` files can carry
+# external image references that Dockerfile-FROM scanning (section 1) does
+# not catch. This block enforces the same pin discipline on those refs.
+#
+# Two patterns:
+#   (a) Literal refs in yml:  `image: <repo>/<name>:<tag>@sha256:<64hex>`
+#   (b) Variable substitution:`image: ${VAR}`  — the literal pin lives in a
+#       `compose/env/*.env*` file as `VAR=<repo>/<name>:<tag>@sha256:<64hex>`.
+#
+# Validation is structural (offline) + registry-resolve (online). A bare-tag
+# ref (no `@sha256:`) is FAIL unless it's a Stargate-built image keyed on a
+# `build:` directive in the same service block (those are pinned via the
+# Dockerfile FROM, scanned in section 1).
+echo
+echo "Compose image pins —"
+# Build the set of service keys that use `build:` (their `image:` is a local
+# tag, not a registry pull, so no @sha256: is expected).
+build_service_keys=""
+if ls compose/*.yml compose/*.yaml >/dev/null 2>&1; then
+  # Extract <service>: for any service block that has a `build:` directive.
+  # Service keys are top-level under `services:` and are typically non-indented
+  # by 2 spaces; service blocks are siblings. We approximate by finding lines
+  # like `  <key>:` followed within a few lines by `    build:`.
+  build_service_keys="$(
+    awk '
+      /^services:[[:space:]]*$/ { in_services=1; next }
+      in_services && /^[^[:space:]]/ { in_services=0 }
+      in_services && /^  [a-zA-Z0-9_-]+:[[:space:]]*$/ { svc=$1; sub(/:/, "", svc); have_build[svc]=0; next }
+      in_services && /^    build:[[:space:]]*$/ { if (svc!="") have_build[svc]=1; next }
+      END { for (k in have_build) if (have_build[k]) print k }
+    ' compose/*.yml compose/*.yaml 2>/dev/null | sort -u | paste -sd'|' -
+  )"
+fi
+
+# Scan compose yml `image:` directives + env files for image refs.
+shopt -s nullglob
+compose_files=( compose/*.yml compose/*.yaml )
+env_files=( compose/env/*.env compose/env/*.env.* )
+shopt -u nullglob
+
+# Collect candidate image refs across both surfaces.
+declare -A refs_seen
+
+# (a) Literal `image:` lines in compose yml.
+for f in "${compose_files[@]:-}"; do
+  [ -f "$f" ] || continue
+  while IFS= read -r line; do
+    # Match `    image: <something>` (4-space indent under a service block).
+    case "$line" in
+      *image[:*]*)
+        # Skip comments.
+        case "$(printf '%s' "$line" | tr -d '[:space:]')" in \#*) continue;; esac
+        val="$(printf '%s' "$line" | sed -E 's/^[[:space:]]*image:[[:space:]]*//; s/[[:space:]]*$//; s/^["\x27]//; s/["\x27]$//')"
+        [ -n "$val" ] || continue
+        refs_seen["$f|$val"]=1
+        ;;
+    esac
+  done < "$f"
+done
+
+# (b) `<KEY>=<value>` lines in env files where value contains `:` (heuristic
+# for "looks like an image ref"). Cheap and catches the
+# DOCKER_SOCKET_PROXY_IMAGE=tecnativa/...:0.3.0@sha256:... case.
+for f in "${env_files[@]:-}"; do
+  [ -f "$f" ] || continue
+  while IFS= read -r line; do
+    case "$line" in
+      [A-Za-z_]*=*)
+        # Strip leading `KEY=`.
+        val="${line#*=}"
+        # Strip surrounding quotes / whitespace.
+        val="${val#\"}"; val="${val%\"}"; val="${val#\'}"; val="${val%\'}"
+        val="$(printf '%s' "$val" | tr -d '[:space:]')"
+        # Heuristic: contains `/` AND `:` → plausibly an image ref.
+        case "$val" in
+          */*:*) refs_seen["$f|$val"]=1 ;;
+        esac
+        ;;
+    esac
+  done < "$f"
+done
+
+# Validate each unique ref.
+seen_any_compose_ref=0
+for key in "${!refs_seen[@]}"; do
+  seen_any_compose_ref=1
+  src="${key%%|*}"; img="${key#*|}"
+  # Skip variable substitutions; they are validated via the env file path.
+  case "$img" in
+    '${'*'}')  # ${VAR} form
+      varname="${img#\$\{}"; varname="${varname%\}}"
+      resolved=""
+      for ef in "${env_files[@]:-}"; do
+        [ -f "$ef" ] || continue
+        v="$(grep -E "^${varname}=" "$ef" 2>/dev/null | head -1)"
+        [ -n "$v" ] && { resolved="${v#*=}"; break; }
+      done
+      if [ -z "$resolved" ]; then
+        note "$src: image ref is '\$${varname}' but no env file sets ${varname}= — cannot validate pin"
+        continue
+      fi
+      img="$resolved"
+      ;;
+    '$'*)  # $VAR form (rare in compose)
+      varname="${img#\$}"
+      resolved=""
+      for ef in "${env_files[@]:-}"; do
+        [ -f "$ef" ] || continue
+        v="$(grep -E "^${varname}=" "$ef" 2>/dev/null | head -1)"
+        [ -n "$v" ] && { resolved="${v#*=}"; break; }
+      done
+      if [ -z "$resolved" ]; then
+        note "$src: image ref is '\$${varname}' but no env file sets ${varname}= — cannot validate pin"
+        continue
+      fi
+      img="$resolved"
+      ;;
+  esac
+  # Skip refs that are bare local tags for build-directive services.
+  case "$img" in
+    stargate/*|localhost/*|ghcr.io/zcat-app/stargate-*)
+      # Stargate-built image keyed on a build: directive — base-digest pin
+      # lives in the Dockerfile (section 1). Final-image digest pin is
+      # deferred to release-tag (see T015 §Analysis R1).
+      ok "$src: $img (Stargate-built, base-digest pinned in Dockerfile — section 1)"
+      continue
+      ;;
+  esac
+  if [[ "$img" != *@sha256:* ]]; then
+    err "$src: un-pinned external image '$img' (no @sha256 digest — Principle IV)"
+    continue
+  fi
+  digest="${img#*@sha256:}"
+  base="${img%@*}"
+  if [[ ! "$digest" =~ ^[0-9a-f]{64}$ ]]; then
+    err "$src: malformed sha256 on '$base' (got '${digest:0:12}…', need 64 lowercase hex)"
+    continue
+  fi
+  ok "$src: $base @sha256:${digest:0:12}…"
+  if [ "$ONLINE" = 1 ]; then
+    if have docker; then
+      # docker manifest inspect wants the image reference; pass the tag@digest form.
+      if docker manifest inspect "$img" >/dev/null 2>&1; then
+        ok "  └ digest resolves in registry"
+      else
+        err "  └ digest does NOT resolve in registry: $img"
+      fi
+    else
+      note "$src: docker absent — cannot resolve compose image digest online"
+    fi
+  fi
+done
+if [ "$seen_any_compose_ref" = 0 ]; then
+  echo "(no compose image refs found — skipping)"
+fi
+
 # === 2. Toolchain / framework version pins ===============================
 echo
 echo "Version pins — confirm each is a SUPPORTED (non-EOL) release:"
