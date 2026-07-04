@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stargate — documentation</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="inner">
+    <span class="brand"><a href="index.html">⭐ Stargate</a></span>
+    <ul>
+      <li><a href="user-guide.html">User guide</a></li>
+      <li><a href="advanced-guide.html">Advanced</a></li>
+      <li><a href="admin.html">Admin</a></li>
+      <li><a href="tech.html">Technical</a></li>
+      <li><a href="developer.html">Developer</a></li>
+      <li><a href="diagrams.html">Diagrams</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container">
+
+<h1>Stargate</h1>
+
+<p>An open-source, multi-protocol <strong>privacy-routing proxy</strong>. A browser
+extension picks the route per request — Tor, I2P, Nym mixnet, or Direct —
+and the proxy forwards bytes to the appropriate sidecar. Family-shareable,
+Docker-deployed, privacy-first. Apache 2.0 licensed.</p>
+
+<div class="banner wip">
+  <p><strong>Status: in development.</strong> The v1 vertical slice
+  (<code>specs/001-tor-route/</code>) is the active feature. The proxy itself
+  is not yet released. What IS real today: the Constitution, the architecture
+  spec, the threat model, and the developer tooling layer (ticket-driven
+  workflow, agent-CLI bindings, CI). What is NOT real yet: the running proxy,
+  the browser extension, the compose stack, the install path. Pages below
+  flag this honestly per section.</p>
+</div>
+
+<h2>Pick a destination</h2>
+
+<div class="grid">
+
+  <a class="card" href="user-guide.html">
+    <h3>User guide</h3>
+    <p>Install, start, restart, basic plugin setup. Stupid-proof.</p>
+    <span class="status future">Not yet shipped — placeholder</span>
+  </a>
+
+  <a class="card" href="advanced-guide.html">
+    <h3>Advanced guide</h3>
+    <p>Deployment modes (local / lan / vps), route selection, what Stargate
+    does and does not protect against.</p>
+    <span class="status future">Not yet shipped — placeholder</span>
+  </a>
+
+  <a class="card" href="admin.html">
+    <h3>Administrator guide</h3>
+    <p>Upgrade, maintenance, observability (dashboard, Prometheus),
+    backup/restore, security advisories.</p>
+    <span class="status future">Not yet shipped — placeholder</span>
+  </a>
+
+  <a class="card" href="tech.html">
+    <h3>Technical reference</h3>
+    <p>Two-plane architecture, gRPC over Unix socket, sidecar model,
+    privacy-critical surfaces, technology choices.</p>
+    <span class="status real">Substantial — arch spec is real</span>
+  </a>
+
+  <a class="card" href="developer.html">
+    <h3>Developer guide</h3>
+    <p>Code/module layout, the ticket-driven workflow, skills, agent
+    integrations, CI, contributing.</p>
+    <span class="status real">Most complete — tooling is live today</span>
+  </a>
+
+  <a class="card" href="diagrams.html">
+    <h3>Diagrams (experiment)</h3>
+    <p>Inline-SVG mental models: two-plane architecture, deployment profiles,
+    request-flow walkthrough, ticket state machine, the /run loop.</p>
+    <span class="status real">Live experiment</span>
+  </a>
+
+</div>
+
+<h2>What Stargate is</h2>
+
+<p>A privacy-routing proxy. The browser extension is where the user picks the
+route per request; the proxy is a <em>dumb router</em> that forwards bytes for
+the port it received them on. The proxy itself does no payload parsing, no
+TLS termination, no local DNS resolution, no header inspection, no per-request
+logs, no cover traffic. This is <strong>Constitution Principle I</strong> and
+it is binding, not aspirational.</p>
+
+<p>Two processes, distinct lifecycles, gRPC over Unix socket between them:</p>
+
+<table>
+  <thead><tr><th>Plane</th><th>Language</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Data plane</strong></td><td>Go (<code>data-plane/</code>)</td>
+        <td>Network transport, sidecar coordination, per-port routing. Privacy-critical hot path. The "dumb router".</td></tr>
+    <tr><td><strong>Control plane</strong></td><td>Quarkus 3.33 LTS on JDK 25 LTS (<code>control-plane/</code>)</td>
+        <td>Admin UI, settings, sidecar lifecycle commands, audit. SQLite for state.</td></tr>
+    <tr><td><strong>Extension</strong></td><td>JS/TS (<code>extension/</code>)</td>
+        <td>Per-request route selection. First-class target: Mullvad Browser.</td></tr>
+  </tbody>
+</table>
+
+<p>Deployment: Docker Compose, three profiles — <code>local</code> (loopback
+only), <code>lan</code> (WireGuard sidecar), <code>vps</code>
+(WireGuard/Tailscale tunnel). The proxy refuses to bind a non-loopback
+interface without a corresponding tunnel sidecar.</p>
+
+<h2>Authoritative source documents</h2>
+
+<p>These HTML pages are a navigable overview. When they disagree with the
+source documents below, the source documents win.</p>
+
+<table>
+  <thead><tr><th>Source</th><th>Authority</th></tr></thead>
+  <tbody>
+    <tr><td><code>.specify/memory/constitution.md</code></td>
+        <td><strong>Binding.</strong> 8 principles. Design conflicts are resolved by amending it, not the code.</td></tr>
+    <tr><td><code>THREAT-MODEL.md</code></td>
+        <td>Per-deployment-mode and per-route threat models.</td></tr>
+    <tr><td><code>CONTRIBUTING.md</code></td>
+        <td>Workflow, code style per plane, PR norms, AI-assisted-workflow doctrine.</td></tr>
+    <tr><td><code>AGENTS.md</code></td>
+        <td>Canonical entry-point for any coding agent (opencode, Claude Code, zcode).</td></tr>
+    <tr><td><code>specs/NNN-feature/</code></td>
+        <td>Feature specs, plans, contracts, tickets.</td></tr>
+    <tr><td><code>SECURITY-DECISIONS.md</code></td>
+        <td>Append-only log of accepted-finding rationales.</td></tr>
+  </tbody>
+</table>
+
+<h2>Status today</h2>
+
+<div class="banner real">
+  <p><strong>What works right now:</strong></p>
+  <ul>
+    <li>Constitution, threat model, architecture spec — all written, all binding.</li>
+    <li>Spec-kit integration (specify → plan → tasks) is wired.</li>
+    <li>108 tickets for the v1 vertical slice (Tor route) are drafted with
+        structured YAML frontmatter.</li>
+    <li>11 tickets are <code>done</code> (Phase 1 scaffolding: directory
+        skeleton, Dockerfiles, proto definitions, build tooling).</li>
+    <li>The developer workflow layer (ticket model, <code>run-task.sh</code>,
+        <code>verify.sh</code>, CI mirror) is real.</li>
+    <li>opencode is wired as the primary agent CLI; Claude Code is a stubbed
+        second option.</li>
+  </ul>
+</div>
+
+<div class="banner wip">
+  <p><strong>What does not work yet:</strong></p>
+  <ul>
+    <li>The proxy itself. No data-plane code beyond scaffolding.</li>
+    <li>The browser extension. No MVP2 build.</li>
+    <li>The Docker Compose stack for end-user deployment.</li>
+    <li>The install path, the admin UI, the observability stack.</li>
+    <li>Routes other than Tor (I2P, Nym, Direct are v1 scope but not built).</li>
+  </ul>
+</div>
+
+<p>If you are a user looking to install Stargate today: you can't yet. Watch
+the v1 vertical slice (<code>specs/001-tor-route/</code>). If you are a
+developer or contributor: the <a href="developer.html">developer guide</a>
+is the most complete page here and the right place to start.</p>
+
+<footer>
+  <p>Stargate is licensed under Apache 2.0. Documentation last updated
+  2026-07-04. Source of truth: the markdown files in the repository, not
+  these HTML pages.</p>
+</footer>
+
+</div>
+</body>
+</html>

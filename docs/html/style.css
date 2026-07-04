@@ -1,0 +1,260 @@
+/* Copyright 2026 The Stargate Authors. SPDX-License-Identifier: Apache-2.0.
+   Shared stylesheet for docs/html/. No external dependencies; opens offline.
+   Light + dark via prefers-color-scheme. System font stack throughout. */
+
+:root {
+  --bg: #fafafa;
+  --fg: #1a1a1a;
+  --fg-muted: #555;
+  --accent: #0066cc;
+  --accent-visited: #663399;
+  --border: #d0d0d0;
+  --code-bg: #eee;
+  --code-fg: #1a1a1a;
+  --banner-wip-bg: #fff3cd;
+  --banner-wip-fg: #664d03;
+  --banner-wip-border: #ffe69c;
+  --banner-real-bg: #d1e7dd;
+  --banner-real-fg: #0a3622;
+  --banner-real-border: #a3cfbb;
+  --banner-future-bg: #cff4fc;
+  --banner-future-fg: #055160;
+  --banner-future-border: #b6effb;
+  --nav-bg: #f0f0f0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a1a;
+    --fg: #e8e8e8;
+    --fg-muted: #aaa;
+    --accent: #6cb6ff;
+    --accent-visited: #c896ff;
+    --border: #444;
+    --code-bg: #2a2a2a;
+    --code-fg: #e8e8e8;
+    --banner-wip-bg: #4d4000;
+    --banner-wip-fg: #fff3cd;
+    --banner-wip-border: #664d03;
+    --banner-real-bg: #0a3622;
+    --banner-real-fg: #d1e7dd;
+    --banner-real-border: #1c6b3a;
+    --banner-future-bg: #055160;
+    --banner-future-fg: #cff4fc;
+    --banner-future-border: #0a6178;
+    --nav-bg: #262626;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.container {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 6rem;
+}
+
+/* Nav bar */
+nav.top {
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+nav.top .inner {
+  max-width: 880px;
+  margin: 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+}
+nav.top .brand {
+  font-weight: 700;
+  font-size: 1rem;
+}
+nav.top .brand a {
+  color: var(--fg);
+  text-decoration: none;
+}
+nav.top ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.9rem;
+}
+nav.top a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.92rem;
+}
+nav.top a:hover { text-decoration: underline; }
+nav.top a.current { color: var(--fg); font-weight: 600; }
+
+/* Typography */
+h1, h2, h3, h4 { line-height: 1.25; }
+h1 {
+  font-size: 2rem;
+  margin: 1.5rem 0 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+h2 {
+  font-size: 1.5rem;
+  margin: 2.2rem 0 0.6rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+h3 { font-size: 1.2rem; margin: 1.6rem 0 0.4rem; }
+h4 { font-size: 1rem; margin: 1.2rem 0 0.3rem; color: var(--fg-muted); }
+p, ul, ol { margin: 0.6rem 0; }
+ul, ol { padding-left: 1.5rem; }
+li { margin: 0.25rem 0; }
+
+a { color: var(--accent); }
+a:visited { color: var(--accent-visited); }
+
+/* Code */
+code {
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+}
+pre {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 0.9rem 1rem;
+  border-radius: 5px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+pre code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+  font-size: 0.94rem;
+}
+th, td {
+  text-align: left;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  vertical-align: top;
+}
+th { background: var(--nav-bg); font-weight: 600; }
+
+/* Status banners */
+.banner {
+  padding: 0.8rem 1rem;
+  border-radius: 5px;
+  border: 1px solid;
+  margin: 1.2rem 0;
+  font-size: 0.95rem;
+}
+.banner p:first-child { margin-top: 0; }
+.banner p:last-child { margin-bottom: 0; }
+.banner.wip    { background: var(--banner-wip-bg); color: var(--banner-wip-fg); border-color: var(--banner-wip-border); }
+.banner.real   { background: var(--banner-real-bg); color: var(--banner-real-fg); border-color: var(--banner-real-border); }
+.banner.future { background: var(--banner-future-bg); color: var(--banner-future-fg); border-color: var(--banner-future-border); }
+.banner strong { font-weight: 700; }
+
+/* Blockquote — used for source-of-truth callouts */
+blockquote {
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  border-left: 4px solid var(--accent);
+  background: var(--nav-bg);
+  color: var(--fg-muted);
+}
+blockquote p { margin: 0.3rem 0; }
+
+/* Footer */
+footer {
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+}
+
+/* Card grid for router pages */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1.1rem;
+  background: var(--bg);
+  text-decoration: none;
+  color: var(--fg);
+  transition: border-color 0.15s;
+}
+.card:hover { border-color: var(--accent); text-decoration: none; }
+.card h3 { margin: 0 0 0.4rem; color: var(--accent); font-size: 1.05rem; }
+.card p { margin: 0; font-size: 0.9rem; color: var(--fg-muted); }
+.card .status {
+  display: inline-block;
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  margin-top: 0.6rem;
+  background: var(--nav-bg);
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+}
+.card .status.real   { background: var(--banner-real-bg); color: var(--banner-real-fg); border-color: var(--banner-real-border); }
+.card .status.wip    { background: var(--banner-wip-bg); color: var(--banner-wip-fg); border-color: var(--banner-wip-border); }
+.card .status.future { background: var(--banner-future-bg); color: var(--banner-future-fg); border-color: var(--banner-future-border); }
+
+/* Keyboard / path inline labels */
+kbd {
+  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.85em;
+  border: 1px solid var(--border);
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+
+/* Definition lists — used in tech/developer pages */
+dl { margin: 1rem 0; }
+dt { font-weight: 600; margin-top: 0.6rem; }
+dd { margin: 0.2rem 0 0.4rem 1.5rem; }

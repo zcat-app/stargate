@@ -1,0 +1,261 @@
+# Copyright 2026 The Stargate Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Agent-driven ticket execution. A human (or another automation) comments on
+# an issue or PR with `/agent T-NNN` and this workflow:
+#   1. checks out a fresh branch
+#   2. invokes scripts/run-task.sh T-NNN in a loop, feeding each emitted
+#      handoff prompt to an agent CLI that does the non-deterministic work
+#      (grounding, implementing, codereview)
+#   3. on a bright-line stop, opens a PR with the partial state and a
+#      handoff for human review
+#   4. on a green cycle (start → review APPROVE → merge), opens a PR with
+#      the squashed commit
+#
+# The workflow NEVER pushes to main. The squash-merge from `run-task.sh
+# --merge` lands on a local branch; the PR is what surfaces it for human
+# review and the final push.
+#
+# Trigger: issue or PR comment matching `/^\/agent\s+T-\d+[a-z]?$/`. The
+# comment author must have write access (enforced below); this is NOT an
+# arbitrary-issue-comment trigger that would let anyone burn CI minutes.
+#
+# Why this is its own workflow (not folded into verify.yml): the agent loop
+# is heavy (LLM calls, multi-minute runs) and triggered by humans, not by
+# every push. Keeping it separate lets the verify.yml gate stay fast and
+# read-only.
+
+name: agent-task
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      ticket:
+        description: 'Ticket id, e.g. T015'
+        required: true
+        type: string
+      agent_cli:
+        description: 'Agent CLI adapter to drive (opencode | claude | <custom>)'
+        required: false
+        type: string
+        default: opencode
+
+permissions:
+  contents: write        # to push the branch
+  pull-requests: write   # to open the PR
+
+jobs:
+  gate:
+    # Authorize: only repo collaborators (write access) can trigger this.
+    # Costs are real (LLM tokens, multi-minute runs); do not expose to drive-by
+    # issue comments. (`if` based on pull_request_target is unsafe for secrets;
+    # issue_comment + collaborator check is the documented-safe pattern.)
+    if: |
+      (github.event_name == 'workflow_dispatch') ||
+      (github.event_name == 'issue_comment' &&
+       startsWith(github.event.comment.body, '/agent ') &&
+       contains(fromJSON('["T"]'), substring(github.event.comment.body, 7, 1)))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ticket: ${{ steps.parse.outputs.ticket }}
+      authorized: ${{ steps.auth.outputs.authorized }}
+    steps:
+      - id: parse
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ticket=${{ inputs.ticket }}" >> "$GITHUB_OUTPUT"
+          else
+            # Strip leading "/agent " and capture the first token as the ticket id.
+            body="${{ toJSON(github.event.comment.body) }}"
+            ticket=$(printf '%s' "$body" | python3 -c 'import json,sys; print(json.load(sys.stdin).split()[1])')
+            # Validate shape: T-NNN or T-NNN<letter>.
+            echo "$ticket" | grep -Eq '^T-?[0-9]+[a-z]?$' || { echo "bad ticket id: $ticket"; exit 1; }
+            echo "ticket=$ticket" >> "$GITHUB_OUTPUT"
+          fi
+      - id: auth
+        # Collaborator check — only write-access users proceed.
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          user="${{ github.event.comment.user.login }}"
+          if gh api "repos/${{ github.repository }}/collaborators/$user/permission" \
+               --jq '.permission' | grep -Eq 'admin|write|maintain'; then
+            echo "authorized=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "authorized=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::User $user lacks write access; /agent trigger ignored."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  run:
+    needs: gate
+    if: needs.gate.outputs.authorized == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60   # hard cap; agent loop can stall on a bright-line stop
+    env:
+      TICKET: ${{ needs.gate.outputs.ticket }}
+      AGENT_BRANCH: agent/${{ needs.gate.outputs.ticket }}
+      # Adapter selection. Issue-comment runs default to opencode (the
+      # workflow_dispatch default above doesn't apply to issue_comment
+      # triggers, so we fall back here).
+      AGENT_CLI: ${{ github.event.inputs.agent_cli || 'opencode' }}
+      # Provider key. The adapter picks the right env var name based on
+      # AGENT_CLI; the dispatcher + adapter expect the raw provider key
+      # under the canonical name(s) below. Add more provider secrets here
+      # as you wire them.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # need history for branch resolution + squash-merge
+
+      - name: Set up toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Install opencode
+        if: env.AGENT_CLI == 'opencode'
+        # opencode's official install (curl | sh). Pin to a version once
+        # stargate standardizes; for experimentation, latest is fine.
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install claude code
+        if: env.AGENT_CLI == 'claude'
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          echo "$HOME/.npm-global/bin" >> "$GITHUB_PATH"
+
+      # --- bootstrap state ------------------------------------------------
+      - name: Resolve ticket
+        id: resolve
+        run: |
+          # Normalise T015 → T015 (strip dash if user typed T-015).
+          TICKET="${TICKET#T-}"
+          TICKET="T${TICKET#T}"
+          echo "id=$TICKET" >> "$GITHUB_OUTPUT"
+          # Find the ticket file.
+          FILE=$(ls specs/*/tickets/${TICKET}-*.md 2>/dev/null | head -1)
+          [ -n "$FILE" ] || { echo "::error::ticket $TICKET not found"; exit 1; }
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Create agent branch
+        run: |
+          git config user.name "stargate-agent[bot]"
+          git config user.email "stargate-agent[bot]@users.noreply.github.com"
+          git checkout -b "$AGENT_BRANCH"
+
+      # --- the agent loop --------------------------------------------------
+      # The loop: invoke run-task.sh, read its emitted prompt (if any),
+      # feed the prompt to the agent-CLI adapter, signal the sentinel the
+      # prompt asked for, repeat until run-task.sh reaches a terminal
+      # state (done / escalated / refused) or fails (bright-line stop).
+      - name: Drive run-task.sh loop
+        id: drive
+        run: |
+          mkdir -p target/runs
+          # Cap iterations to avoid runaway if the state machine somehow
+          # cycles (it shouldn't, but a hard cap is cheap insurance).
+          MAX_ITERS=20
+          iter=0
+          phase="start"
+          while [ "$iter" -lt "$MAX_ITERS" ]; do
+            iter=$((iter + 1))
+            if ! bash scripts/run-task.sh "$TICKET"; then
+              phase="bright-line-stop"
+              break
+            fi
+            # If run-task.sh reached a terminal state, no new prompt file
+            # is emitted and we exit the loop.
+            [ -f "target/runs/${TICKET}.prompt" ] || { phase="terminal"; break; }
+            # Otherwise, the new prompt is at target/runs/${TICKET}.prompt.
+            # Feed it to the agent-CLI adapter.
+            echo "::group::agent-cli iteration $iter (phase: $(head -1 target/runs/${TICKET}.prompt | sed 's/^# //'))"
+            if ! bash scripts/agent-cli.sh \
+                --prompt "target/runs/${TICKET}.prompt" \
+                --workdir "$PWD" \
+                --output "target/runs/${TICKET}.agent-output"; then
+              phase="agent-cli-failed"
+              echo "::endgroup::"
+              break
+            fi
+            echo "::endgroup::"
+            # The agent did its work. Run-task.sh's prompt ends by telling
+            # the agent what sentinel to touch (e.g. `touch target/runs/T015.grounded`).
+            # A well-behaved agent touches it as the last step of its work.
+            # If the agent forgot, we surface that here — the next run-task.sh
+            # invocation will re-emit the same prompt.
+          done
+          echo "phase=$phase" >> "$GITHUB_OUTPUT"
+          echo "iterations=$iter" >> "$GITHUB_OUTPUT"
+
+      # --- always open a PR (success or stop) -----------------------------
+      # The PR is what surfaces the run for human review. Even on a bright-line
+      # stop, the partial state + the emitted handoff prompt are valuable.
+      - name: Commit any state changes
+        run: |
+          # Status transitions, frontmatter updates, derive-deps results, etc.
+          git add -A || true
+          git diff --cached --quiet || git commit -m "agent: drive $TICKET (phase: ${{ steps.drive.outputs.phase }}, iter: ${{ steps.drive.outputs.iterations }})"
+
+      - name: Open PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const ticket = process.env.TICKET;
+            const phase = '${{ steps.drive.outputs.phase }}';
+            const iters = '${{ steps.drive.outputs.iterations }}';
+            const cli   = process.env.AGENT_CLI;
+            const promptPath = `target/runs/${ticket}.prompt`;
+            const outPath    = `target/runs/${ticket}.agent-output`;
+            let promptBody = '(no prompt emitted — phase transitioned without a handoff)';
+            if (fs.existsSync(promptPath)) {
+              promptBody = fs.readFileSync(promptPath, 'utf8');
+            }
+            let agentOut = '(no agent output captured)';
+            if (fs.existsSync(outPath)) {
+              agentOut = fs.readFileSync(outPath, 'utf8').slice(-4000);  // tail-cap to keep PR body sane
+            }
+            const title = `agent (${cli}): ${ticket} — ${phase}`;
+            const body = `## Agent-driven run for ${ticket}
+
+            | Field | Value |
+            |---|---|
+            | Adapter | \`${cli}\` |
+            | Phase reached | \`${phase}\` |
+            | Loop iterations | ${iters} |
+
+            ### Last emitted handoff prompt
+
+            \`\`\`
+            ${promptBody}
+            \`\`\`
+
+            ### Agent output (tail)
+
+            \`\`\`
+            ${agentOut}
+            \`\`\`
+
+            ---
+
+            _This PR was opened by the agent-task workflow. Review the partial
+            state, then either resume locally with \`scripts/run-task.sh ${ticket}\`
+            or close this PR and address the bright-line stop manually._`;
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              head: process.env.AGENT_BRANCH,
+              base: 'main',
+              body,
+            });
+            core.notice(`PR opened: ${pr.html_url}`);

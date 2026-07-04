@@ -1,0 +1,92 @@
+# Copyright 2026 The Stargate Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# CI mirror of scripts/verify.sh — the single green gate, run on every push
+# and every PR. Local verify.sh is the authority; this workflow is the
+# mirror that fails the PR when local would have failed.
+#
+# Why a separate workflow (not the agent-task workflow): this one is
+# read-only, fast, and runs on every push. The agent-task workflow is
+# heavier (writes branches, opens PRs) and runs only on explicit triggers.
+#
+# The Constitution (Principle VI: Open and Auditable) and the review-loop
+# contract require the green gate to be machine-checked, not honor-system.
+# This workflow is that machine check.
+
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:   # manual trigger for release-cadence runs
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: scripts/verify.sh
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1   # shallow is enough; verify.sh doesn't need history
+
+      - name: Set up toolchain (Go + JDK 25 + Python 3)
+        uses: ./.github/actions/setup-toolchain
+
+      - name: verify.sh
+        # The actual gate. STARGATE_GROUND_ONLINE=0 keeps grounding offline
+        # (no network calls); STARGATE_VERIFY_REPRO stays off (release
+        # cadence, not PR cadence). Phase-aware: gates self-SKIP when code
+        # doesn't exist yet, so this is green at scaffolding time.
+        env:
+          STARGATE_GROUND_ONLINE: '0'
+        run: |
+          bash scripts/verify.sh
+
+      - name: Upload verify log
+        if: always()   # upload the log on failure too, so PR reviews can read it
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-log
+          path: target/verify.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Lightweight ticket-state sanity check: every ticket file parses, STATUS.md
+  # regenerates cleanly. Catches frontmatter-yaml drift before review.
+  ticket-state:
+    name: ticket frontmatter
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: lint all tickets
+        run: |
+          for dir in specs/*/tickets; do
+            [ -d "$dir" ] || continue
+            python3 scripts/lint-ticket.py "$dir"
+          done
+      - name: regen STATUS (no-op check)
+        # If a STATUS.md is committed and stale, this catches it: regen writes
+        # to a temp, then we diff against the committed file. Drift fails.
+        run: |
+          for spec in specs/*/; do
+            [ -d "$spec/tickets" ] || continue
+            bash scripts/regen-status.sh "$spec"
+            # regen-status writes in place; the working tree should now show
+            # no diff against the committed STATUS.md.
+            if ! git diff --quiet -- "$spec/STATUS.md"; then
+              echo "::error::$spec/STATUS.md is stale. Run scripts/regen-status.sh $spec locally and commit."
+              git diff -- "$spec/STATUS.md"
+              exit 1
+            fi
+          done

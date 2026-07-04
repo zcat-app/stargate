@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stargate — diagrams (experiment)</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Local styles for the diagrams page. */
+    .svg-wrap {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      margin: 1.2rem 0;
+      overflow-x: auto;
+    }
+    .svg-wrap svg { display: block; max-width: 100%; height: auto; }
+
+    /* Reusable SVG colours — referenced by both light and dark paths.
+       Inline fill/stroke on shapes overrides per-element where useful. */
+    .svg-wrap .box        { fill: var(--bg); stroke: var(--fg); stroke-width: 1.5; }
+    .svg-wrap .box-dp     { fill: #ffe8cc; stroke: #d97706; }
+    .svg-wrap .box-cp     { fill: #d1e7dd; stroke: #198754; }
+    .svg-wrap .box-ext    { fill: #cfe2ff; stroke: #0d6efd; }
+    .svg-wrap .box-side   { fill: #e2d9f3; stroke: #6f42c1; }
+    .svg-wrap .box-browser{ fill: #f8d7da; stroke: #dc3545; }
+    @media (prefers-color-scheme: dark) {
+      .svg-wrap .box-dp     { fill: #4d3300; stroke: #d97706; }
+      .svg-wrap .box-cp     { fill: #0a3622; stroke: #198754; }
+      .svg-wrap .box-ext    { fill: #03184f; stroke: #6cb6ff; }
+      .svg-wrap .box-side   { fill: #2a1f4d; stroke: #a78bfa; }
+      .svg-wrap .box-browser{ fill: #4d0a0a; stroke: #ef4444; }
+    }
+    .svg-wrap .label      { font: 600 14px -apple-system, sans-serif; fill: var(--fg); }
+    .svg-wrap .sub        { font: 11px -apple-system, sans-serif; fill: var(--fg-muted); }
+    .svg-wrap .edge       { stroke: var(--fg-muted); stroke-width: 1.5; fill: none; }
+    .svg-wrap .edge-flow  { stroke: #0066cc; stroke-width: 2; fill: none;
+                             stroke-dasharray: 6 6;
+                             animation: dash 1.2s linear infinite; }
+    .svg-wrap .edge-uds   { stroke: #198754; stroke-width: 2; stroke-dasharray: 3 3; fill: none; }
+    @media (prefers-color-scheme: dark) {
+      .svg-wrap .edge-flow { stroke: #6cb6ff; }
+      .svg-wrap .edge-uds  { stroke: #2dd4bf; }
+    }
+    @keyframes dash { to { stroke-dashoffset: -24; } }
+
+    /* Tab strip for deployment profiles */
+    .tabs { display: flex; gap: 0.4rem; border-bottom: 1px solid var(--border); margin: 1.5rem 0 0; }
+    .tabs button {
+      background: var(--bg); color: var(--fg);
+      border: 1px solid var(--border); border-bottom: none;
+      padding: 0.5rem 1rem; cursor: pointer; font-size: 0.92rem;
+      border-radius: 4px 4px 0 0;
+    }
+    .tabs button.active { background: var(--nav-bg); font-weight: 600; }
+    .tab-panel { display: none; padding: 1rem 0; }
+    .tab-panel.active { display: block; }
+
+    /* Step-through walker */
+    .walker-controls { display: flex; gap: 0.5rem; align-items: center; margin: 1rem 0; flex-wrap: wrap; }
+    .walker-controls button {
+      background: var(--nav-bg); color: var(--fg);
+      border: 1px solid var(--border); padding: 0.4rem 0.8rem;
+      cursor: pointer; border-radius: 4px; font-size: 0.9rem;
+    }
+    .walker-controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .walker-step { font-weight: 600; color: var(--accent); }
+
+    /* State machine styles */
+    .sm-node        { fill: var(--bg); stroke: var(--fg); stroke-width: 1.5; }
+    .sm-node.start  { fill: #cfe2ff; stroke: #0d6efd; }
+    .sm-node.done   { fill: #d1e7dd; stroke: #198754; }
+    .sm-node.stop   { fill: #f8d7da; stroke: #dc3545; }
+    .sm-node.warn   { fill: #fff3cd; stroke: #d97706; }
+    .sm-edge        { stroke: var(--fg-muted); stroke-width: 1.5; fill: none; marker-end: url(#arrow); }
+    .sm-edge.bad    { stroke: #dc3545; }
+    @media (prefers-color-scheme: dark) {
+      .sm-node.start { fill: #03184f; stroke: #6cb6ff; }
+      .sm-node.done  { fill: #0a3622; stroke: #2dd4bf; }
+      .sm-node.stop  { fill: #4d0a0a; stroke: #ef4444; }
+      .sm-node.warn  { fill: #4d4000; stroke: #fbbf24; }
+      .sm-edge.bad   { stroke: #ef4444; }
+    }
+  </style>
+</head>
+<body>
+<nav class="top">
+  <div class="inner">
+    <span class="brand"><a href="index.html">⭐ Stargate</a></span>
+    <ul>
+      <li><a href="user-guide.html">User guide</a></li>
+      <li><a href="advanced-guide.html">Advanced</a></li>
+      <li><a href="admin.html">Admin</a></li>
+      <li><a href="tech.html">Technical</a></li>
+      <li><a href="developer.html">Developer</a></li>
+      <li><a href="diagrams.html" class="current">Diagrams</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container">
+
+<h1>Diagrams — visual mental models</h1>
+
+<p class="sub">An experiment: do these visuals aid understanding more than the
+prose in <code>THREAT-MODEL.md</code>, <code>AGENTS.md</code>, and
+<code>docs/process/workflow.md</code>? If yes, the keepers get embedded into
+the other HTML pages; the rest get pruned. Pure inline SVG + CSS animations
++ vanilla JS, no external dependencies, opens from <code>file://</code>.</p>
+
+<div class="banner wip">
+  <p><strong>These diagrams depict the v1 target architecture, not what is
+  shipped today.</strong> The proxy itself is still in development. The
+  diagrams are useful as mental models now; they will be useful as
+  references when v1 lands. Components in green (control plane, agent
+  workflow) are real today; components in orange/purple (data plane,
+  sidecars) are unbuilt.</p>
+</div>
+
+<hr>
+
+<!-- ====================================================================== -->
+<h2 id="architecture">1. Two-plane architecture</h2>
+
+<p>The central mental model. Two processes, distinct lifecycles, gRPC over
+Unix socket between them. The browser extension is where route choice
+happens; the data plane is a <em>dumb router</em> (Constitution Principle I).</p>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 820 420" role="img" aria-label="Two-plane architecture">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--fg-muted)"/>
+    </marker>
+  </defs>
+
+  <!-- Browser -->
+  <g transform="translate(20,40)">
+    <rect class="box box-browser" width="140" height="80" rx="6"/>
+    <text x="70" y="32" text-anchor="middle" class="label">Browser</text>
+    <text x="70" y="50" text-anchor="middle" class="sub">Mullvad / LibreWolf</text>
+    <text x="70" y="66" text-anchor="middle" class="sub">(first-class targets)</text>
+  </g>
+
+  <!-- Extension -->
+  <g transform="translate(20,170)">
+    <rect class="box box-ext" width="140" height="80" rx="6"/>
+    <text x="70" y="32" text-anchor="middle" class="label">Extension</text>
+    <text x="70" y="50" text-anchor="middle" class="sub">per-request</text>
+    <text x="70" y="66" text-anchor="middle" class="sub">route selection</text>
+  </g>
+
+  <!-- Data plane -->
+  <g transform="translate(280,170)">
+    <rect class="box box-dp" width="200" height="170" rx="6"/>
+    <text x="100" y="32" text-anchor="middle" class="label">Data plane (Go)</text>
+    <text x="100" y="52" text-anchor="middle" class="sub">dumb router</text>
+    <text x="100" y="68" text-anchor="middle" class="sub">SOCKS5 / CONNECT :8881</text>
+    <text x="100" y="100" text-anchor="middle" class="sub">no payload parsing</text>
+    <text x="100" y="116" text-anchor="middle" class="sub">no TLS termination</text>
+    <text x="100" y="132" text-anchor="middle" class="sub">no DNS resolution</text>
+    <text x="100" y="148" text-anchor="middle" class="sub">no per-request logs</text>
+  </g>
+
+  <!-- Control plane -->
+  <g transform="translate(280,360)">
+    <rect class="box box-cp" width="200" height="50" rx="6"/>
+    <text x="100" y="22" text-anchor="middle" class="label">Control plane (Quarkus)</text>
+    <text x="100" y="38" text-anchor="middle" class="sub">admin UI, audit, sidecar lifecycle</text>
+  </g>
+
+  <!-- Sidecar -->
+  <g transform="translate(580,170)">
+    <rect class="box box-side" width="170" height="80" rx="6"/>
+    <text x="85" y="32" text-anchor="middle" class="label">Sidecar</text>
+    <text x="85" y="50" text-anchor="middle" class="sub">Tor / I2P / Nym / Direct</text>
+    <text x="85" y="66" text-anchor="middle" class="sub">digest-pinned image</text>
+  </g>
+
+  <!-- Upstream -->
+  <g transform="translate(580,40)">
+    <rect class="box" width="170" height="60" rx="6"/>
+    <text x="85" y="28" text-anchor="middle" class="label">Upstream</text>
+    <text x="85" y="46" text-anchor="middle" class="sub">.onion / clearnet / .i2p</text>
+  </g>
+
+  <!-- Edges -->
+  <!-- Browser ↔ Extension -->
+  <path class="edge" d="M 90 120 L 90 170" marker-end="url(#arrow)"/>
+  <text x="100" y="148" class="sub">intercept</text>
+
+  <!-- Extension → Data plane (route choice reflected as port) -->
+  <path class="edge-flow" d="M 160 210 C 220 210, 220 230, 280 230" marker-end="url(#arrow)"/>
+  <text x="200" y="200" class="sub">SOCKS5/CONNECT</text>
+
+  <!-- Data plane → Sidecar -->
+  <path class="edge-flow" d="M 480 230 L 580 210" marker-end="url(#arrow)"/>
+  <text x="500" y="220" class="sub">bytes</text>
+
+  <!-- Sidecar → Upstream -->
+  <path class="edge-flow" d="M 665 170 L 665 100" marker-end="url(#arrow)"/>
+  <text x="675" y="135" class="sub">routed</text>
+
+  <!-- Control plane ↔ Data plane (UDS) -->
+  <path class="edge-uds" d="M 380 340 L 380 360" marker-end="url(#arrow)"/>
+  <path class="edge-uds" d="M 400 360 L 400 340" marker-end="url(#arrow)"/>
+  <text x="410" y="355" class="sub">gRPC over UDS</text>
+  <text x="410" y="368" class="sub">/run/stargate/{dp,control}.sock</text>
+
+</svg>
+</div>
+
+<p><strong>Reading the diagram:</strong> blue is browser-side, orange is the
+privacy-critical data plane, green is the admin control plane, purple is the
+sidecar. Animated blue dashed lines are bytes flowing on the request path.
+The green dashed line is the inter-plane control channel — the data plane
+keeps routing if this channel drops (Constitution Principle II).</p>
+
+<hr>
+
+<!-- ====================================================================== -->
+<h2 id="deployment">2. Deployment profiles (tabbed)</h2>
+
+<p>Three Docker Compose profiles, switched by topology. The proxy refuses to
+bind a non-loopback interface without a corresponding tunnel sidecar.</p>
+
+<div class="tabs" role="tablist">
+  <button class="active" data-tab="local" role="tab">local (loopback)</button>
+  <button data-tab="lan" role="tab">lan (WireGuard)</button>
+  <button data-tab="vps" role="tab">vps (tunnel)</button>
+</div>
+
+<div class="tab-panel active" id="tab-local">
+  <p><strong>local</strong> — single user, loopback only. The default for
+  personal use on a workstation. Browser, data plane, and sidecar all run
+  on the same host; the proxy binds only <code>127.0.0.1</code>.</p>
+  <div class="svg-wrap">
+  <svg viewBox="0 0 600 220" role="img" aria-label="Local deployment">
+    <g transform="translate(20,60)">
+      <rect class="box box-browser" width="120" height="60" rx="6"/>
+      <text x="60" y="35" text-anchor="middle" class="label">Browser</text>
+    </g>
+    <g transform="translate(240,60)">
+      <rect class="box box-dp" width="120" height="60" rx="6"/>
+      <text x="60" y="32" text-anchor="middle" class="label">Data plane</text>
+      <text x="60" y="48" text-anchor="middle" class="sub">127.0.0.1:8881</text>
+    </g>
+    <g transform="translate(460,60)">
+      <rect class="box box-side" width="120" height="60" rx="6"/>
+      <text x="60" y="35" text-anchor="middle" class="label">Sidecar</text>
+    </g>
+    <path class="edge-flow" d="M 140 90 L 240 90" marker-end="url(#arrow)"/>
+    <path class="edge-flow" d="M 360 90 L 460 90" marker-end="url(#arrow)"/>
+    <text x="300" y="180" text-anchor="middle" class="sub">all on loopback · single host</text>
+    <text x="300" y="200" text-anchor="middle" class="sub">no host port mapping for sidecar</text>
+  </svg>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-lan">
+  <p><strong>lan</strong> — household, multiple devices. A WireGuard sidecar
+  on the LAN carries traffic from each device to the data plane.</p>
+  <div class="svg-wrap">
+  <svg viewBox="0 0 700 240" role="img" aria-label="LAN deployment">
+    <g transform="translate(20,40)">
+      <rect class="box box-browser" width="100" height="50" rx="6"/>
+      <text x="50" y="30" text-anchor="middle" class="label">Laptop</text>
+    </g>
+    <g transform="translate(20,110)">
+      <rect class="box box-browser" width="100" height="50" rx="6"/>
+      <text x="50" y="30" text-anchor="middle" class="label">Phone</text>
+    </g>
+    <g transform="translate(20,180)">
+      <rect class="box box-browser" width="100" height="50" rx="6"/>
+      <text x="50" y="30" text-anchor="middle" class="label">Tablet</text>
+    </g>
+    <g transform="translate(260,110)">
+      <rect class="box box-ext" width="120" height="60" rx="6"/>
+      <text x="60" y="32" text-anchor="middle" class="label">WireGuard</text>
+      <text x="60" y="48" text-anchor="middle" class="sub">sidecar</text>
+    </g>
+    <g transform="translate(490,80)">
+      <rect class="box box-dp" width="120" height="50" rx="6"/>
+      <text x="60" y="30" text-anchor="middle" class="label">Data plane</text>
+    </g>
+    <g transform="translate(490,160)">
+      <rect class="box box-side" width="120" height="50" rx="6"/>
+      <text x="60" y="30" text-anchor="middle" class="label">Sidecar</text>
+    </g>
+    <path class="edge-flow" d="M 120 65 C 200 65, 200 130, 260 130" marker-end="url(#arrow)"/>
+    <path class="edge-flow" d="M 120 135 L 260 135" marker-end="url(#arrow)"/>
+    <path class="edge-flow" d="M 120 205 C 200 205, 200 145, 260 145" marker-end="url(#arrow)"/>
+    <path class="edge-flow" d="M 380 140 C 440 140, 440 110, 490 110" marker-end="url(#arrow)"/>
+    <path class="edge-flow" d="M 550 130 L 550 160" marker-end="url(#arrow)"/>
+    <text x="350" y="225" text-anchor="middle" class="sub">devices reach DP via WireGuard · DP still binds loopback inside its namespace</text>
+  </svg>
+  </div>
+</div>
+
+<div class="tab-panel" id="tab-vps">
+  <p><strong>vps</strong> — remote-host deployment. Devices tunnel to a VPS
+  via WireGuard or Tailscale; the data plane runs on the VPS. Used when the
+  workstation shouldn't be the always-on egress point.</p>
+  <div class="svg-wrap">
+  <svg viewBox="0 0 720 240" role="img" aria-label="VPS deployment">
+    <g transform="translate(20,40)">
+      <rect class="box box-browser" width="100" height="50" rx="6"/>
+      <text x="50" y="30" text-anchor="middle" class="label">Devices</text>
+    </g>
+    <g transform="translate(20,150)">
+      <rect class="box box-browser" width="100" height="50" rx="6"/>
+      <text x="50" y="30" text-anchor="middle" class="sub">(anywhere)</text>
+    </g>
+    <g transform="translate(200,95)">
+      <rect class="box box-ext" width="140" height="50" rx="6"/>
+      <text x="70" y="30" text-anchor="middle" class="label">WG / Tailscale</text>
+    </g>
+    <!-- Internet cloud -->
+    <g transform="translate(380,90)">
+      <ellipse cx="40" cy="30" rx="42" ry="22" class="box"/>
+      <text x="40" y="35" text-anchor="middle" class="sub">internet</text>
+    </g>
+    <g transform="translate(540,40)">
+      <rect class="box box-dp" width="140" height="60" rx="6"/>
+      <text x="70" y="28" text-anchor="middle" class="label">VPS</text>
+      <text x="70" y="48" text-anchor="middle" class="sub">data plane + sidecar</text>
+    </g>
+    <g transform="translate(540,150)">
+      <rect class="box box-cp" width="140" height="50" rx="6"/>
+      <text x="70" y="30" text-anchor="middle" class="label">Control plane</text>
+    </g>
+    <path class="edge-flow" d="M 120 60 C 160 60, 170 110, 200 110" marker-end="url(#arrow)"/>
+    <path class="edge-flow" d="M 120 175 C 160 175, 170 125, 200 125" marker-end="url(#arrow)"/>
+    <path class="edge-flow" d="M 340 115 L 380 115" marker-end="url(#arrow)"/>
+    <path class="edge-flow" d="M 460 115 L 540 80" marker-end="url(#arrow)"/>
+    <path class="edge-uds" d="M 610 100 L 610 150" marker-end="url(#arrow)"/>
+    <text x="360" y="225" text-anchor="middle" class="sub">VPS exposes only the tunnel port · proxy still binds loopback in its namespace</text>
+  </svg>
+  </div>
+</div>
+
+<hr>
+
+<!-- ====================================================================== -->
+<h2 id="request-flow">3. Request flow walkthrough (animated)</h2>
+
+<p>Step through a single request — typing a URL into the browser, ending
+with bytes returning from the upstream. Each step highlights what each
+component sees and what it does NOT see (the privacy-critical boundary).</p>
+
+<div class="walker-controls">
+  <button id="walker-prev">◀ Prev</button>
+  <button id="walker-next">Next ▶</button>
+  <span>Step <span id="walker-num" class="walker-step">1</span> of <span id="walker-total">7</span>:
+    <span id="walker-title" class="walker-step">User types a URL</span></span>
+</div>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 820 360" id="walker-svg" role="img" aria-label="Request flow">
+  <defs>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--fg-muted)"/>
+    </marker>
+  </defs>
+
+  <!-- Five stages laid out horizontally -->
+  <g id="stage-browser" transform="translate(10,140)">
+    <rect class="box box-browser" width="120" height="80" rx="6"/>
+    <text x="60" y="35" text-anchor="middle" class="label">Browser</text>
+  </g>
+  <g id="stage-ext" transform="translate(170,140)">
+    <rect class="box box-ext" width="120" height="80" rx="6"/>
+    <text x="60" y="35" text-anchor="middle" class="label">Extension</text>
+  </g>
+  <g id="stage-dp" transform="translate(330,140)">
+    <rect class="box box-dp" width="140" height="80" rx="6"/>
+    <text x="70" y="35" text-anchor="middle" class="label">Data plane</text>
+    <text x="70" y="55" text-anchor="middle" class="sub">SOCKS5/CONNECT</text>
+  </g>
+  <g id="stage-sidecar" transform="translate(510,140)">
+    <rect class="box box-side" width="120" height="80" rx="6"/>
+    <text x="60" y="35" text-anchor="middle" class="label">Sidecar</text>
+  </g>
+  <g id="stage-upstream" transform="translate(670,140)">
+    <rect class="box" width="130" height="80" rx="6"/>
+    <text x="65" y="35" text-anchor="middle" class="label">Upstream</text>
+  </g>
+
+  <!-- Active path (revealed per step) -->
+  <path id="flow1" class="edge-flow" d="M 130 180 L 170 180" marker-end="url(#arrow2)" style="opacity:0"/>
+  <path id="flow2" class="edge-flow" d="M 290 180 L 330 180" marker-end="url(#arrow2)" style="opacity:0"/>
+  <path id="flow3" class="edge-flow" d="M 470 180 L 510 180" marker-end="url(#arrow2)" style="opacity:0"/>
+  <path id="flow4" class="edge-flow" d="M 630 180 L 670 180" marker-end="url(#arrow2)" style="opacity:0"/>
+  <path id="flow5" class="edge-flow" d="M 670 180 L 630 180" marker-end="url(#arrow2)" style="opacity:0" transform="translate(0,40)"/>
+  <path id="flow6" class="edge-flow" d="M 510 220 L 470 220" marker-end="url(#arrow2)" style="opacity:0"/>
+  <path id="flow7" class="edge-flow" d="M 330 220 L 290 220" marker-end="url(#arrow2)" style="opacity:0"/>
+
+  <!-- Step description -->
+  <text id="walker-desc" x="410" y="320" text-anchor="middle" class="sub" font-size="13">
+    User types a URL or clicks a link. The browser prepares a connection.
+  </text>
+</svg>
+</div>
+
+<hr>
+
+<!-- ====================================================================== -->
+<h2 id="state-machine">4. Ticket lifecycle state machine</h2>
+
+<p>The workflow from <code>docs/process/workflow.md</code>, visualized. Green
+is the happy path; red borders are bright-line stops that hand back to the
+human; yellow is a rework round within the cap.</p>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 820 400" role="img" aria-label="Ticket lifecycle state machine">
+  <defs>
+    <marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--fg-muted)"/>
+    </marker>
+    <marker id="arrow-bad" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#dc3545"/>
+    </marker>
+  </defs>
+
+  <!-- Nodes -->
+  <g transform="translate(30,40)">
+    <rect class="sm-node start" width="110" height="50" rx="6"/>
+    <text x="55" y="30" text-anchor="middle" class="label">pending</text>
+  </g>
+  <g transform="translate(200,40)">
+    <rect class="sm-node" width="120" height="50" rx="6"/>
+    <text x="60" y="30" text-anchor="middle" class="label">in-progress</text>
+  </g>
+  <g transform="translate(370,40)">
+    <rect class="sm-node" width="110" height="50" rx="6"/>
+    <text x="55" y="30" text-anchor="middle" class="label">in-review</text>
+  </g>
+  <g transform="translate(540,40)">
+    <rect class="sm-node done" width="110" height="50" rx="6"/>
+    <text x="55" y="30" text-anchor="middle" class="label">done</text>
+  </g>
+  <g transform="translate(710,40)">
+    <rect class="sm-node done" width="90" height="50" rx="6"/>
+    <text x="45" y="30" text-anchor="middle" class="label">merged</text>
+  </g>
+
+  <g transform="translate(370,180)">
+    <rect class="sm-node warn" width="110" height="50" rx="6"/>
+    <text x="55" y="30" text-anchor="middle" class="label">rework</text>
+    <text x="55" y="44" text-anchor="middle" class="sub">round ≤ cap</text>
+  </g>
+
+  <g transform="translate(200,290)">
+    <rect class="sm-node stop" width="120" height="60" rx="6"/>
+    <text x="60" y="28" text-anchor="middle" class="label">escalated</text>
+    <text x="60" y="44" text-anchor="middle" class="sub">5-way menu</text>
+  </g>
+  <g transform="translate(370,290)">
+    <rect class="sm-node stop" width="110" height="60" rx="6"/>
+    <text x="55" y="28" text-anchor="middle" class="label">deferred</text>
+    <text x="55" y="44" text-anchor="middle" class="sub">blocked</text>
+  </g>
+
+  <!-- Edges -->
+  <path class="sm-edge" d="M 140 65 L 200 65"/>
+  <path class="sm-edge" d="M 320 65 L 370 65"/>
+  <path class="sm-edge" d="M 480 65 L 540 65"/>
+  <path class="sm-edge" d="M 650 65 L 710 65"/>
+
+  <!-- Review → rework → in-progress -->
+  <path class="sm-edge" d="M 425 90 L 425 180"/>
+  <path class="sm-edge" d="M 370 205 L 320 65"/>
+
+  <!-- Bright-line stops (red) -->
+  <path class="sm-edge bad" d="M 260 90 C 260 200, 260 240, 260 290" marker-end="url(#arrow-bad)"/>
+  <path class="sm-edge bad" d="M 425 90 C 425 200, 425 240, 425 290" marker-end="url(#arrow-bad)"/>
+
+  <text x="160" y="220" class="sub" fill="#dc3545">verify-not-green</text>
+  <text x="160" y="235" class="sub" fill="#dc3545">round cap hit</text>
+  <text x="160" y="250" class="sub" fill="#dc3545">ESCALATE verdict</text>
+
+  <text x="430" y="220" class="sub" fill="#dc3545">decompose</text>
+  <text x="430" y="235" class="sub" fill="#dc3545">defer</text>
+  <text x="430" y="250" class="sub" fill="#dc3545">spec-amend</text>
+
+  <!-- Recovery edges (dashed) -->
+  <path class="sm-edge" stroke-dasharray="3 3" d="M 200 290 C 100 290, 80 200, 80 90"/>
+  <text x="20" y="200" class="sub">refine</text>
+
+  <!-- Annotations -->
+  <text x="150" y="30" class="sub">scripts/run-task.sh drives this state machine</text>
+  <text x="150" y="370" class="sub">status: field in ticket YAML is the source of truth</text>
+</svg>
+</div>
+
+<p><strong>Reading the diagram:</strong> the green path runs unattended under
+<code>/run</code> or the CI <code>agent-task</code> workflow. Red edges are
+the bright-line stops — the agent never self-overrides these; the human
+decides via the five-way menu (refine / override / decompose / defer / amend).
+The yellow node is a rework round; the cap defaults to 2 (3 for high-risk
+tickets).</p>
+
+<hr>
+
+<!-- ====================================================================== -->
+<h2 id="run-loop">5. The /run loop (CI or local)</h2>
+
+<p>How <code>scripts/run-task.sh</code> and <code>scripts/agent-cli.sh</code>
+hand off between deterministic phases and LLM-driven phases. The
+deterministic phases the script does itself; the LLM phases it emits as
+handoff prompts and the agent-CLI adapter picks up.</p>
+
+<div class="svg-wrap">
+<svg viewBox="0 0 760 360" role="img" aria-label="The /run loop">
+  <defs>
+    <marker id="arrow4" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--fg-muted)"/>
+    </marker>
+  </defs>
+
+  <!-- Center: run-task.sh state machine -->
+  <g transform="translate(280,140)">
+    <rect class="box box-cp" width="200" height="80" rx="6"/>
+    <text x="100" y="32" text-anchor="middle" class="label">run-task.sh</text>
+    <text x="100" y="50" text-anchor="middle" class="sub">deterministic phases:</text>
+    <text x="100" y="66" text-anchor="middle" class="sub">verify, status, merge</text>
+  </g>
+
+  <!-- Prompt artefact -->
+  <g transform="translate(280,30)">
+    <rect class="box" width="200" height="50" rx="6"/>
+    <text x="100" y="22" text-anchor="middle" class="label">target/runs/&lt;id&gt;.prompt</text>
+    <text x="100" y="38" text-anchor="middle" class="sub">handoff prompt</text>
+  </g>
+
+  <!-- Agent-CLI dispatcher -->
+  <g transform="translate(530,140)">
+    <rect class="box box-ext" width="180" height="80" rx="6"/>
+    <text x="90" y="32" text-anchor="middle" class="label">agent-cli.sh</text>
+    <text x="90" y="50" text-anchor="middle" class="sub">dispatcher</text>
+    <text x="90" y="66" text-anchor="middle" class="sub">AGENT_CLI=opencode|claude|…</text>
+  </g>
+
+  <!-- Adapters -->
+  <g transform="translate(530,30)">
+    <rect class="box box-side" width="85" height="50" rx="6"/>
+    <text x="42" y="30" text-anchor="middle" class="label">opencode</text>
+  </g>
+  <g transform="translate(625,30)">
+    <rect class="box box-side" width="85" height="50" rx="6"/>
+    <text x="42" y="22" text-anchor="middle" class="label">claude</text>
+    <text x="42" y="38" text-anchor="middle" class="sub">(stub)</text>
+  </g>
+
+  <!-- Sentinel back into run-task -->
+  <g transform="translate(280,260)">
+    <rect class="box" width="200" height="50" rx="6"/>
+    <text x="100" y="22" text-anchor="middle" class="label">target/runs/&lt;id&gt;.grounded</text>
+    <text x="100" y="38" text-anchor="middle" class="sub">.verified · .verdict (sentinels)</text>
+  </g>
+
+  <!-- CI workflow caller -->
+  <g transform="translate(40,140)">
+    <rect class="box" width="160" height="80" rx="6"/>
+    <text x="80" y="32" text-anchor="middle" class="label">agent-task.yml</text>
+    <text x="80" y="50" text-anchor="middle" class="sub">CI workflow</text>
+    <text x="80" y="66" text-anchor="middle" class="sub">/agent T-NNN</text>
+  </g>
+
+  <!-- Edges -->
+  <path class="edge" d="M 380 220 L 380 260" marker-end="url(#arrow4)"/>
+  <text x="390" y="245" class="sub">emit</text>
+
+  <path class="edge-flow" d="M 480 175 L 530 175" marker-end="url(#arrow4)"/>
+  <text x="488" y="165" class="sub">feed</text>
+
+  <path class="edge" d="M 620 140 L 620 80" marker-end="url(#arrow4)"/>
+  <path class="edge" d="M 620 80 L 615 80" marker-end="url(#arrow4)"/>
+
+  <path class="edge-flow" d="M 530 175 C 480 175, 470 280, 480 280" marker-end="url(#arrow4)" style="transform: translate(0, -10px)"/>
+  <text x="450" y="320" class="sub">signal sentinel → re-invoke</text>
+
+  <path class="edge" d="M 200 175 L 280 175" marker-end="url(#arrow4)"/>
+  <text x="220" y="165" class="sub">drive</text>
+</svg>
+</div>
+
+<p><strong>Why a dispatcher:</strong> the LLM CLI (opencode, Claude Code,
+whatever) is the only piece that's tool-specific. Everything else — the
+state machine, the gates, the bright-line stops, the PR-opening — is
+tool-agnostic and lives in shell. Swapping CLI is one env var
+(<code>AGENT_CLI=claude</code>) and one adapter file.</p>
+
+<hr>
+
+<!-- ====================================================================== -->
+<h2>What's next (your call)</h2>
+
+<p>If this format works, candidates for next visuals:</p>
+<ul>
+  <li><strong>Privacy trust-boundary diagram</strong> — what's inside vs
+  outside each trust boundary, what validation happens where (the
+  "validate at edges, trust inside" doctrine made visible).</li>
+  <li><strong>Per-route threat matrix</strong> — what Tor / I2P / Nym / Direct
+  each protect against, animated per route.</li>
+  <li><strong>The analyze gate's residue map</strong> — must-hold / gated /
+  residue as a Venn-like diagram.</li>
+  <li><strong>The Constitution's 8 principles as a radial diagram</strong> —
+  click a principle, see the tickets that cite it.</li>
+  <li><strong>Sidecar digest-pinning chain</strong> — provenance from upstream
+  to pinned image to verified runtime.</li>
+</ul>
+
+<p>Tell me which (if any) to build next, or whether to embed the keepers
+above into <code>tech.html</code> / <code>developer.html</code> instead of
+keeping them on a gallery page.</p>
+
+<footer>
+  <p>All visuals are inline SVG with CSS animations — no external deps, opens
+  from <code>file://</code>. Tab switching and step-through use ~30 lines of
+  vanilla JS at the bottom of this file's source.</p>
+</footer>
+
+</div>
+
+<script>
+  // Tab switching for deployment profiles.
+  document.querySelectorAll('.tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.dataset.tab;
+      document.querySelectorAll('.tabs button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + target).classList.add('active');
+    });
+  });
+
+  // Step-through walker for request flow.
+  const steps = [
+    { title: 'User types a URL', flows: [],
+      desc: 'User types a URL or clicks a link. The browser prepares a connection.' },
+    { title: 'Extension intercepts', flows: ['flow1'],
+      desc: 'The extension intercepts the request and decides the route (Tor, I2P, Nym, or Direct) based on per-tab or per-site rules.' },
+    { title: 'SOCKS5/CONNECT to data plane', flows: ['flow1', 'flow2'],
+      desc: 'Browser opens a SOCKS5 or HTTP CONNECT to 127.0.0.1:8881 with the bearer token.' },
+    { title: 'Data plane authenticates', flows: ['flow1', 'flow2'],
+      desc: 'Data plane verifies the Argon2id token hash. On failure: AUTH_REQUIRED, no per-request log. On success: forward to sidecar.' },
+    { title: 'Bytes to sidecar', flows: ['flow1', 'flow2', 'flow3'],
+      desc: 'Data plane forwards raw bytes to the configured sidecar (tor:9050 for Tor route). No inspection, no logging, no modification.' },
+    { title: 'Sidecar reaches upstream', flows: ['flow1', 'flow2', 'flow3', 'flow4'],
+      desc: 'Sidecar establishes the circuit (Tor, I2P, etc.) and connects to upstream. For .onion: via the overlay network. For clearnet-via-Tor: via exit node.' },
+    { title: 'Response flows back, byte-piped', flows: ['flow1', 'flow2', 'flow3', 'flow4', 'flow5', 'flow6', 'flow7'],
+      desc: 'Bytes return through the same pipes, unmodified. The data plane is a byte-pipe — it never inspected the contents in either direction (Principle I).' },
+  ];
+  let cur = 0;
+  const prev = document.getElementById('walker-prev');
+  const next = document.getElementById('walker-next');
+  const num  = document.getElementById('walker-num');
+  const tot  = document.getElementById('walker-total');
+  const ttl  = document.getElementById('walker-title');
+  const desc = document.getElementById('walker-desc');
+  tot.textContent = steps.length;
+
+  function render() {
+    const s = steps[cur];
+    num.textContent = cur + 1;
+    ttl.textContent = s.title;
+    desc.textContent = s.desc;
+    prev.disabled = cur === 0;
+    next.disabled = cur === steps.length - 1;
+    // Hide all flows, then show the ones for this step.
+    document.querySelectorAll('[id^="flow"]').forEach(f => f.style.opacity = 0);
+    s.flows.forEach(id => { const el = document.getElementById(id); if (el) el.style.opacity = 1; });
+  }
+  prev.addEventListener('click', () => { if (cur > 0) { cur--; render(); } });
+  next.addEventListener('click', () => { if (cur < steps.length - 1) { cur++; render(); } });
+  render();
+</script>
+
+</body>
+</html>

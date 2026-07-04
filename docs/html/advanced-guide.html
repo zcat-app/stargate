@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stargate — Advanced guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="inner">
+    <span class="brand"><a href="index.html">⭐ Stargate</a></span>
+    <ul>
+      <li><a href="user-guide.html">User guide</a></li>
+      <li><a href="advanced-guide.html" class="current">Advanced</a></li>
+      <li><a href="admin.html">Admin</a></li>
+      <li><a href="tech.html">Technical</a></li>
+      <li><a href="developer.html">Developer</a></li>
+      <li><a href="diagrams.html">Diagrams</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container">
+
+<h1>Advanced guide</h1>
+
+<div class="banner wip">
+  <p><strong>Status: partial.</strong> Deployment profiles and the
+  per-route privacy properties are documented in
+  <code>THREAT-MODEL.md</code> and the architecture spec; the per-site
+  routing rules and other advanced features are v1 scope but not yet
+  wired into the extension. What follows is the outline plus the
+  substantive pieces that are decided.</p>
+</div>
+
+<h2>Deployment profiles</h2>
+
+<p>Three Docker Compose profiles, switched by topology. The proxy refuses
+to bind a non-loopback interface without a corresponding tunnel sidecar
+(this is enforced in code, not config — see <code>data-plane/internal/bind</code>
+once ticket T013 lands).</p>
+
+<table>
+  <thead><tr><th>Profile</th><th>Use case</th><th>Topology</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>local</code></td>
+      <td>Personal use on a workstation.</td>
+      <td>Browser, data plane, sidecar all on the same host. Proxy binds
+      <code>127.0.0.1</code> only.</td>
+    </tr>
+    <tr>
+      <td><code>lan</code></td>
+      <td>Household, multiple devices.</td>
+      <td>WireGuard sidecar on the LAN carries per-device traffic to the
+      data plane.</td>
+    </tr>
+    <tr>
+      <td><code>vps</code></td>
+      <td>Always-on egress from a remote host.</td>
+      <td>Devices tunnel to a VPS via WireGuard or Tailscale; the data
+      plane runs on the VPS.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>See the <a href="diagrams.html#deployment">deployment-profiles diagrams</a>
+for the visual topologies of each.</p>
+
+<h2>Routes and what each protects against</h2>
+
+<p>Stargate supports four routes. The browser extension picks one per
+request. What each route actually defends against is documented in
+<code>THREAT-MODEL.md</code>; the summary below is the short version.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Route</th>
+      <th>Network</th>
+      <th>Defends against</th>
+      <th>Does NOT defend against</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Tor</strong></td>
+      <td>Tor overlay</td>
+      <td>Local network observer seeing the destination; clearnet exit
+      observer seeing the source IP (for clearnet-via-Tor).</td>
+      <td>Global passive adversary correlating timing/volume; malicious
+      exit node reading or modifying unencrypted clearnet traffic; the
+      Tor network's own biases.</td>
+    </tr>
+    <tr>
+      <td><strong>I2P</strong></td>
+      <td>I2P overlay</td>
+      <td>Similar to Tor for <code>.i2p</code> destinations; distributed
+      by design.</td>
+      <td>Cross-overlay leakage; the I2P network's own biases.</td>
+    </tr>
+    <tr>
+      <td><strong>Nym</strong></td>
+      <td>Nym mixnet</td>
+      <td>Stronger metadata resistance than Tor via Sphinx packet mixing
+      and cover traffic (when enabled).</td>
+      <td>Performance — mixnet latency is higher; Nym's own threat model
+      and operator set.</td>
+    </tr>
+    <tr>
+      <td><strong>Direct</strong></td>
+      <td>Clearnet, no overlay</td>
+      <td>Nothing on the network side. Used for sites that block
+      anonymous exits or where anonymity is not the goal.</td>
+      <td>Everything — your IP is exposed. Use deliberately.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The full per-route threat model — including the threat-model entries
+for malicious sidecars, DNS leak surface, and the difference between
+<em>local</em>, <em>lan</em>, and <em>vps</em> profiles per route — lives
+in <code>THREAT-MODEL.md</code>. This page summarises; that file is the
+contract.</p>
+
+<h2>What is NOT decided yet (placeholders for v1+)</h2>
+
+<h3>Per-site routing rules</h3>
+
+<p>The extension will support persistent rules: "always use Tor for
+<code>.onion</code>", "always use Direct for <code>bank.example.com</code>".
+The rule schema, the persistence format, and the UI are v1 scope but not
+yet specced in detail. Tracked in
+<code>specs/001-tor-route/spec.md</code>.</p>
+
+<h3>Custom SOCKS5 routing</h3>
+
+<p>Power users may want to point non-browser applications (curl, git,
+etc.) at the data plane's SOCKS5 port directly, with route selection via
+the SOCKS5 username. Whether the v1 extension handles this or it stays a
+developer-only path is an open question.</p>
+
+<h3>Bridge / pluggable-transport configuration</h3>
+
+<p>Tor bridges are supported in v1, toggleable, default off. The
+extension exposes the toggle; the rendered <code>torrc</code> template
+includes the bridge lines when enabled. Per-ticket tracking:
+<code>T029</code>–<code>T032</code> (the <code>torrc</code> contract
+tests).</p>
+
+<h2>What is explicitly out of scope (v1)</h2>
+
+<ul>
+  <li><strong>Cover traffic.</strong> The data plane generates no cover
+  traffic (Constitution Principle I). Nym's own cover-traffic mechanism
+  applies when the Nym route is selected, but Stargate itself does not
+  add any.</li>
+  <li><strong>Per-request logging.</strong> The data plane emits no
+  per-request log line at any granularity. Aggregate counters only, at
+  ≥1-hour bucket resolution (FR-008). This is enforced by the contract
+  tests T025a / T025c.</li>
+  <li><strong>Local DNS resolution.</strong> The data plane does not
+  resolve DNS names. <code>SOCKS5h</code> only; the sidecar does the
+  resolution. This is enforced by T034 (DNS leak test).</li>
+</ul>
+
+<footer>
+  <p>Substantive where decided (deployment profiles, route matrix);
+  placeholder for the extension-level features still being specified.
+  Last updated 2026-07-04.</p>
+</footer>
+
+</div>
+</body>
+</html>

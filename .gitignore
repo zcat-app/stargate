@@ -13,6 +13,16 @@ target/
 *.class
 *.jar
 
+# Per-ticket run state (round counters, diff stats, captured review verdicts).
+# Lives under target/ which is already ignored; this comment is the contract.
+# scripts/run-task.sh reads/writes target/runs/<id>*.{round,diffstat,verdict}.
+
+# Session handoffs and per-ticket outlines — local working notes, never committed.
+# scripts/handoff.sh writes here; the absence from git is the point (handoffs
+# are snapshots of "now", re-verified on resume — see docs/process/workflow.md).
+specs/*/.handoffs/
+specs/.handoffs/
+
 # Browser extension build output
 extension/dist/
 

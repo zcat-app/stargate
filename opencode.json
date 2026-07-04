@@ -1,0 +1,116 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md"],
+  "permission": {
+    "edit": {
+      "specs/**": "allow",
+      "docs/**": "allow",
+      "scripts/**": "allow",
+      "data-plane/**": "allow",
+      "control-plane/**": "allow",
+      "extension/**": "allow",
+      "proto/**": "allow",
+      "compose/**": "allow",
+      "sidecars/**": "allow",
+      "tests/**": "allow",
+      "redteam/**": "allow",
+      "reviews/**": "allow",
+      ".opencode/**": "allow",
+      ".claude/**": "allow",
+      "prompts/**": "allow",
+      "AGENTS.md": "allow",
+      "CLAUDE.md": "allow",
+      "CONTRIBUTING.md": "allow",
+      "THREAT-MODEL.md": "allow",
+      "*": "ask"
+    },
+    "bash": {
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git show*": "allow",
+      "git rev-parse*": "allow",
+      "git branch*": "allow",
+      "git worktree*": "allow",
+      "git stash*": "allow",
+      "git add *": "allow",
+      "git commit*": "allow",
+      "git checkout*": "allow",
+      "git rebase*": "allow",
+      "git merge*": "allow",
+      "scripts/*": "allow",
+      ".specify/scripts/*": "allow",
+      ".specify/extensions/*": "allow",
+      ".githooks/*": "allow",
+      "go *": "allow",
+      "./mvnw*": "allow",
+      "mvn *": "allow",
+      "npx *": "allow",
+      "npm *": "allow",
+      "protoc *": "allow",
+      "docker *": "allow",
+      "docker-compose*": "allow",
+      "command -v *": "allow",
+      "chmod *": "allow",
+      "ls *": "allow",
+      "ls": "allow",
+      "cat *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "wc *": "allow",
+      "grep *": "allow",
+      "rg *": "allow",
+      "find *": "allow",
+      "awk *": "allow",
+      "sed *": "allow",
+      "mkdir *": "allow",
+      "cp *": "allow",
+      "test *": "allow",
+      "[ *": "allow",
+      "python3 *": "allow",
+      "bash *": "allow",
+      "*": "ask"
+    },
+    "external_directory": {
+      "/home/ubuntu5/Projects/quarkus-projects/infochat/**": "allow",
+      "/home/ubuntu5/Projects/quarkus-projects/zecsite-claude/**": "allow",
+      "/home/ubuntu5/**": "allow",
+      "*": "ask"
+    },
+    "read": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "task": "allow",
+    "todowrite": "allow",
+    "question": "allow",
+    "webfetch": "ask",
+    "websearch": "ask"
+  },
+  "agent": {
+    "stargate-codereview": {
+      "description": "Fresh-context correctness + scope review of a single implemented task against its acceptance criteria and the constitution. Blind to the implementer's rationale.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": { "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "*": "deny" }
+      }
+    },
+    "stargate-redteam": {
+      "description": "Adversarial security/privacy review of Stargate code against the constitution and threat model. Invoke at the end of each implementation cycle and before each release.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": { "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "*": "deny" }
+      }
+    },
+    "stargate-perf": {
+      "description": "Performance and resource review of Stargate code. Identifies allocations in hot paths, blocking I/O on event loops, leaks, and cold-start issues. Invoke at milestone boundaries.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": { "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "*": "deny" }
+      }
+    }
+  }
+}
