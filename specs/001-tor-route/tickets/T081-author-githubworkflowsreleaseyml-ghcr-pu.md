@@ -131,6 +131,17 @@ questions (the task body picks defaults; analysis confirms or refines):
   `compose/docker-compose.release.yml` rendered in the prior release still
   references the OLD digest (immutable, still pullable if not GC'd). This is
   correct behaviour (release artifacts are immutable); document.
+- **Release-cadence online-gate discipline (the meta-finding).** AT-1 makes
+  `STARGATE_GROUND_ONLINE=1 bash scripts/verify.sh` a release-mandatory
+  bright-line. The implementer MUST wire it as a real workflow job (not a
+  comment, not a manual step) that runs BEFORE the build job and whose FAIL
+  halts the release. This is the systemic fix for the class of invisibility
+  that let the `docker manifest inspect` defect (commit `892a1d0`) ship and
+  sit unnoticed — a release-cadence gate that is never run automatically is
+  a release-cadence gate that does not exist. Confirm: the job sets BOTH
+  `STARGATE_GROUND_ONLINE=1` AND `STARGATE_VERIFY_REPRO=1` (the latter opts
+  into the release-cadence reproducibility gate per verify.sh gate 5; both
+  are release-tag-only flags by design).
 
 ## Acceptance
 
@@ -144,10 +155,26 @@ git tag v0.0.0-rc-test-t081 && git push origin v0.0.0-rc-test-t081
 # PASS, sign-and-sbom PASS, render-release-compose PASS, append-to-SECURITY-DECISIONS PASS.
 gh run list --workflow=release.yml --limit=1
 ```
-The tag-trigger condition asserts: T076's contract-test workflow is green on
-the tagged commit; T078 redteam verdict is CLEAN (read from
-`specs/001-tor-route/.handoffs/T078.verdict` or equivalent); T079 perf verdict
-is green. Missing any → workflow halts before the build job.
+The tag-trigger condition asserts (each is a separate early-halt job in the
+workflow; any failure stops the release before any image is built):
+- **T076's contract-test workflow** is green on the tagged commit (FR-016 gate).
+- **T078 redteam verdict** is CLEAN (read from
+  `specs/001-tor-route/.handoffs/T078.verdict` or equivalent).
+- **T079 perf verdict** is green.
+- **`STARGATE_GROUND_ONLINE=1 bash scripts/verify.sh`** is GREEN on the tagged
+  commit. This is the release-cadence run of the online ground-check — the
+  gate that resolves every Dockerfile FROM pin AND every compose `image:` pin
+  (and toolchain EOL) against live registries / endoflife.date. It is the only
+  automation that catches a pruned/malformed/re-rolled digest or an EOL
+  toolchain before they ship in a signed release image. **This bright-line is
+  load-bearing:** the ground-check online mode silently broke for multi-arch
+  Dockerfile FROM digests between T002a/T003a/T014 landing and the fix at
+  commit `892a1d0` (switched from `docker manifest inspect` to
+  `docker buildx imagetools inspect`); the breakage was invisible because no
+  release-tag run had ever executed the online gate. Making it release-mandatory
+  here closes that systemic gap — a future regression of the same class will
+  halt the release loudly instead of shipping a signed-but-broken pin.
+- Missing any → workflow halts before the build job.
 
 **AT-2 — Three images pushed, signed, SBOM'd.**
 For each of `stargate-dp`, `stargate-control`, `tor`:
