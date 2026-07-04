@@ -31,4 +31,36 @@
             <artifactId>quarkus-grpc</artifactId>
         </dependency>
     </dependencies>
+
+    <!--
+        The proto contracts live at the repo top (proto/stargate/v1/*.proto)
+        so both planes import from one source (plan.md §"Structure Decision").
+        By default quarkus-grpc's GrpcCodeGen scans src/main/proto. The
+        quarkus.grpc.codegen.proto-directory property (read by
+        io.quarkus.grpc.codegen.GrpcCodeGen.init from the Maven project
+        properties passed to CodeGenerator.initAndRun) overrides that with an
+        absolute path to the shared repo-root proto directory. Declaring it
+        here as a POM property promotes it to MavenProject.getProperties(),
+        which is what the generate-code mojo feeds into the codegen.
+    -->
+    <properties>
+        <quarkus.grpc.codegen.proto-directory>${project.basedir}/../../proto/stargate/v1</quarkus.grpc.codegen.proto-directory>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>${quarkus.platform.group-id}</groupId>
+                <artifactId>quarkus-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>generate-grpc-stubs</id>
+                        <goals>
+                            <goal>generate-code</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

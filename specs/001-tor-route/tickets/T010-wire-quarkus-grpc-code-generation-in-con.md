@@ -1,7 +1,7 @@
 ---
 id: T010
 title: 'Wire Quarkus gRPC code generation in `control-plane/api/pom.xml` (`qua'
-status: pending
+status: done
 created: 2026-07-04
 last_updated: 2026-07-04
 source: tasks.md#T010
@@ -16,7 +16,7 @@ risk: low
 round_cap: 2
 spec_refs: []   # TODO: cite spec.md § at /start
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-07-04, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
