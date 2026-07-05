@@ -25,7 +25,12 @@
 #   - M6 final-image digest honesty: references T081/release-tag; does NOT
 #         present a fabricated final-image sha256 pin as current.
 #   - M7 reserved adversarial-review section heading present.
-#   - M8 scope boundary: no docker-socket-proxy entry (T017a appends it).
+#   - M8 (T017's original scope-boundary assertion) was REMOVED in T017a:
+#         T017a appends the docker-socket-proxy entry, so the
+#         "lacks docker-socket-proxy" assertion is obsolete. The positive
+#         assertions for the docker-socket-proxy entry live in
+#         tests/contract/security-decisions/docker_socket_proxy_entry_test.sh
+#         (T017a AT-1).
 #
 # Hermetic: file reads + grep only. No network, no daemon.
 
@@ -136,11 +141,17 @@ has "8\.6" "M9: Tor entry must cite THREAT-MODEL §8.6 (resolves its 'unresolved
 # and MUST appear in the residual-risk section (Constitution V).
 has "libssl3" "M10: residual-risk section must name libssl3 (Tor's TLS crypto dep) — transitive-deps trust residual"
 
-# --- M8: scope boundary — no docker-socket-proxy entry ---------------------
-# The docker-socket-proxy rationale is T017a's append. Its absence here is
-# the scope-boundary signal (T017 establishes the file + Tor entry only).
-lacks "docker-socket-proxy" \
-  "M8: $SD must NOT contain the docker-socket-proxy rationale (T017a appends it)"
+# --- M8: REMOVED in T017a ---------------------------------------------------
+# T017's original M8 (`lacks "docker-socket-proxy"`) was a scope-boundary
+# signal: T017 established the file + the Tor entry only, and T017a was
+# the follow-up that appends the docker-socket-proxy rationale. T017a
+# landed that entry (directly above the Tor entry, per the preamble's
+# newest-first ordering), so the absence-assertion is obsolete — keeping
+# it would fail the gate the moment the docker-socket-proxy entry landed.
+# The positive assertions for that entry live in
+# tests/contract/security-decisions/docker_socket_proxy_entry_test.sh
+# (T017a AT-1). This block is retained as a marker so future readers
+# don't re-introduce an M8 absence-assertion here.
 
 # --- report ----------------------------------------------------------------
 if [ "${#errs[@]}" -gt 0 ]; then
