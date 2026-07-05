@@ -313,9 +313,17 @@ plane reports a higher major version than it understands.
 | `ReloadTokens` RPC fails midway             | Atomic swap — old generation remains until success  |
 | Schema-version mismatch (peer is newer)     | Reject handshake, log to journal, exit non-zero     |
 
-The data plane caches the last successful `StatusResponse → token list +
-route enable/disable mask` on disk at `/var/lib/stargate/dp-snapshot.json`
-so cold-start without the control plane still serves the right ports.
+The data plane caches the last successful `StatusResponse → token list`
+on disk at `/var/lib/stargate/dp-snapshot.json` so cold-start without
+the control plane still serves the right ports. The snapshot is
+**token-list-only** — `routeEnableMask` is deliberately NOT persisted;
+cold-start unconditionally begins DISABLED and waits for the first
+`HEALTHY` `SidecarEvent` to transition a route to ENABLED. See
+`specs/001-tor-route/data-model.md` §1.4 (snapshot schema) and §2 (the
+state-machine rationale for the no-optimistic-enable-on-cold-start
+path) — both are the canonical sources; this §5.5 paragraph intentionally
+does not duplicate them so future readers do not re-introduce the
+mask into the snapshot.
 
 ---
 
@@ -388,7 +396,7 @@ CREATE TABLE audit_log (
   id           INTEGER PRIMARY KEY,
   ts           INTEGER NOT NULL,                -- unix seconds (admin action time, not user request time)
   actor        TEXT    NOT NULL,                -- admin credential label
-  action       TEXT    NOT NULL,                -- enum (v1 baseline; per-feature extensions land via lock-step amendments — see e.g. specs/001-tor-route/data-model.md §4): enrolled, revoked, config_error, sidecar_healthy, sidecar_unhealthy, sidecar_restart, bridge_toggle, export, import, wipe
+  action       TEXT    NOT NULL,                -- enum (v1 baseline; per-feature extensions land via lock-step amendments — see e.g. specs/001-tor-route/data-model.md §4): enrolled, revoked, config_error, sidecar_healthy, sidecar_unhealthy, bridge_toggle, export, import, wipe
   target       TEXT,                            -- entity affected (e.g. device name)
   detail_json  TEXT                             -- fixed-schema metadata; never request data
 );
@@ -412,7 +420,7 @@ opens a PR with a newer digest and contract tests pass.
 
 | Sidecar     | Candidate image                                  | Digest pinning                                          |
 |-------------|--------------------------------------------------|---------------------------------------------------------|
-| Tor         | **`stargate/tor`** — Stargate-built image installing `tor` from `deb.torproject.org` (Tor Project's official Debian apt repository) on a pinned Debian-slim base. Dockerfile lives in `sidecars/tor/`. Tor Project signing key pinned by fingerprint and verified at build time. Resolved by `specs/001-tor-route/` §Clarifications 2026-05-17 Q1. | `NEEDS CLARIFICATION` — pin both the Debian-slim base and the final composed image at first release tag |
+| Tor         | **`stargate/tor`** — Stargate-built image installing `tor` from `deb.torproject.org` (Tor Project's official Debian apt repository) on a pinned Debian-slim base. Dockerfile lives in `sidecars/tor/`. Tor Project signing key pinned by fingerprint (`A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89`, in `sidecars/tor/apt-key.fingerprint`) and verified at build time. Resolved by `specs/001-tor-route/` §Clarifications 2026-05-17 Q1. | **Pinned by sha256 digest per FR-015**: the Debian-slim base (`debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df`) and the final composed image are both pinned in `compose/docker-compose.local.yml` / `compose/env/local.env.example` and cross-checked by `tests/contract/compose/` (T015) and `tests/contract/security-decisions/tor_entry_test.sh` (T017). The trust rationale is in `SECURITY-DECISIONS.md` (T017). |
 | i2pd        | `purplei2p/i2pd` (upstream maintainer)           | `NEEDS CLARIFICATION` — pin at first release tag        |
 | Nym client  | `NEEDS CLARIFICATION: Nym's official Docker distribution status is not resolved in this spec; either pin an upstream image if maintained or build from a pinned `nymtech/nym` source tree.` | `NEEDS CLARIFICATION` |
 | WireGuard   | `linuxserver/wireguard`                          | `NEEDS CLARIFICATION` — pin at first release tag        |
@@ -423,11 +431,10 @@ flags that the maintainer must resolve, with an `SECURITY-DECISIONS.md`
 entry per sidecar covering: who maintains the image, how its provenance is
 verified, and what the contract test suite asserts about it.
 
-**Outstanding follow-up for the Tor row**: the trust-rationale narrative
-required by Principle IV must land in `SECURITY-DECISIONS.md` once that
-file is authored (constitution Sync Impact Report lists it as TODO).
-Until then, the rationale lives inline above (Tor Project as upstream
-package maintainer; their signing infrastructure as the trust root).
+**Trust rationale**: recorded in `SECURITY-DECISIONS.md` (T017 Tor
+entry — apt-key fingerprint, digest pins, transitive-dependency
+closure, residual risk). The inline narrative above is the historical
+pre-entry framing; the entry is the authoritative source.
 
 ---
 
@@ -601,8 +608,10 @@ record content, Tor circuit identifier, request method/path, byte counts.
 backend, captures the response, and asserts:
 
 1. Status code matches the table.
-2. Body matches the template byte-for-byte after substitution of the four
-   permitted fields.
+2. Body matches the template byte-for-byte after substitution of the three
+   permitted fields (`{ROUTE_LABEL}`, `{CODE}`, `{LOCAL_REFERENCE_ID}` per
+   §10.2 and `specs/001-tor-route/contracts/error-template.md` §"Response
+   body").
 3. Response headers contain only: `Content-Type`, `Content-Length`,
    `Cache-Control: no-store`, `X-Stargate-Error: <CODE>`. Any other
    header (`Server`, `Via`, `X-Forwarded-*`, etc.) fails the test.
@@ -870,8 +879,16 @@ For each request:
 
 Bearer tokens themselves SHOULD be stored in the browser's OS keyring via
 the WebExtensions password-storage path if available; otherwise in
-`storage.local` with a clear UX warning. `NEEDS CLARIFICATION`: which
-storage path Mullvad Browser exposes for credential-grade secrets.
+`storage.local` with a clear UX warning. **Resolved-for-v1 by FR-019 +
+`specs/001-tor-route/research.md` §6**: Firefox ESR (Mullvad Browser's
+engine) exposes no credential-grade storage API to extensions in the v1
+release window, so the token is persisted to `storage.local` with the
+canonical warning text pinned verbatim in
+`specs/001-tor-route/data-model.md` §5.1 (asserted byte-for-byte by
+T056's inline test). A future feature may revisit this if WebExtensions
+on Firefox ESR gain a credential-grade storage API; until then the
+residual filesystem-read risk is acknowledged under THREAT-MODEL §3.1
+(local profile assumes local code execution is already game-over).
 
 ### 14.5 Install-time configuration audit
 
@@ -927,7 +944,9 @@ relies on it can be planned.
    remains open**: Nym's official Docker support status needs
    verification; either pin an upstream image if maintained, or build
    from a pinned `nymtech/nym` source tree. `SECURITY-DECISIONS.md`
-   rationale entries still owed for both once that file is authored.
+   rationale entry owed for **Nym only** (Tor entry authored under T017
+   — `SECURITY-DECISIONS.md` §"2026-07-04 — Tor sidecar trust rationale
+   (FR-015)"; file exists at repo root, verified at HEAD).
 2. **§7 Image digests** — Concrete sha256 digests for Tor, i2pd, Nym
    client, WireGuard, distroless base, and the Quarkus native builder
    image. To be pinned at first release tag.
@@ -938,16 +957,27 @@ relies on it can be planned.
    standard?
 5. **§13.1 Backup encryption** — `age` (preferred) vs `gpg --symmetric`
    (more ecosystem familiarity)?
-6. **§14.1 Manifest version** — Confirm MV2 support on Mullvad Browser at
-   v1 release window; if MV2 is gone, redesign the proxy decision path
-   for MV3.
+6. **§14.1 Manifest version** — ~~Confirm MV2 support on Mullvad Browser
+   at v1 release window~~ **Resolved-for-v1** by `specs/001-tor-route/`
+   §Clarifications + `research.md` §2: implement the extension as Manifest
+   V2 with `proxy.onRequest` (Mozilla's stated policy is to maintain MV2
+   indefinitely for APIs that have no MV3 equivalent; no MV3 migration
+   path preserves per-request routing with per-request SOCKS5 username —
+   which is how stream isolation is driven). **Maintenance flag**: re-
+   verify MV2 support on each Mullvad Browser major-version bump; if a
+   bump drops MV2, redesign the proxy decision path for MV3 (out of scope
+   for v1; the redesign would force a Constitution-level review of the
+   stream-isolation guarantee).
 7. **§14.3 First-encounter behaviour** — Prompt the user on first
    encounter of a new domain, or apply the configured default silently?
    (UX-vs-security trade-off; surfaces a privacy decision to the user but
    adds friction.)
-8. **§14.4 Token storage** — Does Mullvad Browser expose a credential-grade
-   storage API for the device bearer token, or do we accept `storage.local`
-   with a documented residual risk?
+8. **§14.4 Token storage** — ~~Does Mullvad Browser expose a credential-
+   grade storage API for the device bearer token, or do we accept
+   `storage.local` with a documented residual risk?~~ **Resolved-for-v1**
+   by FR-019 + `research.md` §6: accept `storage.local` with the canonical
+   warning text pinned in `data-model.md` §5.1. §14.4 amended in lock-
+   step; see that section for the cross-reference.
 9. **§12.2 Quarkus / JDK / Mandrel compatibility matrix** — Confirm
     Quarkus 3.33 LTS officially targets JDK 25 as a runtime, and pin the
     matching Mandrel 25 builder image digest at first release tag. If
@@ -984,24 +1014,40 @@ the contract test at `specs/001-tor-route/` T019c.
 **Property bought**: a compromise of the Quarkus CP (YAML parser,
 gRPC server, future admin UI) does NOT escalate to host root; the CP
 holds no `docker.sock` handle and can only invoke the GET-only surface
-the proxy exposes.
+the proxy exposes. The same property holds for the DP and Tor on the
+same condition (both also on `stargate-internal`; see Profile
+applicability below and the `SECURITY-DECISIONS.md` entry's Exposure
+surface) — the proxy's env-flag filter + HAProxy frontend + base
+closure behave as documented. Naming the DP explicitly so an auditor
+does not conclude "the proxy isolates only the CP."
 
 **Residual trust** (Principle V — honest threat model): the proxy
 itself IS in the TCB; a compromise of the proxy is host-root-equivalent.
 The trade is accepted under THREAT-MODEL §3.1 (local profile assumes
 local code execution is already game-over). Mitigations recorded in
 `SECURITY-DECISIONS.md` (entry created by `specs/001-tor-route/` T017a):
-digest pin, `POST=0` lockdown, proxy runs as the unprivileged user its
-upstream image declares, proxy unreachable from outside the
-compose-internal network.
+digest pin (`tecnativa/docker-socket-proxy:0.3.0@sha256:9e4b9e7517a6b660f2cc903a19b257b1852d5b3344794e3ea334ff00ae677ac2`,
+pinned verbatim in `compose/env/local.env.example`), `POST=0` lockdown
+(gated at runtime by T019c), proxy unreachable from outside the
+compose-internal network. **No defense-in-depth user-isolation control
+exists**: the proxy runs as root — verified at T017a commit time via
+`docker image inspect` (the tecnativa image's `Config.User` is empty),
+so the docker.sock handle is the pivot and Docker binds as root
+regardless of the calling UID (see `SECURITY-DECISIONS.md` docker-socket-
+proxy entry Mitigation #1 for the rationale and the residual-defeatability
+acknowledgement).
 
 **Profile applicability**: this mechanism is sized for the local
-profile. The LAN and VPS profiles expose the CP to non-localhost
-callers and shift the compromise-probability calculus; both are
-**release-blocked on revisiting this section** (and likely replacing
-the proxy with a narrower mechanism — e.g. a CP→host RPC over a
-dedicated UDS with a purpose-built daemon — before those profile specs
-ship).
+profile. The LAN and VPS profiles expose the CP, DP, and Tor sidecar to
+non-localhost callers and shift the compromise-probability calculus —
+the DP is the most concerning pivot since it faces internet-supplied
+input the CP does not, and Tor is a third reacher over the compose-
+internal network. All three profiles are **release-blocked on revisiting
+this section** (and likely replacing the proxy with a narrower mechanism
+— e.g. a CP→host RPC over a dedicated UDS with a purpose-built daemon —
+before those profile specs ship). See `SECURITY-DECISIONS.md`'s
+docker-socket-proxy entry Release-blocker paragraph for the lock-step
+framing on the CP/DP/Tor reacher set.
 
 ---
 
