@@ -100,6 +100,16 @@ PROXY_PO="$(q '.services["docker-socket-proxy"].environment.POST // "?"')"
 [ "$PROXY_EV" = "1" ] || bail "M5: docker-socket-proxy.EVENTS must be '1' (got: $PROXY_EV)"
 [ "$PROXY_CN" = "1" ] || bail "M5: docker-socket-proxy.CONTAINERS must be '1' (got: $PROXY_CN)"
 [ "$PROXY_PO" = "0" ] || bail "M5: docker-socket-proxy.POST must be '0' (got: $PROXY_PO)"
+# VERSION and PING must be EXPLICITLY 0: the pinned upstream image defaults
+# both to ALLOW (probed empirically at T019c /start), so "unset means deny"
+# does not hold for these two flags. Removing either line would silently
+# reopen the endpoint until the runtime test (sidecar-proxy/lockdown_test.go,
+# container-validation cadence) next runs — this static check is the
+# PR-cadence gate.
+PROXY_VS="$(q '.services["docker-socket-proxy"].environment.VERSION // "?"')"
+PROXY_PG="$(q '.services["docker-socket-proxy"].environment.PING // "?"')"
+[ "$PROXY_VS" = "0" ] || bail "M5: docker-socket-proxy.VERSION must be explicitly '0' — upstream defaults it to allow; T019c (got: $PROXY_VS)"
+[ "$PROXY_PG" = "0" ] || bail "M5: docker-socket-proxy.PING must be explicitly '0' — upstream defaults it to allow; T019c (got: $PROXY_PG)"
 # Collect all proxy env keys set to "1"; only EVENTS and CONTAINERS are allowed.
 GRANT_HITS="$(q '[.services["docker-socket-proxy"].environment // {} | to_entries[] | select((.value | tostring) == "1") | .key] | join(",")')"
 BAD_GRANTS="$(echo "$GRANT_HITS" | tr ',' '\n' | grep -vE '^(EVENTS|CONTAINERS)$' | paste -sd, -)"

@@ -152,8 +152,20 @@ services:
       EVENTS: 1
       CONTAINERS: 1
       POST: 0
+      # VERSION and PING are EXPLICITLY 0, not left unset: the pinned
+      # upstream image defaults BOTH to allow (probed empirically at T019c
+      # /start), so "unset defaults to deny" is false for these two flags.
+      # SidecarMonitor (T039) needs neither /version nor /_ping — its
+      # documented surface is plain GET /events + /containers/{name}/json.
+      # If a future CP client library pings/negotiates against the daemon,
+      # it must re-grant PING via an explicit threat-model amendment
+      # rather than by deleting these lines (local_compose_test.sh M5 and
+      # tests/contract/sidecar-proxy/lockdown_test.go both gate them).
+      VERSION: 0
+      PING: 0
       # Every other endpoint flag is intentionally UNSET —
-      # tecnativa/docker-socket-proxy defaults unset flags to deny. Do not
+      # tecnativa/docker-socket-proxy defaults the remaining flags to
+      # deny (runtime-verified by T019c's DenyByDefaultSurface). Do not
       # add EXEC, BUILD, IMAGES, INFO, NETWORKS, NODES, PLUGINS, SERVICES,
       # SESSION, SWARM, SYSTEM, TASKS, VOLUMES, AUTH, DISTRIBUTION,
       # SECRETS, CONFIGS, COMMIT, or GET without an explicit threat-model

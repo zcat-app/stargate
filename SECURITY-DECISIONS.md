@@ -41,7 +41,60 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-07-06 — docker-socket-proxy `CONTAINERS=1` read surface (corrective supersession, T019c redteam)
+
+**Corrects (partially supersedes)** the 2026-07-04 entry "docker-socket-proxy
+trust rationale (auxiliary container)" below. Scope of the correction: the
+characterization of the **read** surface the env-flag filter grants.
+Everything else in the 2026-07-04 entry — property bought, residual trust,
+exposure surface, `:ro` caveat, mitigations, release-blocker — stands
+unchanged.
+
+**Finding (stargate-redteam at T019c, 2026-07-06, major).** The 2026-07-04
+entry states the CP "can `GET /events` and `GET /containers/{name}/json`
+… and nothing else", and the T019c ticket residue as first drafted narrowed
+the `CONTAINERS=1` over-grant to notice-log exposure. Both understate the
+granted surface. The proxy's env-flag ACLs are **section- and
+method-granular**, not path-granular: `CONTAINERS=1` with `POST=0` allows
+**every GET/HEAD under `^(/v[\d.]+)?/containers`**, including:
+
+- `GET /containers/{id}/archive?path=…` — tar-export of any file from ANY
+  container's filesystem (e.g. Tor's entry-guard state under `/var/lib/tor`,
+  documented sensitive in THREAT-MODEL §4.2);
+- `GET /containers/{id}/json` — full inspect (env vars, mounts, network
+  config) of every container, not only `tor`;
+- `GET /containers/json`, `/top`, `/logs`, `/stats`, `/changes`, `/export`
+  and the rest of the read-only containers section.
+
+**Why the local-profile accept still holds.** THREAT-MODEL §3.1: the local
+profile assumes same-host code execution is already game-over, and the CP
+already mounts the keys volume directly. A CP compromise reading guard state
+via `/archive` adds no capability a same-host attacker lacks. The property
+the proxy buys — **no write surface, so no host-root pivot** (`POST=0`
+denies every non-GET/HEAD verb) — is unaffected and remains runtime-gated
+by T019c's `PostSurfaceDenied`.
+
+**What changes for LAN/VPS.** The 2026-07-04 entry's release-blocker
+paragraph inherits this correction: under a LAN/VPS profile a CP compromise
+is NOT co-located with the host, so "arbitrary container-filesystem read of
+every container" (entry-guard state, rendered torrc, CP state DB) is a
+materially larger exfiltration surface than "read tor's notice-level
+stdout". The mandated LAN/VPS revisit MUST scope against the
+section-granular grant, not the two-endpoint shorthand.
+
+**Enforcement cross-reference.** `tests/contract/sidecar-proxy/
+lockdown_test.go` (T019c) runtime-gates the deny surface; its
+`DenyByDefaultSurface` sub-test was hardened in the same PR to probe an
+API-version-prefixed path (`/v1.43/version`) and `HEAD /_ping`, so an
+upstream image bump that regresses the version-prefix regex or the method
+filter fails the test rather than silently widening the surface (T019c
+redteam minor finding, resolved in-code).
+
 ## 2026-07-04 — docker-socket-proxy trust rationale (auxiliary container)
+
+**Superseded by:** §"2026-07-06 — docker-socket-proxy `CONTAINERS=1` read
+surface (corrective supersession, T019c redteam)" above — read-surface
+characterization only; the remainder of this entry stands.
 
 **Decision.** Stargate's local profile runs a digest-pinned
 `tecnativa/docker-socket-proxy` container as the **only** service that
