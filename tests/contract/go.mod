@@ -43,6 +43,16 @@ replace github.com/zcat-app/stargate/proto => ../../proto
 // rationale as the proto replace above.
 replace github.com/zcat-app/stargate/tests/integration => ../integration
 
+// The shared DP-journal allowlist + leak-scan package (T025a's
+// loginvariants) lives in the sibling workspace module
+// github.com/zcat-app/stargate/tests/internal/loginvariants. The
+// package's import path satisfies Go's internal-package rule for
+// both tests/contract and tests/integration (the rule's parent-of-
+// internal root is github.com/zcat-app/stargate/tests; both
+// consumers are rooted below that prefix). Same unpublished-module
+// rationale as the replaces above.
+replace github.com/zcat-app/stargate/tests/internal/loginvariants => ../internal/loginvariants
+
 require (
 	github.com/Microsoft/go-winio v0.5.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -76,13 +86,14 @@ require (
 require (
 	github.com/zcat-app/stargate/proto v0.0.0-00010101000000-000000000000
 	github.com/zcat-app/stargate/tests/integration v0.0.0-00010101000000-000000000000
+	github.com/zcat-app/stargate/tests/internal/loginvariants v0.0.0-00010101000000-000000000000
 	golang.org/x/crypto v0.51.0
 	google.golang.org/grpc v1.81.1
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 )

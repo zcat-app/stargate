@@ -4,5 +4,6 @@ use (
 	./data-plane
 	./proto
 	./tests/contract
+	./tests/internal/loginvariants
 	./tests/integration
 )
