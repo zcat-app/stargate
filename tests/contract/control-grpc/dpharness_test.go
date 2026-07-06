@@ -1,0 +1,506 @@
+// Copyright 2026 The Stargate Authors
+// SPDX-License-Identifier: Apache-2.0
+
+// Package controlgrpc hosts the contract tests for the inter-plane gRPC
+// surface declared in specs/001-tor-route/contracts/control-grpc.md.
+//
+// This file is the shared data-plane process harness. The tests here
+// observe the data plane EXTERNALLY only — gRPC on dp.sock, SOCKS5 auth
+// bytes on the port-8881 listener, dp-snapshot.json bytes, and captured
+// stderr. tests/contract is a separate Go module, so importing
+// data-plane/internal/... is impossible by Go's internal-package rule;
+// that structural wall is what makes these contract tests, not unit tests.
+//
+// ── Test-defined harness contract for T045 / T050 ──────────────────────
+//
+// No spec pins a local-process configuration surface for the data plane
+// (the compose deployment uses fixed absolute paths). The env-var
+// interface below is therefore defined HERE, tests-first (Principle VII),
+// and the implementation tickets T045 (DP gRPC server) and T050 (DP main)
+// must either conform to it or amend this single choke point:
+//
+//	STARGATE_IPC_DIR     dir hosting dp.sock and where control.sock is
+//	                     dialed        (default /run/stargate)
+//	STARGATE_STATE_DIR   dir holding dp-snapshot.json
+//	                     (default /var/lib/stargate)
+//	STARGATE_KEYS_DIR    ed25519 key material dir
+//	                     (default /etc/stargate/keys)
+//	STARGATE_LISTEN_ADDR proxy listen address
+//	                     (default 127.0.0.1:8881; FR-010's bind check
+//	                     still applies — loopback literals only)
+//
+// Mutual-ed25519 credentials on dp.sock are deliberately NOT wired here:
+// the transport-invariant contract (including the auth mechanism) is
+// T022's scope. The dial site in startDP is the single seam where the
+// control-plane credentials attach; once T045 enforces mutual auth, this
+// insecure dial fails loudly (fail-not-skip) and forces that update.
+package controlgrpc
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"golang.org/x/crypto/argon2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
+)
+
+// Argon2id parameters — MUST mirror specs/001-tor-route/data-model.md §1.5
+// and data-plane/internal/auth/params.go byte-for-byte. The mirror is
+// deliberate, not accidental duplication: this module cannot import the
+// data plane's internal package, so agreeing on the values from two
+// independent declarations is itself the cross-plane params-agreement
+// check — a drifted constant surfaces as an auth-probe failure here.
+const (
+	argonTime        uint32 = 3
+	argonMemoryKiB   uint32 = 64 * 1024
+	argonParallelism uint8  = 4
+	argonHashLen     uint32 = 32
+	argonSaltLen     uint32 = 16
+)
+
+// dpHarness is one booted data-plane process plus the probes the contract
+// cases need. Each sub-test boots its own instance so generation state
+// never leaks between cases.
+type dpHarness struct {
+	client    grpcpb.ControlClient
+	conn      *grpc.ClientConn
+	proxyAddr string // 127.0.0.1:<port> SOCKS5/CONNECT listener
+	stateDir  string // holds dp-snapshot.json
+	journal   *lockedBuffer
+}
+
+func (h *dpHarness) snapshotPath() string {
+	return filepath.Join(h.stateDir, "dp-snapshot.json")
+}
+
+// buildDPOnce compiles the data-plane binary exactly once per `go test`
+// invocation; every sub-test boots the same artifact. The build output
+// lands under os.TempDir (not t.TempDir) because the path is shared
+// across sub-tests; the OS owns its lifecycle.
+var buildDPOnce sync.Once
+var builtDPPath string
+var builtDPErr error
+
+// startDP content-gates, builds, boots, and connects to one data-plane
+// process. Skips (never fails) while the implementation this test gates
+// does not exist yet — T019b sub-test (c) precedent: the gate files are a
+// proxy for "the DP is runnable"; once they exist, a broken build or a
+// failing contract is FAIL, not SKIP.
+func startDP(t *testing.T) *dpHarness {
+	t.Helper()
+	repoRoot := findRepoRoot(t)
+
+	// Content gate: T045 (DP gRPC server hosting ReloadTokens on dp.sock)
+	// and T050 (DP main wiring boot order + listener). Both are needed to
+	// exercise this contract end-to-end.
+	for _, gate := range []string{
+		filepath.Join(repoRoot, "data-plane", "internal", "controlclient", "server.go"),
+		filepath.Join(repoRoot, "data-plane", "cmd", "stargate-proxy", "main.go"),
+	} {
+		if _, err := os.Stat(gate); err != nil {
+			t.Skipf("blocked: %s absent — DP ReloadTokens surface not implemented yet (T045/T050); this skip self-lifts when both land", gate)
+		}
+	}
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skipf("go toolchain not on PATH (environmental, like T019b's docker-daemon skip): %v", err)
+	}
+
+	buildDPOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "stargate-t020-bin")
+		if err != nil {
+			builtDPErr = err
+			return
+		}
+		builtDPPath = filepath.Join(dir, "stargate-proxy")
+		cmd := exec.Command("go", "build", "-o", builtDPPath, "./cmd/stargate-proxy")
+		cmd.Dir = filepath.Join(repoRoot, "data-plane")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			builtDPErr = fmt.Errorf("go build ./cmd/stargate-proxy: %w\n%s", err, out)
+		}
+	})
+	if builtDPErr != nil {
+		t.Fatalf("building data-plane binary: %v", builtDPErr)
+	}
+
+	// IPC dir via MkdirTemp, NOT t.TempDir: sun_path on Linux caps UDS
+	// paths at ~108 bytes and t.TempDir embeds the full test name.
+	ipcDir, err := os.MkdirTemp("", "t020ipc")
+	if err != nil {
+		t.Fatalf("mktemp ipc dir: %v", err)
+	}
+	t.Cleanup(func() { os.RemoveAll(ipcDir) })
+	stateDir := t.TempDir()
+	keysDir := t.TempDir() // empty until T022 pins the key-material format
+
+	proxyAddr := freeLoopbackAddr(t)
+	journal := &lockedBuffer{}
+
+	cmd := exec.Command(builtDPPath)
+	cmd.Env = append(os.Environ(),
+		"STARGATE_IPC_DIR="+ipcDir,
+		"STARGATE_STATE_DIR="+stateDir,
+		"STARGATE_KEYS_DIR="+keysDir,
+		"STARGATE_LISTEN_ADDR="+proxyAddr,
+	)
+	cmd.Stderr = journal
+	cmd.Stdout = journal
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("starting data-plane process: %v", err)
+	}
+	t.Cleanup(func() { stopDP(t, cmd, journal) })
+
+	sockPath := filepath.Join(ipcDir, "dp.sock")
+	waitFor(t, "dp.sock to appear", 20*time.Second, journal, func() bool {
+		_, err := os.Stat(sockPath)
+		return err == nil
+	})
+	waitFor(t, "proxy listener to accept", 20*time.Second, journal, func() bool {
+		c, err := net.DialTimeout("tcp", proxyAddr, 250*time.Millisecond)
+		if err != nil {
+			return false
+		}
+		c.Close()
+		return true
+	})
+
+	// T022 seam: mutual-ed25519 client credentials attach at this dial.
+	conn, err := grpc.NewClient("unix://"+sockPath,
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(unix://%s): %v", sockPath, err)
+	}
+	t.Cleanup(func() { conn.Close() })
+
+	return &dpHarness{
+		client:    grpcpb.NewControlClient(conn),
+		conn:      conn,
+		proxyAddr: proxyAddr,
+		stateDir:  stateDir,
+		journal:   journal,
+	}
+}
+
+// stopDP terminates the DP process: SIGINT first (exercising whatever
+// graceful path T050 wires), SIGKILL after a bounded grace window so a
+// hung process can never wedge the test run.
+func stopDP(t *testing.T, cmd *exec.Cmd, journal *lockedBuffer) {
+	t.Helper()
+	if cmd.Process == nil {
+		return
+	}
+	_ = cmd.Process.Signal(os.Interrupt)
+	done := make(chan struct{})
+	go func() { _, _ = cmd.Process.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		_ = cmd.Process.Kill()
+		<-done
+	}
+	if t.Failed() {
+		t.Logf("data-plane journal:\n%s", journal.String())
+	}
+}
+
+// reloadErr is the goroutine-safe RPC wrapper (no *testing.T calls) the
+// concurrency case needs; reload is the fatal-on-transport-error wrapper
+// every sequential case uses.
+func (h *dpHarness) reloadErr(gen uint64, tokens []*grpcpb.TokenHash) (*grpcpb.ReloadTokensResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	return h.client.ReloadTokens(ctx,
+		&grpcpb.ReloadTokensRequest{Generation: gen, Tokens: tokens},
+		grpc.WaitForReady(true))
+}
+
+func (h *dpHarness) reload(t *testing.T, gen uint64, tokens []*grpcpb.TokenHash) *grpcpb.ReloadTokensResponse {
+	t.Helper()
+	resp, err := h.reloadErr(gen, tokens)
+	if err != nil {
+		t.Fatalf("ReloadTokens(generation=%d) transport error: %v", gen, err)
+	}
+	return resp
+}
+
+// mintToken argon2id-hashes a known plaintext under a fresh random salt,
+// yielding the wire shape the control plane would push (data-model.md
+// §1.2: per-token salt; §1.5 params).
+func mintToken(t *testing.T, plaintext string) *grpcpb.TokenHash {
+	t.Helper()
+	salt := make([]byte, argonSaltLen)
+	if _, err := rand.Read(salt); err != nil {
+		t.Fatalf("reading random salt: %v", err)
+	}
+	hash := argon2.IDKey([]byte(plaintext), salt, argonTime, argonMemoryKiB, argonParallelism, argonHashLen)
+	return &grpcpb.TokenHash{Hash: hash, Salt: salt}
+}
+
+// randomBytes backs the malformed-length cases; content is irrelevant,
+// only length is under test.
+func randomBytes(t *testing.T, n int) []byte {
+	t.Helper()
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		t.Fatalf("reading %d random bytes: %v", n, err)
+	}
+	return b
+}
+
+// socks5AuthOK runs the RFC 1929 username/password sub-negotiation from
+// contracts/socks5-auth.md against the DP's proxy listener and reports
+// whether the offered password (the bearer token plaintext) authenticated:
+// reply 0x01 0x00 → true, 0x01 0xFF → false. Anything outside the
+// contract's byte shapes is a fatal contract violation, not a false.
+// The request phase after auth is out of scope here (with no control
+// plane and no HEALTHY event, routeEnableMask[TOR] stays DISABLED —
+// T020a pins that layering).
+func (h *dpHarness) socks5AuthOK(t *testing.T, password string) bool {
+	t.Helper()
+	conn, err := net.DialTimeout("tcp", h.proxyAddr, 5*time.Second)
+	if err != nil {
+		t.Fatalf("dial proxy %s: %v", h.proxyAddr, err)
+	}
+	defer conn.Close()
+	// Generous deadline: each auth attempt costs the DP one argon2id op
+	// per stored token (~50 ms nominal, more on loaded CI hardware).
+	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
+
+	// Method negotiation: offer USERNAME/PASSWORD only.
+	if _, err := conn.Write([]byte{0x05, 0x01, 0x02}); err != nil {
+		t.Fatalf("write method negotiation: %v", err)
+	}
+	methods := make([]byte, 2)
+	if _, err := io.ReadFull(conn, methods); err != nil {
+		t.Fatalf("read method selection: %v", err)
+	}
+	if methods[0] != 0x05 || methods[1] != 0x02 {
+		t.Fatalf("method selection = %#02x %#02x, want 0x05 0x02 (contracts/socks5-auth.md §\"Auth method negotiation\")", methods[0], methods[1])
+	}
+
+	// RFC 1929 sub-negotiation. The username is the stream-isolation key;
+	// any value is acceptable to the auth contract.
+	user := []byte("t020")
+	pass := []byte(password)
+	req := append([]byte{0x01, byte(len(user))}, user...)
+	req = append(req, byte(len(pass)))
+	req = append(req, pass...)
+	if _, err := conn.Write(req); err != nil {
+		t.Fatalf("write userpass sub-negotiation: %v", err)
+	}
+	reply := make([]byte, 2)
+	if _, err := io.ReadFull(conn, reply); err != nil {
+		t.Fatalf("read userpass reply: %v", err)
+	}
+	if reply[0] != 0x01 {
+		t.Fatalf("userpass reply version = %#02x, want 0x01 (RFC 1929 §2)", reply[0])
+	}
+	switch reply[1] {
+	case 0x00:
+		return true
+	case 0xFF:
+		return false
+	default:
+		t.Fatalf("userpass reply status = %#02x, want 0x00 or 0xFF (contracts/socks5-auth.md §\"Auth failure response\")", reply[1])
+		return false
+	}
+}
+
+// requireAuth asserts the auth outcome for a plaintext, with a message
+// tying the probe back to the ReloadTokens clause under test.
+func (h *dpHarness) requireAuth(t *testing.T, plaintext string, want bool, why string) {
+	t.Helper()
+	if got := h.socks5AuthOK(t, plaintext); got != want {
+		t.Errorf("SOCKS5 auth with %q = %v, want %v — %s", plaintext, got, want, why)
+	}
+}
+
+// snapshotFile mirrors data-model.md §1.4's informal schema.
+type snapshotFile struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	Generation    uint64 `json:"generation"`
+	LoadedAt      string `json:"loadedAt"`
+	Hashes        []struct {
+		Hash string `json:"hash"`
+		Salt string `json:"salt"`
+	} `json:"hashes"`
+}
+
+// snapshotBytes returns the raw dp-snapshot.json content, or nil when the
+// file does not exist (valid pre-first-OK state).
+func (h *dpHarness) snapshotBytes(t *testing.T) []byte {
+	t.Helper()
+	b, err := os.ReadFile(h.snapshotPath())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		t.Fatalf("reading %s: %v", h.snapshotPath(), err)
+	}
+	return b
+}
+
+func (h *dpHarness) readSnapshot(t *testing.T) snapshotFile {
+	t.Helper()
+	raw := h.snapshotBytes(t)
+	if raw == nil {
+		t.Fatalf("%s does not exist — contract requires persist before returning APPLY_STATUS_OK", h.snapshotPath())
+	}
+	var s snapshotFile
+	if err := json.Unmarshal(raw, &s); err != nil {
+		// Content deliberately redacted: the snapshot holds base64
+		// hash+salt material, and failure output lands in CI logs — same
+		// index-only hygiene as assertNoSecretLeak.
+		t.Fatalf("unmarshal %s (data-model.md §1.4 shape): %v (%d bytes, content redacted)", h.snapshotPath(), err, len(raw))
+	}
+	return s
+}
+
+// secretEncodings returns every textual rendering of secret the leak scan
+// hunts for. The set covers the realistic accidental-logging paths, not
+// just canonical dumps: hex (both cases), all four base64 variants, and
+// the decimal byte-slice forms — `[12 34 56]` is what fmt's %v/%+v verbs
+// AND slog's TextHandler emit for a []byte, i.e. the single most likely
+// way a future DP change leaks a hash without anyone writing an encoder
+// (redteam finding 20260706-001).
+func secretEncodings(secret []byte) map[string]string {
+	return map[string]string{
+		"hex":           hex.EncodeToString(secret),
+		"HEX":           strings.ToUpper(hex.EncodeToString(secret)),
+		"base64":        base64.StdEncoding.EncodeToString(secret),
+		"base64-raw":    base64.RawStdEncoding.EncodeToString(secret),
+		"base64url":     base64.URLEncoding.EncodeToString(secret),
+		"base64url-raw": base64.RawURLEncoding.EncodeToString(secret),
+		"decimal-slice": fmt.Sprint(secret),
+		// The same digit run without brackets catches a reformatted or
+		// field-joined rendering of the slice.
+		"decimal-run": strings.Trim(fmt.Sprint(secret), "[]"),
+	}
+}
+
+// findSecretLeaks reports every (secret index, encoding) pair present in
+// journal, sorted for determinism. Kept a pure function so
+// leakscan_test.go can negative-control each encoding — proving the scan
+// actually catches it — without booting a DP process.
+func findSecretLeaks(journal string, secrets ...[]byte) []string {
+	var leaks []string
+	for i, secret := range secrets {
+		if len(secret) == 0 {
+			continue
+		}
+		for name, enc := range secretEncodings(secret) {
+			if strings.Contains(journal, enc) {
+				leaks = append(leaks, fmt.Sprintf("secret %d as %s", i, name))
+			}
+		}
+	}
+	sort.Strings(leaks)
+	return leaks
+}
+
+// assertNoSecretLeak scans the captured journal for every rendering of
+// every secret handed to the DP — the contract's final bullet: the data
+// plane MUST NOT log the hash bytes, the salt bytes, or any token label.
+// Failure messages name only the secret's index and encoding, never the
+// bytes, so a failing run cannot itself leak into CI logs.
+func assertNoSecretLeak(t *testing.T, h *dpHarness, secrets ...[]byte) {
+	t.Helper()
+	for _, leak := range findSecretLeaks(h.journal.String(), secrets...) {
+		t.Errorf("journal leaks %s — contract: never log hash/salt/token bytes", leak)
+	}
+}
+
+// journalContains reports whether the captured journal has the substring,
+// case-insensitively.
+func (h *dpHarness) journalContains(needle string) bool {
+	return strings.Contains(strings.ToLower(h.journal.String()), strings.ToLower(needle))
+}
+
+// lockedBuffer is a mutex-guarded byte buffer safe for concurrent writes
+// from the child process pipe pump and reads from test assertions.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// freeLoopbackAddr reserves an ephemeral loopback port by binding and
+// immediately releasing it. The small close-to-rebind race is acceptable
+// in a test harness; a collision surfaces as a boot failure with the
+// journal attached.
+func freeLoopbackAddr(t *testing.T) string {
+	t.Helper()
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("reserving loopback port: %v", err)
+	}
+	addr := l.Addr().String()
+	l.Close()
+	return addr
+}
+
+// waitFor polls until cond is true or the deadline passes; on timeout it
+// fails with the DP journal so boot problems are diagnosable from CI logs.
+func waitFor(t *testing.T, what string, timeout time.Duration, journal *lockedBuffer, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("timed out after %s waiting for %s\ndata-plane journal:\n%s", timeout, what, journal.String())
+}
+
+// findRepoRoot walks up from this file's source location to the directory
+// containing go.work (the workspace root). Working-directory independence
+// per the T019b precedent: `go test` may run from any cwd.
+func findRepoRoot(t *testing.T) string {
+	t.Helper()
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed — cannot locate test source path")
+	}
+	dir := filepath.Dir(thisFile)
+	for i := 0; i < 12; i++ {
+		if _, err := os.Stat(filepath.Join(dir, "go.work")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	t.Fatal("repo root (containing go.work) not found by walking up from " + filepath.Dir(thisFile))
+	return ""
+}
