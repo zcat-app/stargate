@@ -105,6 +105,15 @@ var builtDPErr error
 // proxy for "the DP is runnable"; once they exist, a broken build or a
 // failing contract is FAIL, not SKIP.
 func startDP(t *testing.T) *dpHarness {
+	return startDPWith(t, nil)
+}
+
+// startDPWith is the extension point for tests that need to host a service
+// in the DP's IPC dir BEFORE the DP process boots. T021 hosts a fake
+// control plane on control.sock so the DP's WatchEvents dial succeeds on
+// the first try; beforeBoot runs after the IPC dir is created and before
+// cmd.Start(), with the resolved ipcDir as its argument. nil is the no-op.
+func startDPWith(t *testing.T, beforeBoot func(ipcDir string)) *dpHarness {
 	t.Helper()
 	repoRoot := findRepoRoot(t)
 
@@ -162,6 +171,9 @@ func startDP(t *testing.T) *dpHarness {
 	)
 	cmd.Stderr = journal
 	cmd.Stdout = journal
+	if beforeBoot != nil {
+		beforeBoot(ipcDir)
+	}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("starting data-plane process: %v", err)
 	}
