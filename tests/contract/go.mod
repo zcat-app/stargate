@@ -34,6 +34,15 @@ require github.com/docker/docker v28.5.2+incompatible
 // builds resolve it via go.work either way.
 replace github.com/zcat-app/stargate/proto => ../../proto
 
+// The synthetic SOCKS5 backend (T019a's fake_socks5_tor.go) lives in
+// the sibling workspace module github.com/zcat-app/stargate/tests/
+// integration. Importing it from tests/contract lets the SOCKS5
+// contract family (T024, T025, T025a–d, T026, T028) exercise the
+// data plane's forward path against an in-process upstream rather
+// than duplicating the ~400-line fake. Same unpublished-module
+// rationale as the proto replace above.
+replace github.com/zcat-app/stargate/tests/integration => ../integration
+
 require (
 	github.com/Microsoft/go-winio v0.5.2 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -66,6 +75,7 @@ require (
 
 require (
 	github.com/zcat-app/stargate/proto v0.0.0-00010101000000-000000000000
+	github.com/zcat-app/stargate/tests/integration v0.0.0-00010101000000-000000000000
 	golang.org/x/crypto v0.51.0
 	google.golang.org/grpc v1.81.1
 )

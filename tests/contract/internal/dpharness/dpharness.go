@@ -53,9 +53,39 @@ import (
 // generation / token-list state never leaks between sub-tests.
 type Harness struct {
 	ProxyAddr string // 127.0.0.1:<port>; STARGATE_LISTEN_ADDR
+	UpstreamAddr string // loopback fake upstream (fake_socks5_tor); empty in tests that don't forward
+	IPCDir    string // dir hosting dp.sock + where control.sock is dialed
 	Journal   *LockedBuffer
 	PID       int
 	Cmd       *exec.Cmd
+}
+
+// Option configures Start at construction time. The zero Option set
+// reproduces the T023 behaviour (no upstream override, no before-boot
+// callback) — Start(t) with no opts is the minimal DP boot.
+type Option func(*startConfig)
+
+type startConfig struct {
+	beforeBoot func(ipcDir string)
+	upstream   string // empty = use production default (tor:9050)
+}
+
+// WithBeforeBoot registers a callback invoked AFTER the IPC dir is
+// created and BEFORE the DP process starts. Mirrors T021's startDPWith
+// pattern: tests host a fake control plane on ${ipcDir}/control.sock
+// here so the DP's first WatchEvents dial succeeds (or host any other
+// pre-DP fixture that needs the ipcDir).
+func WithBeforeBoot(fn func(ipcDir string)) Option {
+	return func(c *startConfig) { c.beforeBoot = fn }
+}
+
+// WithUpstream overrides the production tor:9050 dial target with a
+// loopback address (typically the dial addr of a fake_socks5_tor.Server
+// from tests/integration). This is the test-defined choke point T047
+// and T050 must honour; the env-var interface it implies
+// (STARGATE_TOR_SOCKS_ADDR) is the new contract surface this option pins.
+func WithUpstream(addr string) Option {
+	return func(c *startConfig) { c.upstream = addr }
 }
 
 // Start content-gates, builds, boots, and waits for the proxy listener
@@ -65,24 +95,30 @@ type Harness struct {
 // (controlclient/server.go) + T050 (cmd/stargate-proxy/main.go) land.
 // Once they exist, a broken build or a failing contract is FAIL, not
 // SKIP (precedent: tests/contract/control-grpc/dpharness_test.go).
-func Start(t *testing.T) *Harness {
+//
+// Per-sub-test content gates for surfaces beyond the boot-minimum
+// (T044 auth/token.go, T047 forward/tor.go, T045 client.go for
+// WatchEvents) are the test's responsibility — call RequireFile from
+// the test before exercising the surface that depends on it.
+func Start(t *testing.T, opts ...Option) *Harness {
 	t.Helper()
+	cfg := startConfig{}
+	for _, o := range opts {
+		o(&cfg)
+	}
 	repoRoot := FindRepoRoot(t)
 
 	// Content gate: T042 (listener) + T045 (gRPC server hosting
 	// ReloadTokens on dp.sock) + T050 (main wiring boot order +
 	// listener). All three are needed to exercise the port-8881 inbound
-	// surface end-to-end. T023 is tests-first for T042, so this skip is
-	// the red→green transition: the test exists RED-but-SKIP until T042
-	// lands, then drives the implementation to satisfy the byte contract.
+	// surface end-to-end. This is the boot-minimum gate; tests with
+	// larger dependency surfaces add per-sub-test RequireFile calls.
 	for _, gate := range []string{
 		filepath.Join(repoRoot, "data-plane", "internal", "listener", "socks5.go"),
 		filepath.Join(repoRoot, "data-plane", "internal", "controlclient", "server.go"),
 		filepath.Join(repoRoot, "data-plane", "cmd", "stargate-proxy", "main.go"),
 	} {
-		if _, err := os.Stat(gate); err != nil {
-			t.Skipf("blocked: %s absent — port-8881 inbound surface not implemented yet (T042/T045/T050); this skip self-lifts when all three land", gate)
-		}
+		RequireFile(t, gate, "port-8881 inbound surface not implemented yet (T042/T045/T050); this skip self-lifts when all three land")
 	}
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skipf("go toolchain not on PATH (environmental, like T019b's docker-daemon skip): %v", err)
@@ -104,14 +140,24 @@ func Start(t *testing.T) *Harness {
 	journal := &LockedBuffer{}
 
 	cmd := exec.Command(binPath)
-	cmd.Env = append(os.Environ(),
+	env := append(os.Environ(),
 		"STARGATE_IPC_DIR="+ipcDir,
 		"STARGATE_STATE_DIR="+stateDir,
 		"STARGATE_KEYS_DIR="+keysDir,
 		"STARGATE_LISTEN_ADDR="+proxyAddr,
 	)
+	if cfg.upstream != "" {
+		// Test-defined env-var interface: T047 / T050 must read this
+		// and override the production tor:9050 default when set.
+		// Production deploys leave it unset (compose DNS resolves tor).
+		env = append(env, "STARGATE_TOR_SOCKS_ADDR="+cfg.upstream)
+	}
+	cmd.Env = env
 	cmd.Stderr = journal
 	cmd.Stdout = journal
+	if cfg.beforeBoot != nil {
+		cfg.beforeBoot(ipcDir)
+	}
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("starting data-plane process: %v", err)
 	}
@@ -137,11 +183,32 @@ func Start(t *testing.T) *Harness {
 	})
 
 	return &Harness{
-		ProxyAddr: proxyAddr,
-		Journal:   journal,
-		PID:       cmd.Process.Pid,
-		Cmd:       cmd,
+		ProxyAddr:    proxyAddr,
+		UpstreamAddr: cfg.upstream,
+		IPCDir:       ipcDir,
+		Journal:      journal,
+		PID:          cmd.Process.Pid,
+		Cmd:          cmd,
 	}
+}
+
+// RequireFile content-gates a sub-test on a file existing. Skips (never
+// fails) when absent, with the supplied reason naming the ticket the
+// skip lifts under. Use for per-sub-test dependencies beyond the boot-
+// minimum gate inside Start (e.g. T044 auth/token.go, T047 forward/
+// tor.go, T045 client.go for WatchEvents consumption).
+func RequireFile(t *testing.T, path, reason string) {
+	t.Helper()
+	if _, err := os.Stat(path); err != nil {
+		t.Skipf("blocked: %s absent — %s", path, reason)
+	}
+}
+
+// SockPath returns the absolute path to dp.sock in this harness's IPC
+// dir. Tests dial it via grpc.NewClient("unix://"+h.SockPath()) to
+// reach the DP-hosted ReloadTokens / GetStatus surface.
+func (h *Harness) SockPath() string {
+	return filepath.Join(h.IPCDir, "dp.sock")
 }
 
 // buildDPOnce compiles the data-plane binary exactly once per `go test`
