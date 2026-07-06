@@ -26,9 +26,9 @@ import (
 // hostnames upstream would silently break the local-profile invariant).
 func TestCheck(t *testing.T) {
 	tests := []struct {
-		name    string
-		addr    string
-		accept  bool // true → expect nil error; false → expect ErrBindRefused
+		name   string
+		addr   string
+		accept bool // true → expect nil error; false → expect ErrBindRefused
 	}{
 		// (a) IPv4 loopback — the whole 127.0.0.0/8 is loopback, not just 127.0.0.1.
 		{"ipv4 loopback canonical", "127.0.0.1", true},
