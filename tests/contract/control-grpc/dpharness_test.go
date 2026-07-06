@@ -85,6 +85,8 @@ type dpHarness struct {
 	proxyAddr string // 127.0.0.1:<port> SOCKS5/CONNECT listener
 	stateDir  string // holds dp-snapshot.json
 	journal   *lockedBuffer
+	pid       int    // DP process PID; T022 reads /proc/<pid>/net/tcp
+	ipcDir    string // dir hosting dp.sock + where control.sock is dialed
 }
 
 func (h *dpHarness) snapshotPath() string {
@@ -207,6 +209,8 @@ func startDPWith(t *testing.T, beforeBoot func(ipcDir string)) *dpHarness {
 		proxyAddr: proxyAddr,
 		stateDir:  stateDir,
 		journal:   journal,
+		pid:       cmd.Process.Pid,
+		ipcDir:    ipcDir,
 	}
 }
 
