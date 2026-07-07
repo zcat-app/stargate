@@ -1,6 +1,15 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "instructions": ["AGENTS.md"],
+  "provider": {
+    "zai-coding-plan": {
+      "options": {
+        "chunkTimeout": 120000,
+        "headerTimeout": 60000,
+        "timeout": 600000
+      }
+    }
+  },
   "permission": {
     "edit": {
       "specs/**": "allow",
