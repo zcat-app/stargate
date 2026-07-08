@@ -53,9 +53,7 @@ const renderedFileSection = "## Rendered file"
 // test. Per contracts/torrc.md invariant #13 the file ends with a single
 // trailing "\n" and uses LF line endings (no CRLF anywhere).
 //
-// Pinned AS-WRITTEN, including the stray space in the Source: comment
-// ("specs/001-tor-route/ contracts/torrc.md" — see ticket T029 §Analysis
-// residue). The em-dashes (U+2014) on the "Stargate v1 — Tor" and
+// The em-dashes (U+2014) on the "Stargate v1 — Tor" and
 // "Logging — Notice" lines are UTF-8 (E2 80 94); Go raw-string literals
 // carry them byte-for-byte.
 //
@@ -66,7 +64,7 @@ const renderedFileSection = "## Rendered file"
 // data in any comment (12) — all covered transitively by the byte-match.
 const wantTorrc = `# Stargate v1 — Tor sidecar configuration.
 # Rendered by control plane. Do not edit by hand.
-# Source: specs/001-tor-route/ contracts/torrc.md
+# Source: specs/001-tor-route/contracts/torrc.md
 
 SocksPort 0.0.0.0:9050 IsolateClientAddr IsolateSOCKSAuth
 ControlPort 0.0.0.0:9051

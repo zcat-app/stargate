@@ -20,7 +20,7 @@ it on container start.
 ```
 # Stargate v1 — Tor sidecar configuration.
 # Rendered by control plane. Do not edit by hand.
-# Source: specs/001-tor-route/ contracts/torrc.md
+# Source: specs/001-tor-route/contracts/torrc.md
 
 SocksPort 0.0.0.0:9050 IsolateClientAddr IsolateSOCKSAuth
 ControlPort 0.0.0.0:9051
@@ -60,10 +60,15 @@ SafeLogging 1
 
 ### `render_byte_match_test.go`
 
-Calls the control plane's `TorrcRenderer.render()` with the v1
-configuration shape (no bridges, IPv4 only, route enabled) and asserts
-the output equals the file shown above, byte-for-byte. This test fails
-loudly on any drift.
+Pins the v1 template above as a Go golden constant and cross-checks this
+contract document against it byte-for-byte, so any drift between the
+rendered template and the golden fails loudly. The control plane's
+`TorrcRenderer.render()` output is gated separately, in Java, by T037's
+JUnit test asserting `render()` equals the same golden — the Go
+contract-test harness is Go-only per `research.md` §5 (no JVM in the
+contract-test path), so the byte-for-byte chain is split across the two
+languages: contract doc == Go golden (this test) == Java `render()`
+output (T037).
 
 ### `invariants_test.go`
 
