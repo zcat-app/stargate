@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 73 |
+| pending | 72 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 42 |
+| done | 43 |
 | deferred | 0 |
 | **total** | **115** |
 
@@ -29,7 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T033 | Integration test for the full vertical: bring up `compose/do | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034 | Integration test asserting no DNS query for any `*.onion` na | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034b | Unit test for `extension/background/hardening.js` (Principle | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
@@ -112,7 +111,7 @@ _(none deferred)_
 
 ## Done
 
-_42 ticket(s) done._
+_43 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -155,4 +154,5 @@ _42 ticket(s) done._
 - T030 — Contract test asserting each `torrc` invariant individually (rows 1–13
 - T031 — Contract test asserting no bridge / pluggable-transport strings appear
 - T032 — Contract test spinning up the live Tor sidecar with the rendered confi
+- T033 — Integration test for the full vertical: bring up `compose/docker-compo
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
