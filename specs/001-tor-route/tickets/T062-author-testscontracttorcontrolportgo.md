@@ -3,11 +3,11 @@ id: T062
 title: 'Author `tests/contract/tor/control_port.go`'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-07-11
 source: tasks.md#T062
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009, T087]
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true

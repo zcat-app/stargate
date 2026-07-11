@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 72 |
+| pending | 87 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 43 |
+| done | 44 |
 | deferred | 0 |
-| **total** | **115** |
+| **total** | **131** |
 
 ---
 
@@ -31,39 +31,22 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034 | Integration test asserting no DNS query for any `*.onion` na | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T034b | Unit test for `extension/background/hardening.js` (Principle | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T034c | Unit test for `extension/popup/popup.js` per-tab indicator ( | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034d | Unit test for `extension/lib/firstparty.js` (Principle VII | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
-| T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T035 | Implement `control-plane/core/src/main/java/.../TokenLoader. | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T036 | Implement `control-plane/persistence/src/main/java/.../entit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T038 | In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcS | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T039 | Implement `control-plane/core/src/main/java/.../SidecarMonit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T034e | Unit test for the canonical `storage.local` warning text (Pr | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
-| T041 | Implement `control-plane/runtime/src/main/java/.../StargateC | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T042 | Implement `data-plane/internal/listener/socks5.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T043 | Implement `data-plane/internal/listener/connect.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T044 | Implement `data-plane/internal/auth/token.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T045 | Implement `data-plane/internal/controlclient/` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T046 | Implement `data-plane/internal/controlclient/snapshot.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
 | T047 | Implement `data-plane/internal/forward/tor.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T048 | Implement `data-plane/internal/errortpl/render.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T049 | Implement `data-plane/internal/audit/counters.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T050 | Implement `data-plane/cmd/stargate-proxy/main.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T051 | Author `extension/manifest.json` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T052 | Author `extension/lib/storage.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T053 | Author `extension/lib/firstparty.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
-| T054 | Author `extension/background/router.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T055 | Author `extension/background/hardening.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T056 | Author `extension/options/options.html` and `extension/optio | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T057 | Author `extension/popup/popup.html` and `extension/popup/pop | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T058 | Contract test in `tests/contract/torrc/isolate_socks_auth_ef | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T058a | Contract test pinning Tor''s behaviour under `IsolateSOCKSAu | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T059 | Integration test in `tests/integration/stream_isolation_test | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T060 | Integration test in `tests/integration/same_origin_shared_ci | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T061 | Integration test in `tests/integration/circuit_isolation_cor | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
-| T062 | Author `tests/contract/tor/control_port.go` | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 | T063 | Author `tests/integration/synthetic_onion_corpus.txt` | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  |  |
 | T064 | Author the curated leak corpus `tests/contract/error-templat | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T065 | Contract test `tests/contract/error-template/route_down_test | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
@@ -72,28 +55,30 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T067a | Contract test for SOCKS5 request-phase failure replies (FR-0 | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T067b | Contract test for the auth-pass + route-failure counter-incr | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T068 | Contract test `tests/contract/error-template/body_byte_match | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
+| T068a | Contract test for the **response-header invariants** of the  | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T069 | Contract tests `tests/contract/error-template/reference_id_u | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T070 | Integration test `tests/integration/error_template_test.go` | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T070a | Integration test for mid-request Tor circuit drop (Principle | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T070b | Contract test for `WatchEvents` failure transitions (`UNHEAL | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T071 | Extend `data-plane/internal/errortpl/render.go` (from T048)  | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T072 | Extend `data-plane/internal/forward/tor.go` (from T047) to m | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
-| T073 | In `data-plane/internal/controlclient/client.go` (from T045) | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |  |  |
-| T074 | Extend `control-plane/core/src/main/java/.../SidecarMonitor. | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
-| T075b | Author `tests/reproducibility/extension_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
-| T076 | Wire **all six v1 contract-test directories** | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
+| T075b | Author `tests/reproducibility/extension_test.sh` | 2: Foundational (Blocking Prerequisites) |  | ✓ |
+| T076 | Run every test module in the single green gate | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
 | T077 | Run the `quickstart.md` walkthrough on a clean Linux x86_64  | 6: Polish & Cross-Cutting Concerns |  |  |
 | T078 | Run the `stargate-redteam` agent against the completed featu | 6: Polish & Cross-Cutting Concerns |  |  |
 | T079 | Run the `stargate-perf` agent against the data plane (Princi | 6: Polish & Cross-Cutting Concerns | ✓ |  |
-| T079a | PR-cadence regression gate for SC-005''s pool-fill + steady- | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T080 | Sweep with `scripts/check-license-headers.sh` (from T006); v | 6: Polish & Cross-Cutting Concerns | ✓ |  |
-| T081 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
-| T082 | Amend THREAT-MODEL.md §8.6 to resolve the Tor sidecar mainta | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T083 | Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_resta | 2: Foundational (Blocking Prerequisites) |  |  |
 | T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T087 | Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOI | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
+| T089 | Amend the Tor startup configuration contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
+| T090 | Remove control-plane route admission gating | 2: Foundational (Blocking Prerequisites) | ✓ |  |
+| T091 | Amend the browser-hardening enforcement boundary | 2: Foundational (Blocking Prerequisites) | ✓ |  |
+| T092 | Amend the token verifier and lifecycle contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
+| T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
+| T101 | Consolidate the privacy log-invariant scanner | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
+| T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
 ---
 
@@ -111,7 +96,7 @@ _(none deferred)_
 
 ## Done
 
-_43 ticket(s) done._
+_44 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -156,3 +141,4 @@ _43 ticket(s) done._
 - T032 — Contract test spinning up the live Tor sidecar with the rendered confi
 - T033 — Integration test for the full vertical: bring up `compose/docker-compo
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
+- T096 — Enforce the canonical ticket workflow

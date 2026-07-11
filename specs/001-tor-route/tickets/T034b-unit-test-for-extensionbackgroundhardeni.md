@@ -3,14 +3,14 @@ id: T034b
 title: 'Unit test for `extension/background/hardening.js` (Principle VII; FR-0'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-07-11
 source: tasks.md#T034b
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009, T091]
 parallel: true
 files_budget: 8   # TODO: tighten per task
-privacy_critical: false
+privacy_critical: true
 complexity: low   # TODO: set per task
 risk: low
 round_cap: 2

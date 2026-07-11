@@ -1,19 +1,19 @@
 ---
 id: T082
-title: 'Amend THREAT-MODEL.md §8.6 to resolve the Tor sidecar maintainer trust'
+title: 'Reconcile the threat model with the local stack'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
-source: derived-from-T017-redteam  # not in tasks.md; filed from T017's redteam MAJOR 2
+last_updated: 2026-07-11
+source: review/sol-review.md#M8
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
-blocked_by: [T017]   # T017 ships the decision this amendment reflects
+blocked_by: [T017, T089, T094, T099]
 parallel: false
-files_budget: 2
+files_budget: 4
 privacy_critical: true
-complexity: low
-risk: low
-round_cap: 2
+complexity: medium
+risk: high
+round_cap: 3
 spec_refs:
   - THREAT-MODEL.md §8.6 (Sidecar maintainer trust)
   - THREAT-MODEL.md §5.8 (Sidecar compromise — the residual anchor)
@@ -33,7 +33,7 @@ spec_amend_for: THREAT-MODEL.md §8.6
 spec_amend_parent: T017
 ---
 
-# T082: Amend THREAT-MODEL.md §8.6 to resolve the Tor sidecar maintainer trust decision
+# T082: Reconcile the threat model with the local stack
 
 ## Context
 
@@ -75,23 +75,26 @@ class and was flagged out-of-scope for T017.
 
 ## Acceptance
 
-- **AT-1 (tests-first, Principle VII).** Add
-  `tests/contract/threat-model/sidecar_trust_amend_test.sh` (structural;
-  hermetic — grep only). It MUST pass under verify gate 4 and assert:
-  - THREAT-MODEL.md §8.6 does NOT contain "unresolved trust decision" or
-    "choose a community maintainer" (the stale framing).
-  - §8.6 DOES reference `SECURITY-DECISIONS.md` (the authoritative rationale
-    location).
-  - THREAT-MODEL.md §2.6's internal "See §5.x" pointer cites §5.8 (not §5.7).
-- **AT-2.** `scripts/verify.sh` is GREEN.
-- **AT-3.** Diff is surgical: only THREAT-MODEL.md (§8.6 + §2.6 pointer) +
-  the new contract test. No other spec or artifact touched.
+1. Update status/date and replace false present-tense claims with the topology
+   actually delivered by T089/T094/T099: which images/build inputs are pinned,
+   which roots/mounts are writable, which service has egress, and whether any
+   component can reach Docker API.
+2. Resolve §8.6's obsolete community-maintainer language in favor of the
+   in-house Tor build and point to the existing decision record.
+3. Correct §2.6's sidecar-compromise cross-reference from §5.7 to §5.8 and
+   remove every "SECURITY-DECISIONS.md once authored" statement.
+4. Replace §9's claim that CONTRIBUTING does not exist with the concrete
+   private GitHub Security Advisory route and current pre-release caveat.
+5. Add a focused structural consistency test for the load-bearing facts above;
+   do not create broad prose regexes that freeze incidental wording.
+6. Cross-check the same facts in architecture, Compose, quickstart, and
+   `SECURITY-DECISIONS.md`; `scripts/verify.sh` passes.
 
 ## Out-of-scope
 
 - Re-litigating the build-vs-community-maintainer decision (that is
   resolved in T017 / SECURITY-DECISIONS.md; T082 only syncs the model).
-- Amending any other THREAT-MODEL section.
+- Rewriting unrelated per-route threat analysis.
 - Editing SECURITY-DECISIONS.md (T017 owns it; T082 only points to it).
 - Amending arch §7 (T018's job).
 

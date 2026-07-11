@@ -3,14 +3,14 @@ id: T073
 title: 'In `data-plane/internal/controlclient/client.go` (from T045), wire the'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-07-11
 source: tasks.md#T073
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009, T090]
 parallel: false
 files_budget: 8   # TODO: tighten per task
-privacy_critical: false
+privacy_critical: true
 complexity: low   # TODO: set per task
 risk: low
 round_cap: 2

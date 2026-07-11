@@ -1,5 +1,5 @@
 ---
-id: T081
+id: T104
 title: 'Wire Error Prone + NullAway into the control-plane Maven reactor'
 status: pending
 created: 2026-07-04
@@ -65,7 +65,7 @@ redteam_findings: []
 clarity_check: {}
 ---
 
-# T081: Wire Error Prone + NullAway into the control-plane Maven reactor
+# T104: Wire Error Prone + NullAway into the control-plane Maven reactor
 
 ## Context
 
@@ -240,10 +240,10 @@ time only.
 
 ### Related tickets to file after this one lands
 
-- T081a (per-module test-source onboarding — one subticket per stargate
+- T104a (per-module test-source onboarding — one subticket per stargate
   module when it acquires non-trivial test code; mirror infochat M1-164a).
-- T081b (CONTRIBUTING.md §"Code style / Java" update — adds the
+- T104b (CONTRIBUTING.md §"Code style / Java" update — adds the
   nullness-contract rule, mirroring infochat `engineering-rules-verbatim.md
   §7a`).
-- Optional T081c (a `package-info.java` with `@NullMarked` once the package
+- Optional T104c (a `package-info.java` with `@NullMarked` once the package
   default has proven stable for ≥1 feature).

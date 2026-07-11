@@ -24,7 +24,7 @@ runs in a Stargate-managed container.
 ## Step 1 — Clone and build (1 minute)
 
 ```bash
-git clone https://github.com/<org>/stargate.git
+git clone https://github.com/zcat-app/stargate.git
 cd stargate
 ./scripts/stargate init
 ```

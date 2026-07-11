@@ -1,20 +1,22 @@
 ---
 id: T076
-title: 'Wire **all six v1 contract-test directories**'
+title: 'Run every test module in the single green gate'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
-source: tasks.md#T076
-phase: "6: Polish & Cross-Cutting Concerns"
+last_updated: 2026-07-11
+source: review/sol-review.md#M4
+phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: []
 parallel: true
-files_budget: 8   # TODO: tighten per task
+files_budget: 8
 privacy_critical: true
-complexity: low   # TODO: set per task
-risk: low
-round_cap: 2
-spec_refs: []   # TODO: cite spec.md § at /start
+complexity: medium
+risk: high
+round_cap: 3
+spec_refs:
+  - specs/001-tor-route/spec.md §FR-016
+  - .specify/memory/constitution.md §VII
 decision_refs: []
 reviews: {}
 overrides: []
@@ -24,32 +26,43 @@ redteam_findings: []
 clarity_check: {}
 ---
 
-# T076: Wire **all six v1 contract-test directories**
+# T076: Run every test module in the single green gate
 
 ## Context
 
-Derived from `specs/001-tor-route/tasks.md` — see the full task body there. This
-ticket is the executable work unit; the tasks.md entry is the
-spec-kit plan that survives `/speckit-tasks` regeneration.
-
-> **Full task body (verbatim from tasks.md):**
->
-> Wire **all six v1 contract-test directories** — `tests/contract/{tor,torrc,socks5,error-template,control-grpc,sidecar-proxy}/` — into CI as **required** checks for any PR that touches `compose/docker-compose.local.yml`, `data-plane/`, `control-plane/`, `proto/stargate/v1/`, or `sidecars/` (FR-016, Principle IV). The workflow MUST also run the `extension/run-tests.sh` discovery script (Node 20 LTS pinned per research.md §10; picks up T034b–T034e) on any PR touching `extension/`. The CI config lives in `.github/workflows/contract.yml` (GitHub Actions; matches constitution §VI's commitment to GitHub hosting with a Codeberg mirror as a v1.5+ consideration). Implementation note: glob `tests/contract/*/` rather than enumerating fixed names, so a future feature adding `tests/contract/<surface>/` extends the gate without needing to amend this workflow. PR-time integration tests under `tests/integration/` are also wired into the same workflow — at minimum T034 (DNS-leak gate, explicitly labelled PR-time in its description) and T079a (concurrent-connects regression gate; explicit PR-cadence). Integration tests explicitly labelled release-tag-cadence in their own task description (T034a, T034f, T070a) are excluded; tests with no explicit cadence label are an infra decision left to the implementer at workflow-authoring time (in practice: PR-time iff the test does not depend on the live Tor network).
+The documented single green gate currently runs only the data-plane Go module
+and shell tests. Completed Go contract, integration, proto, and shared-helper
+modules can therefore regress while `scripts/verify.sh` remains green.
 
 ## Analysis
 
-*(Required — `privacy_critical: true`. Fill at `/start` per
-`docs/process/analysis.md`.)*
+- **Must hold** — every workspace module is discovered automatically and
+  accounted as PASS/SKIP/FAIL; required tests that all skip cannot report PASS.
+- **Gated** — a self-test fixture proves module discovery and JSON skip
+  accounting; CI invokes exactly the same `scripts/verify.sh` entrypoint.
+- **Residue** — live/release-only tests remain explicit SKIP with a named
+  cadence and cannot disappear from the inventory.
 
 ## Acceptance
 
-*(Derive from the spec at `/start` — see `docs/process/ticket-template.md`
-for the preferred shapes: named test, behavioral assertion, runnable command.)*
+1. Move this ticket to Foundational and run every Go module currently present:
+   data plane, proto, contract, integration, and shared log invariants.
+2. Use `go test -json` accounting so a required package/test set with only
+   skipped tests is reported SKIP (or FAIL when required), never PASS.
+3. Discover modules and extension tests rather than enumerating six fixed
+   directories; new modules cannot silently fall outside the gate.
+4. Keep hermetic PR tests separate from named Docker/live/release jobs, but
+   make the inventory exhaustive and machine-auditable.
+5. Add a CI workflow that runs `scripts/verify.sh`; do not create a second,
+   divergent list of commands.
+6. Add a regression test for discovery/skip accounting and make verify green.
 
 ## Out-of-scope
 
-*(Fill at `/start` if the task body references exclusions or other tickets' work.)*
+Live Tor/browser/packet-capture tests keep their release cadence. This ticket
+accounts for them but does not make them hermetic.
 
 ## Notes
 
-Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+Refined from tasks.md#T076 for review finding M4. This blocker must land before
+completed contract tickets can be treated as standing regression gates.

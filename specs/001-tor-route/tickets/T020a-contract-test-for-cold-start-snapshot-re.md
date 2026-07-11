@@ -3,11 +3,11 @@ id: T020a
 title: 'Contract test for cold-start snapshot restore (Principle II survival; '
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-07-11
 source: tasks.md#T020a
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
-blocked_by: [T009, T046]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009, T046, T090, T092, T093]
 parallel: true
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true

@@ -3,18 +3,20 @@ id: T034f
 title: 'Integration test for US1 acceptance-scenario 3 second assertion (no TC'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
-source: tasks.md#T034f
+last_updated: 2026-07-11
+source: review/sol-review.md#A5
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009, T094]
 parallel: false
-files_budget: 8   # TODO: tighten per task
+files_budget: 8
 privacy_critical: true
-complexity: low   # TODO: set per task
-risk: low
-round_cap: 2
-spec_refs: []   # TODO: cite spec.md § at /start
+complexity: medium
+risk: high
+round_cap: 3
+spec_refs:
+  - specs/001-tor-route/spec.md §"US1 Acceptance Scenario 3"
+  - .specify/memory/constitution.md §III
 decision_refs: []
 reviews: {}
 overrides: []
@@ -38,17 +40,32 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 
 ## Analysis
 
-*(Required — `privacy_critical: true`. Fill at `/start` per
-`docs/process/analysis.md`.)*
+- **Must hold** — Tor egress reaches only consensus endpoints while DP and CP
+  have no non-internal egress at all.
+- **Gated** — captures are attributed to container namespaces/veths or source
+  identities, never to unrelated host traffic.
+- **Residue** — the live consensus can change during the window; the test
+  records both the snapshot time and bounded reconciliation rule.
 
 ## Acceptance
 
-*(Derive from the spec at `/start` — see `docs/process/ticket-template.md`
-for the preferred shapes: named test, behavioral assertion, runnable command.)*
+1. Capture Tor's container network namespace/veth (or filter by its exact
+   container source identity), not the whole host egress NIC.
+2. Assert each Tor TCP SYN during the request window targets an endpoint in
+   the recorded live consensus snapshot.
+3. Run separate DP and CP namespace captures and assert zero non-internal DNS,
+   TCP, or UDP egress. A zero-packet assertion includes a capture-sanity probe
+   so it cannot pass vacuously.
+4. Ignore unrelated host traffic by construction; do not allowlist it.
+5. Record namespace IDs, consensus digest/time, capture filters, and results in
+   the release artefact. Leak-corpus diagnostics must not print captured secret
+   content.
+6. The release-cadence test passes against the T094-hardened topology.
 
 ## Out-of-scope
 
-*(Fill at `/start` if the task body references exclusions or other tickets' work.)*
+Host-wide traffic attribution and unrelated workstation processes are outside
+the assertion surface. This ticket observes; T094 enforces the topology.
 
 ## Notes
 

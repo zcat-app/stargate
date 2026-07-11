@@ -3,11 +3,11 @@ id: T081
 title: 'Author `release.yml` workflow: GHCR push + image digest pin (FR-015)'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
-source: tasks.md#T081
+last_updated: 2026-07-11
+source: review/sol-review.md#M7
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: [T002a, T003a, T014, T017, T076]
+blocked_by: [T002a, T003a, T014, T017, T076, T098, T099]
 parallel: false
 files_budget: 8
 privacy_critical: true
@@ -145,14 +145,30 @@ questions (the task body picks defaults; analysis confirms or refines):
 
 ## Acceptance
 
-*(Derive from the spec at `/start`. Suggested shape — the implementer refines.)*
+The following review refinement is binding and supersedes conflicting
+tag-trigger/write-back language elsewhere in this ticket:
+
+1. Use a two-phase release. A candidate workflow builds/tests/signs artifacts,
+   records resolved digests and decision metadata in a reviewed commit or PR,
+   and verifies the release compose file against those digests.
+2. Tag only the exact reviewed commit that already contains its release
+   Compose metadata and decision records. The tag workflow verifies and
+   publishes those bytes; it MUST NOT commit to the repository, append
+   `SECURITY-DECISIONS.md`, or rewrite source metadata after the tag.
+3. T099's immutable Tor package inputs and T098's reproducible JVM artifact
+   are release prerequisites alongside T075/T075b/T097.
+4. A repeated/deleted tag with different source is rejected; release identity
+   is commit plus immutable digest, not a mutable tag.
+5. Refine the generated-artifact location so the release compose file is
+   version-controlled on the tagged commit, not described as a post-tag
+   artifact.
 
 **AT-1 — Workflow triggers cleanly on tag.**
 ```bash
 # Dry-run trigger against a test tag (does NOT push to GHCR; gating mode).
 git tag v0.0.0-rc-test-t081 && git push origin v0.0.0-rc-test-t081
-# Workflow run completes; jobs: gate-on-contract-tests PASS, build-three-images
-# PASS, sign-and-sbom PASS, render-release-compose PASS, append-to-SECURITY-DECISIONS PASS.
+# Workflow verifies the already-reviewed candidate metadata, then publishes.
+# It performs no repository write.
 gh run list --workflow=release.yml --limit=1
 ```
 The tag-trigger condition asserts (each is a separate early-halt job in the
@@ -193,13 +209,11 @@ NOT to main). Structural contract test (extend
 - The tecnativa/docker-socket-proxy pin is unchanged from `compose/env/local.env.example`.
 - UID/GID, volumes, ports, networks, depends_on invariants from T015's M1–M13 still hold (reuse the same assertions).
 
-**AT-4 — SECURITY-DECISIONS.md append lands.**
-A commit on main (or a PR that merges) appends a section to
-`SECURITY-DECISIONS.md` with: release tag, the three final-image digests (with
-`docker buildx imagetools inspect` confirmation commands), the three SBOM URIs
-(or cosign attestation references), the three cosign signature / rekor
-transparency-log entries. Cross-references T017's rotation policy. Unblocks
-T018's arch-spec §7 Tor row amendment.
+**AT-4 — Release metadata predates the tag.**
+The candidate PR appends the release tag-to-be, three final-image digests,
+SBOM references, and signing/provenance records to
+`SECURITY-DECISIONS.md`. The tag workflow asserts the tagged commit contains
+the matching record and fails on any mismatch; it never appends one.
 
 **AT-5 — No long-lived secrets in CI.**
 `grep -E 'secrets\.' .github/workflows/release.yml` returns zero matches (the

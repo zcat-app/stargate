@@ -1,7 +1,7 @@
 ---
 id: T096
 title: 'Enforce the canonical ticket workflow'
-status: in-review
+status: done
 created: 2026-07-11
 last_updated: 2026-07-11
 source: review/sol-review.md#M6
@@ -24,7 +24,7 @@ spec_refs:
 decision_refs:
   - "review/sol-review.md#M6 (workflow driver != canonical workflow)"
 tests_first: []
-reviews: {}
+reviews: { round: 1, date: 2026-07-11, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

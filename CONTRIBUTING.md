@@ -35,11 +35,8 @@ without a sign-off will be asked to amend or rebase before merge.
 ## Code of Conduct
 
 This project follows the [Contributor Covenant v2.1](https://www.contributor-covenant.org/version/2/1/code_of_conduct/).
-See `CODE_OF_CONDUCT.md` for the full text and the contact channel for
-reporting incidents.
-
-> **TODO**: author `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1) with the
-> maintainer's contact address.
+See `CODE_OF_CONDUCT.md` for the adopted text and the private reporting
+channel.
 
 In short: be kind, assume good faith, accept review, give review with the
 same respect you want to receive. Privacy work attracts strong opinions —
@@ -51,7 +48,7 @@ disagree about the technical substance, not the people holding it.
 
 Report privately via GitHub Security Advisories:
 
-> `https://github.com/<org>/stargate/security/advisories/new`
+> `https://github.com/zcat-app/stargate/security/advisories/new`
 
 The maintainer aims to acknowledge new advisories within **7 days**. A fix
 timeline is agreed per finding. If you have not received an acknowledgement
@@ -69,8 +66,8 @@ it through the same channel.
 
 ### Prerequisites
 
-- **Go** — version pinned in `data-plane/go.mod` via the `toolchain`
-  directive. `[fill in once architecture spec lands: concrete Go version]`.
+- **Go 1.26.3** — pinned in `data-plane/go.mod` via the `toolchain`
+  directive.
 - **JDK 25 LTS** — pinned in `control-plane/pom.xml` via
   `<maven.compiler.release>25`. Any JDK 25 distribution (Temurin,
   Liberica, Zulu, Corretto) works for local development; the release
@@ -80,8 +77,7 @@ it through the same channel.
   platform BOM. Do not bump this casually; LTS-to-LTS upgrades follow
   the same documented process as sidecar image bumps (constitution
   Principle IV).
-- **Maven** — version that ships with the JDK or via a wrapper
-  (`mvnw`). `[fill in once architecture spec lands: pinned Maven version]`.
+- **Maven 3.9.14** — use the checked-in `control-plane/mvnw` wrapper.
 - **Docker** and **Docker Compose v2** — required for any integration or
   end-to-end work. The compose stack lives under `compose/`.
 - **Mullvad Browser** — the first-class target browser. Install from
@@ -91,20 +87,19 @@ it through the same channel.
 - **GraalVM / Mandrel** — required only for building Quarkus native-image
   artefacts. **Mandrel 25** (the JDK 25 native-image builder) is pinned by
   digest in the parent POM; for local native builds, match that digest.
-  `[fill in once architecture spec lands: Mandrel 25 builder image digest,
-  pinned at first release tag once Quarkus 3.33 LTS / JDK 25 compatibility
-  is verified — arch spec §15 open question 10]`.
+  The concrete builder digest remains a release prerequisite tracked by
+  architecture §15 open question 9; native-image work is not part of feature
+  001.
 
 ### One-shot setup
 
 A bootstrap script is planned at `scripts/dev-setup.sh` (or `make setup`)
-that verifies tool versions and warms the build caches.
-`[fill in once architecture spec lands: confirmed entry-point name and
-flags]`. Until that script exists, the manual sequence is:
+that verifies tool versions and warms the build caches. Until it exists, use
+the manual sequence:
 
 ```bash
 # 1. clone
-git clone https://github.com/<org>/stargate.git
+git clone https://github.com/zcat-app/stargate.git
 cd stargate
 
 # 2. data plane
@@ -125,8 +120,6 @@ The `scripts/stargate` entry-point is described in
 
 - An `.editorconfig` file ships at the repo root and is honoured by most
   editors out of the box.
-  `[fill in once architecture spec lands: confirm .editorconfig is checked
-  in]`.
 - **Go**: enable `gofmt`/`goimports` on save. `staticcheck` and
   `golangci-lint` as your linter front-end.
 - **Java**: use the Quarkus formatter configuration (Spotless or
@@ -152,24 +145,15 @@ go test -v -count=1 ./internal/forward/...
 
 ### Go data plane — contract tests (per sidecar)
 
-Contract tests live at `tests/contract/<sidecar>/` and assert the narrow
-interface Stargate depends on against the actual sidecar image. They are
-slow (they pull images and spin up containers) but they are the most
-important tests in the repository.
+Contract tests live under `tests/contract/` and assert the narrow boundary
+Stargate depends on. Some are hermetic; Docker-backed suites self-skip when
+Docker is unavailable until T076 adds explicit skip accounting.
 
 ```bash
 # From the repo root:
-go test ./tests/contract/tor/...
-go test ./tests/contract/i2pd/...
-go test ./tests/contract/nym/...
-go test ./tests/contract/wireguard/...
-go test ./tests/contract/error-template/...
+cd tests/contract
+go test ./...
 ```
-
-Set `STARGATE_CONTRACT_KEEP_CONTAINERS=1` to leave containers running after
-a failure so you can inspect logs.
-`[fill in once architecture spec lands: confirm env-var name in test
-harness]`.
 
 ### Quarkus control plane
 
@@ -190,15 +174,13 @@ cd control-plane
 
 ```bash
 cd extension
-# Static checks first:
-npx eslint .
-# Unit tests (jest or vitest — confirm in extension/package.json):
-npm test
+# Once T034b lands:
+./run-tests.sh
 ```
 
-`[fill in once architecture spec lands: confirmed test runner for the
-extension; the architecture spec leaves the build step out of v1 to avoid
-npm supply-chain risk, so a no-npm test path may be preferred]`.
+Feature 001 uses Node 20 LTS's built-in `node:test` runner and no npm
+dependencies. Until T034b creates `run-tests.sh`, only the packaging check is
+available.
 
 ### Reproducibility tests
 
@@ -363,11 +345,9 @@ documented at `.specify/memory/review-loop.md`. The single green gate every
 
 ### Browser extension (JavaScript / TypeScript)
 
-- **TypeScript preferred** for any new module. Existing plain-JS modules
-  may be migrated opportunistically.
-  `[fill in once architecture spec lands: the architecture spec defers
-  the build-step decision to avoid npm supply-chain risk. Confirm whether
-  TS is compiled at build-time or whether v1 stays pure JS]`.
+- **Feature 001 stays vanilla JavaScript (ES2022)** with no build step or npm
+  runtime dependencies. TypeScript requires a later spec that defines and
+  pins the compiler/reproducibility surface.
 - ESLint default config plus the repo's `extension/.eslintrc` overrides.
 - **No `innerHTML` or `dangerouslySetInnerHTML`-style sinks.** Build DOM
   with `document.createElement` / `textContent`.

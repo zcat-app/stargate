@@ -3,11 +3,11 @@ id: T044
 title: 'Implement `data-plane/internal/auth/token.go`'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-07-11
 source: tasks.md#T044
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009, T092, T093]
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true

@@ -3,18 +3,20 @@ id: T075b
 title: 'Author `tests/reproducibility/extension_test.sh`'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
-source: tasks.md#T075b
-phase: "6: Polish & Cross-Cutting Concerns"
+last_updated: 2026-07-11
+source: review/sol-review.md#M7
+phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: []
 parallel: true
-files_budget: 8   # TODO: tighten per task
+files_budget: 4
 privacy_critical: false
 complexity: low   # TODO: set per task
 risk: low
 round_cap: 2
-spec_refs: []   # TODO: cite spec.md § at /start
+spec_refs:
+  - specs/000-architecture/spec.md §12.3
+  - .specify/memory/constitution.md §VI
 decision_refs: []
 reviews: {}
 overrides: []
@@ -38,16 +40,25 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 
 ## Analysis
 
-*(Omit — not privacy-critical and not high-complexity.)*
+The falsification case is source trees with identical bytes but deliberately
+different mtimes. Comparing two copies that preserve the same mtimes would
+reconfirm the current script instead of testing reproducibility.
 
 ## Acceptance
 
-*(Derive from the spec at `/start` — see `docs/process/ticket-template.md`
-for the preferred shapes: named test, behavioral assertion, runnable command.)*
+1. Copy the extension sources into two clean trees and assign distinct mtimes
+   to every input file before packaging.
+2. Assert the two zip files are byte-identical and every member has the one
+   canonical timestamp, deterministic permissions, sorted order, and no
+   host-specific extra fields.
+3. Demonstrate the test fails against the current Info-ZIP behavior before
+   T097 changes `extension/package.sh`.
+4. Wire the test into the release-cadence reproducibility inventory and pass
+   `scripts/verify.sh` without weakening the comparison.
 
 ## Out-of-scope
 
-*(Fill at `/start` if the task body references exclusions or other tickets' work.)*
+The package implementation is T097. Runtime extension behavior is not changed.
 
 ## Notes
 

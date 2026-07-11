@@ -4,16 +4,16 @@ title: 'Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOINT)'
 status: pending
 created: 2026-07-11
 last_updated: 2026-07-11
-source: follow-up-from-T032
+source: review/sol-review.md#B2+M3
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
-blocked_by: []
+blocked_by: [T089]
 parallel: true
-files_budget: 4
+files_budget: 7
 privacy_critical: true
-complexity: low
-risk: medium
-round_cap: 2
+complexity: medium
+risk: high
+round_cap: 3
 spec_refs:
   - spec.md §FR-014
   - spec.md §FR-011
@@ -64,59 +64,26 @@ THREE documents carry the now-known-wrong path:
 
 ## Acceptance
 
-Pick ONE of the two resolution paths below (the choice is a design
-decision for this ticket's /start; both are viable):
-
-### Path A: Load torrc-defaults (preferred)
-
-Amend `sidecars/tor/Dockerfile`'s ENTRYPOINT to pass
-`--defaults-torrc /etc/tor/torrc-defaults`:
-
-```
-ENTRYPOINT ["tor", "--defaults-torrc", "/etc/tor/torrc-defaults", "-f", "/etc/tor/torrc"]
-```
-
-This makes the Debian package's intended defaults (including
-`DataDirectory /var/lib/tor`) take effect, so the cookie lands at the
-contract-assumed path and the HEALTHCHECK works as written.
-
-CAVEAT: the `stargate-tor-config` named volume is seeded by the control
-plane (T037) or by the T032 test harness. If the volume is seeded from
-empty (bypassing Docker's image-content initialization),
-`/etc/tor/torrc-defaults` may be absent from the volume and tor will fail
-to start. Verify that the volume initialization path (compose auto-create
-+ image-content copy) reliably populates `torrc-defaults`, or seed it
-alongside `torrc` in the control-plane renderer (T037) and the T032 test
-harness.
-
-### Path B: Explicit DataDirectory in the rendered torrc
-
-Add `DataDirectory /var/lib/tor` to the rendered torrc (contracts/torrc.md
-§"Rendered file") and update invariant #11 to reflect the explicit
-directive. This is a contract change — it amends the byte-match golden
-(T029's `wantTorrc`), T030's parsed-directive invariants, and requires a
-`SECURITY-DECISIONS.md` entry per contracts/torrc.md §"When this contract
-changes" (invariant #11 is not in the privacy-load-bearing set rows
-1/5/6/7/8/12, but the change should still be recorded).
-
-### Either path
-
-- Amend the Dockerfile HEALTHCHECK cookie path if it remains stale after
-  the resolution (Path A makes it correct; Path B does too if the cookie
-  lands at `/var/lib/tor/control_auth_cookie`).
-- Amend `data-model.md:336` to match the actual cookie path.
-- Amend `contracts/torrc.md` invariant #11's comment to match the actual
-  default.
-- Verify T032 still passes after the fix (the `find`-based cookie
-  discovery in T032's `liveTorControl` is robust to either path and
-  should not need changes; if it does, tighten it to assert the specific
-  path the fix produces).
+1. Write a cold-volume regression test first. Start the production Tor image
+   without seeding config from the harness and assert Docker reports
+   `State.Health.Status == healthy`.
+2. Implement T089's amended contract: the image contains the byte-pinned safe
+   `torrc` before entrypoint, including explicit
+   `DataDirectory /var/lib/tor`; Tor does not wait for CP rendering.
+3. Assert the loaded configuration contains every torrc contract invariant,
+   the control cookie is exactly `/var/lib/tor/control_auth_cookie`, and the
+   SOCKS/control ports remain compose-internal.
+4. Update the Docker healthcheck to read the authoritative cookie path and
+   perform the authenticated bootstrap probe.
+5. Update `data-model.md`, `contracts/torrc.md`, T029/T030 goldens, and
+   `SECURITY-DECISIONS.md` as required by T089; remove `find`-based test
+   workarounds that could mask a path regression.
+6. T032, the new cold-volume test, and `scripts/verify.sh` pass.
 
 ## Out-of-scope
 
 - T062 (Go-side control-port client with cookie volume mount) — separate
-  Phase 4 ticket; once it lands, T032 and T058/T058a can read the cookie
-  directly rather than via `docker exec`.
+  Phase 4 ticket.
 - Any change to the IsolateSOCKSAuth / IsolateClientAddr directives
   themselves — those are invariant #1, untouched here.
 
