@@ -177,6 +177,13 @@ txt = re.sub(r'^(last_updated:\s*).*$',
 open(path, 'w').write(txt)
 PY
   echo "run-task: $TICKET_ID status → $new_status"
+  # Regenerate STATUS.md so it stays in sync with the frontmatter we just
+  # changed. Best-effort: a regen failure does not block the transition
+  # (the next transition or a manual `scripts/regen-status.sh` catches up).
+  # This closes the "forgot to regen STATUS.md" drift the CI ticket-state
+  # job was catching after the fact.
+  bash "$(git rev-parse --show-toplevel)/scripts/regen-status.sh" "$FEATURE_DIR" >/dev/null 2>&1 \
+    || echo "run-task: WARNING — regen-status.sh failed; STATUS.md may be stale" >&2
 }
 
 # --- dispatch on status -----------------------------------------------------

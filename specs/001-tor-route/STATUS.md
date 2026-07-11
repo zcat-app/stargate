@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-07-04
+**Last updated:** 2026-07-11
 
 ---
 
@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 91 |
+| pending | 73 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 18 |
+| done | 42 |
 | deferred | 0 |
-| **total** | **109** |
+| **total** | **115** |
 
 ---
 
@@ -29,29 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T016 | Author `scripts/stargate` entrypoint and `scripts/subcommand | 2: Foundational (Blocking Prerequisites) | ✓ |  |
-| T017 | Author `SECURITY-DECISIONS.md` (new file at repo root) with  | 2: Foundational (Blocking Prerequisites) | ✓ |  |
-| T017a | Append to `SECURITY-DECISIONS.md` (created by T017) the **`d | 2: Foundational (Blocking Prerequisites) | ✓ |  |
-| T018 | Amend `specs/000-architecture/spec.md` in lock-step: §4.3 in | 2: Foundational (Blocking Prerequisites) | ✓ |  |
-| T019 | Author the privacy-safe error template **literal** in `data- | 2: Foundational (Blocking Prerequisites) | ✓ |  |
-| T019a | Author `tests/integration/fake_socks5_tor.go` | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
-| T019b | Contract test for FR-012''s Tor port-exposure invariant in ` | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
-| T019c | Contract test for the `docker-socket-proxy` lockdown invaria | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
-| T020 | Contract test for `ReloadTokens` (happy / stale / invalid /  | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T021 | Contract test for `WatchEvents` happy path (`STARTED` → `HEA | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T022 | Contract test for inter-plane transport invariants in `tests | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T023 | Contract test for SOCKS5 first-byte demultiplex (`0x05` → SO | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T024 | Contract test for SOCKS5 username/password sub-negotiation s | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T025 | Contract test for SOCKS5 leak invariants in `tests/contract/ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T025a | Contract test for SOCKS5 success-path log invariants | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T025b | Contract test for long-lived bidirectional CONNECT (Principl | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T026 | Contract test for HTTP CONNECT auth success | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T027 | Contract test for `AUTH_REQUIRED` on CONNECT path in `tests/ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T028 | Contract test for `AUTH_REQUIRED` on SOCKS5 path | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T029 | Contract test asserting the rendered `torrc` matches the v1  | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T030 | Contract test asserting each `torrc` invariant individually  | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T031 | Contract test asserting no bridge / pluggable-transport stri | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T032 | Contract test spinning up the live Tor sidecar with the rend | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T033 | Integration test for the full vertical: bring up `compose/do | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034 | Integration test asserting no DNS query for any `*.onion` na | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
@@ -110,8 +87,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T077 | Run the `quickstart.md` walkthrough on a clean Linux x86_64  | 6: Polish & Cross-Cutting Concerns |  |  |
 | T078 | Run the `stargate-redteam` agent against the completed featu | 6: Polish & Cross-Cutting Concerns |  |  |
 | T079 | Run the `stargate-perf` agent against the data plane (Princi | 6: Polish & Cross-Cutting Concerns | ✓ |  |
+| T079a | PR-cadence regression gate for SC-005''s pool-fill + steady- | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T080 | Sweep with `scripts/check-license-headers.sh` (from T006); v | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T081 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
+| T082 | Amend THREAT-MODEL.md §8.6 to resolve the Tor sidecar mainta | 2: Foundational (Blocking Prerequisites) | ✓ |  |
+| T083 | Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_resta | 2: Foundational (Blocking Prerequisites) |  |  |
+| T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
+| T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
+| T087 | Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOI | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
 
 ---
 
@@ -129,7 +112,7 @@ _(none deferred)_
 
 ## Done
 
-_18 ticket(s) done._
+_42 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -149,3 +132,27 @@ _18 ticket(s) done._
 - T013 — Implement `data-plane/internal/bind/check.go`
 - T014 — Author `sidecars/tor/Dockerfile`
 - T015 — Author `compose/docker-compose.local.yml` and `compose/env/local.env.e
+- T016 — Author `scripts/stargate` entrypoint and `scripts/subcommands/init` de
+- T017 — Author `SECURITY-DECISIONS.md` (new file at repo root) with the Tor si
+- T017a — Append to `SECURITY-DECISIONS.md` (created by T017) the **`docker-sock
+- T018 — Amend `specs/000-architecture/spec.md` in lock-step: §4.3 inter-plane 
+- T019 — Author the privacy-safe error template literal
+- T019a — Author `tests/integration/fake_socks5_tor.go`
+- T019b — Contract test for FR-012 Tor port-exposure invariant
+- T019c — Contract test for the `docker-socket-proxy` lockdown invariants
+- T020 — Contract test for `ReloadTokens` (happy / stale / invalid / snapshot-p
+- T021 — Contract test for `WatchEvents` happy path (`STARTED` → `HEALTHY` for 
+- T022 — Contract test for inter-plane transport invariants in `tests/contract/
+- T023 — Contract test for SOCKS5 first-byte demultiplex (`0x05` → SOCKS5, `''C
+- T024 — Contract test for SOCKS5 username/password sub-negotiation success (`0
+- T025 — Contract test for SOCKS5 leak invariants in `tests/contract/socks5/lea
+- T025a — Contract test for SOCKS5 success-path log invariants
+- T025b — Contract test for long-lived bidirectional CONNECT (Principle I byte-p
+- T026 — Contract test for HTTP CONNECT auth success
+- T027 — Contract test for `AUTH_REQUIRED` on CONNECT path in `tests/contract/e
+- T028 — Contract test for `AUTH_REQUIRED` on SOCKS5 path
+- T029 — Contract test asserting the rendered `torrc` matches the v1 template b
+- T030 — Contract test asserting each `torrc` invariant individually (rows 1–13
+- T031 — Contract test asserting no bridge / pluggable-transport strings appear
+- T032 — Contract test spinning up the live Tor sidecar with the rendered confi
+- T086 — Clean up torrc contract: Source-space typo + test prose drift
