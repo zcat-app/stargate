@@ -154,6 +154,29 @@ def lint(path: Path) -> list:
                     f"INVALID-DEP-ID: blocked_by entry `{d}` is not T-NNN shape"
                 )
 
+    # tests_first: explicit Principle-VII directed metadata (T096 / sol-review
+    # M6). Each entry must be T-NNN shape. For a privacy_critical ticket, every
+    # named test MUST also appear in blocked_by — otherwise the impl would be
+    # runnable before its test, violating Constitution Principle VII. This is
+    # the machine-checkable form of "tests-first for privacy-critical code".
+    tf = fm.get("tests_first", [])
+    if isinstance(tf, list) and tf:
+        for t in tf:
+            if not re.match(r"^T\d+[a-z]?$", t):
+                findings.append(
+                    f"INVALID-TESTS-FIRST-ID: tests_first entry `{t}` is not T-NNN shape"
+                )
+        if pc == "true":
+            dep_set = set(deps) if isinstance(deps, list) else set()
+            missing = [t for t in tf if re.match(r"^T\d+[a-z]?$", t) and t not in dep_set]
+            if missing:
+                findings.append(
+                    "TESTS-FIRST-VIOLATION: privacy_critical ticket names "
+                    f"tests_first {missing} but they are absent from blocked_by "
+                    "— the impl would be runnable before its Principle-VII test. "
+                    "Add them to blocked_by (scripts/derive-deps.sh does this)."
+                )
+
     # Lineage cross-checks (informational when inconsistent).
     if fm.get("decomposed_from") and fm.get("status") != "deferred":
         # decomposed_from is allowed on a replacement ticket; otherwise odd.

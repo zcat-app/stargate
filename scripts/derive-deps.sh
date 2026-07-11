@@ -20,16 +20,27 @@
 #      "shared infrastructure" not strict dependencies. It's a floor, not a
 #      ceiling.
 #
-#   2. EXPLICIT PROSE (precise).
+#   2. EXPLICIT DIRECTED METADATA (precise, preferred).
+#      A `tests_first: [T-NNN, ...]` field on an implementation ticket
+#      declares the Principle-VII tests that MUST be done before the impl
+#      can start. The impl's `blocked_by:` gains each named test. This is
+#      the canonical direction (impl waits for test, never the reverse).
+#      Also recognised: `test_for: T-NNN` on a test ticket (the impl it
+#      gates) is the reverse view of the same edge and is added to that
+#      impl's blocked_by the same way.
+#
+#   3. EXPLICIT PROSE (legacy, narrow).
 #      Patterns inside a task body that name other tasks:
 #        - "Depends on T-NNN and T-NNN"           → blocked_by those
-#        - "Pairs with T-NNN"                     → blocked_by that (test+impl)
 #        - "Test gate: T-NNN MUST be authored"    → blocked_by that
 #        - "Verified by T-NNN"                    → that is a verifier, not a
 #                                                   blocker; do NOT add.
-#      These prose-derived deps are precise and override phase-derived ones.
+#      NOTE: "Pairs with T-NNN" was REMOVED as a dependency signal (T096 /
+#      sol-review M6): it is direction-ambiguous and previously inverted
+#      Principle-VII tests-first sequencing (test blocked_by impl). Direction
+#      is now declared explicitly via `tests_first:` / `test_for:` per ticket.
 #
-#   3. SUBTICKET PARENT (T-NNN → T-NNNa/b/c).
+#   4. SUBTICKET PARENT (T-NNN → T-NNNa/b/c).
 #      Subtickets (T012a, T019b, etc.) block their parent (T012, T019) when
 #      the parent is an umbrella, OR depend on the parent when the subticket
 #      is a follow-on. The bootstrap can't tell which; this script writes a
@@ -124,11 +135,14 @@ def phase_close_before(phase):
 
 phase_blocker = {p: phase_close_before(p) for p in phase_order}
 
-# --- prose-derived deps ------------------------------------------------------
-# Per task body, find references to other T-NNN ids that imply a dep.
+# --- prose-derived deps (narrowed; "Pairs with" removed — T096 / M6) ---------
+# Per task body, find references to other T-NNN ids that imply a dep. The
+# ambiguous "Pairs with" signal was removed because it inverted Principle-VII
+# tests-first ordering (it made the test blocked_by the impl). Direction is
+# now declared explicitly via the `tests_first:` / `test_for:` frontmatter
+# fields, parsed below.
 DEP_PATTERNS = [
     re.compile(r'\bDepends on\s+(T\d+[a-z]?(?:\s*(?:,|and)\s*T\d+[a-z]?)*)', re.IGNORECASE),
-    re.compile(r'\bPairs with\s+(T\d+[a-z]?)', re.IGNORECASE),
     re.compile(r'\bTest gate:\s*(T\d+[a-z]?)\s+MUST', re.IGNORECASE),
 ]
 # Negative pattern — "verified by" is NOT a blocker; the verifier is gated
@@ -148,6 +162,42 @@ def prose_deps(body):
     return deps
 
 prose_blockers = {tid: prose_deps(t['body']) for tid, t in tasks.items()}
+
+# --- explicit directed metadata: tests_first / test_for ---------------------
+# A `tests_first: [T-NNN, ...]` field on an implementation ticket declares the
+# Principle-VII tests that must be DONE before the impl can start → those tests
+# are added to THIS ticket's blocked_by. A `test_for: T-NNN` field on a test
+# ticket is the reverse view of the same edge; it is added to the NAMED impl's
+# blocked_by instead. Both encode the canonical tests-first direction.
+def read_fm_list(path, key):
+    txt = open(path).read()
+    m = re.match(r'^---\n(.*?)\n---\n', txt, re.DOTALL)
+    if not m: return []
+    fm = m.group(1)
+    mm = re.search(rf'^{re.escape(key)}:\s*(.*)$', fm, re.MULTILINE)
+    if not mm: return []
+    rest = re.sub(r'\s+#.*$', '', mm.group(1)).strip()
+    if rest.startswith('['):
+        inner = rest.strip('[]').strip()
+        if not inner: return []
+        return [v.strip().strip("'\"") for v in inner.split(',')]
+    if rest == '':
+        vals = []
+        for line in fm.splitlines():
+            m2 = re.match(r'^\s+-\s+(T\d+[a-z]?)\s*$', line)
+            if m2: vals.append(m2.group(1))
+        return vals
+    return [rest.strip("'\"")]
+
+import glob as _glob
+tests_first_self = {}     # tid -> [test ids this impl must wait for]
+test_for_targets  = {}    # tid(test) -> impl id it gates (for reverse edges)
+for tid in tasks:
+    matches = _glob.glob(f'{TICKETS_DIR}/{tid}-*.md')
+    if not matches: continue
+    tests_first_self[tid] = read_fm_list(matches[0], 'tests_first')
+    tf = read_fm_list(matches[0], 'test_for')
+    test_for_targets[tid] = tf[0] if tf else ''
 
 # --- for each ticket file, compute the new blocked_by list -------------------
 # Read existing blocked_by from the ticket file (so we preserve user-added
@@ -202,6 +252,13 @@ def write_blocked_by(path, deps):
     return True
 
 # --- apply ------------------------------------------------------------------
+# First, resolve reverse edges from test_for: each (test → impl) edge adds the
+# test to the impl's blocked_by. Pre-collect so the apply loop sees them.
+test_for_blockers = {}   # impl tid -> set(test tids that gate it)
+for test_tid, impl_tid in test_for_targets.items():
+    if impl_tid and impl_tid in tasks:
+        test_for_blockers.setdefault(impl_tid, set()).add(test_tid)
+
 changes = 0
 for tid, t in tasks.items():
     matches = glob.glob(f'{TICKETS_DIR}/{tid}-*.md')
@@ -213,8 +270,12 @@ for tid, t in tasks.items():
     pb = phase_blocker.get(t['phase'])
     if pb and pb != tid:
         derived.add(pb)
-    # Prose deps.
+    # Prose deps (Depends on / Test gate — "Pairs with" removed, T096/M6).
     derived |= prose_blockers.get(tid, set())
+    # Explicit directed metadata: tests_first on THIS ticket (impl waits for
+    # its named tests) + reverse edges from test_for pointing at this ticket.
+    derived |= set(tests_first_self.get(tid, []))
+    derived |= set(test_for_blockers.get(tid, set()))
     # Drop self-deps and deps on ids that don't exist as tickets (stale
     # references in tasks.md).
     derived.discard(tid)

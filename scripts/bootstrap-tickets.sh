@@ -17,12 +17,18 @@
 # the stable identifier; the slug is a human affordance.
 #
 # Dependency inference: tasks.md does not declare deps structurally. This
-# script derives `blocked_by` from:
+# script emits `blocked_by: []` for every ticket; scripts/derive-deps.sh
+# tightens it from:
 #   (a) phase ordering — every task in Phase N is blocked_by every [X] task
-#       in earlier phases (coarse; can be tightened by hand post-bootstrap);
-#   (b) explicit prose — "Depends on T003", "Pairs with T013",
-#       "Test gate: T012a MUST be authored" etc. in the task body.
-# Both are heuristics; review the generated frontmatter before relying on it.
+#       in earlier phases (coarse; tightened by hand or derive-deps post-bootstrap);
+#   (b) explicit prose — "Depends on T003", "Test gate: T012a MUST be authored"
+#       in the task body;
+#   (c) explicit directed metadata — `tests_first: [T-NNN]` on impl tickets /
+#       `test_for: T-NNN` on test tickets (T096 / sol-review M6).
+# The direction-ambiguous "Pairs with T-NNN" prose signal was REMOVED (T096):
+# it previously inverted Principle-VII tests-first ordering. Direction is now
+# declared explicitly per ticket. Both (a)/(b) are heuristics; review the
+# generated frontmatter before relying on it.
 #
 # privacy_critical inference: a task is flagged `true` if its body matches any
 # of the Constitution-Principle-I/III surface keywords (DNS, routing, SOCKS5,

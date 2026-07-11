@@ -7,7 +7,7 @@ last_updated: 2026-07-04
 source: tasks.md#T034e
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
-blocked_by: [T009, T056]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009]   # T096/M6: removed inverted T056 dep — the test must NOT wait on its impl (Constitution VII)
 parallel: true
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true

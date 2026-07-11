@@ -33,15 +33,20 @@
 # round counter is per-cycle, not durable.
 #
 # Bright-line stops (workflow.md §"Autonomous runs"):
-#   - verify.sh not green after a rework round
+#   - verify.sh not green after a rework round, or not fresh-green at APPROVE
 #   - review round cap hit (default 2; 3 if round_cap: 3)
 #   - codereview verdict ESCALATE
-#   - redteam FINDINGS (not yet wired — privacy_critical gate is informational
-#     in this batch; the future /run autopilot enforces it)
+#   - redteam FINDINGS on a privacy_critical ticket (wired at APPROVE since T096)
 #
 # The script NEVER pushes. The script NEVER spawns a developer-subagent
 # (there is no portable way to do that from shell; the caller does it).
 # Status transitions happen ONLY here.
+#
+# Branch model (T096 / sol-review M6): direct commits on the feature
+# integration branch ($FEATURE_BRANCH, from .specify/feature.json). The
+# feature branch squash-merges to main at milestone close (--merge). main has
+# no scripts/ mid-feature, so per-ticket branches off main are unbuildable;
+# the prior per-ticket commits on the feature branch are grandfathered.
 #
 # Usage:
 #   scripts/run-task.sh T015              # drive ticket T015 one phase forward
@@ -92,8 +97,36 @@ except Exception:
     print("specs/001-tor-route")
 ' 2>/dev/null || echo "specs/001-tor-route")"
 
-TICKET_PATH="$(ls "$FEATURE_DIR/tickets/$TICKET_ID"-*.md 2>/dev/null | head -1 || true)"
-[ -n "$TICKET_PATH" ] || { echo "run-task: ticket $TICKET_ID not found under $FEATURE_DIR/tickets/" >&2; exit 2; }
+# Canonical branch model (T096 / sol-review M6): direct commits on the
+# feature integration branch; the feature branch squash-merges to main at
+# milestone close. The feature integration branch name is derived from the
+# feature directory basename (specs/001-tor-route -> 001-tor-route). main has
+# no scripts/ dir mid-feature, so per-ticket branches off main are unbuildable;
+# the 87 prior commits on the feature branch are grandfathered.
+FEATURE_BRANCH="$(python3 -c '
+import json, os
+try:
+    cfg = json.load(open(".specify/feature.json"))
+    fd = cfg.get("feature_directory", "specs/001-tor-route")
+except Exception:
+    fd = "specs/001-tor-route"
+print(os.path.basename(fd.rstrip("/")))
+' 2>/dev/null || echo "001-tor-route")"
+
+# Refuse ambiguous/multiple ticket matches (T096 §Acceptance #2). A bare
+# `ls | head -1` silently picks one, which mismatches the canonical "one ticket
+# file per id" invariant and can drive the wrong ticket.
+shopt -s nullglob
+TICKET_MATCHES=( "$FEATURE_DIR/tickets/$TICKET_ID"-*.md )
+shopt -u nullglob
+case "${#TICKET_MATCHES[@]}" in
+  0) echo "run-task: ticket $TICKET_ID not found under $FEATURE_DIR/tickets/" >&2; exit 2 ;;
+  1) TICKET_PATH="${TICKET_MATCHES[0]}" ;;
+  *) echo "run-task: ambiguous: $TICKET_ID matches ${#TICKET_MATCHES[@]} files:" >&2
+     printf '  %s\n' "${TICKET_MATCHES[@]}" >&2
+     echo "  rename so '$TICKET_ID' matches exactly one filename." >&2
+     exit 2 ;;
+esac
 
 # --- frontmatter field extraction (same python helper as the other scripts) -
 extract_fm() {
@@ -123,11 +156,12 @@ RUN_DIR="target/runs"
 mkdir -p "$RUN_DIR"
 ROUND_FILE="$RUN_DIR/$TICKET_ID.round"
 DIFFSTAT_FILE="$RUN_DIR/$TICKET_ID-r$([ -f "$ROUND_FILE" ] && cat "$ROUND_FILE" || echo 1).diffstat"
-VERDICT_FILE="$RUN_DIR/$TICKET_ID.verdict"
+VERDICT_FILE="$RUN_DIR/$TICKET_ID.verdict"      # codereview verdict (APPROVE|REWORK|ESCALATE)
+REDTEAM_FILE="$RUN_DIR/$TICKET_ID.redteam"      # stargate-redteam verdict (CLEAN|FINDINGS)
 PROMPT_FILE="$RUN_DIR/$TICKET_ID.prompt"
 
 if [ "$RESET_ROUND" = "1" ]; then
-  rm -f "$ROUND_FILE" "$VERDICT_FILE" "$DIFFSTAT_FILE"
+  rm -f "$ROUND_FILE" "$VERDICT_FILE" "$DIFFSTAT_FILE" "$REDTEAM_FILE"
   echo "run-task: reset round state for $TICKET_ID"
   exit 0
 fi
@@ -155,6 +189,61 @@ emit_prompt() {
     echo "re-run \`scripts/run-task.sh $TICKET_ID\` to advance to the next phase._"
   } > "$PROMPT_FILE"
   cat "$PROMPT_FILE"
+}
+
+# ensure_feature_branch: land the caller on $FEATURE_BRANCH (T096 §Acceptance
+# #2). Creates it from main if absent; checks it out if the caller is elsewhere.
+# Refuses a dirty working tree (would carry unrelated changes across the
+# checkout). The branch name is derived from the feature directory basename,
+# reconciling the docs' per-ticket-branch wording to the direct-commits model
+# the 87 prior commits already follow.
+ensure_feature_branch() {
+  if [ -n "$(git status --porcelain)" ]; then
+    echo "run-task: working tree dirty. Commit or stash before starting $TICKET_ID." >&2
+    exit 1
+  fi
+  if ! git show-ref --verify --quiet "refs/heads/$FEATURE_BRANCH"; then
+    # Feature branch doesn't exist — create it from main. This is the
+    # milestone-squash source; per-ticket work commits here directly.
+    if ! git show-ref --verify --quiet "refs/heads/main"; then
+      echo "run-task: neither '$FEATURE_BRANCH' nor 'main' exists; nothing to branch from." >&2
+      exit 1
+    fi
+    git checkout -b "$FEATURE_BRANCH" main
+    echo "run-task: created + checked out feature branch '$FEATURE_BRANCH' from main."
+  elif [ "$(git rev-parse --abbrev-ref HEAD)" != "$FEATURE_BRANCH" ]; then
+    git checkout "$FEATURE_BRANCH"
+    echo "run-task: checked out feature branch '$FEATURE_BRANCH'."
+  fi
+}
+
+# make_focused_commit: create the one-ticket commit on the feature branch with
+# the required Reviewed-by trailer (T096 §Acceptance #3). Commits ONLY paths the
+# caller already staged (`git add <paths>` during IMPLEMENT) — never `git add -A`
+# and never `-a`, so unrelated edits stay out of the focused commit. Refuses if
+# nothing is staged. The message is constructed from the ticket's id/title and
+# the §Context body so the invariant holds by construction, not caller discipline.
+make_focused_commit() {
+  local verdict_line="$1" title ctx
+  if [ -z "$(git diff --cached --name-only)" ]; then
+    return 1
+  fi
+  title="$(extract_fm title)"
+  ctx="$(python3 - "$TICKET_PATH" <<'PY'
+import re, sys
+txt = open(sys.argv[1]).read()
+m = re.search(r'^## Context\s*\n(.*?)(?=^## |\Z)', txt, re.MULTILINE | re.DOTALL)
+body = m.group(1).strip() if m else ''
+# Collapse to a flat paragraph for the commit body; drop the leading
+# blockquote line-by-line noise bootstrap may have emitted.
+lines = [ln.rstrip() for ln in body.splitlines() if ln.strip()]
+print('\n'.join(lines) if lines else '(no Context section)')
+PY
+)"
+  git commit -m "Implement ${FEATURE_BRANCH}: ${TICKET_ID} ${title}" \
+            -m "${ctx}" \
+            -m "${verdict_line}" \
+            -m "Marks ${TICKET_ID} [X]."
 }
 
 update_ticket_status() {
@@ -255,10 +344,14 @@ EOF
       echo "run-task: $TICKET_ID emitted START handoff. Ground, then re-invoke."
       exit 0
     fi
-    # Caller signalled ready — transition.
+    # Caller signalled ready — land on the feature integration branch
+    # (creating it from main if absent) BEFORE flipping status, so an
+    # in-progress ticket always has its commit target ready (T096 §Acceptance
+    # #2). Dirty tree refusal happens inside ensure_feature_branch.
+    ensure_feature_branch
     rm -f "target/runs/$TICKET_ID.grounded"
     update_ticket_status "in-progress"
-    echo "run-task: $TICKET_ID ready to implement. Re-invoke to advance."
+    echo "run-task: $TICKET_ID ready to implement on '$FEATURE_BRANCH'. Re-invoke to advance."
     exit 0
     ;;
 
@@ -272,15 +365,18 @@ Implement $TICKET_ID (workflow.md §"The flow" steps 2–3):
 
 1. Read the ticket's §Acceptance — this is the only section that pins behavior.
 2. For privacy_critical=$PRIVACY tasks, tests MUST be written first
-   (Constitution Principle VII, no AI exception): the test must exist and
-   be failing before the implementation lands.
+   (Constitution Principle VII, no AI exception): the test must exist and be
+   failing before the implementation lands.
 3. Surgical changes only, within files_budget=$(extract_fm files_budget).
    Stay outside out_of_scope.
 4. When the diff is ready, run from repo root:
    bash scripts/verify.sh
 5. Verify must be GREEN. Fix the code, never the test, unless the ticket's
    §Out-of-scope authorized that test change.
-6. When verify is green, signal ready:
+6. **Stage the ticket's changed paths** (explicit paths only — never \`git add -A\`;
+   the driver commits ONLY what you stage, at APPROVE):
+   git add <path1> <path2> ... $TICKET_PATH
+7. When verify is green and the paths are staged, signal ready:
    touch target/runs/$TICKET_ID.verified
 
 Diff stats will be captured on transition to in-review for the must-shrink
@@ -325,6 +421,7 @@ Write the verdict block verbatim to:
   $VERDICT_FILE
 
 Then re-invoke: scripts/run-task.sh $TICKET_ID
+$([ "$PRIVACY" = "true" ] && printf '%s\n' "" "NOTE: privacy_critical=true — after codereview APPROVE, the driver will" "require a stargate-redteam CLEAN verdict before creating the commit.")
 
 EOF
       echo "run-task: $TICKET_ID emitted REVIEW handoff. Spawn codereview, write verdict, re-invoke."
@@ -334,7 +431,78 @@ EOF
     # Verdict is in — act on it.
     VERDICT_BODY="$(cat "$VERDICT_FILE")"
     if echo "$VERDICT_BODY" | grep -qE '^VERDICT:\s*APPROVE'; then
-      echo "run-task: APPROVE. Transitioning $TICKET_ID to done."
+      # --- T096 §Acceptance #3: APPROVE is fail-closed. The driver may not
+      # flip `done` until (a) verify is fresh-green, (b) codereview APPROVE is
+      # present (the file we're holding), (c) for privacy_critical tickets a
+      # red-team CLEAN verdict is present, and (d) a focused commit with the
+      # required Reviewed-by trailer exists. The driver creates the commit
+      # itself so the invariant holds by construction.
+      echo "run-task: APPROVE received. Re-running verify.sh as the freshness gate…"
+      if ! bash scripts/verify.sh >> target/verify.log 2>&1; then
+        echo "run-task: verify.sh NOT GREEN at APPROVE. Tree changed post-review. Re-implement." >&2
+        rm -f "$VERDICT_FILE"
+        exit 1
+      fi
+
+      # Privacy-critical red-team gate (Constitution Principle VIII; was
+      # informational before T096 — sol-review M6). Fail closed on a missing
+      # or FINDINGS verdict.
+      if [ "$PRIVACY" = "true" ]; then
+        if [ ! -f "$REDTEAM_FILE" ]; then
+          cat <<EOF | emit_prompt REDTEAM
+Privacy-critical red-team gate REQUIRED for $TICKET_ID (privacy_critical: true,
+Constitution Principle VIII; sol-review M6). Spawn \`stargate-redteam\` (fresh
+context, blind to rationale) against the cumulative diff. Hand it ONLY:
+  - The cumulative diff:  \`git diff main\`
+  - The threat model:     \`THREAT-MODEL.md\`
+  - The Constitution:     \`.specify/memory/constitution.md\`
+
+Write the verdict block to:
+  $REDTEAM_FILE
+
+It must contain one of:
+  VERDICT: CLEAN
+  VERDICT: FINDINGS
+
+Then re-invoke: scripts/run-task.sh $TICKET_ID
+
+EOF
+          echo "run-task: $TICKET_ID emitted REDTEAM handoff. Spawn redteam, write verdict, re-invoke."
+          # Keep the codereview verdict + round state so re-invocation resumes
+          # from this point (caller writes only the redteam file).
+          exit 0
+        fi
+        if grep -qE '^VERDICT:\s*FINDINGS' "$REDTEAM_FILE"; then
+          echo "run-task: REDTEAM FINDINGS on $TICKET_ID. Cannot set done (Constitution VIII)." >&2
+          echo "  Resolve findings, then: scripts/run-task.sh $TICKET_ID --reset && scripts/run-task.sh $TICKET_ID" >&2
+          cat "$REDTEAM_FILE" >&2
+          exit 1
+        fi
+        # CLEAN (or any non-FINDINGS verdict) — proceed.
+      fi
+
+      # Create the focused commit on the feature branch with the required
+      # Reviewed-by trailer. The caller staged paths during IMPLEMENT; we
+      # commit only those. If nothing is staged, surface a COMMIT handoff
+      # rather than flipping done (the commit invariant is the gate).
+      REVIEW_LINE="Reviewed-by: stargate-codereview (VERDICT: APPROVE; round $ROUND)"
+      if ! make_focused_commit "$REVIEW_LINE"; then
+        cat <<EOF | emit_prompt COMMIT
+$TICKET_ID was APPROVED but no changes are staged for the focused commit
+(T096 §Acceptance #3 — done requires a focused commit with the Reviewed-by
+trailer). Stage the ticket's paths explicitly (never \`git add -A\`):
+
+  git add <path1> <path2> ... $TICKET_PATH
+
+Then re-invoke: scripts/run-task.sh $TICKET_ID
+The driver will create the commit and flip \`done\`.
+
+EOF
+        echo "run-task: $TICKET_ID emitted COMMIT handoff. Stage paths, re-invoke."
+        # Keep verdict + redteam so re-invocation proceeds straight to commit.
+        exit 0
+      fi
+
       # Stash the verdict into the ticket's reviews: field (latest only).
       python3 - "$TICKET_PATH" "$ROUND" "$VERDICT_BODY" <<'PY'
 import datetime, re, sys
@@ -347,8 +515,10 @@ txt = re.sub(r'^reviews:\s*\{[^}]*\}\s*$', new, txt, count=1, flags=re.MULTILINE
 open(path, 'w').write(txt)
 PY
       update_ticket_status "done"
-      rm -f "$VERDICT_FILE"
-      echo "run-task: $TICKET_ID done. Next: scripts/run-task.sh $TICKET_ID --merge"
+      rm -f "$VERDICT_FILE" "$REDTEAM_FILE"
+      echo "run-task: $TICKET_ID done (committed on '$FEATURE_BRANCH')."
+      echo "  Push is your call: git push origin $FEATURE_BRANCH"
+      echo "  Milestone squash-merge to main: scripts/run-task.sh $TICKET_ID --merge"
       exit 0
     fi
 
@@ -431,54 +601,62 @@ EOF
 
   done)
     if [ "$DO_MERGE" = "1" ]; then
-      # Squash-merge the branch into main (workflow.md step 7).
-      # Refuse if there's no branch matching the ticket id, or if working
-      # tree is dirty, or if main has diverged with a substantive conflict.
-      BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-      if [ "$BRANCH" = "main" ]; then
-        echo "run-task: already on main — nothing to merge (was the branch already merged?)." >&2
-        exit 0
-      fi
+      # T096 §Acceptance #4: milestone squash-merge of the recorded feature
+      # branch into main. Targets $FEATURE_BRANCH by NAME (never guesses from
+      # the caller's current branch), refuses a dirty tree, refuses an absent
+      # feature branch, and never pushes. Per-ticket work already committed on
+      # the feature branch at APPROVE; this is the milestone-end step.
       if [ -n "$(git status --porcelain)" ]; then
         echo "run-task: working tree dirty. Commit or stash before --merge." >&2
         exit 1
       fi
-      # Verify the branch slug matches the ticket id.
-      case "$BRANCH" in
-        *"$TICKET_ID"*) : ;;  # OK
-        *) echo "run-task: current branch '$BRANCH' does not contain '$TICKET_ID'. Aborting --merge." >&2; exit 1 ;;
-      esac
-
-      echo "run-task: squash-merging $BRANCH into main…"
+      if ! git show-ref --verify --quiet "refs/heads/$FEATURE_BRANCH"; then
+        echo "run-task: feature branch '$FEATURE_BRANCH' does not exist. Nothing to merge." >&2
+        exit 1
+      fi
+      if ! git show-ref --verify --quiet "refs/heads/main"; then
+        echo "run-task: 'main' does not exist. Create it before the milestone merge." >&2
+        exit 1
+      fi
+      # Count commits being folded in (for the milestone message).
+      NCOMMITS="$(git rev-list --count main.."${FEATURE_BRANCH}" 2>/dev/null || echo 0)"
+      if [ "${NCOMMITS:-0}" -eq 0 ]; then
+        echo "run-task: '$FEATURE_BRANCH' has no commits ahead of main. Nothing to merge." >&2
+        exit 0
+      fi
+      echo "run-task: milestone squash-merge of '$FEATURE_BRANCH' (${NCOMMITS} commits) into main…"
       git checkout main
-      if git merge --squash "$BRANCH"; then
-        # Reuse the branch tip's commit message (preserves Reviewed-by: trailer).
-        git commit -C "$BRANCH"
-        echo "run-task: merged. Deleting branch $BRANCH…"
-        git branch -D "$BRANCH"
-        echo "run-task: $TICKET_ID merged to main. Push is the user's call (never auto-push)."
+      if git merge --squash "$FEATURE_BRANCH"; then
+        git commit -m "Merge ${FEATURE_BRANCH}: milestone squash (${NCOMMITS} ticket commits)" \
+                   -m "Squash-merges ${NCOMMITS} reviewed per-ticket commits from ${FEATURE_BRANCH}." \
+                   -m "Generated by scripts/run-task.sh ${TICKET_ID} --merge at milestone close."
+        # The feature branch is NOT deleted: under the direct-commits model it
+        # remains the active integration branch; deletion is the user's call.
+        git checkout "$FEATURE_BRANCH" 2>/dev/null || true
+        echo "run-task: milestone merge complete. main now carries ${FEATURE_BRANCH}."
+        echo "  Push is your call (never auto-push): git push origin main"
       else
-        echo "run-task: squash-merge conflicted. Resolve, or rebase $BRANCH onto main and retry." >&2
+        echo "run-task: squash-merge conflicted. Resolve, or rebase $FEATURE_BRANCH onto main and retry." >&2
         git merge --abort 2>/dev/null || true
-        git checkout "$BRANCH"
+        git checkout "$FEATURE_BRANCH" 2>/dev/null || true
         exit 1
       fi
       exit 0
     fi
 
     cat <<EOF | emit_prompt MERGE
-$TICKET_ID is done. To squash-merge into main (workflow.md step 7):
+$TICKET_ID is done — its focused commit landed on '$FEATURE_BRANCH' at APPROVE
+(T096 §Acceptance #3). Next steps:
 
-  scripts/run-task.sh $TICKET_ID --merge
+  - Push the ticket commit (your call — the script never pushes):
+      git push origin $FEATURE_BRANCH
+  - Milestone squash-merge of the whole feature branch into main (run once,
+    at milestone close):
+      scripts/run-task.sh $TICKET_ID --merge
 
-This will squash-merge the current branch into main, reuse the branch tip's
-commit message (preserving the Reviewed-by: trailer), delete the branch,
-and stop. **Push is your call — the script never pushes.**
-
-Preconditions the merge step will enforce:
-  - working tree clean
-  - current branch name contains the ticket id
-  - no substantive conflict at squash-merge time
+The milestone merge targets '$FEATURE_BRANCH' by name (never guesses from your
+current branch), refuses a dirty tree, reuses a generated milestone message,
+and never pushes.
 
 EOF
     exit 0

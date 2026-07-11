@@ -7,10 +7,11 @@ last_updated: 2026-07-04
 source: tasks.md#T048
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009, T068a]   # T068a is the Principle-VII test-first gate (T096)
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true
+tests_first: [T068a]   # T096/M6: T068a MUST be done before this impl (Constitution VII)
 complexity: low   # TODO: set per task
 risk: low
 round_cap: 2

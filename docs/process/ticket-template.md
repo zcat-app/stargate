@@ -12,7 +12,8 @@ phase: <Setup | Foundational | Core | Integration | Polish>   # from tasks.md ph
 story: <US1 | US2 | US3 | ->    # from tasks.md [USx] marker, or '-' for non-story work.
 blocked_by: []                  # List of T-NNN ids that must be `done` before this can start.
                                 # Derived from tasks.md phase ordering + explicit "Depends on T..."
-                                # prose. Empty for Phase-1 tasks with no prose deps.
+                                # prose + the `tests_first:` field below (T096). Empty for Phase-1
+                                # tasks with no prose deps.
 parallel: true                  # `true` mirrors the tasks.md [P] marker; means "files_scope is
                                 # disjoint from other in-flight [P] tickets, so a worktree may run
                                 # this in parallel". `false` → serialises.
@@ -42,6 +43,15 @@ privacy_critical: false         # `true` if the task touches ANY of: DNS resolut
                                 # gated — even a green verify.sh is not sufficient to auto-commit.
                                 # When `false`: standard review path; autonomy OK on green verify.
                                 # Source: tasks.md task body — most Phase-3+ tasks are `true`.
+tests_first: []                 # Principle-VII directed metadata (T096 / sol-review M6). List the
+                                # test ticket ids that MUST be `done` before this implementation
+                                # can start. scripts/derive-deps.sh adds them to blocked_by;
+                                # scripts/lint-ticket.py rejects a privacy_critical impl whose
+                                # named test is not a blocker (i.e. runnable before its test).
+                                # Empty for non-impl tickets, or impls with no test-first gate.
+test_for: []                    # Reverse view: on a TEST ticket, the impl id it gates. Consumed
+                                # by derive-deps.sh the same way as tests_first (adds this test to
+                                # the named impl's blocked_by). Use one or the other, not both.
 constitution_refs:              # Which Constitution principles this ticket carries. Used by
                                 # stargate-codereview to scope its check. Cite by number+name.
   # - "I: Dumb router"

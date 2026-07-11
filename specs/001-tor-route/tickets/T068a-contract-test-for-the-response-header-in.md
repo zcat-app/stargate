@@ -7,7 +7,7 @@ last_updated: 2026-07-04
 source: tasks.md#T068a
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
-blocked_by: [T009, T048]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009]   # T096/M6: removed inverted T048 dep — the test must NOT wait on its impl (Constitution VII)
 parallel: true
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true
