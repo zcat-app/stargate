@@ -15,9 +15,9 @@
 |---|---|
 | pending | 84 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 46 |
+| done | 47 |
 | deferred | 0 |
 | **total** | **131** |
 
@@ -82,9 +82,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T101 | Consolidate the privacy log-invariant scanner | in-review | ✓ | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -96,7 +94,7 @@ _(none deferred)_
 
 ## Done
 
-_46 ticket(s) done._
+_47 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -143,4 +141,5 @@ _46 ticket(s) done._
 - T076 — Run every test module in the single green gate
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
 - T096 — Enforce the canonical ticket workflow
+- T101 — Consolidate the privacy log-invariant scanner
 - T102 — Scan for Stargate bearer-token secrets
