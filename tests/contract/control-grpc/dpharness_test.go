@@ -39,8 +39,6 @@ package controlgrpc
 import (
 	"context"
 	"crypto/rand"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -49,7 +47,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -60,6 +57,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
+	"github.com/zcat-app/stargate/tests/internal/loginvariants"
 )
 
 // Argon2id parameters — MUST mirror specs/001-tor-route/data-model.md §1.5
@@ -389,58 +387,21 @@ func (h *dpHarness) readSnapshot(t *testing.T) snapshotFile {
 	return s
 }
 
-// secretEncodings returns every textual rendering of secret the leak scan
-// hunts for. The set covers the realistic accidental-logging paths, not
-// just canonical dumps: hex (both cases), all four base64 variants, and
-// the decimal byte-slice forms — `[12 34 56]` is what fmt's %v/%+v verbs
-// AND slog's TextHandler emit for a []byte, i.e. the single most likely
-// way a future DP change leaks a hash without anyone writing an encoder
-// (redteam finding 20260706-001).
-func secretEncodings(secret []byte) map[string]string {
-	return map[string]string{
-		"hex":           hex.EncodeToString(secret),
-		"HEX":           strings.ToUpper(hex.EncodeToString(secret)),
-		"base64":        base64.StdEncoding.EncodeToString(secret),
-		"base64-raw":    base64.RawStdEncoding.EncodeToString(secret),
-		"base64url":     base64.URLEncoding.EncodeToString(secret),
-		"base64url-raw": base64.RawURLEncoding.EncodeToString(secret),
-		"decimal-slice": fmt.Sprint(secret),
-		// The same digit run without brackets catches a reformatted or
-		// field-joined rendering of the slice.
-		"decimal-run": strings.Trim(fmt.Sprint(secret), "[]"),
-	}
-}
-
-// findSecretLeaks reports every (secret index, encoding) pair present in
-// journal, sorted for determinism. Kept a pure function so
-// leakscan_test.go can negative-control each encoding — proving the scan
-// actually catches it — without booting a DP process.
-func findSecretLeaks(journal string, secrets ...[]byte) []string {
-	var leaks []string
-	for i, secret := range secrets {
-		if len(secret) == 0 {
-			continue
-		}
-		for name, enc := range secretEncodings(secret) {
-			if strings.Contains(journal, enc) {
-				leaks = append(leaks, fmt.Sprintf("secret %d as %s", i, name))
-			}
-		}
-	}
-	sort.Strings(leaks)
-	return leaks
-}
-
 // assertNoSecretLeak scans the captured journal for every rendering of
 // every secret handed to the DP — the contract's final bullet: the data
 // plane MUST NOT log the hash bytes, the salt bytes, or any token label.
 // Failure messages name only the secret's index and encoding, never the
 // bytes, so a failing run cannot itself leak into CI logs.
+//
+// Delegates to the canonical loginvariants scanner (T101 acceptance #1:
+// one scanner implementation). The legacy local copy that lived here
+// omitted the raw-plaintext encoding (review A2 path #1); consolidating
+// on loginvariants.AssertNoSecrets closes that gap — a verifier logging
+// the offered token as a cleartext string no longer passes this
+// assertion. Call sites are unchanged (same (t, harness, secrets...) shape).
 func assertNoSecretLeak(t *testing.T, h *dpHarness, secrets ...[]byte) {
 	t.Helper()
-	for _, leak := range findSecretLeaks(h.journal.String(), secrets...) {
-		t.Errorf("journal leaks %s — contract: never log hash/salt/token bytes", leak)
-	}
+	loginvariants.AssertNoSecrets(t, h.journal.String(), secrets...)
 }
 
 // journalContains reports whether the captured journal has the substring,

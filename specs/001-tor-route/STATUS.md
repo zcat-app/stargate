@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 85 |
+| pending | 84 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 46 |
 | deferred | 0 |
@@ -76,14 +76,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T091 | Amend the browser-hardening enforcement boundary | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T092 | Amend the token verifier and lifecycle contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T101 | Consolidate the privacy log-invariant scanner | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T101 | Consolidate the privacy log-invariant scanner | in-review | ✓ | 2: Foundational (Blocking Prerequisites) |
 
 ---
 

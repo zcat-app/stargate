@@ -37,6 +37,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
+	"github.com/zcat-app/stargate/tests/internal/loginvariants"
 )
 
 // --- fake control plane ---------------------------------------------------
@@ -364,10 +365,11 @@ func assertDetailRejected(t *testing.T, h *dpHarness, fakeCP *fakeEventsServer, 
 	// value — a DP that logs "rejected: detail=\"could not bind...\"" would
 	// pass the marker check above while leaking the exact text the
 	// vocabulary exists to keep out (constitution Principle III). Reuses
-	// findSecretLeaks so a DP that logs the value in hex/base64/decimal is
-	// caught too. Failure messages are encoding-name-only (no byte values)
-	// per the established index-only hygiene.
-	if leaks := findSecretLeaks(h.journal.String(), []byte(detail)); len(leaks) != 0 {
+	// the canonical loginvariants scanner (T101 acceptance #1) so a DP
+	// that logs the value in raw/hex/base64/decimal is caught too. Failure
+	// messages are encoding-name-only (no byte values) per the established
+	// index-only hygiene.
+	if leaks := loginvariants.FindSecretLeaks(h.journal.String(), []byte(detail)); len(leaks) != 0 {
 		t.Errorf("journal echoes forbidden detail verbatim (%s) — closed-vocabulary violation must be journaled without the offending sidecar free-text (constitution Principle III)", strings.Join(leaks, ", "))
 	}
 }

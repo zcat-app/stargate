@@ -68,9 +68,30 @@ type LogReporter interface {
 // span) of that class; Patterns are case-insensitive and
 // multiline-anchored so they apply line-by-line to a captured
 // journal regardless of the line terminator the DP's logger emits.
+//
+// AllowedFields is the per-class field contract (T101 acceptance #2,
+// review A2 path #2): the set of slog key= names a line of this class
+// MAY carry beyond the universal slog fields (level, msg). A line whose
+// msg= matches the class but which carries a key not in AllowedFields
+// AND not in universalFields is rejected — `msg=startup dst=...` is a
+// per-request leak that the bare pattern (pre-T101) let through. Field
+// KEYS are programmer vocabulary (not captured content), so a rejected
+// field's KEY may appear in the failure diagnostic; its VALUE never does.
 type AllowedLineClass struct {
-	Name    string
-	Pattern *regexp.Regexp
+	Name          string
+	Pattern       *regexp.Regexp
+	AllowedFields []string
+}
+
+// universalFields are the slog TextHandler fields every journal line
+// carries regardless of class. slog always emits level= and msg=; the
+// DP's logger is configured WITHOUT time= (AssertNoSubHourTimestamp
+// would flag every line otherwise), so time is deliberately NOT
+// universal — a `time=`-bearing line is a per-request timestamp the
+// scanner surfaces rather than normalises.
+var universalFields = map[string]bool{
+	"level": true,
+	"msg":   true,
 }
 
 // msgFieldAlts returns the regex alternation contents (without the
@@ -140,11 +161,13 @@ var AllowedLineClasses = []AllowedLineClass{
 		Name: "startup",
 		Pattern: regexp.MustCompile(
 			`(?im)^.*\b(?:` + msgFieldAlts("startup") + `).*$`),
+		AllowedFields: []string{"listener"},
 	},
 	{
 		Name: "shutdown",
 		Pattern: regexp.MustCompile(
 			`(?im)^.*\b(?:` + msgFieldAlts("shutdown") + `).*$`),
+		AllowedFields: []string{"reason"},
 	},
 	{
 		Name: "reload_tokens_apply",
@@ -153,6 +176,7 @@ var AllowedLineClasses = []AllowedLineClass{
 				"tokens applied", "reload applied",
 				"reload_applied", "reload_tokens_apply",
 			) + `).*$`),
+		AllowedFields: []string{"generation", "count"},
 	},
 	{
 		Name: "snapshot_write",
@@ -164,6 +188,7 @@ var AllowedLineClasses = []AllowedLineClass{
 				"snapshot written", "snapshot write failed",
 				"snapshot_persisted", "snapshot_persist_failed",
 			) + `).*$`),
+		AllowedFields: []string{"err"},
 	},
 	{
 		Name: "sidecar_event",
@@ -196,6 +221,7 @@ var AllowedLineClasses = []AllowedLineClass{
 					"watchevents event", "watchevents_event",
 				) +
 				`).*$`),
+		AllowedFields: []string{"sidecar", "kind", "detail"},
 	},
 }
 
@@ -224,34 +250,113 @@ var SubHourTimestamp = regexp.MustCompile(
 	`(?:\d{4}-\d{2}-\d{2})?T?\d{2}:\d{2}:\d{2}(?:\.\d+)?`)
 
 // AssertOnlyAllowedLines splits journal into lines and asserts each
-// non-empty line matches at least one AllowedLineClasses pattern.
-// t.Errorf per violator (no fatal) so a multi-line breach surfaces
-// all offenders in one run rather than just the first. Trailing
-// "\r" is trimmed per line so a CRLF-formatted journal (Windows-side
-// container output edge case) does not false-negative on the
-// allowlist while still failing the corpus scan that operates on the
-// raw delta.
+// non-empty line matches exactly one AllowedLineClasses pattern AND
+// carries no field key outside that class's AllowedFields ∪ the
+// universal slog fields (level, msg). t.Errorf per violator (no fatal)
+// so a multi-line breach surfaces all offenders in one run rather than
+// just the first. Trailing "\r" is trimmed per line so a CRLF-formatted
+// journal (Windows-side container output edge case) does not
+// false-negative on the allowlist while still failing the corpus scan
+// that operates on the raw delta.
+//
+// Failure diagnostics are index/length/rule-only (T101 acceptance #3,
+// review A2 path #3): the rejected line is NEVER echoed, because a
+// per-request field smuggled onto an allowlisted msg= often carries the
+// very destination / token / UNAME bytes FR-008 exists to keep out of
+// journals — echoing the line re-leaks it into CI output. The matched
+// class name and the offending field's KEY are vocabulary, not captured
+// content, and appear in the diagnostic so a maintainer can locate the
+// breach without seeing its value.
 func AssertOnlyAllowedLines(t LogReporter, journal string) {
 	t.Helper()
-	for _, line := range strings.Split(journal, "\n") {
+	for i, line := range strings.Split(journal, "\n") {
 		trimmed := strings.TrimRight(line, "\r")
 		if strings.TrimSpace(trimmed) == "" {
 			continue
 		}
-		matched := false
-		for _, c := range AllowedLineClasses {
-			if c.Pattern.MatchString(trimmed) {
-				matched = true
-				break
+		var matched *AllowedLineClass
+		matches := 0
+		for idx := range AllowedLineClasses {
+			if AllowedLineClasses[idx].Pattern.MatchString(trimmed) {
+				matches++
+				matched = &AllowedLineClasses[idx]
 			}
 		}
-		if !matched {
-			t.Errorf("journal line not in allowlist (5 classes per "+
-				"FR-008 / arch §6.4; T025a §Analysis): %q — per-request "+
-				"or otherwise-unclassified journal output is a "+
-				"Constitution Principle I / III breach", trimmed)
+		switch matches {
+		case 0:
+			t.Errorf("journal line %d (len=%d, rule=no_class_matched) "+
+				"not in any allowlist class — per-request or "+
+				"otherwise-unclassified journal output is a "+
+				"Constitution Principle I / III breach; content elided "+
+				"(FR-008 / arch §6.4; T025a §Analysis)",
+				i, len(trimmed))
+		case 1:
+			// Field allowlist (T101 acceptance #2). A field key not in
+			// the class's AllowedFields ∪ universalFields is a per-
+			// request surface smuggled past the msg= gate.
+			for _, key := range fieldKeys(trimmed) {
+				if universalFields[key] {
+					continue
+				}
+				if isAllowedField(matched.AllowedFields, key) {
+					continue
+				}
+				t.Errorf("journal line %d (len=%d, class=%s) has "+
+					"field %q not in the class allowlist "+
+					"(rule=unexpected_field) — an allowed msg= may not "+
+					"carry a per-request field; field VALUE elided "+
+					"(FR-008 / arch §6.4; Constitution Principle I / III)",
+					i, len(trimmed), matched.Name, key)
+			}
+		default:
+			t.Errorf("journal line %d (len=%d, rule=ambiguous_class) "+
+				"matched %d allowlist classes — patterns overlap; "+
+				"tighten the looser one so each line class has exactly "+
+				"one home; content elided",
+				i, len(trimmed), matches)
 		}
 	}
+}
+
+// isAllowedFields reports whether key is in fields. A small linear
+// scan over a short slice (the largest class allowlist has three
+// entries) outperforms a map allocation per line and keeps the class
+// definitions literal []strings rather than maps.
+func isAllowedField(fields []string, key string) bool {
+	for _, f := range fields {
+		if f == key {
+			return true
+		}
+	}
+	return false
+}
+
+// quotedValue matches a double-quoted slog value (with \" escapes) so
+// fieldKeys can mask quoted values before scanning for key= tokens — a
+// `key=` substring inside a quoted value (e.g. an err= string reading
+// `unknown field=xyz`) would otherwise masquerade as a field key.
+var quotedValue = regexp.MustCompile(`"[^"\\]*(?:\\.[^"\\]*)*"`)
+
+// fieldKey matches a slog TextHandler field key: an identifier at a
+// token boundary (line start or whitespace) followed immediately by =.
+// Values are separated from keys by the same boundary, so the key
+// capture is unambiguous once quoted values are masked.
+var fieldKey = regexp.MustCompile(`(?:^|[\s])([A-Za-z_][A-Za-z0-9_]*)=`)
+
+// fieldKeys extracts the slog field keys present in line, respecting
+// quoted values. Used by AssertOnlyAllowedLines's per-class field
+// allowlist (T101 acceptance #2).
+func fieldKeys(line string) []string {
+	masked := quotedValue.ReplaceAllString(line, `""`)
+	out := fieldKey.FindAllStringSubmatch(masked, -1)
+	if len(out) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(out))
+	for _, m := range out {
+		keys = append(keys, m[1])
+	}
+	return keys
 }
 
 // AssertNoSubHourTimestamp asserts delta contains no sub-hour-
@@ -262,33 +367,24 @@ func AssertOnlyAllowedLines(t LogReporter, journal string) {
 // timestamps written before the event under test would otherwise
 // false-positive.
 //
-// The failure message bounds the delta echo to ±80 bytes around the
-// matched timestamp (consistent with AssertNoSecrets's no-bytes-in-
-// failure-message policy): if a concurrent leak puts destination /
-// body / UNAME bytes in the delta, the timestamp sub-test's failure
-// output does not echo the full delta and therefore does not
-// re-leak those bytes into CI logs.
+// Failure diagnostics are offset/length/rule-only (T101 acceptance #3,
+// review A2 path #3): the matched timestamp substring and any
+// surrounding delta bytes are NEVER echoed. The prior ±80-byte context
+// window could capture a concurrent destination / UNAME leak and
+// re-leak it into CI output; the timestamp substring itself is captured
+// content the scanner has no reason to republish. A maintainer locates
+// the breach via the byte offset + matched length.
 func AssertNoSubHourTimestamp(t LogReporter, delta string) {
 	t.Helper()
 	loc := SubHourTimestamp.FindStringIndex(delta)
 	if loc == nil {
 		return
 	}
-	const window = 80
-	start := loc[0] - window
-	if start < 0 {
-		start = 0
-	}
-	end := loc[1] + window
-	if end > len(delta) {
-		end = len(delta)
-	}
-	t.Errorf("delta contains a sub-hour timestamp %q at offset %d "+
-		"— FR-008 / arch §6.4 prohibit per-request timestamps "+
-		"finer than the ≥1-hour aggregate bucket; context "+
-		"(±%d bytes around the match, full delta elided to avoid "+
-		"echoing concurrent leak bytes):\n%s",
-		delta[loc[0]:loc[1]], loc[0], window, delta[start:end])
+	t.Errorf("delta contains a sub-hour timestamp at offset %d "+
+		"(len=%d, rule=sub_hour_timestamp) — FR-008 / arch §6.4 "+
+		"prohibit per-request timestamps finer than the ≥1-hour "+
+		"aggregate bucket; matched content elided",
+		loc[0], loc[1]-loc[0])
 }
 
 // AssertNoSecrets asserts none of secrets (raw byte slices) appear
@@ -302,12 +398,12 @@ func AssertNoSubHourTimestamp(t LogReporter, delta string) {
 // into CI logs.
 //
 // The encoding set extends T020's redteam finding 20260706-001
-// (findSecretLeaks in tests/contract/control-grpc/dpharness_test.go:418)
-// with the raw entry T025 leak_test.go:523 already carried — T025a
+// (the former local copy in tests/contract/control-grpc) with the raw
+// entry T025 leak_test.go:523 already carried — T025a
 // stargate-redteam round-1 flagged that without raw, ASCII corpus
-// items would slip past all eight derived forms. T020's local copy
-// is missing the raw entry (out-of-scope follow-up to refactor the
-// legacy call sites AND add raw to T020's scan).
+// items would slip past all eight derived forms. T101 consolidated
+// the legacy control-gRPC call sites onto this scanner, closing the
+// raw-encoding gap that the local copy carried (review A2 path #1).
 func AssertNoSecrets(t LogReporter, journal string, secrets ...[]byte) {
 	t.Helper()
 	for _, leak := range FindSecretLeaks(journal, secrets...) {
@@ -352,13 +448,14 @@ func FindSecretLeaks(journal string, secrets ...[]byte) []string {
 // the single most likely way a future DP change leaks a hash or
 // destination byte without anyone writing an encoder.
 //
-// Mirrors tests/contract/control-grpc/dpharness_test.go:399 (T020)
+// Mirrors the former tests/contract/control-grpc local copy (T020)
 // plus the raw-bytes entry T025 leak_test.go:523 carries — by design,
 // so the scan surfaces cannot drift. T020 redteam finding
 // 20260706-001 originally established the eight derived encodings;
 // the raw entry was re-added in T025a after stargate-redteam round-1
 // flagged that ASCII corpus items would otherwise slip past all
-// eight derived forms.
+// eight derived forms. T101 removed the local copy and made this the
+// sole scanner; this is now the single encoding-set source of truth.
 func secretEncodings(secret []byte) map[string]string {
 	return map[string]string{
 		// Raw first: the cleartext string the DP would emit if it

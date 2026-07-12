@@ -104,18 +104,21 @@ func TestAllowedLineClasses_AcceptsEachClass(t *testing.T) {
 // the logger emits it bare (msg=startup) or quoted
 // (msg="startup"). This is what makes the allowlist robust to a
 // logger-config change without requiring an edit.
+// The trailing field is the class's own permitted field (T101 acceptance
+// #2 rejects extra fields), keeping this a positive control.
 func TestAllowedLineClasses_AcceptsBareAndQuotedShapes(t *testing.T) {
 	pairs := []struct {
-		bare   string
-		quoted string
-		class  string
+		bare      string
+		quoted    string
+		class     string
+		allowedKV string
 	}{
-		{`msg=startup`, `msg="startup"`, "startup"},
-		{`msg=shutdown`, `msg="shutdown"`, "shutdown"},
+		{`msg=startup`, `msg="startup"`, "startup", "listener=127.0.0.1:8881"},
+		{`msg=shutdown`, `msg="shutdown"`, "shutdown", "reason=signal"},
 	}
 	for _, p := range pairs {
 		for _, shape := range []string{p.bare, p.quoted} {
-			line := "level=info " + shape + " extra=context"
+			line := "level=info " + shape + " " + p.allowedKV
 			matched := false
 			for _, c := range AllowedLineClasses {
 				if c.Name == p.class && c.Pattern.MatchString(line) {
@@ -197,6 +200,91 @@ func TestAllowedLineClasses_CleanJournalNoFindings(t *testing.T) {
 	}
 }
 
+// TestAllowedLineClasses_RejectsForbiddenExtraFields is the T101
+// regression for review A2's second false-assurance path: the allowlist
+// pattern matched any line carrying an allowed msg= value, so a
+// per-request field smuggled onto an allowed line —
+// `msg=startup dst=evil.onion` — passed undetected. Acceptance #2
+// requires field allowlisting: an allowed msg= with a forbidden field
+// MUST be flagged. Each case pairs an allowed msg= with a per-request
+// field the class's AllowedFields set does not name.
+//
+// Each diagnostic MUST NOT echo the field's value (the destination /
+// hash a future DP might log there) — that is the A2 third path,
+// gated separately by TestAssertOnlyAllowedLines_DiagnosticsIndexOnly.
+func TestAllowedLineClasses_RejectsForbiddenExtraFields(t *testing.T) {
+	cases := []struct {
+		name string
+		line string
+	}{
+		{"startup with destination", "level=info msg=startup dst=t025a-dest-042-example.onion"},
+		{"startup with bytes", "level=info msg=startup bytes=1234"},
+		{"shutdown with destination", "level=info msg=shutdown dst=t025a-dest-042-example.onion"},
+		{"tokens applied with destination", `level=info msg="tokens applied" generation=2 count=1 dst=t025a-dest-042-example.onion`},
+		{"sidecar event with bytes", `level=info msg="sidecar event" sidecar=tor kind=EVENT_KIND_HEALTHY bytes=1234`},
+		{"snapshot with destination", `level=warn msg="snapshot write failed" err="read-only" dst=t025a-dest-042-example.onion`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			var fr fakeReporter
+			AssertOnlyAllowedLines(&fr, c.line)
+			if !fr.failed {
+				t.Errorf("allowlist did not flag an allowed msg= carrying a "+
+					"forbidden per-request field — A2 false-assurance path #2; "+
+					"line (len=%d) class-allowed but field-unconstrained",
+					len(c.line))
+			}
+			// The field's VALUE is exactly the per-request surface FR-008
+			// exists to keep out of journals; echoing it in the failure
+			// re-leaks it into CI logs (A2 false-assurance path #3).
+			if msg := fr.errors.String(); strings.Contains(msg, "t025a-dest-042-example.onion") {
+				t.Errorf("failure diagnostic echoed the forbidden field's value "+
+					"— A2 path #3; the destination MUST NOT appear in CI output: %s",
+					msg)
+			}
+		})
+	}
+}
+
+// TestAssertOnlyAllowedLines_DiagnosticsIndexOnly is the T101 regression
+// for review A2's third false-assurance path: the prior diagnostic
+// printed the full rejected line via %q, which can echo a leaked
+// destination / token / UNAME straight into CI output. Acceptance #3:
+// diagnostics carry only source index, byte length, and rule ID — never
+// the rejected line or matched secret. A no-class line carrying a
+// secret-shaped marker exercises the diagnostic path directly (the line
+// is rejected regardless of the field-allowlisting landing).
+func TestAssertOnlyAllowedLines_DiagnosticsIndexOnly(t *testing.T) {
+	const secretValue = "a31f8c57e209b46d71c83e950af642d9882b64cf137ae5509e06bb41dc782f93"
+	line := "level=info msg=CONNECT dst=" + secretValue + " bytes=1234"
+	var fr fakeReporter
+	AssertOnlyAllowedLines(&fr, line)
+	if !fr.failed {
+		t.Fatalf("AssertOnlyAllowedLines did not flag a no-class line — " +
+			"prerequisite for the diagnostic check below failed")
+	}
+	msg := fr.errors.String()
+	if strings.Contains(msg, secretValue) {
+		t.Errorf("diagnostic echoed the rejected line's secret hash — A2 path #3; " +
+			"FR-008-named surface MUST NOT reach CI output")
+	}
+	if strings.Contains(msg, line) {
+		t.Errorf("diagnostic echoed the rejected line verbatim — A2 path #3; " +
+			"failure output MUST be index/length/rule-only")
+	}
+	// Positive contract: the diagnostic MUST carry the source index and
+	// byte length, so a maintainer reading CI output can locate the breach
+	// without seeing its content.
+	if !strings.Contains(msg, "line 0") {
+		t.Errorf("diagnostic lacks the source line index — acceptance #3 "+
+			"requires index/length/rule, got: %s", msg)
+	}
+	if !strings.Contains(msg, "len=") && !strings.Contains(msg, "length=") {
+		t.Errorf("diagnostic lacks the byte length — acceptance #3 requires "+
+			"index/length/rule, got: %s", msg)
+	}
+}
+
 // TestAssertNoSubHourTimestamp_DetectsAndMisses pins the regex's
 // matched and deliberately-unmatched shapes. The Unix-epoch
 // non-match documents the residue (§Analysis); a future regex
@@ -247,6 +335,37 @@ func TestAssertNoSubHourTimestamp_DetectsAndMisses(t *testing.T) {
 				"— wrapper must agree with SubHourTimestamp.MatchString",
 				c.name, fr.failed, c.matched)
 		}
+	}
+}
+
+// TestAssertNoSubHourTimestamp_DiagnosticsIndexOnly is the T101
+// regression for review A2's third false-assurance path applied to the
+// timestamp scanner: the prior diagnostic echoed the matched timestamp
+// and a ±80-byte context window, which can echo a concurrent
+// destination / UNAME leak into CI output. Acceptance #3 requires
+// index/length/rule-only diagnostics — no captured content. The marker
+// below sits inside the old ±80-byte window, so the old diagnostic
+// re-leaked it.
+func TestAssertNoSubHourTimestamp_DiagnosticsIndexOnly(t *testing.T) {
+	const secretMarker = "t025a-dest-042-example.onion"
+	// Place the marker within 80 bytes of the timestamp so the old
+	// ±80-byte context window would have captured it.
+	delta := "ts=12:34:56 dst=" + secretMarker
+	var fr fakeReporter
+	AssertNoSubHourTimestamp(&fr, delta)
+	if !fr.failed {
+		t.Fatalf("AssertNoSubHourTimestamp did not flag a sub-hour timestamp — " +
+			"prerequisite for the diagnostic check below failed")
+	}
+	msg := fr.errors.String()
+	if strings.Contains(msg, secretMarker) {
+		t.Errorf("diagnostic echoed content adjacent to the matched " +
+			"timestamp — A2 path #3; a concurrent leak within the old " +
+			"±80-byte window re-reaches CI output")
+	}
+	if strings.Contains(msg, "12:34:56") {
+		t.Errorf("diagnostic echoed the matched timestamp substring — " +
+			"acceptance #3 requires index/length/rule only, no captured content")
 	}
 }
 

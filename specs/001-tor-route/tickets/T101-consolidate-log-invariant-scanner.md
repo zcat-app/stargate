@@ -1,9 +1,9 @@
 ---
 id: T101
 title: 'Consolidate the privacy log-invariant scanner'
-status: pending
+status: in-review
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-07-12
 source: review/sol-review.md#A2
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
