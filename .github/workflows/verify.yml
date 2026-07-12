@@ -58,6 +58,34 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  # Secret scan over full git history (T102 §Acceptance #3). gitleaks is the
+  # authoritative scanner where installed; the local .githooks/pre-commit
+  # fallback protects fresh machines without gitleaks. This job mirrors the
+  # gate in CI so a secret that slips past a hook-less clone is still caught
+  # before it reaches main or a release tag.
+  #
+  # Full history (fetch-depth: 0) is required — gitleaks detect walks commits.
+  # Runs on push (main), PRs, and workflow_dispatch (the release-cadence
+  # trigger this workflow already documents above). Uses the curated
+  # .gitleaks.toml so detection matches the local fallback (T102 §Analysis).
+  secret-scan:
+    name: gitleaks (history)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks detect
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: .gitleaks.toml
+
   # Lightweight ticket-state sanity check: every ticket file parses, STATUS.md
   # regenerates cleanly. Catches frontmatter-yaml drift before review.
   ticket-state:

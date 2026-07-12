@@ -77,6 +77,54 @@ for p in "${patterns[@]}"; do
   fi
 done
 
+# --- Contextual 32-hex Stargate bearer-token rule (T102) ------------------
+# Why: FR-017 bearer tokens are 128-bit / 32-lowercase-hex values. The rules
+# above catch generic provider tokens but not this codebase's own shape, so a
+# leaked Stargate token could ride a commit into history. "Contextual" = the
+# 32-hex value shares a line with {token, bearer, stargate_test_token}; the
+# keyword is the false-positive filter. Entropy-only detection is intentionally
+# rejected (T102 §Analysis residue). Boundary guard: exactly-32 hex, never
+# 32-of-a-longer-run, so sha256 digests, PGP fingerprints, and git object ids
+# pass. Output reports path + rule only — the matched value is NEVER echoed
+# (T102 §Acceptance #4).
+bearer_keyword='token|bearer|stargate_test_token'
+# Documented example bearer tokens appearing in the 001-tor-route spec docs
+# (data-model.md, quickstart.md, contracts/socks5-auth.md). Allowlisted so
+# legitimate doc commits are not blocked; any OTHER 32-hex value in a
+# token/bearer context is treated as a leaked token. MUST stay in sync with
+# the allowlist in .gitleaks.toml.
+bearer_allow_a='9f2c3a14b8d7e60f5a3c2e1d0b9c8a7f'
+bearer_allow_b='1a2b3c4d5e6f70819a8b7c6d5e4f3a2b'
+cur_file=''
+cur_line=0
+while IFS= read -r diff_line; do
+  case "$diff_line" in
+    ('+++ b/'*) cur_file="${diff_line#+++ b/}"; cur_line=0 ;;
+    (@@*)       cur_line=$(printf '%s' "$diff_line" | sed -E 's/^@@ -[0-9]+(,[0-9]+)? \+([0-9]+).*/\2/') ;;
+    (+++*)      : ;;
+    (+*)
+      cur_line=$((cur_line + 1))
+      content="${diff_line#+}"
+      printf '%s' "$content" | grep -Eiq -- "$bearer_keyword" || continue
+      hit_hex=''
+      while IFS= read -r run; do
+        [ "${#run}" -eq 32 ] || continue
+        case "$run" in
+          "$bearer_allow_a"|"$bearer_allow_b") continue ;;
+        esac
+        hit_hex="$run"; break
+      done < <(printf '%s' "$content" | grep -Eo '[0-9a-f]+')
+      [ -n "$hit_hex" ] || continue
+      if [ "$hit" -eq 0 ]; then
+        red "✗ Potential Stargate bearer token in staged changes (built-in scan):"
+        hit=1
+      fi
+      printf '    %s:%s  rule=stargate-bearer-token  (value redacted)\n' "$cur_file" "$cur_line"
+      ;;
+  esac
+done < <(git diff --cached -U0 --no-color --diff-filter=ACM \
+            -- . ':(exclude)*.example' ':(exclude)*.sum' ':(exclude)*.lock')
+
 if [ "$hit" -ne 0 ]; then
   echo
   bold "  gitleaks is not installed — this was the built-in fallback scan."

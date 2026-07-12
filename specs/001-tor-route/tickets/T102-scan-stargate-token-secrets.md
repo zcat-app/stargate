@@ -1,9 +1,9 @@
 ---
 id: T102
 title: 'Scan for Stargate bearer-token secrets'
-status: pending
+status: in-progress
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-07-12
 source: review/sol-review.md#A3
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'

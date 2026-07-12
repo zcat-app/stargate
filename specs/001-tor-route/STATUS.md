@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 86 |
-| in-progress | 0 |
+| pending | 85 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 45 |
@@ -77,14 +77,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T092 | Amend the token verifier and lifecycle contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T101 | Consolidate the privacy log-invariant scanner | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
-| T102 | Scan for Stargate bearer-token secrets | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T102 | Scan for Stargate bearer-token secrets | in-progress | ✓ | 6: Polish & Cross-Cutting Concerns |
 
 ---
 
