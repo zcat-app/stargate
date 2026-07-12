@@ -15,9 +15,9 @@
 |---|---|
 | pending | 83 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 47 |
+| done | 48 |
 | deferred | 0 |
 | **total** | **131** |
 
@@ -31,6 +31,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034 | Integration test asserting no DNS query for any `*.onion` na | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T034b | Unit test for `extension/background/hardening.js` (Principle | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034c | Unit test for `extension/popup/popup.js` per-tab indicator ( | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034d | Unit test for `extension/lib/firstparty.js` (Principle VII | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T034e | Unit test for the canonical `storage.local` warning text (Pr | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
@@ -39,6 +40,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T043 | Implement `data-plane/internal/listener/connect.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T047 | Implement `data-plane/internal/forward/tor.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T049 | Implement `data-plane/internal/audit/counters.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T051 | Author `extension/manifest.json` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T052 | Author `extension/lib/storage.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T053 | Author `extension/lib/firstparty.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T057 | Author `extension/popup/popup.html` and `extension/popup/pop | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
@@ -81,9 +83,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T091 | Amend the browser-hardening enforcement boundary | in-review | ✓ | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -95,7 +95,7 @@ _(none deferred)_
 
 ## Done
 
-_47 ticket(s) done._
+_48 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -141,6 +141,7 @@ _47 ticket(s) done._
 - T033 — Integration test for the full vertical: bring up `compose/docker-compo
 - T076 — Run every test module in the single green gate
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
+- T091 — Amend the browser-hardening enforcement boundary
 - T096 — Enforce the canonical ticket workflow
 - T101 — Consolidate the privacy log-invariant scanner
 - T102 — Scan for Stargate bearer-token secrets

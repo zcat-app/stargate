@@ -1,7 +1,7 @@
 ---
 id: T091
 title: 'Amend the browser-hardening enforcement boundary'
-status: in-review
+status: done
 created: 2026-07-11
 last_updated: 2026-07-12
 source: review/sol-review.md#B4
@@ -25,7 +25,7 @@ spec_refs:
   - specs/001-tor-route/spec.md §FR-004
 decision_refs: []
 spec_amend_for: .specify/memory/constitution.md §III
-reviews: {}
+reviews: { round: 1, date: 2026-07-12, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
