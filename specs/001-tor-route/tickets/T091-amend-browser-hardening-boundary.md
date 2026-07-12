@@ -1,9 +1,9 @@
 ---
 id: T091
 title: 'Amend the browser-hardening enforcement boundary'
-status: pending
+status: in-review
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-07-12
 source: review/sol-review.md#B4
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
@@ -29,7 +29,15 @@ reviews: {}
 overrides: []
 aborted_attempts: []
 reopens: []
-redteam_findings: []
+redteam_findings:
+  - "2026-07-12 r1 M1 (major, CLOSED): 'confirmed for this session' runtime gate overclaimed a per-session binding the extension cannot deliver for DoH/DoT/HTTP-3 (sol-review B4). Fixed: FR-004 + arch §14.5 Failure UX + Principle III bullet 3 rewritten — hardeningOk is a pure function of peerConnectionEnabled; runtime fail-closed is WebRTC-only; DoH/DoT/HTTP-3 are release-cadence-verified with accepted residue. redteam/findings/closed/20260712-001-confirmed-for-session-gap.md"
+  - "2026-07-12 r1 m1 (minor, FIXED): live-e2e grep verifies test-profile user_pref lines, not effective distribution pref state; false-REDs on lockPref/policies.json. Fixed: pref-source caveat in README/run.sh/arch §14.5; 'test profile that models the target browser's hardened defaults' wording."
+  - "2026-07-12 r1 m2 (minor, FIXED): management permission fingerprint asymmetry undocumented. Fixed: THREAT-MODEL §2.7 itemizes what management exposes + compromised-Stargate fingerprint risk."
+  - "2026-07-12 r1 i1 (info, FIXED): prop 1 requires network.trr.mode==5 exactly. Fixed: run.sh comment notes mode 5 is the explicitly-off sentinel."
+  - "2026-07-12 r2 m3 (minor, FIXED): THREAT-MODEL §5.5 claimed test asserts network.http.http3.enable_kdtp (fabricated/unverified pref). Fixed: dropped the kdtp parenthetical; only network.http.http3.enable is asserted."
+  - "2026-07-12 r3 m4 (minor, FIXED): orphan fragment 'SOCKS5/HTTP-CONNECT listeners.' left in §5.5 by the m3 edit. Fixed: deleted."
+  - "2026-07-12 r3 m5 (minor, FIXED): §5.3/§5.4 still said 'actual Mullvad Browser profile' (m1-class overclaim), inconsistent with the §5.5 tightening. Fixed: both now say 'a test profile that models the target browser's hardened defaults'."
+  - "redteam endorsement (r2, reaffirmed r3): the amended Principle III bullet 3 boundary is constitutionally sufficient for v1 given the named residue; no Blocker, no Major in any round after M1's fix."
 clarity_check: {}
 ---
 
@@ -68,20 +76,29 @@ pre-approval redteam) and #6 (dependent refine) are step-17; T091 is **not
     `browser.privacy.*`. Only `privacy.network.peerConnectionEnabled`
     (WebRTC) and `proxy.ProxyInfo` (`proxyDNS`, SOCKS5 username/password)
     are claimed as extension-API surfaces (Constitution V; Principle VII).
-  - Non-Direct routing stays **fail-closed** until the externally verified
-    profile is confirmed: `proxy.onRequest` MUST NOT return a SOCKS
-    descriptor for non-Direct routes while the profile is unverified
-    (FR-004; Principle III).
-  - The Sync Impact Report at the top of `constitution.md` records the
-    amendment: principle modified = III; proposed version MINOR
-    1.1.0 → 1.2.0 (principle stands; one bullet's enforcement locus is
-    clarified — governance may override to MAJOR during the comment
-    window); privacy-critical-principle redteam + 7-day comment apply
-    regardless (Constitution §Governance).
+  - Non-Direct routing is **fail-closed at runtime against WebRTC** (the
+    one surface the stable API exposes): `proxy.onRequest` MUST NOT return
+    a SOCKS descriptor for non-Direct routes while
+    `peerConnectionEnabled != false`. The DoH/DoT/HTTP-3 surfaces are
+    release-cadence-verified, NOT runtime-enforced; there is no per-session
+    "profile confirmed" signal (stargate-redteam M1, 2026-07-12 — the
+    pre-rework "confirmed for this session" wording is removed). Their
+    post-verification drift is accepted residue (FR-004; arch §14.5;
+    Principle III).
+  - The amendment log at the top of `constitution.md` records the change:
+    principle modified = III; **no version bump** (the project has shipped
+    no binary and has no public remote — semver-on-amendments becomes
+    binding at first public release; the earlier v1.1.0 bump for the JDK
+    pin is marked SUPERSEDED as the same pre-release over-signalling
+    error). The privacy-critical-principle redteam + 7-day comment still
+    apply (Constitution §Governance) — T091 runs `stargate-redteam` as
+    good practice and the maintainer opens a comment window via the
+    governance PR.
   - A real Mullvad Browser integration test exercises the externally
-    verified precondition in the actual target browser (release-cadence
-    live-e2e, per `docs/process/workflow.md` §"Live end-to-end
-    verification"), not a Node mock (Constitution VII, VIII).
+    verified precondition against a test profile that models the target
+    browser's hardened defaults (release-cadence live-e2e, per
+    `docs/process/workflow.md` §"Live end-to-end verification"), not a
+    Node mock (Constitution VII, VIII).
   - The foreign-extension requirement is decided explicitly: **retained**
     as a `management`-permission inventory verified by the real-browser
     test (decision recorded in arch §14.2/§14.5 + THREAT-MODEL §2.7);
@@ -108,10 +125,10 @@ pre-approval redteam) and #6 (dependent refine) are step-17; T091 is **not
   - The real Mullvad Browser integration test cannot run in the hermetic
     PR environment (no Mullvad Browser in CI); it is release-cadence
     live-e2e. A regression in the externally-verified precondition between
-    release runs is NOT caught at PR cadence. Mitigated by: (a) Node unit
-    retained for logic over real-API values (`peerConnectionEnabled`,
-    `proxyDNS`); (b) the live-e2e README + `run.sh` a human runs before a
-    release tag; (c) redteam at milestones. Promote-to-gated impossible
+    release runs is NOT caught at PR cadence.     Mitigated by: (a) a future Node unit
+    (T034b, step-17 refine — not yet in tree) over real-API values only
+    (`peerConnectionEnabled`, `proxyDNS`); (b) the live-e2e README +
+    `run.sh` a human runs before a release tag; (c) redteam at milestones. Promote-to-gated impossible
     without a browser-in-CI; residue accepted and named in THREAT-MODEL
     §5.3/§5.4/§5.5.
   - The amendment's **approval** (merge to main) is a 7-day human

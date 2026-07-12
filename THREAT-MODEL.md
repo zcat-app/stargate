@@ -3,7 +3,7 @@
 **Status**: Draft
 **Last updated**: 2026-05-17
 **Derives from**:
-- `.specify/memory/constitution.md` v1.1.0 (Principles III and V)
+- `.specify/memory/constitution.md` v1.0.0 (with the pre-release T091 amendment to Principle III bullet 3) (Principles III and V)
 - `specs/000-architecture/spec.md` (concrete ports, profiles, sidecars)
 
 ---
@@ -174,6 +174,27 @@ browser profile.
 The extension hardening audit (architecture spec §14.5) detects foreign
 extensions outside the allowlist and warns the user. This is detection,
 not prevention; the user must remove the extension.
+
+**Foreign-extension inventory decision (T091 acceptance #5): retained for
+v1.** Enumerating other extensions requires the `management` permission
+(arch §14.2). The inventory runs against the actual Mullvad Browser
+profile in the release-cadence live-e2e test
+(`tests/live-e2e/mullvad-browser-hardening/`), not only a Node mock. A
+future release may drop the inventory (and the `management` permission)
+if the detection value is outweighed by the permission's attack surface;
+until then it is retained. **Cost of retaining `management`** (the
+fingerprint asymmetry — Stargate-as-observer, not just
+foreign-extension-as-observer): `management.get`/`getAll` exposes every
+other extension's ID, name, version, enabled state, and host permissions
+to the Stargate extension; if Stargate is compromised, that inventory is
+a fingerprint of the user's browser that a clean Stargate would not
+collect. The detection benefit (warn on a disallowed extension that
+could exfiltrate via legitimate browser channels — §2.7 above) is
+judged to outweigh this cost for v1; it is revisited if the inventory's
+detection value proves weak. The broader browser-hardening guarantee
+(DoH/DoT/HTTP-3 off) is an **externally verified precondition** on the
+profile, not an extension-API claim — see §5.3/§5.4/§5.5 (amended by T091;
+Constitution Principle III bullet 3, pre-release amendment).
 
 ### 2.8 OS-level attacker (**out of scope**)
 
@@ -742,21 +763,30 @@ public IP addresses via direct UDP outside the browser's HTTP proxy
 configuration. A page that loads a WebRTC peer connection can read the
 user's real IP even when all HTTP traffic is proxied.
 
-**Mitigation**: the Stargate browser extension sets
-`privacy.network.webRTCIPHandlingPolicy` to `disable_non_proxied_udp`
-or `proxy_only` (the strictest setting, in which only TURN-over-TCP
-through the proxy is allowed) and audits this on every startup
-(architecture spec §14.5). The setting and its values are documented at
+**Mitigation**: the Stargate browser extension reads
+`privacy.network.peerConnectionEnabled` via the stable WebExtensions API
+and refuses to route non-Direct traffic while it is not `false`
+(architecture spec §14.5 Part 2). WebRTC is the one hardening surface
+Firefox's stable WebExtensions API truthfully exposes (sol-review B4);
+the other hardening prefs (DoH/DoT/HTTP-3) are not extension-readable and
+are enforced as an externally verified profile precondition (§5.4, §5.5).
+The setting and its values are documented at
 [https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/privacy/network].
-The hardening audit displays a blocking dialog if WebRTC is enabled.
+The hardening audit displays a blocking dialog if WebRTC is enabled, and
+the externally verified profile (release-cadence live-e2e test
+`tests/live-e2e/mullvad-browser-hardening/`) additionally confirms
+`peerConnectionEnabled = false` in a test profile that models the target
+browser's hardened defaults.
 
 **Residual risk**: if the user grants WebRTC permission to a specific
 origin, or runs Firefox with a profile that overrides this preference
 out from under the extension, the leak returns. Stargate cannot defend
 against deliberate override.
 
-**Reference**: Constitution Principle III, "extension enforces browser
-hardening for non-Direct routes".
+**Reference**: Constitution Principle III bullet 3 (as amended by T091,
+pre-release) — "Non-Direct routes require a hardened target-browser
+configuration that is verified as a release-cadence precondition, not
+enforced via the WebExtension API."
 
 ### 5.4 DNS-over-HTTPS / DNS-over-TLS leaks
 
@@ -765,16 +795,30 @@ to Cloudflare) resolves hostnames over HTTPS *before* the proxy is
 consulted, leaking the lookup to the DoH provider — including for
 destinations that would otherwise be looked up inside Tor.
 
-**Mitigation**: the extension sets `network.trr.mode = 5` (TRR off,
-fall back to system resolver) and `webRequest` rules block known DoH
-endpoints. The hardening audit verifies the setting and blocks startup
-on mismatch (architecture spec §14.5).
+**Mitigation**: the DoH-off guarantee is an **externally verified
+precondition** on the target-browser profile, not an extension-API claim.
+Stable Firefox WebExtensions do not expose `network.trr.mode` (sol-review
+B4), so the extension does NOT claim to read or set it. The profile is
+verified out-of-band — `network.trr.mode = 5` (TRR off) is asserted by
+the release-cadence live-e2e test `tests/live-e2e/mullvad-browser-hardening/`
+against a test profile that models the target browser's hardened defaults
+(architecture spec §14.5 Part 1).
+As defense-in-depth, `webRequest` rules block *known* DoH endpoints; this
+is a secondary net, not the primary guarantee (a custom DoH endpoint not
+in the blocklist is caught by the profile precondition, not by the
+blocklist). The hardening gate blocks non-Direct routing until the profile
+is verified (FR-004).
 
-**Residual risk**: a custom DoH endpoint not in the blocklist could be
-configured by another extension or by the user; the audit detects
-foreign extensions but cannot enumerate every possible DoH endpoint.
+**Residual risk**: a custom DoH endpoint configured by another extension
+or by the user after the live-e2e verification is NOT caught at PR
+cadence — only at the next release-cadence live-e2e run or by a fresh
+`peerConnectionEnabled`-style runtime gate (which does not exist for DoH
+because the API is unavailable). This residue is accepted and documented
+here; it is the cost of Firefox not exposing the pref to extensions.
+Promoting it to a gated property requires a browser-in-CI, which is out
+of scope for v1.
 
-**Reference**: Constitution Principle III.
+**Reference**: Constitution Principle III bullet 3 (as amended by T091).
 
 ### 5.5 QUIC / HTTP/3 fallback
 
@@ -782,15 +826,25 @@ foreign extensions but cannot enumerate every possible DoH endpoint.
 configurations in some browsers. A browser that quietly upgrades to h3
 for a destination would leak the connection outside the proxy.
 
-**Mitigation**: the extension sets `network.http.http3.enable = false`
-and `network.http.http3.enable_kdtp = false` (Firefox / Mullvad Browser
-prefs) and audits this on startup. All routed traffic uses TCP and is
-captured by the SOCKS5/HTTP-CONNECT listeners.
+**Mitigation**: like DoH (§5.4), the HTTP/3-off guarantee is an
+**externally verified precondition** on the target-browser profile, not an
+extension-API claim. Stable Firefox WebExtensions do not expose
+`network.http.http3.enable` (sol-review B4), so the extension does NOT
+claim to read or set it. The profile is verified out-of-band —
+`network.http.http3.enable = false` is asserted by the release-cadence
+live-e2e test `tests/live-e2e/mullvad-browser-hardening/` against a test
+profile that models the target browser's hardened defaults (architecture
+spec §14.5 Part 1). With HTTP/3 off, all routed traffic uses TCP and is
+captured by the SOCKS5/HTTP-CONNECT listeners. (Other HTTP/3-related
+Firefox prefs such as `network.http.http3.enable_qlog` are not asserted by
+the test; if a future release needs them, it adds a grep then.)
 
 **Residual risk**: future browsers may add new transports (e.g., a
-WebTransport-over-QUIC variant); Stargate's hardening audit must be
-updated to cover them. This is a maintenance burden, not a one-time
-mitigation.
+WebTransport-over-QUIC variant) that the externally verified profile does
+not yet cover; Stargate's live-e2e hardening test must be updated to cover
+them at the next release-cadence run. This is a maintenance burden, not a
+one-time mitigation, and — like DoH — a post-verification profile change
+is not caught at PR cadence (no browser-in-CI in v1).
 
 **Reference**: Constitution Principle III.
 

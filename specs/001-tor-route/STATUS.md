@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 84 |
+| pending | 83 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 47 |
 | deferred | 0 |
@@ -73,7 +73,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T089 | Amend the Tor startup configuration contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T090 | Remove control-plane route admission gating | 2: Foundational (Blocking Prerequisites) | ✓ |  |
-| T091 | Amend the browser-hardening enforcement boundary | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T092 | Amend the token verifier and lifecycle contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
@@ -82,7 +81,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T091 | Amend the browser-hardening enforcement boundary | in-review | ✓ | 2: Foundational (Blocking Prerequisites) |
 
 ---
 

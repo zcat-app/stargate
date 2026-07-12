@@ -6,7 +6,7 @@
 
 **Created**: 2026-05-17
 
-**Derives from**: `.specify/memory/constitution.md` v1.1.0
+**Derives from**: `.specify/memory/constitution.md` v1.0.0 (with the pre-release T091 amendment to Principle III bullet 3)
 
 **Supersedes**: nothing (this is the foundational system-shape spec)
 
@@ -819,8 +819,9 @@ the DB beforehand).
 | `proxy`                                 | Set per-request proxy via `proxy.onRequest` listener (core function)|
 | `<all_urls>` (host permission)          | The proxy listener must see all outbound URLs to apply mapping      |
 | `storage`                               | Persist per-domain route preferences and blocklist in `storage.local` |
-| `webRequest`, `webRequestBlocking`      | Block DoH/DoT requests pre-proxy and enforce hardening invariants   |
-| `privacy`                               | Read/write WebRTC, DNS-over-HTTPS, HTTP/3 prefs (hardening)         |
+| `webRequest`, `webRequestBlocking`      | Block known DoH/DoT endpoints pre-proxy (defense-in-depth; the primary DoH/DoT/HTTP-3 guarantee is the externally verified profile per §14.5, not this rule) |
+| `privacy`                               | Read WebRTC state via `privacy.network.peerConnectionEnabled` — the only hardening surface Firefox's stable WebExtensions API exposes (sol-review B4; §14.5) |
+| `management` (optional)                 | Enumerate foreign extensions for the §14.5 allowlist inventory. Retained for v1 per the foreign-extension decision (THREAT-MODEL §2.7); detection, not prevention. If a future release drops the inventory, this permission is removed. |
 | `notifications` (optional)              | Local desktop notifications only (Constitution Notifications scope) |
 
 No `tabs`, no `history`, no `bookmarks`, no `cookies`, no `identity` —
@@ -890,33 +891,108 @@ on Firefox ESR gain a credential-grade storage API; until then the
 residual filesystem-read risk is acknowledged under THREAT-MODEL §3.1
 (local profile assumes local code execution is already game-over).
 
-### 14.5 Install-time configuration audit
+### 14.5 Browser hardening — externally verified precondition
 
-On first run and on browser startup, the extension performs a hardening
-audit (read-only):
+**Enforcement boundary (amended by T091; Constitution Principle III bullet
+3 — pre-release amendment, no version bump).** Stable Firefox WebExtensions APIs do NOT expose the DoH
+(`network.trr.mode`), DoT (`network.dns.over_tls.*`), or HTTP/3
+(`network.http.http3.enable`) preferences. The pre-T091 wording asserted an
+extension guarantee that could not be implemented (sol-review finding B4),
+risking false assurance from a green mock over invented prefs or a
+fail-open implementation. The amended boundary has three parts.
 
-- WebRTC must be fully disabled (`privacy.network.peerConnectionEnabled
-  = false`, reachable via `browser.privacy.network.peerConnectionEnabled`
-  in the WebExtensions API). The older `webRTCIPHandlingPolicy =
-  disable_non_proxied_udp` setting is insufficient — it blocks non-proxied
-  UDP but leaves SDP/ICE candidate gathering reachable over the proxy,
-  which can leak local-network info to the remote peer (Constitution
-  Principle III, bullet 3).
-- DoH must be off (`network.trr.mode = 5`, Firefox).
-- DoT must be off. Firefox-ESR does not natively speak DoT, so the audit
-  asserts that no DoT-enabling preference exists (`network.dns.over_tls.*`
-  family is absent or all-false). This is a defense-in-depth check against
-  a future ESR adding DoT support; in current Firefox-ESR it is trivially
-  satisfied.
-- HTTP/3 / QUIC must be off (`network.http.http3.enable = false`).
-- No foreign extensions other than allowlisted ones (Mullvad Browser
-  default uBlock Origin is allowlisted).
+**Part 1 — Hardened target-browser configuration is an externally verified
+precondition** for non-Direct routing, verified out-of-band against a test
+profile that models the target browser's hardened defaults (Mullvad Browser
+by default), NOT via the WebExtension API. The required profile state:
 
-On any failure, the extension displays a blocking dialog explaining the
-issue and offers a one-click remediation where the API permits it. Audit
-results are written to `storage.local.hardening.lastAuditResult` for the
-admin dashboard to surface (read via a future signed-export flow — out of
-scope for this spec).
+- DoH off (`network.trr.mode = 5`).
+- DoT off (no `network.dns.over_tls.*` family present, or all-false — a
+  defense-in-depth check against a future ESR adding DoT).
+- HTTP/3 / QUIC off (`network.http.http3.enable = false`).
+- WebRTC fully disabled. The Firefox pref verified out-of-band in
+  `prefs.js` is `media.peerconnection.enabled = false` (the older
+  `webRTCIPHandlingPolicy = disable_non_proxied_udp` is insufficient —
+  it blocks non-proxied UDP but leaves SDP/ICE candidate gathering
+  reachable over the proxy, leaking local-network info to the remote
+  peer). The extension's runtime gate (Part 2) reads the same state via
+  the stable WebExtensions API `browser.privacy.network.peerConnectionEnabled`,
+  which wraps this pref — the API path is NOT itself a `prefs.js` key.
+
+Verification is performed by the release-cadence live-e2e test
+`tests/live-e2e/mullvad-browser-hardening/` against a test profile that
+models the target browser's hardened defaults (transport-relevant; not
+hermetic — see `docs/process/workflow.md` §"Live end-to-end
+verification"). The test reads the profile's `prefs.js` `user_pref(...)`
+entries; note that hardened distributions sometimes enforce prefs via
+`lockPref`/`policies.json` (not written to `prefs.js` as `user_pref`), so
+the test profile must be one that writes these prefs as `user_pref` (or
+the test must be extended to read effective pref state via Marionette —
+deferred to Phase 5+). A green Node
+unit over invented prefs is explicitly NOT evidence for these four
+surfaces.
+
+**Part 2 — The extension gates only surfaces Firefox's stable API
+truthfully exposes:**
+
+- WebRTC: `browser.privacy.network.peerConnectionEnabled` (read at startup
+  and on browser restart; the extension refuses to route non-Direct if
+  this is not `false`).
+- SOCKS5h: `proxy.ProxyInfo` with `proxyDNS: true` and the SOCKS5
+  username/password set per FR-002/FR-003.
+
+The extension does NOT claim to read or write the DoH/DoT/HTTP-3 prefs.
+When T034b lands (step-17 refine, after this amendment is accepted), Node
+units will be retained only for logic over API values that truly exist
+(`peerConnectionEnabled`, `proxyDNS`, the SOCKS5 username/password
+computation) — not over invented pref shapes. No Node unit exists in the
+tree at the start-phase commit (verify.sh `extension-tests` gate SKIPs).
+
+**Part 3 — Foreign-extension inventory (decision, T091 acceptance #5):
+retained for v1.** Enumerating other extensions requires the `management`
+permission (§14.2). The inventory is **detection, not prevention** — the
+user must remove a disallowed extension; Stargate cannot stop it running
+in the same profile (THREAT-MODEL §2.7). The real-browser live-e2e test
+exercises the inventory against a profile with a known allowlisted
+extension (Mullvad Browser default uBlock Origin) and a known disallowed
+one. T051's manifest edit to request `management` lands at the step-17
+refine of the dependent tickets (T091 acceptance #6); until then T051
+remains `pending`, `blocked_by: [T091]`.
+
+**Failure UX.** The runtime gate is WebRTC only (the one surface the
+stable WebExtensions API exposes — Part 2). On `peerConnectionEnabled !=
+false` at runtime (browser startup and on restart), the extension:
+
+1. Displays a blocking dialog naming WebRTC as the runtime-blocked surface
+   and the remediation ("WebRTC is enabled — disable
+   `peerConnectionEnabled` in your Mullvad Browser profile"). The dialog
+   must NOT claim a runtime block on DoH/DoT/HTTP-3; it states those
+   surfaces are release-cadence-verified (Part 1) and names their drift as
+   accepted residue (THREAT-MODEL §5.4/§5.5).
+2. Sets `hardeningOk = false` — a **pure function of
+   `peerConnectionEnabled`** — that `router.js` (T054) checks before
+   returning a SOCKS descriptor from `proxy.onRequest` for non-Direct
+   routes (FR-004). Direct routes are unaffected. There is no per-session
+   "profile confirmed" signal: DoH/DoT/HTTP-3 are not runtime-gated.
+3. Writes the last failure to `storage.local.hardening.lastAuditResult`
+   for the admin dashboard to surface (read via a future signed-export
+   flow — out of scope for this spec).
+
+Non-Direct routing is **fail-closed at runtime against WebRTC**. The
+DoH/DoT/HTTP-3 surfaces are release-cadence-verified (Part 1) plus
+defense-in-depth `webRequest` blocklist (§14.2); their post-verification
+drift is accepted residue (THREAT-MODEL §5.4/§5.5) — there is no
+runtime signal that catches a pref flip between live-e2e runs, because
+the stable WebExtensions API does not expose those prefs (sol-review B4).
+
+**What changed from the pre-T091 wording.** The DoH/DoT/HTTP-3 prefs are
+no longer claimed as extension-readable; their guarantee moves to the
+externally verified profile (Part 1, release-cadence). WebRTC remains
+extension-gated (the API is real) and is the sole runtime fail-closed
+surface. The foreign-extension inventory is explicitly retained (with
+`management`), not silently assumed. The pre-T091 "confirmed for this
+session" runtime clause is removed — it asserted a per-session binding the
+mechanism cannot deliver (stargate-redteam M1, 2026-07-12).
 
 ### 14.6 Anti-pattern blocklist
 
@@ -983,7 +1059,7 @@ relies on it can be planned.
     matching Mandrel 25 builder image digest at first release tag. If
     Quarkus 3.33 LTS lags JDK 25 support, fall back to the highest Quarkus
     LTS that does and reopen the constitution amendment that introduced
-    these pins (constitution v1.1.0).
+    these pins (constitution v1.0.0 pre-release JDK-pin note; no version bump).
 
 None of these are deviations from the constitution; they are unresolved
 implementation choices within the space the constitution allows.

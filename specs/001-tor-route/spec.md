@@ -16,7 +16,7 @@ Principles I, II, III apply in full."
 
 **Derives from**:
 
-- `.specify/memory/constitution.md` v1.1.0 — Principles I (Dumb Router),
+- `.specify/memory/constitution.md` v1.0.0 (with the pre-release T091 amendment to Principle III bullet 3) — Principles I (Dumb Router),
   II (Plane Separation), III (Privacy-Preserving by Construction), VII
   (Tests-First), VIII (Adversarial Review).
 - `specs/000-architecture/spec.md` — §2 topology, §4 ports (Tor on 8881),
@@ -292,15 +292,24 @@ tests-first suite (Principle VII) before implementation lands.
   verify that no DNS query for any `.onion` hostname leaves the host's
   network namespace during a routed Tor session** (US1 acceptance
   scenario 3 encodes this).
-- **FR-004**: Before issuing routed requests, the extension MUST verify
-  the hardening preconditions from architecture spec §14.5 (DoH off,
-  DoT off, WebRTC fully disabled, HTTP/3 off). If any precondition
-  fails, the extension MUST display a blocking dialog explaining the
-  issue and MUST NOT route requests through port 8881 until the user
-  remediates. The audit details and the prefs it touches live in
-  architecture spec §14.5; this feature uses that audit but does not
-  redefine it. (Aligns with Constitution Principle III bullet 3 — all
-  four leak channels covered.)
+- **FR-004**: Non-Direct routing is fail-closed against a hardened
+  target-browser profile. (a) The extension ships only in a release whose
+  live-e2e hardening test (`tests/live-e2e/mullvad-browser-hardening/`) was
+  green against a test profile that models the target browser's hardened
+  defaults (DoH off, DoT off, HTTP/3 / QUIC off) — this is a **release-
+  process** precondition, not a per-session runtime check. (b) At runtime,
+  the extension gates WebRTC via the stable
+  `browser.privacy.network.peerConnectionEnabled` API (the only hardening
+  surface Firefox's stable WebExtensions API exposes — sol-review B4). If
+  WebRTC is enabled at runtime, the extension MUST display a blocking
+  dialog (architecture spec §14.5 failure UX) and MUST NOT route non-Direct
+  requests through port 8881 until the user remediates. The extension does
+  NOT claim to read or write the DoH/DoT/HTTP-3 preferences via the
+  WebExtensions API; those three surfaces are release-cadence-verified, not
+  runtime-enforced, and their post-verification drift is accepted residue
+  (THREAT-MODEL §5.4/§5.5). (Aligns with Constitution Principle III bullet 3
+  as amended by T091 — non-Direct routing is fail-closed at runtime against
+  WebRTC; DoH/DoT/HTTP-3 are release-cadence-verified.)
 
 #### Data plane behaviour
 
@@ -671,7 +680,7 @@ is recorded as not-applicable.
 |---------------------------------------------|-------------------------------------------------------------------|
 | I — Dumb Router                             | Met. Data plane parses only SOCKS5/CONNECT framing (FR-007); no TLS termination, no header inspection, no local DNS, no payload logs, no cover traffic. Port 8881 → Tor sidecar binding fixed at startup (FR-005). |
 | II — Plane Separation                       | Met. Control plane is advisor (token loader, sidecar lifecycle); data plane keeps serving on last-known token list if control plane is down (FR-013). Inter-plane uses gRPC over UDS, authenticated, versioned (`stargate.v1`, architecture spec §5.4). |
-| III — Privacy-Preserving by Construction    | Met. SOCKS5h enforced (FR-003, FR-007); per-first-party stream isolation by SOCKS5 username (FR-002, FR-011); no per-request logs, only hour-bucketed counters (FR-008); no outbound channels other than the routed request itself; hardening audit covers DoH/WebRTC/QUIC (FR-004). |
+| III — Privacy-Preserving by Construction    | Met (as amended by T091). Non-Direct routing is fail-closed at runtime against WebRTC (FR-004; arch §14.5). SOCKS5h enforced (FR-003, FR-007); per-first-party stream isolation by SOCKS5 username (FR-002, FR-011); no per-request logs, only hour-bucketed counters (FR-008); no outbound channels other than the routed request itself. The extension gates only WebRTC (stable API) and SOCKS5h at runtime; DoH/DoT/HTTP-3 are release-cadence-verified out-of-band (sol-review B4), not runtime-enforced — their post-verification drift is accepted residue (THREAT-MODEL §5.4/§5.5). |
 | IV — Pinned, Tested, Manually Promoted Updates | Met. Tor sidecar pinned by digest (FR-015); contract tests gate updates (FR-016); no background auto-update logic added in this feature. |
 | V — Honest Threat Model                     | Met. Threat statements for the Tor onion route already live in `THREAT-MODEL.md` §4.2; this feature does not add unmodelled claims. Local-profile residual risks (THREAT-MODEL §3.1) are documented and unchanged. |
 | VI — Open and Auditable                     | Met. All artefacts of this feature live in the repo: spec, contract tests (FR-016), rendered torrc (FR-011 — a test asserts its exact content). |
