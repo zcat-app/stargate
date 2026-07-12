@@ -15,9 +15,9 @@
 |---|---|
 | pending | 81 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 49 |
+| done | 50 |
 | deferred | 0 |
 | **total** | **131** |
 
@@ -35,11 +35,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T034c | Unit test for `extension/popup/popup.js` per-tab indicator ( | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034d | Unit test for `extension/lib/firstparty.js` (Principle VII | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T034e | Unit test for the canonical `storage.local` warning text (Pr | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
+| T038 | In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcS | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
 | T042 | Implement `data-plane/internal/listener/socks5.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T043 | Implement `data-plane/internal/listener/connect.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T047 | Implement `data-plane/internal/forward/tor.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T049 | Implement `data-plane/internal/audit/counters.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T050 | Implement `data-plane/cmd/stargate-proxy/main.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T051 | Author `extension/manifest.json` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T052 | Author `extension/lib/storage.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T053 | Author `extension/lib/firstparty.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
@@ -83,9 +85,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T095 | Complete the inter-plane wire contract | in-review | ✓ | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -97,7 +97,7 @@ _(none deferred)_
 
 ## Done
 
-_49 ticket(s) done._
+_50 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -145,6 +145,7 @@ _49 ticket(s) done._
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
 - T090 — Remove control-plane route admission gating
 - T091 — Amend the browser-hardening enforcement boundary
+- T095 — Complete the inter-plane wire contract
 - T096 — Enforce the canonical ticket workflow
 - T101 — Consolidate the privacy log-invariant scanner
 - T102 — Scan for Stargate bearer-token secrets

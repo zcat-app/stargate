@@ -1,7 +1,7 @@
 ---
 id: T095
 title: 'Complete the inter-plane wire contract'
-status: in-review
+status: done
 created: 2026-07-11
 last_updated: 2026-07-12
 source: review/sol-review.md#M5
@@ -23,7 +23,7 @@ spec_refs:
   - specs/001-tor-route/contracts/control-grpc.md §"Transport invariants"
 decision_refs: []
 remediates: T022
-reviews: {}
+reviews: { round: 2, date: 2026-07-12, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
