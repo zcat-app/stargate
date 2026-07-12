@@ -3,7 +3,7 @@ id: T087
 title: 'Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOINT)'
 status: pending
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-07-12
 source: review/sol-review.md#B2+M3
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
@@ -68,16 +68,24 @@ THREE documents carry the now-known-wrong path:
    without seeding config from the harness and assert Docker reports
    `State.Health.Status == healthy`.
 2. Implement T089's amended contract: the image contains the byte-pinned safe
-   `torrc` before entrypoint, including explicit
-   `DataDirectory /var/lib/tor`; Tor does not wait for CP rendering.
+   `torrc` (the `wantTorrc` golden from `contracts/torrc.md` §"Rendered file")
+   baked in at `/etc/tor/torrc` before the entrypoint runs, including explicit
+   `DataDirectory /var/lib/tor`; Tor does not wait for CP rendering
+   (`sidecars/tor/Dockerfile` COPY + ENTRYPOINT; `compose/docker-compose.local.yml`
+   drops the v1 boot dependency on `stargate-tor-config`).
 3. Assert the loaded configuration contains every torrc contract invariant,
    the control cookie is exactly `/var/lib/tor/control_auth_cookie`, and the
    SOCKS/control ports remain compose-internal.
 4. Update the Docker healthcheck to read the authoritative cookie path and
    perform the authenticated bootstrap probe.
-5. Update `data-model.md`, `contracts/torrc.md`, T029/T030 goldens, and
-   `SECURITY-DECISIONS.md` as required by T089; remove `find`-based test
-   workarounds that could mask a path regression.
+5. T089 already amended `contracts/torrc.md`, `data-model.md` §6,
+   `SECURITY-DECISIONS.md`, and the T029/T030 goldens (lock-step) — do NOT
+   re-amend them here. T087's remaining test/code work: update
+   `tests/contract/torrc/live_sidecar_test.go` (T032) to stop seeding the
+   `stargate-tor-config` volume (the torrc is image-baked now) and to assert
+   `State.Health.Status == healthy`; remove `find`-based test workarounds
+   that could mask a path regression; update `sidecars/tor/Dockerfile` and
+   `compose/docker-compose.local.yml` per acceptance #2.
 6. T032, the new cold-volume test, and `scripts/verify.sh` pass.
 
 ## Out-of-scope

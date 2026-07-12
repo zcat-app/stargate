@@ -398,18 +398,32 @@ tests-first suite (Principle VII) before implementation lands.
 
 #### Sidecar configuration
 
-- **FR-011**: The Tor sidecar MUST be configured (via control-plane-
-  rendered `torrc`, architecture spec §8) with the directive set pinned
-  byte-for-byte in `contracts/torrc.md §"Rendered file"`:
+- **FR-011**: The Tor sidecar MUST be configured with the directive set
+  pinned byte-for-byte in `contracts/torrc.md §"Rendered file"`:
   `SocksPort 0.0.0.0:9050 IsolateClientAddr IsolateSOCKSAuth`,
   `ControlPort 0.0.0.0:9051`, `CookieAuthentication 1`,
-  `CookieAuthFileGroupReadable 1`, `ClientUseIPv6 0`,
-  `AvoidDiskWrites 1`, `UseBridges 0`, `Log notice stdout`,
-  `SafeLogging 1`. Bridge lines MUST be absent from the rendered `torrc`
-  for this feature (bridges are a separate feature spec). **A contract
-  test (`tests/contract/torrc/render_byte_match_test.go`, per T029) MUST
-  verify the rendered `torrc` is byte-for-byte equal to the template in
-  `contracts/torrc.md §"Rendered file"`** for v1 of this feature.
+  `CookieAuthFileGroupReadable 1`, `DataDirectory /var/lib/tor`,
+  `ClientUseIPv6 0`, `AvoidDiskWrites 1`, `UseBridges 0`,
+  `Log notice stdout`, `SafeLogging 1`. For this static Tor-only slice
+  the safe `torrc` is **baked into the Tor image at build time**
+  (`sidecars/tor/Dockerfile`, T087) and loaded by the entrypoint at
+  container start; the control plane does NOT render `torrc` at boot
+  (Constitution Principle II — Compose starts Tor before the CP, so a
+  CP-rendered `torrc` would couple Tor startup to control-plane
+  availability; sol-review B2). `DataDirectory /var/lib/tor` is explicit
+  because the entrypoint does not load Debian's `torrc-defaults`, so
+  without the directive Tor would fall back to `$HOME/.tor` and land the
+  control cookie at the wrong path (T087 / sol-review B2+M3).
+  Control-plane-rendered `torrc` (atomic write into the
+  `stargate-tor-config` volume) is future work for a dynamic-config
+  feature and is deferred by T089 (T037 `TorrcRenderer` is deferred with
+  it). Bridge lines MUST be absent from the image-baked `torrc` for this
+  feature (bridges are a separate feature spec). **A contract test
+  (`tests/contract/torrc/render_byte_match_test.go`, per T029) MUST
+  verify the `torrc` template in `contracts/torrc.md` is byte-for-byte
+  equal to the pinned Go golden** for v1 of this feature; T087's
+  cold-volume regression test verifies the `/etc/tor/torrc` baked into
+  the image equals the same golden without harness-seeded config.
 - **FR-012**: The Tor sidecar's `SocksPort` (9050) and `ControlPort`
   (9051, cookie-authenticated) MUST NOT be published to the host or to
   any compose network mapping. Both are reachable only internally on the
@@ -626,8 +640,8 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
   the local-profile slice is proven. The bind-safety check (FR-010)
   still verifies the loopback-only invariant.
 - **No bridges.** Tor bridge support (Constitution v1 Scope) is
-  delivered as a separate feature spec. The `torrc` rendered by this
-  feature has `UseBridges 0` and no `Bridge` lines (FR-011).
+  delivered as a separate feature spec. The `torrc` baked into the Tor
+  image by this feature has `UseBridges 0` and no `Bridge` lines (FR-011).
 - **Manual bearer-token configuration for v1.** The control-plane reads
   tokens from a yaml file the user populates (FR-017). The admin
   dashboard UI, including the enrollment flow with QR/JSON exchange
@@ -695,7 +709,7 @@ is recorded as not-applicable.
 | III — Privacy-Preserving by Construction    | Met (as amended by T091). Non-Direct routing is fail-closed at runtime against WebRTC (FR-004; arch §14.5). SOCKS5h enforced (FR-003, FR-007); per-first-party stream isolation by SOCKS5 username (FR-002, FR-011); no per-request logs, only hour-bucketed counters (FR-008); no outbound channels other than the routed request itself. The extension gates only WebRTC (stable API) and SOCKS5h at runtime; DoH/DoT/HTTP-3 are release-cadence-verified out-of-band (sol-review B4), not runtime-enforced — their post-verification drift is accepted residue (THREAT-MODEL §5.4/§5.5). |
 | IV — Pinned, Tested, Manually Promoted Updates | Met. Tor sidecar pinned by digest (FR-015); contract tests gate updates (FR-016); no background auto-update logic added in this feature. |
 | V — Honest Threat Model                     | Met. Threat statements for the Tor onion route already live in `THREAT-MODEL.md` §4.2; this feature does not add unmodelled claims. Local-profile residual risks (THREAT-MODEL §3.1) are documented and unchanged. |
-| VI — Open and Auditable                     | Met. All artefacts of this feature live in the repo: spec, contract tests (FR-016), rendered torrc (FR-011 — a test asserts its exact content). |
+| VI — Open and Auditable                     | Met. All artefacts of this feature live in the repo: spec, contract tests (FR-016), image-baked torrc (FR-011 — a test asserts its exact content). |
 | VII — Tests-First                           | Met. Privacy-critical FRs (FR-002 stream isolation; FR-003 DNS leak absence; FR-006 auth; FR-008 logging restraint; FR-009 error template) each carry a "test MUST verify" clause and are gated by Principle VII discipline before implementation. |
 | VIII — Adversarial Review                   | To be exercised at end of implementation. `stargate-redteam` and `stargate-perf` run against the completed feature; findings either resolved or recorded in `SECURITY-DECISIONS.md`. |
 

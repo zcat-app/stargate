@@ -2,30 +2,33 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package torrc hosts the contract tests for the byte-level invariants of
-// the Tor sidecar's rendered `torrc`. The authoritative template lives in
+// the Tor sidecar's image-baked `torrc`. The authoritative template lives in
 // specs/001-tor-route/contracts/torrc.md §"Rendered file"; this package
 // gates drift between that contract document and the pinned golden, and
-// (via the sibling JUnit test in control-plane/core, T037) between the
-// golden and the control plane's TorrcRenderer.render() output.
+// (via T087's cold-volume regression test) between the golden and the
+// `/etc/tor/torrc` baked into the Tor image at build time.
 //
-// Cross-plane split (see ticket T029 §Analysis): research.md §5 rejects a
-// JVM in the Go contract-test path, so a Go test cannot call the Java
-// TorrcRenderer.render() directly (FFM/jextract are Java→native; JNI
-// Invocation embeds libjvm — the rejected case). The byte-for-byte chain
-// is therefore split across two languages:
+// Cross-plane split (T029 §Analysis, amended by T089): research.md §5
+// rejects a JVM in the Go contract-test path, so a Go test cannot call a
+// Java `TorrcRenderer.render()` directly. For v1 the byte-for-byte chain
+// is Go-only — the Java renderer is deferred with T037 to the dynamic-
+// config feature (T089 bakes the torrc into the image so Tor startup
+// never waits for the control plane; Constitution Principle II / sol-
+// review B2):
 //
 //	contracts/torrc.md §"Rendered file"  ==  wantTorrc (this Go const)
-//	                    ==  TorrcRenderer.render(v1)  (T037's JUnit test)
+//	                    ==  /etc/tor/torrc baked into the image  (T087 cold-volume test)
 //
 // This file owns the first link: it pins the v1 template as a Go golden
 // and cross-checks the contract document against it at run time, so any
-// edit to the rendered template that is not accompanied by a golden update
-// fails this test. The Java side (renderer == golden) is T037's scope;
-// T037's frontmatter records "Verified by T029".
+// edit to the image-baked template that is not accompanied by a golden
+// update fails this test. The image-side link (image /etc/tor/torrc ==
+// golden) is T087's scope; T087's cold-volume regression test reads the
+// file out of the image without harness-seeded config.
 //
-// FR-011 (spec.md §"Sidecar configuration") requires this byte-for-byte
-// gate; Constitution Principle VII (tests-first for privacy-critical
-// contract code) requires it land before the renderer (T037).
+// FR-011 (spec.md §"Sidecar configuration", amended by T089) requires this
+// byte-for-byte gate; Constitution Principle VII (tests-first for privacy-
+// critical contract code) requires it land before the image-baking (T087).
 package torrc
 
 import (
@@ -45,13 +48,14 @@ import (
 // blocks elsewhere in the document.
 const renderedFileSection = "## Rendered file"
 
-// wantTorrc is the byte-exact v1 rendered torrc, transcribed verbatim
+// wantTorrc is the byte-exact v1 image-baked torrc, transcribed verbatim
 // from specs/001-tor-route/contracts/torrc.md §"Rendered file" (the fenced
 // block). It is the golden against which (a) the contract document is
 // cross-checked at run time by TestRenderedTorrcByteMatch, and (b) the
-// control plane's TorrcRenderer.render() output is checked by T037's JUnit
-// test. Per contracts/torrc.md invariant #13 the file ends with a single
-// trailing "\n" and uses LF line endings (no CRLF anywhere).
+// `/etc/tor/torrc` baked into the Tor image is checked by T087's cold-
+// volume regression test. Per contracts/torrc.md invariant #13 the file
+// ends with a single trailing "\n" and uses LF line endings (no CRLF
+// anywhere).
 //
 // The em-dashes (U+2014) on the "Stargate v1 — Tor" and
 // "Logging — Notice" lines are UTF-8 (E2 80 94); Go raw-string literals
@@ -62,14 +66,17 @@ const renderedFileSection = "## Rendered file"
 // IsolateSOCKSAuth (inv. 1), ClientUseIPv6 0 (5), AvoidDiskWrites 1 (6),
 // UseBridges 0 + no Bridge lines (7), SafeLogging 1 (8), and no per-user
 // data in any comment (12) — all covered transitively by the byte-match.
+// DataDirectory /var/lib/tor (inv. 11) is pinned explicitly because the
+// image entrypoint does not load Debian's torrc-defaults (T087 / T089).
 const wantTorrc = `# Stargate v1 — Tor sidecar configuration.
-# Rendered by control plane. Do not edit by hand.
+# Baked into the Tor image at build time. Do not edit by hand.
 # Source: specs/001-tor-route/contracts/torrc.md
 
 SocksPort 0.0.0.0:9050 IsolateClientAddr IsolateSOCKSAuth
 ControlPort 0.0.0.0:9051
 CookieAuthentication 1
 CookieAuthFileGroupReadable 1
+DataDirectory /var/lib/tor
 ClientUseIPv6 0
 AvoidDiskWrites 1
 UseBridges 0
@@ -81,7 +88,7 @@ SafeLogging 1
 `
 
 // TestRenderedTorrcByteMatch is the FR-011 byte-for-byte gate on the v1
-// rendered torrc. It extracts the rendered-file code fence from the
+// image-baked torrc. It extracts the rendered-file code fence from the
 // contract document and asserts it equals wantTorrc exactly, so any drift
 // between the contract template and the pinned golden fails loudly. It
 // also asserts the structural invariants (#13: single trailing LF, no
@@ -91,13 +98,15 @@ SafeLogging 1
 // Per-invariant rows 1–12 are broken out individually in T030
 // (invariants_test.go); this test is the whole-file gate. The no-bridges
 // substring sweep is T031. The live-sidecar GETCONF assertion is T032.
+// The image-side link (image /etc/tor/torrc == golden, without harness-
+// seeded config) is T087's cold-volume regression test.
 //
-// This test does NOT self-skip on TorrcRenderer.java: under the cross-
-// plane split it does not call the Java renderer, so it is useful
-// immediately (it pins the contract). It is wired into CI by T076;
-// verify.sh does not run the tests/contract Go module today (see T029
-// §Analysis residue), so until T076 lands it is invoked manually via
-// `cd tests/contract && go test ./torrc/`.
+// This test does NOT self-skip on a missing Java renderer: under T089's
+// amendment the v1 chain is Go-only (the Java TorrcRenderer is deferred
+// with T037), so this test pins the contract immediately. It is wired
+// into CI by T076; verify.sh does not run the tests/contract Go module
+// today (see T029 §Analysis residue), so until T076 lands it is invoked
+// manually via `cd tests/contract && go test ./torrc/`.
 func TestRenderedTorrcByteMatch(t *testing.T) {
 	contractFile := filepath.Join(findRepoRoot(t),
 		"specs", "001-tor-route", "contracts", "torrc.md")

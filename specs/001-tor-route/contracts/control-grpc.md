@@ -143,8 +143,10 @@ enum EventKind {
   `config_render` is reserved for `EVENT_KIND_CONFIG_RELOADED`, which
   the **bridges feature** will emit when `UseBridges` / `Bridge`
   lines are toggled and `TorrcRenderer` re-renders live; this feature
-  renders `torrc` once at startup (T037) and emits no
-  `CONFIG_RELOADED` event. Keeping `config_render` in the closed set
+  bakes the safe `torrc` into the Tor image at build time (T089 / T087,
+  FR-011) and emits no `CONFIG_RELOADED` event — the CP does not render
+  `torrc` at boot in this slice (Constitution Principle II / sol-review
+  B2). Keeping `config_render` in the closed set
   now (rather than adding it later) prevents a future minor-version
   vocabulary bump that would force the data-plane contract test to
   treat a previously-unknown `detail` value as a contract violation

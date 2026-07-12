@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // invariants_test.go is the per-row companion to T029's whole-file byte-match
-// gate (render_byte_match_test.go). FR-011 (spec.md §"Sidecar configuration")
-// pins the Tor sidecar's rendered torrc byte-for-byte against contracts/torrc.md
-// §"Rendered file"; that contract lists 13 invariants in its Invariants table.
-// T029 catches any drift as an opaque "first diverging byte at offset N"; this
-// test breaks the 13 rows out as named subtests so a missing or mutated
-// directive reports by row. Per contracts/torrc.md §"invariants_test.go":
-// "This test gives a clearer diff message than the byte-match test when a
-// directive is missing or changed."
+// gate (render_byte_match_test.go). FR-011 (spec.md §"Sidecar configuration",
+// amended by T089) pins the Tor sidecar's image-baked torrc byte-for-byte
+// against contracts/torrc.md §"Rendered file"; that contract lists 13
+// invariants in its Invariants table. T029 catches any drift as an opaque
+// "first diverging byte at offset N"; this test breaks the 13 rows out as
+// named subtests so a missing or mutated directive reports by row. Per
+// contracts/torrc.md §"invariants_test.go": "This test gives a clearer diff
+// message than the byte-match test when a directive is missing or changed."
 //
 // Constitution Principle VII (tests-first for privacy-critical paths) lands
 // here as: every privacy-load-bearing directive flagged in contracts/torrc.md
@@ -232,13 +232,26 @@ func TestTorrcInvariants(t *testing.T) {
 		}
 	})
 
-	// Row 11 — NO DataDirectory override (default /var/lib/tor from the
-	// Debian package, mounted from stargate-tor-state for guard persistence).
-	t.Run("no_DataDirectory", func(t *testing.T) {
-		if _, present := directives["DataDirectory"]; present {
-			t.Errorf("DataDirectory directive line is present in wantTorrc — " +
-				"contracts/torrc.md invariant #11 forbids it (an override " +
-				"would risk pointing guard state somewhere ephemeral)")
+	// Row 11 — DataDirectory /var/lib/tor is explicit. The image entrypoint
+	// runs `tor -f /etc/tor/torrc` WITHOUT --defaults-torrc, so Debian's
+	// torrc-defaults (which would set DataDirectory /var/lib/tor) is never
+	// loaded (T087 / T089 / sol-review B2+M3). Without an explicit directive
+	// Tor falls back to $HOME/.tor, landing the control cookie at the wrong
+	// path and breaking the healthcheck + T062's control-port helper.
+	t.Run("DataDirectory_var_lib_tor", func(t *testing.T) {
+		args, ok := directives["DataDirectory"]
+		if !ok {
+			t.Fatal("no DataDirectory directive line in wantTorrc — " +
+				"contracts/torrc.md invariant #11 (amended by T089) " +
+				"requires DataDirectory /var/lib/tor because the image " +
+				"entrypoint does not load Debian's torrc-defaults")
+		}
+		if !containsToken(strings.Join(args, " "), "/var/lib/tor") {
+			t.Errorf("DataDirectory line %q is not /var/lib/tor — "+
+				"contracts/torrc.md invariant #11 (the cookie file must "+
+				"land at /var/lib/tor/control_auth_cookie for the "+
+				"healthcheck and T062)",
+				"DataDirectory "+strings.Join(args, " "))
 		}
 	})
 

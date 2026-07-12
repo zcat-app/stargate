@@ -41,6 +41,88 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-07-12 — Tor `torrc` image-baking contract (T089 static-startup amendment)
+
+**Context.** Review `sol-review.md` B2 found that Compose starts the
+`tor` service before `stargate-control`, while the Tor entrypoint reads
+its config from the shared `stargate-tor-config` volume
+(`sidecars/tor/Dockerfile:120-124`). A control-plane-rendered `torrc`
+written later does not make a running Tor reload it, so Tor could start
+with the Debian default config (no `IsolateSOCKSAuth`, no `SafeLogging 1`)
+or fail because the expected file is absent. The last case is a privacy
+failure, not just an availability issue. T089 amends the contract so the
+static Tor-only slice bakes the exact safe `torrc` into the image at
+build time and does not claim the control plane renders it at boot
+(Constitution Principle II — Tor startup must not depend on CP
+availability or Compose timing).
+
+**Decision (T089 §Acceptance #1–#2, amending FR-011 / `contracts/torrc.md`
+/ `data-model.md` §6 / plan Constitution Check / THREAT-MODEL §4.2).**
+
+- The byte-pinned safe `torrc` from `contracts/torrc.md` §"Rendered
+  file" is **baked into the Tor image at build time** (`COPY` into
+  `/etc/tor/torrc`, T087) and loaded by the entrypoint at container
+  start. The control plane does NOT render `torrc` at boot in this slice.
+- `DataDirectory /var/lib/tor` is now **explicit** in the byte template
+  (contracts/torrc.md invariant #11, flipped from "NO override"). The
+  entrypoint runs `tor -f /etc/tor/torrc` WITHOUT
+  `--defaults-torrc /etc/tor/torrc-defaults`, so Debian's defaults file
+  (which would set `DataDirectory /var/lib/tor`) is never loaded
+  (sol-review B2+M3 / T087). Without the explicit directive Tor falls
+  back to its compile-time default `$HOME/.tor` = `/var/lib/tor/.tor`,
+  landing the control cookie at `/var/lib/tor/.tor/control_auth_cookie`
+  — not the `/var/lib/tor/control_auth_cookie` the healthcheck and
+  T062's control-port helper assume. Pinning it makes the cookie path
+  deterministic.
+- Control-plane-rendered `torrc` (atomic write into `stargate-tor-config`
+  by `TorrcRenderer`, T037) is **deferred** to a dynamic-config feature
+  (bridges toggle, live reload). T037 is deferred with it
+  (`deferred_reason: spec-amend`, `deferred_on: T089`). The
+  `stargate-tor-config` volume's CP-RW / Tor-RO role is not used for v1
+  boot (data-model.md §6 amended).
+
+**Why accepted for the local profile.** Baking the torrc into the image
+is the B2 recommendation and is strictly safer than a CP-rendered torrc
+under Compose's `tor`-before-`stargate-control` ordering: it removes the
+boot-coupling Principle II forbids and guarantees the privacy directives
+(`IsolateSOCKSAuth`, `SafeLogging 1`, `UseBridges 0`, no `Bridge` lines)
+are present at Tor's first boot. The cost is that a torrc change now
+requires an image rebuild (T087's cold-volume regression test gates the
+image `/etc/tor/torrc` == golden), which is the right cadence for a
+static slice and is no barrier to the future dynamic-config feature
+re-introducing CP rendering behind a Tor-depends-on-CP-health ordering.
+
+**Residue / what changes for dynamic config.** A future feature that
+re-introduces control-plane-rendered `torrc` MUST (a) re-open the
+ownership decision recorded here, (b) remove the Compose cycle per B2's
+recommendation (start CP without Tor, make CP healthy only after an
+atomic render, make Tor depend on that health condition) rather than
+relying on Compose timing, and (c) supersede this entry with a dated
+superseding entry + `Superseded by:` back-link. The `config_render`
+detail value in `contracts/control-grpc.md`'s `SidecarEvent` vocabulary
+is already reserved for the `CONFIG_RELOADED` event that feature will
+emit.
+
+**Enforcement cross-reference.**
+
+- Contract document: `specs/001-tor-route/contracts/torrc.md` §"Rendered
+  file" + invariant #11 (amended by T089).
+- Byte-for-byte gate: `tests/contract/torrc/render_byte_match_test.go`
+  (T029) — `wantTorrc` golden updated in lock-step with the contract
+  template; `tests/contract/torrc/invariants_test.go` (T030) Row 11
+  flipped to assert `DataDirectory /var/lib/tor` present.
+- Image-side gate (T087, not yet landed): cold-volume regression test
+  reads `/etc/tor/torrc` out of the image without harness-seeded config
+  and asserts it equals the golden; also asserts Docker
+  `State.Health.Status == healthy` and the authoritative cookie path.
+- Threat model: `THREAT-MODEL.md` §4.2 "Stargate-specific notes" (image-
+  baked torrc note added by T089).
+- Downstream consumers: T087 (implement the amended image, healthcheck,
+  cold-volume test), T037 (deferred), T041 (startup sequence no longer
+  renders torrc).
+
+---
+
 ## 2026-07-12 — Inter-plane X.509 certificate validity policy (T095 wire-auth contract)
 
 **Context.** T095 completed the inter-plane wire contract

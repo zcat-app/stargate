@@ -519,6 +519,21 @@ six relays (three on each side) selected by Tor's path-selection algorithm
   circuits per onion service.
 - DNS resolution for `.onion` names is **always** Tor-internal — the
   proxy never resolves them locally (Principle III; SOCKS5h enforced).
+- **The safe `torrc` is baked into the Tor image at build time** (FR-011,
+  amended by T089 / sol-review B2). Compose starts the `tor` service
+  before `stargate-control`, so a control-plane-rendered `torrc` would
+  be a boot coupling Principle II forbids: Tor could start with the
+  Debian default config (no `IsolateSOCKSAuth`, no `SafeLogging 1`,
+  `UseBridges` unset) and route traffic before the CP renders the safe
+  config — a privacy failure, not just an availability issue. Baking
+  the byte-pinned `torrc` into the image (with explicit
+  `DataDirectory /var/lib/tor` because the entrypoint does not load
+  Debian's `torrc-defaults`) guarantees the privacy directives are
+  present at Tor's first boot regardless of CP availability or Compose
+  timing. A cold-volume regression test (T087) asserts Docker
+  `State.Health.Status == healthy` and the loaded config without
+  harness-seeded config. Dynamic (CP-rendered) `torrc` is future work
+  for a dynamic-config feature.
 - **Tor entry-guard state is persisted across `export`/`import` and
   wiped on `wipe`.** Tor's guard design relies on a small, slowly-
   rotating guard set so the statistical probability of touching a

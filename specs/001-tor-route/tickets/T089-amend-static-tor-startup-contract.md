@@ -1,9 +1,9 @@
 ---
 id: T089
 title: 'Amend the Tor startup configuration contract'
-status: pending
+status: in-progress
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-07-12
 source: review/sol-review.md#B2
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
