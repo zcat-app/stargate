@@ -81,10 +81,9 @@ func TestSOCKS5SuccessPathLogInvariants(t *testing.T) {
 	// Boot-minimum gate (T042 listener + T045 gRPC server + T050
 	// main wiring) is inside dpharness.Start. Additional per-test
 	// gates: T044 auth/token.go, T047 forward/tor.go, T045 client
-	// (needed to receive the HEALTHY event that engages the forward
-	// path — without HEALTHY the route stays DISABLED, the request-
-	// phase forward returns ROUTE_DOWN byte-exact, and the success-
-	// path surface under test is never reached).
+	// (needed to consume the WatchEvents stream — advisory; admission
+	// is not CP-gated per T090/data-model.md §2, so the success path
+	// is reached with or without a HEALTHY event).
 	repoRoot := dpharness.FindRepoRoot(t)
 	authGate := filepath.Join(repoRoot, "data-plane", "internal", "auth", "token.go")
 	dpharness.RequireFile(t, authGate,
@@ -95,7 +94,7 @@ func TestSOCKS5SuccessPathLogInvariants(t *testing.T) {
 	clientGate := filepath.Join(repoRoot, "data-plane", "internal", "controlclient", "client.go")
 	dpharness.RequireFile(t, clientGate,
 		"controlclient/client.go not implemented yet (T045 client side); "+
-			"needed to receive the HEALTHY event that engages the forward path")
+			"needed to consume the WatchEvents stream (advisory; admission is not CP-gated per T090)")
 
 	// Fake upstream: fake_socks5_tor in AcceptAndRelay mode. The
 	// data plane forwards each CONNECT to this loopback address
@@ -115,7 +114,8 @@ func TestSOCKS5SuccessPathLogInvariants(t *testing.T) {
 	// Boot DP with the upstream override + fake CP hosted on
 	// control.sock BEFORE the DP boots (so the first WatchEvents
 	// dial lands against our programmable stream). fakecp pushes
-	// a single HEALTHY event for "tor" once the DP's dial lands.
+	// a single HEALTHY event for "tor" once the DP's dial lands
+	// (advisory; admission is not CP-gated per T090).
 	var cp *fakecp.Server
 	h := dpharness.Start(t,
 		dpharness.WithUpstream(upstreamAddr),
@@ -138,10 +138,9 @@ func TestSOCKS5SuccessPathLogInvariants(t *testing.T) {
 	}
 
 	// Wait for the DP's WatchEvents dial to land on the fake CP,
-	// then push HEALTHY so routeEnableMask[TOR] transitions to
-	// ENABLED (data-model.md §2). Without HEALTHY the forward path
-	// short-circuits to ROUTE_DOWN and the journal surface under
-	// test is never exercised.
+	// then push HEALTHY for advisory status visibility. Admission is
+	// NOT gated on it (data-model.md §2; Principle II; sol-review B3;
+	// remediated by T090) — the forward path is reached regardless.
 	waitForWatchEventsDial(t, cp)
 	if err := cp.Send(fakecp.Healthy("tor")); err != nil {
 		t.Fatalf("pushing HEALTHY event: %v", err)

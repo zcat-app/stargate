@@ -105,8 +105,9 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 	repoRoot := dpharness.FindRepoRoot(t)
 	// Per-test content gates beyond the boot minimum inside
 	// dpharness.Start (T042/T045/T050): the auth surface, the forward
-	// path, the WatchEvents client (HEALTHY engages the route), and —
-	// new vs. T025a — the HTTP CONNECT listener path for leg 2.
+	// path, the WatchEvents client (advisory; admission is not CP-gated
+	// per T090), and — new vs. T025a — the HTTP CONNECT listener path
+	// for leg 2.
 	dpharness.RequireFile(t,
 		filepath.Join(repoRoot, "data-plane", "internal", "auth", "token.go"),
 		"auth/token.go not implemented yet (T044); this skip self-lifts when T044 lands")
@@ -116,7 +117,7 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 	dpharness.RequireFile(t,
 		filepath.Join(repoRoot, "data-plane", "internal", "controlclient", "client.go"),
 		"controlclient/client.go not implemented yet (T045 client side); "+
-			"needed to receive the HEALTHY event that engages the forward path")
+			"needed to consume the WatchEvents stream (advisory; admission is not CP-gated per T090)")
 	dpharness.RequireFile(t,
 		filepath.Join(repoRoot, "data-plane", "internal", "listener", "connect.go"),
 		"listener/connect.go not implemented yet (T043); needed for the HTTP CONNECT leg")
@@ -149,8 +150,9 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 			"generation", reloadResp.GetStatus())
 	}
 
-	// HEALTHY engages routeEnableMask[TOR]; without it the request
-	// phase short-circuits to ROUTE_DOWN and no tunnel ever opens.
+	// A HEALTHY event is pushed for advisory status visibility, but
+	// admission is NOT gated on it (data-model.md §2; Principle II;
+	// sol-review B3; remediated by T090) — the tunnel opens regardless.
 	waitForWatchEventsDial(t, cp)
 	if err := cp.Send(fakecp.Healthy("tor")); err != nil {
 		t.Fatalf("pushing HEALTHY event: %v", err)

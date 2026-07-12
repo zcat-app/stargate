@@ -316,14 +316,16 @@ plane reports a higher major version than it understands.
 The data plane caches the last successful `StatusResponse → token list`
 on disk at `/var/lib/stargate/dp-snapshot.json` so cold-start without
 the control plane still serves the right ports. The snapshot is
-**token-list-only** — `routeEnableMask` is deliberately NOT persisted;
-cold-start unconditionally begins DISABLED and waits for the first
-`HEALTHY` `SidecarEvent` to transition a route to ENABLED. See
-`specs/001-tor-route/data-model.md` §1.4 (snapshot schema) and §2 (the
-state-machine rationale for the no-optimistic-enable-on-cold-start
-path) — both are the canonical sources; this §5.5 paragraph intentionally
-does not duplicate them so future readers do not re-introduce the
-mask into the snapshot.
+**token-list-only** — no route-admission state is persisted; cold start
+unconditionally attempts the fixed upstream on every admitted request and
+relies on the upstream dial/handshake result alone to decide success or
+the privacy-safe route error (Constitution Principle II; sol-review B3).
+Sidecar `SidecarEvent`s are advisory status/audit hints and MUST NOT be a
+mandatory precondition for listening, authenticating, dialing, or
+forwarding. See `specs/001-tor-route/data-model.md` §1.4 (snapshot
+schema) and §2 (the no-admission-gate rationale) — both are the canonical
+sources; this §5.5 paragraph intentionally does not duplicate them so
+future readers do not re-introduce a control-plane-driven admission gate.
 
 ---
 
@@ -571,7 +573,7 @@ an error-channel side channel.
 | Code              | Meaning                                                    | HTTP status | SOCKS5 reply |
 |-------------------|------------------------------------------------------------|-------------|--------------|
 | `ROUTE_DISABLED`  | The port's route is administratively disabled              | 503         | REP `0x03` (Network unreachable; reuses `ROUTE_DOWN`'s reply path) |
-| `ROUTE_DOWN`      | Sidecar is unreachable or unhealthy                        | 502         | REP `0x03` (Network unreachable) |
+| `ROUTE_DOWN`      | Upstream sidecar unreachable (no TCP connection)            | 502         | REP `0x03` (Network unreachable) |
 | `ROUTE_TIMEOUT`   | Upstream did not respond within the configured timeout     | 504         | REP `0x06` (TTL expired) |
 | `ROUTE_REFUSED`   | Sidecar accepted the SOCKS handshake but refused the target| 502         | REP `0x04` (Host unreachable) |
 | `AUTH_REQUIRED`   | Bearer token missing or invalid (introduced by `specs/001-tor-route/` FR-006) | 407 (CONNECT framing) | sub-negotiation `0x01 0xFF` (RFC 1929 §2; not RFC 1928 §6) |

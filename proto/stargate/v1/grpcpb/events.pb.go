@@ -4,10 +4,13 @@
 // Event stream hosted by the control plane on /run/stargate/control.sock.
 //
 // The data plane dials this socket and consumes a long-lived
-// server-streamed sequence of SidecarEvent values that drive its
-// routeEnableMask (e.g., enable the TOR route when the tor sidecar
-// reports HEALTHY). The per-RPC contract this proto must mirror is
-// specs/001-tor-route/contracts/control-grpc.md §"WatchEvents".
+// server-streamed sequence of SidecarEvent values that are advisory
+// status/audit hints (Constitution Principle II; sol-review B3; T090).
+// A SidecarEvent MUST NOT gate admission, listening, authenticating,
+// dialing, or forwarding — the upstream dial result is the sole ground
+// truth. See specs/001-tor-route/data-model.md §2 for the rationale and
+// specs/001-tor-route/contracts/control-grpc.md §"WatchEvents" for the
+// per-RPC contract this proto mirrors.
 //
 // SidecarEvent.detail is intentionally `string` rather than `enum`:
 // the closed-vocabulary check is enforced at the test/consumer layer

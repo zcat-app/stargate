@@ -16,10 +16,11 @@
 // established repo pattern (mirrors tests/contract/tor/findRepoRoot).
 //
 // Scope: T024 (this package's author) needs only the programmable-
-// stream + Send capability (to push a single HEALTHY event for route
-// enable). The full surface (closeFromServer, dialCount, latestStream)
-// is included because the package is designed for reuse by T025a–d,
-// T026, T028, T070b — all of which need some subset.
+// stream + Send capability (to push advisory HEALTHY/STARTED events;
+// admission is not CP-gated per T090/data-model.md §2). The full
+// surface (closeFromServer, dialCount, latestStream) is included
+// because the package is designed for reuse by T025a–d, T026, T028,
+// T070b — all of which need some subset.
 package fakecp
 
 import (
@@ -111,8 +112,9 @@ func (s *Server) LatestStream() *ControlledStream {
 // Send pushes an event to the most-recent stream's handler, which
 // forwards it to the DP via stream.Send. Returns an error if no
 // stream exists or it has already ended. The common path is
-// Healthy("tor") which transitions routeEnableMask[TOR] to ENABLED
-// (data-model.md §2).
+// Healthy("tor"), an advisory status event (data-model.md §2;
+// admission is not CP-gated per T090/Principle II — events do NOT
+// gate admission, they update advisory status only).
 func (s *Server) Send(ev *grpcpb.SidecarEvent) error {
 	cs := s.LatestStream()
 	if cs == nil {
@@ -173,11 +175,12 @@ func Start(t *testing.T, ipcDir string) *Server {
 }
 
 // Healthy is a convenience constructor for the canonical HEALTHY
-// SidecarEvent for the named sidecar. This is the event that
-// transitions routeEnableMask[<sidecar>] from DISABLED to ENABLED
-// (data-model.md §2). Most tests that need a routable forward path
-// push exactly one Healthy("tor") event after the DP's WatchEvents
-// dial lands.
+// SidecarEvent for the named sidecar. This is an advisory status
+// event (data-model.md §2; admission is not CP-gated per
+// T090/Principle II — events do NOT gate admission). Some tests push
+// exactly one Healthy("tor") event after the DP's WatchEvents dial
+// lands for advisory status visibility; the forward path is reached
+// with or without it.
 func Healthy(sidecar string) *grpcpb.SidecarEvent {
 	return &grpcpb.SidecarEvent{
 		Ts:      timestamppb.Now(),
@@ -189,9 +192,9 @@ func Healthy(sidecar string) *grpcpb.SidecarEvent {
 
 // Started is a convenience constructor for the STARTED SidecarEvent
 // (paired with detail "container_start"). Tests that need to walk a
-// sidecar through the full STARTED → HEALTHY transition use this
-// before Healthy; tests that only need routing enabled skip straight
-// to Healthy.
+// sidecar through the full STARTED → HEALTHY advisory sequence use
+// this before Healthy; tests that only need advisory status skip
+// straight to Healthy.
 func Started(sidecar string) *grpcpb.SidecarEvent {
 	return &grpcpb.SidecarEvent{
 		Ts:      timestamppb.Now(),

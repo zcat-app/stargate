@@ -34,8 +34,9 @@ import (
 // Timeouts: bootstrap can take several minutes on a cold guard selection;
 // the per-request timeout absorbs Tor circuit-build + onion rendezvous
 // latency (two orders of magnitude slower than clearnet); the route-wait
-// window absorbs routeEnableMask[TOR] propagation — the DP waits for the
-// first HEALTHY SidecarEvent before enabling the route (data-model.md §2).
+// window absorbs Tor circuit-build + any transient dial retry — admission
+// is not CP-gated (data-model.md §2; Principle II; sol-review B3;
+// remediated by T090), so the DP forwards as soon as the listener is up.
 const (
 	t033Project   = "stargate-t033-test"
 	t033Onion     = "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion"
@@ -162,9 +163,10 @@ func TestOnionLoad(t *testing.T) {
 	}
 
 	// --- Load the onion via SOCKS5h through port 8881 -------------------
-	// Retry within a bounded window to absorb routeEnableMask[TOR]
-	// propagation — the DP waits for the first HEALTHY SidecarEvent
-	// before enabling the route (data-model.md §2).
+	// Retry within a bounded window to absorb Tor circuit-build + onion
+	// rendezvous latency. Admission is not CP-gated (data-model.md §2;
+	// T090), so the DP forwards as soon as the listener is up — the
+	// retry window is for Tor, not for a route-enable event.
 	t.Logf("loading https://%s/ via SOCKS5h through %s …", t033Onion, t033DPAddr)
 	body, ok := t033TryLoadOnion(ctx, t, token, t033ReqWait)
 	if !ok {
@@ -187,9 +189,10 @@ func TestOnionLoad(t *testing.T) {
 
 // t033TryLoadOnion retries the HTTPS GET via SOCKS5h within a bounded
 // window, returning the body on the first success. The retry absorbs
-// routeEnableMask[TOR] propagation and transient Tor circuit-build
-// latency. Each attempt logs its error so a dead route, auth failure, or
-// TLS issue surfaces in the test output for diagnosis.
+// transient Tor circuit-build + onion rendezvous latency. Admission is
+// not CP-gated (data-model.md §2; T090), so no route-enable wait is
+// involved. Each attempt logs its error so a dead route, auth failure,
+// or TLS issue surfaces in the test output for diagnosis.
 func t033TryLoadOnion(ctx context.Context, t *testing.T, token string, window time.Duration) ([]byte, bool) {
 	deadline := time.Now().Add(window)
 	for time.Now().Before(deadline) {

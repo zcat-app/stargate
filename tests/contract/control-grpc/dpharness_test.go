@@ -114,6 +114,20 @@ func startDP(t *testing.T) *dpHarness {
 // the first try; beforeBoot runs after the IPC dir is created and before
 // cmd.Start(), with the resolved ipcDir as its argument. nil is the no-op.
 func startDPWith(t *testing.T, beforeBoot func(ipcDir string)) *dpHarness {
+	return startDPWithUpstream(t, "", beforeBoot)
+}
+
+// startDPWithUpstream is the extension point for tests that need BOTH a
+// pre-boot IPC-dir hook AND a fake Tor upstream. upstreamAddr overrides
+// the production tor:9050 dial target via STARGATE_TOR_SOCKS_ADDR (the
+// same env-var contract tests/contract/internal/dpharness.WithUpstream
+// pins). Empty upstreamAddr leaves the DP at its default (tor:9050,
+// unreachable in the hermetic test — the route-phase probe then observes
+// ROUTE_DOWN from the upstream-dial failure, never from an admission gate
+// per data-model.md §2 / T090). Added by T090 so the WatchEvents
+// admission-invariance sub-test can prove forwarding succeeds without a
+// SidecarEvent (Principle II; sol-review B3).
+func startDPWithUpstream(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir string)) *dpHarness {
 	t.Helper()
 	repoRoot := findRepoRoot(t)
 
@@ -169,6 +183,9 @@ func startDPWith(t *testing.T, beforeBoot func(ipcDir string)) *dpHarness {
 		"STARGATE_KEYS_DIR="+keysDir,
 		"STARGATE_LISTEN_ADDR="+proxyAddr,
 	)
+	if upstreamAddr != "" {
+		cmd.Env = append(cmd.Env, "STARGATE_TOR_SOCKS_ADDR="+upstreamAddr)
+	}
 	cmd.Stderr = journal
 	cmd.Stdout = journal
 	if beforeBoot != nil {
@@ -283,9 +300,11 @@ func randomBytes(t *testing.T, n int) []byte {
 // whether the offered password (the bearer token plaintext) authenticated:
 // reply 0x01 0x00 → true, 0x01 0xFF → false. Anything outside the
 // contract's byte shapes is a fatal contract violation, not a false.
-// The request phase after auth is out of scope here (with no control
-// plane and no HEALTHY event, routeEnableMask[TOR] stays DISABLED —
-// T020a pins that layering).
+// The request phase after auth is out of scope here — admission is not
+// CP-gated (data-model.md §2; Principle II; sol-review B3; remediated
+// by T090), so with no CP and no `HEALTHY` event the forward path still
+// attempts the fixed upstream. T020a pins the cold-start forwarding
+// outcome (reachable upstream → forward; unreachable → ROUTE_DOWN).
 func (h *dpHarness) socks5AuthOK(t *testing.T, password string) bool {
 	t.Helper()
 	conn, err := net.DialTimeout("tcp", h.proxyAddr, 5*time.Second)

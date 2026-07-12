@@ -42,8 +42,8 @@ func TestUserpassSubnegotiationSuccess(t *testing.T) {
 	// Per-sub-test gates add to the boot-minimum gate inside
 	// dpharness.Start. Auth-touching sub-tests require T044
 	// (auth/token.go); the forwarding sub-test additionally requires
-	// T047 (forward/tor.go) and T045 client.go (WatchEvents consumer,
-	// so the DP actually receives the HEALTHY event fakecp.Send pushes).
+	// T047 (forward/tor.go) and T045 client.go (WatchEvents consumer —
+	// advisory; admission is not CP-gated per T090/data-model.md §2).
 	authGate := filepath.Join(dpharness.FindRepoRoot(t), "data-plane", "internal", "auth", "token.go")
 	requireAuth := func(t *testing.T) {
 		dpharness.RequireFile(t, authGate, "auth/token.go not implemented yet (T044); this skip self-lifts when T044 lands")
@@ -52,7 +52,7 @@ func TestUserpassSubnegotiationSuccess(t *testing.T) {
 	clientGate := filepath.Join(dpharness.FindRepoRoot(t), "data-plane", "internal", "controlclient", "client.go")
 	requireForward := func(t *testing.T) {
 		dpharness.RequireFile(t, forwardGate, "forward/tor.go not implemented yet (T047); UNAME-forwarding sub-test self-lifts when T047 lands")
-		dpharness.RequireFile(t, clientGate, "controlclient/client.go not implemented yet (T045 client side); needed to receive HEALTHY event")
+		dpharness.RequireFile(t, clientGate, "controlclient/client.go not implemented yet (T045 client side); needed to consume the WatchEvents stream (advisory; admission is not CP-gated per T090)")
 	}
 
 	// (a) AuthSuccess_ReplyIsExact_01_00: preload one valid token,
@@ -128,12 +128,13 @@ func TestUserpassSubnegotiationSuccess(t *testing.T) {
 	})
 
 	// (c) UNAME_ForwardedVerbatim: with a fake upstream pointed to
-	// by STARGATE_TOR_SOCKS_ADDR, a fake control plane pushing HEALTHY,
-	// and a valid token preloaded: open SOCKS5, do method negotiation,
-	// send RFC 1929 sub-negotiation with a distinctive UNAME, do
-	// SOCKS5 CONNECT to a target. Assert (1) sub-negotiation reply is
-	// 01 00; (2) the fake upstream observed the EXACT UNAME bytes via
-	// its CircuitIDs() snapshot — proving FR-007 verbatim forwarding.
+	// by STARGATE_TOR_SOCKS_ADDR, a fake control plane (advisory
+	// WatchEvents stream; admission is not CP-gated per T090), and a
+	// valid token preloaded: open SOCKS5, do method negotiation, send
+	// RFC 1929 sub-negotiation with a distinctive UNAME, do SOCKS5
+	// CONNECT to a target. Assert (1) sub-negotiation reply is 01 00;
+	// (2) the fake upstream observed the EXACT UNAME bytes via its
+	// CircuitIDs() snapshot — proving FR-007 verbatim forwarding.
 	t.Run("UNAME_ForwardedVerbatim", func(t *testing.T) {
 		requireAuth(t)
 		requireForward(t)
@@ -160,10 +161,13 @@ func TestUserpassSubnegotiationSuccess(t *testing.T) {
 			}),
 		)
 
-		// Push token, then push HEALTHY so routeEnableMask[TOR]
-		// transitions to ENABLED (data-model.md §2). Without HEALTHY
-		// the forward path short-circuits to ROUTE_DOWN and UNAME
-		// never reaches the upstream.
+		// Push token. A HEALTHY event is pushed for advisory status
+		// visibility, but admission is NOT gated on it (data-model.md
+		// §2; Principle II; sol-review B3; remediated by T090) — the
+		// forward path reaches the upstream regardless. The no-gating
+		// regression for the SOCKS5 path is carried by T021's
+		// AdmissionNotGatedBySidecarEvents; this test focuses on UNAME
+		// verbatim forwarding.
 		dpharness.Reload(t, h, 1, []*grpcpb.TokenHash{dpharness.MintToken(t, knownPlaintext)})
 		waitForWatchEventsDial(t, cp)
 		if err := cp.Send(fakecp.Healthy("tor")); err != nil {

@@ -153,14 +153,18 @@ enum EventKind {
   any other free text from the sidecar in `detail` (arch §5.2).
 - The stream is long-lived. On disconnect, the data plane reconnects
   with exponential backoff (initial 1 s, cap 30 s, jitter ±20%).
-  During disconnect the data plane keeps using its last-known
-  `routeEnableMask` (which is essentially "trust until proven
-  otherwise").
+  During disconnect the data plane keeps routing — `SidecarEvent`s are
+  advisory status/audit hints and MUST NOT gate admission (Constitution
+  Principle II; data-model.md §2; sol-review B3). The upstream dial is
+  the ground truth on every reconnect, just as it is on cold start.
 
 **Tests** (`tests/contract/control-grpc/watch_events_test.go`):
 
-1. Happy path: control plane emits `STARTED` then `HEALTHY` for `tor`;
-   data plane transitions to ENABLED for the TOR route.
+1. Advisory events: the data plane dials `control.sock`; emitting
+   `STARTED` then `HEALTHY` for `tor` does NOT change admission — a
+   request forwards through a reachable upstream before any event is
+   sent and continues to forward after each event (proves events are
+   advisory, not a precondition; Constitution Principle II).
 2. Forbidden `detail`: control plane test harness emits a
    `SidecarEvent` with `detail = "could not bind 0.0.0.0:9050"` → the
    contract test fails (the offending field should never have been
@@ -168,7 +172,8 @@ enum EventKind {
    accidentally piping log lines into `detail`).
 3. Disconnect/reconnect: the data plane retries the stream with
    bounded backoff; events delivered after reconnect are applied
-   normally.
+   normally. Admission is unchanged across the disconnect (the data
+   plane keeps routing per Principle II).
 
 ### `GetStatus` (minimum subset)
 

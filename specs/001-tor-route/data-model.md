@@ -128,7 +128,7 @@ Schema (informal):
 }
 ```
 
-Note: `routeEnableMask` is deliberately NOT in the snapshot. See §2 for the state-machine rationale (cold-start unconditionally begins DISABLED and waits for the first `HEALTHY` event).
+Note: no route-admission state is in the snapshot. See §2 for the rationale (cold start unconditionally attempts the fixed upstream; admission is never gated on a control-plane event — Constitution Principle II).
 
 The snapshot contains hashed tokens only — never plaintext. It is
 restored at data-plane cold start when the control plane is unreachable
@@ -183,37 +183,45 @@ slice.
 
 ---
 
-## 2. Tor route enable state
+## 2. Tor route admission
 
-A single boolean in the data plane: `routeEnableMask[TOR]`. It is
-initialised to `false` (DISABLED) at process start; the first `HEALTHY`
-`SidecarEvent` for `tor` transitions it to `true` (ENABLED). Subsequent
-`UNHEALTHY`, `STOPPED`, or `CRASHED` events transition it back to
-`false`; a later `HEALTHY` returns it to `true`. The full state machine
-is in the diagram below; the cold-start rationale (why no
-optimistic-enable path) is in the paragraph after.
+There is **no control-plane-driven admission gate** for the Tor route. The
+data plane attempts the fixed upstream (`tor:9050`) on every admitted
+request; the upstream dial/handshake result alone decides success or the
+privacy-safe route error (`ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`
+per FR-009). A control-plane `SidecarEvent` (`HEALTHY`, `UNHEALTHY`,
+`STOPPED`, `CRASHED`, `RESTARTED`, `STARTED`) is an **advisory local
+status/audit hint** — it MUST NOT be a mandatory precondition for
+listening, authenticating, dialing, or forwarding (Constitution Principle
+II; sol-review B3).
 
-State transitions:
+**Why no mask.** A cold-start mask that begins DISABLED and waits for the
+first `HEALTHY` event makes routing availability depend on the advisor
+plane, which is exactly the failure coupling Principle II forbids:
+restarting only the data plane during a control-plane outage would stop
+routing even when Tor and the last-known token snapshot are healthy. The
+fixed upstream dial is the authoritative signal — try `tor:9050`, forward
+on success, return the protocol-safe route failure on connect/handshake
+failure. Absence or staleness of a sidecar event can never deny admission.
 
-```
-                  STARTED + first HEALTHY
-   (initial) ─────────────────────────────► ENABLED
-                  UNHEALTHY / STOPPED / CRASHED
-   ENABLED ─────────────────────────────────► DISABLED → returns ROUTE_DOWN
-                  HEALTHY
-   DISABLED ─────────────────────────────► ENABLED
-```
+**Advisory consumption (audit + status only).** The data plane MUST
+always attempt the upstream dial on every admitted request.
+`SidecarEvent`s feed the audit journal (`sidecar_healthy` /
+`sidecar_unhealthy` rows per §4) and may drive status reporting; they
+MUST NOT influence the admission decision or short-circuit the dial.
+A `STOPPED` / `CRASHED` event is recorded in the audit log and may
+surface "sidecar unhealthy" in status, but the data plane still dials
+`tor:9050` — a stale or forged event cannot suppress a dial that would
+succeed (Constitution Principle II: "a compromise of the management UI
+cannot silently corrupt routing decisions"). The upstream dial result
+is the sole input to `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`
+selection. Advisory consumption MUST NOT log destination, token, or
+per-request metadata (Principle III).
 
-The state is **process-local in the data plane** and not persisted. On
-cold start the data plane unconditionally begins in DISABLED and waits
-for the control plane to push the first `HEALTHY` event for `tor`
-before transitioning to ENABLED. There is no optimistic-enable path:
-serving a request through a sidecar that may already be unhealthy
-would risk returning a non-privacy-safe error or leaking destination
-metadata via a partial connect, whereas the brief startup window in
-which DISABLED returns `ROUTE_DOWN` is a clean failure mode the
-browser already knows how to surface. The snapshot at §1.4 therefore
-omits `routeEnableMask` by design.
+**No persisted admission state.** The snapshot at §1.4 carries token
+hashes only; there is no per-route enable bit to persist. Cold start
+begins with the same admission policy as a warm process: every admitted
+request reaches the upstream dial.
 
 ---
 

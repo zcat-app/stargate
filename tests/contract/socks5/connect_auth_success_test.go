@@ -31,10 +31,13 @@
 // Tests-first (Constitution Principle VII): content-gates on T043
 // (listener/connect.go — the surface under test), T044 (auth/token.go),
 // T047 (forward/tor.go — the bridge), and T045
-// (controlclient/client.go — HEALTHY engages the route), plus the boot
-// minimum inside dpharness.Start (T042/T045/T050); the test SKIPs
-// until all land, then a response-shape or leak regression is FAIL,
-// not SKIP.
+// (controlclient/client.go — consumes the WatchEvents stream), plus
+// the boot minimum inside dpharness.Start (T042/T045/T050); the test
+// SKIPs until all land, then a response-shape or leak regression is
+// FAIL, not SKIP. Admission is NOT gated on a SidecarEvent (data-model.md
+// §2; Principle II; sol-review B3; remediated by T090): this test
+// forwards through the fake upstream WITHOUT pushing HEALTHY — the
+// primary no-gating regression for the CONNECT path.
 package socks5
 
 import (
@@ -79,15 +82,16 @@ const connectResponseHeaderCeil = 8 << 10
 // TestHTTPConnectAuthSuccess pins the CONNECT auth-success contract
 // (exact 200 response bytes + bridge engagement + response/journal
 // leak invariants). Single consolidated body — the four must-holds
-// layer on one fixture (one DP boot, one token push, one HEALTHY, one
+// layer on one fixture (one DP boot, one token push, no HEALTHY, one
 // CONNECT success); splitting would multiply argon2id + boot cost
-// without adding assertion coverage (the T025a precedent).
+// without adding assertion coverage (the T025a precedent). No HEALTHY
+// is pushed: admission is not CP-gated (T090; data-model.md §2).
 func TestHTTPConnectAuthSuccess(t *testing.T) {
 	repoRoot := dpharness.FindRepoRoot(t)
 	// Per-test content gates beyond the boot minimum inside
 	// dpharness.Start (T042/T045/T050): the CONNECT listener under
 	// test, the auth surface, the forward path (the bridge), and the
-	// WatchEvents client (HEALTHY engages the route).
+	// WatchEvents client (consumes the advisory event stream).
 	dpharness.RequireFile(t,
 		filepath.Join(repoRoot, "data-plane", "internal", "listener", "connect.go"),
 		"listener/connect.go not implemented yet (T043); this skip self-lifts when T043 lands")
@@ -100,7 +104,7 @@ func TestHTTPConnectAuthSuccess(t *testing.T) {
 	dpharness.RequireFile(t,
 		filepath.Join(repoRoot, "data-plane", "internal", "controlclient", "client.go"),
 		"controlclient/client.go not implemented yet (T045 client side); "+
-			"needed to receive the HEALTHY event that engages the forward path")
+			"needed to consume the WatchEvents stream (advisory; admission is not CP-gated per T090)")
 
 	// Fake upstream in AcceptAndRelay mode: completes the upstream
 	// SOCKS5 handshake, REP=0x00, then echoes. A sentinel written by
@@ -130,15 +134,15 @@ func TestHTTPConnectAuthSuccess(t *testing.T) {
 			"generation", reloadResp.GetStatus())
 	}
 
-	// HEALTHY engages routeEnableMask[TOR]; without it the forward
-	// path never reaches the upstream and no bridge engages.
+	// No HEALTHY push: admission is not CP-gated (data-model.md §2;
+	// Principle II; sol-review B3; remediated by T090). The forward path
+	// reaches the upstream and the bridge engages without any SidecarEvent.
+	// The fake CP is hosted only so the DP's WatchEvents dial lands (no
+	// retry-log noise); no event is sent.
 	waitForWatchEventsDial(t, cp)
-	if err := cp.Send(fakecp.Healthy("tor")); err != nil {
-		t.Fatalf("pushing HEALTHY event: %v", err)
-	}
 
-	// Quiesce before the journal snapshot — boot/reload/HEALTHY lines
-	// must flush so the delta carries only the CONNECT-success window.
+	// Quiesce before the journal snapshot — boot/reload lines must
+	// flush so the delta carries only the CONNECT-success window.
 	time.Sleep(250 * time.Millisecond)
 	before := h.Journal.String()
 

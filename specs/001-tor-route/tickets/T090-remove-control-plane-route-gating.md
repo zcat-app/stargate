@@ -1,15 +1,15 @@
 ---
 id: T090
 title: 'Remove control-plane route admission gating'
-status: pending
+status: in-review
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-07-12
 source: review/sol-review.md#B3
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
 blocked_by: []
 parallel: false
-files_budget: 8
+files_budget: 11
 privacy_critical: true
 constitution_refs:
   - "II: Plane separation"
@@ -49,8 +49,9 @@ plane and contradicts binding Constitution Principle II.
   result decides success or the privacy-safe route error.
 - **Gated** — contract tests boot the DP without CP, exercise a healthy fake
   Tor and an unreachable Tor, and assert both outcomes byte-for-byte.
-- **Residue** — advisory health may optimize status or avoid a known-doomed
-  dial, but absence/staleness of an event can never deny admission.
+- **Residue** — advisory health events feed the audit journal and status
+  reporting only; they MUST NOT short-circuit the dial (a stale/forged
+  event cannot suppress a dial that would succeed — Principle II).
 
 ## Acceptance
 

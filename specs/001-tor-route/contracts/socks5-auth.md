@@ -154,13 +154,12 @@ live in the table below (rows "Auth failure response is exactly
 
 After username/password sub-negotiation succeeds, the client sends the
 SOCKS5 request (RFC 1928 §4); the data plane dials the Tor sidecar
-and bridges. If the route is DISABLED (`routeEnableMask[TOR]=false`),
-or the upstream connect fails, the data plane MUST reply with an
-RFC 1928 §6 SOCKS5 reply with the following mapping:
+and bridges. If the upstream connect fails, the data plane MUST reply
+with an RFC 1928 §6 SOCKS5 reply with the following mapping:
 
 | Stargate condition                            | RFC 1928 §6 `REP` | Mnemonic              |
 |-----------------------------------------------|-------------------|-----------------------|
-| `ROUTE_DOWN` (sidecar unreachable / unhealthy; `routeEnableMask[TOR]=false`)        | `0x03`            | Network unreachable   |
+| `ROUTE_DOWN` (upstream sidecar unreachable — no TCP connection) | `0x03`            | Network unreachable   |
 | `ROUTE_REFUSED` (sidecar accepted SOCKS5 but refused the target — e.g. onion service unreachable) | `0x04` | Host unreachable      |
 | `ROUTE_TIMEOUT` (upstream dial+I/O deadline exceeded)                               | `0x06`            | TTL expired           |
 
@@ -216,7 +215,7 @@ than this value to deterministically trigger `0x06`.
 
 | Invariant                                                                                              | Test method                                                                                                                                                                |
 |--------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Route-disabled `ROUTE_DOWN` reply is exactly `05 03 00 01 00 00 00 00 00 00`                           | Stop the Tor sidecar (or arrange `routeEnableMask[TOR]=false` via withheld HEALTHY event); send authenticated SOCKS5 CONNECT; assert byte-exact 10-byte reply, then close. |
+| Upstream-unreachable `ROUTE_DOWN` reply is exactly `05 03 00 01 00 00 00 00 00 00`        | Stop the Tor sidecar; send authenticated SOCKS5 CONNECT; assert byte-exact 10-byte reply, then close. (Admission is not event-gated — data-model.md §2 — so a withheld `HEALTHY` does NOT produce this reply; only an unreachable upstream does.) |
 | `ROUTE_REFUSED` reply is exactly `05 04 00 01 00 00 00 00 00 00`                                        | Tor up, target an unreachable `.onion`; assert byte-exact 10-byte reply.                                                                                                   |
 | `ROUTE_TIMEOUT` reply is exactly `05 06 00 01 00 00 00 00 00 00`                                        | Substitute the `slow` mode of `tests/integration/fake_socks5_tor.go` (T019a); assert byte-exact 10-byte reply.                                                              |
 | `BND.ADDR` and `BND.PORT` never carry destination, sidecar, or token-derived bytes                     | Leak-corpus scan over every reply byte (corpus per `contracts/error-template.md` §"Leak-corpus invariant"); zero hits.                                                     |

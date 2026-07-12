@@ -34,7 +34,7 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 
 > **Full task body (verbatim from tasks.md):**
 >
-> In `data-plane/internal/controlclient/client.go` (from T045), wire the `SidecarEvent` consumer to set `routeEnableMask[TOR]=false` on `UNHEALTHY`/`STOPPED`/`CRASHED` per data-model.md §2 state machine; the forwarding path checks the mask before dialing and returns `ROUTE_DOWN` (via T071) when disabled.
+> In `data-plane/internal/controlclient/client.go` (from T045), wire the `SidecarEvent` consumer to treat all events as **advisory** status per data-model.md §2 (Principle II — events MUST NOT gate admission and MUST NOT short-circuit the dial). The forwarding path ALWAYS dials the upstream; events feed the audit journal (`sidecar_healthy` / `sidecar_unhealthy` rows per §4) and status reporting only. A `STOPPED`/`CRASHED` event is recorded in the audit log but the DP still dials `tor:9050` — a stale or forged event cannot suppress a dial that would succeed. `HEALTHY`/`STARTED`/`RESTARTED` update advisory status only.
 
 ## Analysis
 

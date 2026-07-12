@@ -4,10 +4,13 @@
 // Event stream hosted by the control plane on /run/stargate/control.sock.
 //
 // The data plane dials this socket and consumes a long-lived
-// server-streamed sequence of SidecarEvent values that drive its
-// routeEnableMask (e.g., enable the TOR route when the tor sidecar
-// reports HEALTHY). The per-RPC contract this proto must mirror is
-// specs/001-tor-route/contracts/control-grpc.md §"WatchEvents".
+// server-streamed sequence of SidecarEvent values that are advisory
+// status/audit hints (Constitution Principle II; sol-review B3; T090).
+// A SidecarEvent MUST NOT gate admission, listening, authenticating,
+// dialing, or forwarding — the upstream dial result is the sole ground
+// truth. See specs/001-tor-route/data-model.md §2 for the rationale and
+// specs/001-tor-route/contracts/control-grpc.md §"WatchEvents" for the
+// per-RPC contract this proto mirrors.
 //
 // SidecarEvent.detail is intentionally `string` rather than `enum`:
 // the closed-vocabulary check is enforced at the test/consumer layer
@@ -49,7 +52,10 @@ type EventsClient interface {
 	// stream is long-lived; on disconnect the DP reconnects with
 	// exponential backoff (initial 1s, cap 30s, jitter ±20%) per
 	// contracts/control-grpc.md §"WatchEvents". During disconnect the
-	// DP keeps using its last-known routeEnableMask.
+	// DP keeps routing — SidecarEvents are advisory (Constitution
+	// Principle II; data-model.md §2; sol-review B3) and MUST NOT gate
+	// admission. The upstream dial is the ground truth on every
+	// reconnect, just as it is on cold start.
 	WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SidecarEvent], error)
 }
 
@@ -88,7 +94,10 @@ type EventsServer interface {
 	// stream is long-lived; on disconnect the DP reconnects with
 	// exponential backoff (initial 1s, cap 30s, jitter ±20%) per
 	// contracts/control-grpc.md §"WatchEvents". During disconnect the
-	// DP keeps using its last-known routeEnableMask.
+	// DP keeps routing — SidecarEvents are advisory (Constitution
+	// Principle II; data-model.md §2; sol-review B3) and MUST NOT gate
+	// admission. The upstream dial is the ground truth on every
+	// reconnect, just as it is on cold start.
 	WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[SidecarEvent]) error
 	mustEmbedUnimplementedEventsServer()
 }

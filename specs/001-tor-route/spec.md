@@ -372,13 +372,15 @@ tests-first suite (Principle VII) before implementation lands.
   the in-scope test-harness caller and the deferred production
   caller). The invariant on *what* is counted (this FR)
   is independent of the deferral on *where* the counts persist.
-- **FR-009**: When the Tor sidecar is unreachable (no TCP connection),
-  unhealthy (the `WatchEvents` stream has reported `EVENT_KIND_UNHEALTHY`
-  for `tor`; architecture spec §5.2), or refuses the SOCKS5 target,
-  the data plane MUST return a privacy-safe failure response with
-  `{CODE}` chosen per architecture spec §10.1 (`ROUTE_DOWN` /
-  `ROUTE_REFUSED` / `ROUTE_TIMEOUT` as applicable) and shape chosen
-  per the inbound protocol:
+- **FR-009**: When the Tor sidecar is unreachable (no TCP connection) or
+  refuses the SOCKS5 target, the data plane MUST return a privacy-safe
+  failure response with `{CODE}` chosen per architecture spec §10.1
+  (`ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT` as applicable) and
+  shape chosen per the inbound protocol. The upstream dial/handshake
+  result alone decides success or the route error; a `SidecarEvent`
+  (`UNHEALTHY` / `STOPPED` / `CRASHED`) is an advisory hint and MUST NOT
+  be a mandatory precondition for dialing or forwarding (Constitution
+  Principle II; data-model.md §2; sol-review B3):
   - **HTTP CONNECT path**: HTML template from architecture spec §10.2
     with `{ROUTE_LABEL} = "Tor"` and the exactly-four headers
     enumerated in §10.3. Detailed contract: `contracts/error-template.md`.
@@ -424,16 +426,26 @@ tests-first suite (Principle VII) before implementation lands.
   file read by the control plane at startup (no dashboard UI yet; see
   Assumptions). The data plane MUST continue serving port 8881 with
   its last-known token list if the control plane is unreachable
-  (Principle II; architecture spec §5.5).
+  (Principle II; architecture spec §5.5). Admission is never gated on
+  a control-plane event (data-model.md §2; sol-review B3): a request
+  that authenticates against the last-known list reaches the upstream
+  dial regardless of `SidecarEvent` state.
 - **FR-014**: The control plane MUST emit a `SidecarEvent` with kind
   `STARTED` / `HEALTHY` / `UNHEALTHY` / `STOPPED` / `CRASHED` /
   `RESTARTED` for the Tor sidecar (architecture spec §5.2 events). The
   `detail` field MUST be a fixed-vocabulary token from the enum, not
-  free text from Tor logs. The data plane consumes these events to
-  decide whether to return `ROUTE_DOWN` on requests: `UNHEALTHY`,
-  `STOPPED`, and `CRASHED` each transition `routeEnableMask[TOR]` to
-  DISABLED (data-model.md §2); `RESTARTED` is informational and arms
-  the data plane to re-enable on the next `HEALTHY` event.
+  free text from Tor logs. The data plane consumes these events as
+  **advisory local status/audit hints** (data-model.md §2; Constitution
+  Principle II): they MUST NOT be a mandatory precondition for listening,
+  authenticating, dialing, or forwarding, and they MUST NOT
+  short-circuit the upstream dial. The data plane MUST always attempt
+  the fixed `tor:9050` dial on every admitted request; the dial result
+  alone selects `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`.
+  `SidecarEvent`s feed the audit journal (`sidecar_healthy` /
+  `sidecar_unhealthy` rows) and status reporting only — a stale or
+  forged event cannot suppress a dial that would succeed (Principle II:
+  a compromise of the management UI cannot silently corrupt routing
+  decisions). `RESTARTED` is informational.
 
 #### Build and contract testing
 
@@ -679,7 +691,7 @@ is recorded as not-applicable.
 | Principle                                   | Status in this feature                                            |
 |---------------------------------------------|-------------------------------------------------------------------|
 | I — Dumb Router                             | Met. Data plane parses only SOCKS5/CONNECT framing (FR-007); no TLS termination, no header inspection, no local DNS, no payload logs, no cover traffic. Port 8881 → Tor sidecar binding fixed at startup (FR-005). |
-| II — Plane Separation                       | Met. Control plane is advisor (token loader, sidecar lifecycle); data plane keeps serving on last-known token list if control plane is down (FR-013). Inter-plane uses gRPC over UDS, authenticated, versioned (`stargate.v1`, architecture spec §5.4). |
+| II — Plane Separation                       | Met. Control plane is advisor (token loader, sidecar lifecycle); data plane keeps serving on last-known token list if control plane is down (FR-013). Admission is never gated on a control-plane `SidecarEvent` — the upstream dial is the ground truth (FR-009, FR-014, data-model.md §2; sol-review B3). Inter-plane uses gRPC over UDS, authenticated, versioned (`stargate.v1`, architecture spec §5.4). |
 | III — Privacy-Preserving by Construction    | Met (as amended by T091). Non-Direct routing is fail-closed at runtime against WebRTC (FR-004; arch §14.5). SOCKS5h enforced (FR-003, FR-007); per-first-party stream isolation by SOCKS5 username (FR-002, FR-011); no per-request logs, only hour-bucketed counters (FR-008); no outbound channels other than the routed request itself. The extension gates only WebRTC (stable API) and SOCKS5h at runtime; DoH/DoT/HTTP-3 are release-cadence-verified out-of-band (sol-review B4), not runtime-enforced — their post-verification drift is accepted residue (THREAT-MODEL §5.4/§5.5). |
 | IV — Pinned, Tested, Manually Promoted Updates | Met. Tor sidecar pinned by digest (FR-015); contract tests gate updates (FR-016); no background auto-update logic added in this feature. |
 | V — Honest Threat Model                     | Met. Threat statements for the Tor onion route already live in `THREAT-MODEL.md` §4.2; this feature does not add unmodelled claims. Local-profile residual risks (THREAT-MODEL §3.1) are documented and unchanged. |

@@ -48,18 +48,18 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
     (`contracts/control-grpc.md` §"WatchEvents", §"Socket topology"). The
     test therefore HOSTS a fake control plane on `control.sock` before the
     DP boots — the inverse of T020, where the DP hosted the RPC under test.
-  - Row 1 happy path: a `STARTED/container_start` then
-    `HEALTHY/healthcheck_pass` pairing for `sidecar="tor"` transitions
-    `routeEnableMask[TOR]` from cold-start DISABLED to ENABLED
-    (`data-model.md` §2 state machine). `STARTED` alone MUST NOT transition
-    the mask — only `HEALTHY` does — so the test probes BETWEEN the two
-    events to assert the mask is still DISABLED after `STARTED`, then again
-    after `HEALTHY` to assert the flip. The observable is the SOCKS5
-    request-phase reply byte (RFC 1928 §6 REP): DISABLED → `0x03`
-    (byte-exact `05 03 00 01 00 00 00 00 00 00` per
-    `contracts/socks5-auth.md`); ENABLED → REP ≠ `0x03` (the exact post-
-    HEALTHY reply is forward-path/T072-dependent, not T021's claim — T021
-    asserts only that the mask is no longer DISABLED).
+  - Row 1 advisory events: a `STARTED/container_start` then
+    `HEALTHY/healthcheck_pass` pairing for `sidecar="tor"` is consumed
+    by the DP but does NOT gate admission (`data-model.md` §2; Constitution
+    Principle II; sol-review B3 — remediated by T090). The test probes
+    SOCKS5 CONNECT BEFORE any event is sent and again after each event;
+    admission is unchanged (the reply is determined by the upstream
+    dial/handshake result, not by event state). With a reachable fake
+    Tor upstream the reply is a forward success (REP ≠ `0x03`) before
+    any event, after `STARTED`, and after `HEALTHY` — proving events are
+    advisory, not a precondition. The exact success reply is
+    forward-path/T072-dependent; T021 asserts only that admission is
+    invariant under events (the mask-flip claim was removed by T090).
   - Row 2 forbidden detail: the data plane treats any `detail` value
     outside the closed set `{"healthcheck_pass", "healthcheck_fail",
     "container_exit", "container_start", "config_render"}` as a contract
@@ -73,7 +73,8 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
     jitter ±20 %). The test closes the first server-side stream after one
     event, waits for the DP to re-dial (observed server-side as
     `dialCount` incrementing), and asserts events on the second stream are
-    applied (route transition observed via the same SOCKS5 probe as row 1).
+    consumed (admission is unchanged across the disconnect — the DP keeps
+    routing per Principle II; data-model.md §2).
   - The test observes the DP **externally only**: gRPC client to `dp.sock`
     (for `ReloadTokens` setup pushes), the fake CP gRPC server on
     `control.sock`, the SOCKS5 bytes on the 8881 listener, and the
@@ -127,20 +128,23 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
    `TestWatchEvents` with three sub-tests, each mapping 1:1 to
    `contracts/control-grpc.md` §"WatchEvents · Tests" rows 1–3 (happy-path
    pairings only; failure-transition pairings are T070b):
-   - `HappyPathTransitionsRouteToEnabled`: with a fake CP hosted on
-     `control.sock` and a known-plaintext token pushed via `ReloadTokens`
-     on `dp.sock`, (a) assert the DP dials `control.sock` (fake CP
-     `dialCount` ≥ 1 within a bounded wait); (b) send
+   - `AdmissionNotGatedBySidecarEvents`: with a fake CP hosted on
+     `control.sock`, a reachable fake Tor upstream
+     (`STARGATE_TOR_SOCKS_ADDR` → `fake_socks5_tor.go` accept-and-relay),
+     and a known-plaintext token pushed via `ReloadTokens` on `dp.sock`,
+     (a) assert the DP dials `control.sock` (fake CP `dialCount` ≥ 1
+     within a bounded wait); (b) BEFORE sending any event, probe SOCKS5
+     CONNECT and assert the reply is a forward success (REP ≠ `0x03`) —
+     proving admission is not gated on a `SidecarEvent` (Constitution
+     Principle II; data-model.md §2; sol-review B3); (c) send
      `SidecarEvent{sidecar:"tor", kind:STARTED, detail:"container_start"}`
-     and POLL SOCKS5 CONNECT for ~2 s — assert reply stays byte-exact
-     `05 03 00 01 00 00 00 00 00 00` throughout (mask still DISABLED,
-     proving `STARTED` alone does not transition; polling catches a
-     spurious flip any time in the window, not just at one point); (c)
-     send `SidecarEvent{sidecar:"tor", kind:HEALTHY,
-     detail:"healthcheck_pass"}` and probe SOCKS5 CONNECT — assert reply
-     REP ≠ `0x03` (mask flipped to ENABLED). Row sub-gates on
-     `listener/socks5.go` AND `forward/tor.go` existence and self-skips
-     with a precise message until both land.
+     and probe — assert the SAME forward-success reply (admission
+     unchanged; `STARTED` is advisory); (d) send
+     `SidecarEvent{sidecar:"tor", kind:HEALTHY,
+     detail:"healthcheck_pass"}` and probe — assert the SAME
+     forward-success reply (admission unchanged; `HEALTHY` is advisory).
+     Row sub-gates on `listener/socks5.go` AND `forward/tor.go` existence
+     and self-skips with a precise message until both land.
    - `ForbiddenDetailRejected`: send a `SidecarEvent` with `detail =
      "could not bind 0.0.0.0:9050"` (out-of-vocabulary); assert (a) the DP
      closes the stream (fake CP observes `stream.Context().Done()` within
@@ -158,13 +162,14 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
      bound is the contract's cap — observed server-side as `dialCount`
      incrementing to 2; the `waitFor` timeout is 35 s so the upper-bound
      assertion is reachable rather than dead code); (c) on the second
-     stream, send `HEALTHY/healthcheck_pass` and assert the route
-     transitions to ENABLED via the same SOCKS5 probe as
-     `HappyPathTransitionsRouteToEnabled`. The reconnect-timing assertion
-     (b) needs ONLY `client.go` and runs even if the forward path is
-     absent — `requireForwardPath` is called AFTER the timing assertion,
-     gating only the route-observation tail.
-   - `HappyPathTransitionsRouteToEnabled` and
+     stream, send `HEALTHY/healthcheck_pass` and probe SOCKS5 CONNECT —
+     assert a forward-success reply (REP ≠ `0x03`), unchanged from the
+     pre-disconnect probe (admission is invariant across disconnect per
+     Principle II). The reconnect-timing assertion (b) needs ONLY
+     `client.go` and runs even if the forward path is absent —
+     `requireForwardPath` is called AFTER the timing assertion, gating
+     only the route-observation tail.
+   - `AdmissionNotGatedBySidecarEvents` and
      `DisconnectReconnectAppliesEvents` additionally call
      `assertNoSecretLeak` over the captured journal with the auth-plaintext
      bytes (the only secret in scope — `SidecarEvent` fields are
@@ -212,8 +217,8 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
   mutual-ed25519, plane-down survival) — T022's scope.
 - Cold-start snapshot restore with CP-absent dial retry — T020a's scope.
 - The DP implementation this test gates: `WatchEvents` consumer + closed-
-  vocabulary enforcement + reconnect backoff (T045 `client.go`), route
-  state machine wiring (T050 main, T073 failure transitions), SOCKS5
+  vocabulary enforcement + reconnect backoff (T045 `client.go`), advisory
+  event consumption wiring (T050 main, T073), SOCKS5
   request-phase listener (T042), forward path (T047).
 - No change to `data-plane/**`, `proto/**`, `compose/**`, or verify.sh.
 - CI workflow wiring for `tests/contract/` Go tests is T076.
@@ -227,10 +232,11 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
   real CP (T038/T039), just as T020's gRPC client is the test-side stand-in
   for the real CP's `ReloadTokens` caller.
 - Why the route observation is loose (REP ≠ `0x03`, not byte-exact): the
-  exact post-HEALTHY reply depends on the forward path's failure mapping
-  (T072 maps `tor:9050` dial failure → `ROUTE_REFUSED 0x04`), which is
-  Phase 5 work. T021 asserts only the mask-flip — the only claim row 1
-  makes. T067a will pin the byte-exact failure replies later.
+  exact forward-success reply depends on the forward path (T072), which is
+  Phase 5 work. T021 asserts only that admission is INVARIANT under
+  sidecar events — the only claim row 1 makes post-T090 (the mask-flip
+  claim was removed by T090; data-model.md §2). T067a will pin the
+  byte-exact failure replies later.
 - Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04. §Analysis +
   §Acceptance derived at `/start` 2026-07-06 against HEAD `b906efb`,
   grounded on `contracts/control-grpc.md` §"WatchEvents",

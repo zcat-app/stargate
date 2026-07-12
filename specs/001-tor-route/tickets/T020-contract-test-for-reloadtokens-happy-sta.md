@@ -196,8 +196,10 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 - Why no upstream (no `fake_socks5_tor.go`) here: the happy-path
   observability is the RFC 1929 sub-negotiation byte (`0x01 0x00` vs
   `0x01 0xFF`), which completes BEFORE the request-phase forward path.
-  With no CP and no `HEALTHY` event, `routeEnableMask[TOR]` stays DISABLED
-  — irrelevant to auth (T020a pins that layering).
+  With no CP and no `HEALTHY` event, the forward path still attempts the
+  fixed `tor:9050` upstream (admission is not CP-gated — data-model.md
+  §2; Principle II; sol-review B3; remediated by T090) — irrelevant to
+  auth (T020a pins that layering).
 - Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04. §Analysis +
   §Acceptance derived at `/start` 2026-07-06 against HEAD `b906efb`.
 - Redteam pass (2026-07-06, `reviews/redteam-20260706-b906efb.md`) found

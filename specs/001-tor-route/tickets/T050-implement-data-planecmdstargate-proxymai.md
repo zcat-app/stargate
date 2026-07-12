@@ -34,7 +34,7 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 
 > **Full task body (verbatim from tasks.md):**
 >
-> Implement `data-plane/cmd/stargate-proxy/main.go` — run `bind/check.go` (T013) FIRST; load `dp-snapshot.json` (T046); dial the control plane (T045); open the port-8881 listener (T042 + T043); wait for at least one `HEALTHY` `SidecarEvent` for `tor` before transitioning `routeEnableMask[TOR]` to ENABLED (data-model.md §2). Verified end-to-end by T033, T034.
+> Implement `data-plane/cmd/stargate-proxy/main.go` — run `bind/check.go` (T013) FIRST; load `dp-snapshot.json` (T046); dial the control plane (T045); open the port-8881 listener (T042 + T043); begin forwarding immediately — admission is NOT gated on a `SidecarEvent` (data-model.md §2; Principle II; sol-review B3); `WatchEvents` runs concurrently and its events are advisory. Verified end-to-end by T033, T034.
 
 ## Analysis
 
