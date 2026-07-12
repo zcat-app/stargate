@@ -1,7 +1,7 @@
 ---
 id: T076
 title: 'Run every test module in the single green gate'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-07-11
 source: review/sol-review.md#M4
@@ -66,3 +66,20 @@ accounts for them but does not make them hermetic.
 
 Refined from tasks.md#T076 for review finding M4. This blocker must land before
 completed contract tickets can be treated as standing regression gates.
+
+### Follow-ups surfaced on landing (out of this ticket's files_budget)
+
+- **gofmt drift (7 files in `tests/contract`).** Surfacing every module under
+  `gofmt` exposed pre-existing tab-alignment drift the old data-plane-only
+  gate never checked. gofmt is ADVISORY (WARN) in the new gate until this is
+  cleaned; flip it to FAIL in a follow-up that runs `gofmt -w` on the 7 files.
+- **Go toolchain pin 1.26.3 → 1.26.4.** Mechanical (`toolchain` directives in
+  `go.work` + each `go.mod`); unrelated to T076, kept separate per the
+  surgical-changes doctrine.
+- **staticcheck / gosec uniform wiring.** The old data-plane gate ran these
+  when installed; the new uniform gate does not yet. Re-add them across all
+  discovered modules in a follow-up (optional advisories, SKIP in CI).
+- **Named Docker CI job.** The cadence-separation mechanism (`//go:build
+  docker` + `STARGATE_TEST_TAGS`) lands here; the CI workflow that actually
+  runs the docker suites under `STARGATE_TEST_TAGS=docker scripts/verify.sh`
+  is a separate ticket (same entrypoint, no divergent command list).

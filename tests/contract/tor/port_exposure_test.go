@@ -1,3 +1,6 @@
+//go:build docker
+// +build docker
+
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
@@ -15,6 +18,14 @@
 // See specs/001-tor-route/spec.md §"FR-012" for the contract and
 // specs/001-tor-route/research.md §5 for the harness-language decision
 // (Go, sharing the data-plane toolchain).
+//
+// stargate:cadence docker — this package BRINGS UP the tor service, so it
+// is build-tagged (`//go:build docker`) out of the hermetic PR gate and
+// runs in the named Docker job (T076 §Acceptance #4). scripts/verify.sh
+// compile-checks it via `go vet -tags docker` and accounts it SKIP[docker]
+// in the hermetic PR run; `STARGATE_TEST_TAGS=docker scripts/verify.sh`
+// (the named job) executes it. The t.Skip guards below stay as
+// defense-in-depth for the named job on Docker-less hosts.
 package tor
 
 import (

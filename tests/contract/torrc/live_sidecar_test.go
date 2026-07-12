@@ -1,3 +1,6 @@
+//go:build docker
+// +build docker
+
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
@@ -45,11 +48,15 @@
 // the seed container — a future ticket may hoist that pin into a shared
 // constant if more contract tests need ephemeral probe images.
 //
-// NOT wired into scripts/verify.sh today: verify.sh gate 4 runs only
-// *_test.sh and *.bats files; Go contract tests are wired in by T076. Until
-// T076 lands this test is invoked manually via
-// `cd tests/contract && go test ./torrc/ -run TestLiveSidecarGETCONFSocksPort -v -timeout 15m`.
-// Same self-invocation model as T029/T030/T031.
+// NOT executed by the hermetic PR run of scripts/verify.sh: this file is
+// build-tagged `//go:build docker` (T076 §Acceptance #4 — live/Docker
+// cadence is kept separate from the hermetic PR gate). verify.sh
+// compile-checks it via `go vet -tags docker` and accounts it SKIP[docker]
+// in the hermetic PR run. The named Docker job executes it via
+// `STARGATE_TEST_TAGS=docker scripts/verify.sh`, or manually:
+// `cd tests/contract && go test -tags docker ./torrc/ -run TestLiveSidecarGETCONFSocksPort -v -timeout 15m`.
+// The sibling torrc tests (invariants, no_bridges, render_byte_match) are
+// hermetic and run in the PR gate. Same self-invocation model as T029/T030/T031.
 package torrc
 
 import (

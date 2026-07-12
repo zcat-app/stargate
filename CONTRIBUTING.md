@@ -132,27 +132,31 @@ The `scripts/stargate` entry-point is described in
 
 ## Running tests locally
 
-Tests are layered. Run the layer that matches the area you touched.
+Tests are layered. Run the layer that matches the area you touched. The
+single green gate that runs every layer is `scripts/verify.sh` (see
+§Verification below); the per-area commands here are for the fast inner
+loop.
 
-### Go data plane — unit tests
+### Go workspace — unit + contract tests (every module)
 
-```bash
-cd data-plane
-go test ./...
-# verbose, single package:
-go test -v -count=1 ./internal/forward/...
-```
-
-### Go data plane — contract tests (per sidecar)
-
-Contract tests live under `tests/contract/` and assert the narrow boundary
-Stargate depends on. Some are hermetic; Docker-backed suites self-skip when
-Docker is unavailable until T076 adds explicit skip accounting.
+`scripts/verify.sh`'s `go-workspace` gate discovers every workspace Go
+module from `go.work` (data plane, proto, contract, integration, shared log
+invariants) and runs it with JSON skip accounting: a package whose tests
+all skip is reported SKIP, never PASS. Docker/live/release-backed suites
+carry `//go:build docker|live|release` and are accounted SKIP[<cadence>] in
+the hermetic PR run (compile-checked via `go vet -tags`); the named job
+opts them back in with the SAME entrypoint:
 
 ```bash
-# From the repo root:
-cd tests/contract
-go test ./...
+# Hermetic PR gate (default): every module, docker/live/release excluded.
+bash scripts/verify.sh
+
+# Named Docker job: same script, opts docker suites INTO execution.
+STARGATE_TEST_TAGS=docker bash scripts/verify.sh
+
+# A single module's inner loop:
+cd tests/contract && go test ./...
+cd data-plane        && go test ./...
 ```
 
 ### Quarkus control plane

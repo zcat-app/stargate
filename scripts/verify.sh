@@ -81,34 +81,35 @@ else
   record "ground-check" SKIP "scripts/ground-check.sh absent"
 fi
 
-# === Gate 2: Go data plane ================================================
-# Heuristic for "real source exists": any .go file other than tools.go (the
-# build-tagged tool-pin file, which compiles to nothing on its own).
-go_src=$(find data-plane -name '*.go' ! -name 'tools.go' 2>/dev/null | wc -l | tr -d ' ')
+# === Gate 2: Go workspace modules (discovered via go.work) ================
+# T076: every workspace Go module (data plane, proto, contract, integration,
+# shared log invariants) is discovered from go.work and gated with JSON skip
+# accounting. A package whose tests all skip is reported SKIP, never PASS.
+# Suites carrying `//go:build docker|live|release` are kept out of the
+# hermetic PR run (accounted SKIP[<cadence>], compile-checked via
+# `go vet -tags`) and run in the named Docker/live/release job through the
+# SAME entrypoint — `STARGATE_TEST_TAGS=docker scripts/verify.sh` — not a
+# divergent command list (T076 §Acceptance #2/#4/#5). The gate is a separate
+# script so its discovery + accounting is independently testable
+# (tests/contract/workflow/verify_discovery_test.sh).
 if ! have go; then
-  record "go" SKIP "go toolchain not installed"
-elif [ -f data-plane/go.mod ]; then
-  ( cd data-plane && go mod verify ) >>"$LOG" 2>&1 \
-    && record "go-mod-verify" PASS || record "go-mod-verify" FAIL "see target/verify.log"
-  # gofmt applies even to tools.go.
-  if [ "$(find data-plane -name '*.go' | wc -l | tr -d ' ')" -gt 0 ]; then
-    badfmt=$( cd data-plane && gofmt -l . 2>/dev/null )
-    [ -z "$badfmt" ] && record "gofmt" PASS \
-      || record "gofmt" FAIL "unformatted: $(printf '%s' "$badfmt" | tr '\n' ' ')"
-  fi
-  if [ "$go_src" -gt 0 ]; then
-    run_cmd "go-vet"  -- sh -c 'cd data-plane && go vet ./...'
-    run_cmd "go-test" -- sh -c 'cd data-plane && go test ./...'
-    # Static analysis: policy in CONTRIBUTING §Code style. Run if installed.
-    if have staticcheck; then run_cmd "staticcheck" -- sh -c 'cd data-plane && staticcheck ./...'
-    else record "staticcheck" SKIP "not installed"; fi
-    if have gosec; then run_cmd "gosec" -- sh -c 'cd data-plane && gosec -quiet ./...'
-    else record "gosec" SKIP "not installed"; fi
-  else
-    record "go-vet/test" SKIP "no data-plane source yet (only tools.go)"
-  fi
+  record "go-workspace" SKIP "go toolchain not installed"
+elif [ -x scripts/go-workspace-gate.py ]; then
+  run_cmd "go-workspace" -- python3 scripts/go-workspace-gate.py "$(pwd)"
 else
-  record "go" SKIP "no data-plane/go.mod"
+  record "go-workspace" SKIP "scripts/go-workspace-gate.py absent"
+fi
+
+# === Gate 2b: browser extension tests (discovered) ========================
+# T076 §Acceptance #3: discover the extension test runner rather than
+# enumerate a fixed path. The runner lands with T034b; until then this gate
+# self-SKIPs so verify.sh is green at scaffolding time.
+if [ -x extension/run-tests.sh ]; then
+  run_cmd "extension-tests" -- sh -c 'cd extension && ./run-tests.sh'
+elif [ -d extension ]; then
+  record "extension-tests" SKIP "no extension/run-tests.sh (T034b not landed)"
+else
+  record "extension-tests" SKIP "no extension/ dir"
 fi
 
 # === Gate 3: Quarkus control plane =======================================
