@@ -1,9 +1,9 @@
 ---
 id: T089
 title: 'Amend the Tor startup configuration contract'
-status: in-progress
+status: done
 created: 2026-07-11
-last_updated: 2026-07-12
+last_updated: 2026-07-13
 source: review/sol-review.md#B2
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
@@ -25,7 +25,7 @@ spec_refs:
 decision_refs: []
 spec_amend_for: specs/001-tor-route/spec.md §FR-011
 spec_amend_parent: T087
-reviews: {}
+reviews: { round: 2, date: 2026-07-13, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
