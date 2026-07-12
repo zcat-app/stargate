@@ -381,6 +381,18 @@ def main() -> int:
             rec = classified[ip]
             cadence, required, has_tf = meta[ip]
             v = verdict(rec, required, cadence, has_tf)
+            # Masking guard (stargate-redteam finding): if the test run died
+            # non-zero (timeout, race, panic, or a TestMain that os.Exit-ed
+            # before the JSON encoder flushed a FAIL event) AND this package
+            # has test files but produced zero pass/fail/skip events, it must
+            # FAIL, not SKIP — otherwise a dead privacy test masks as a clean
+            # SKIP and the gate is GREEN. pkg_skipped (no test files on disk)
+            # is excluded: those legitimately produced no test-level events.
+            if (v == "SKIP" and tproc.returncode != 0 and has_tf
+                    and not rec["pkg_skipped"]
+                    and rec["pass"] == 0 and rec["fail"] == 0
+                    and rec["skip"] == 0):
+                v = "FAIL"
             tail = (f"pass={rec['pass']} fail={rec['fail']} "
                     f"skip={rec['skip']}")
             if v == "PASS":

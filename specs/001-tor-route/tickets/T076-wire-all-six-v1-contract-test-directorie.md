@@ -1,9 +1,9 @@
 ---
 id: T076
 title: 'Run every test module in the single green gate'
-status: in-progress
+status: done
 created: 2026-07-04
-last_updated: 2026-07-11
+last_updated: 2026-07-12
 source: review/sol-review.md#M4
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
@@ -18,7 +18,7 @@ spec_refs:
   - specs/001-tor-route/spec.md §FR-016
   - .specify/memory/constitution.md §VII
 decision_refs: []
-reviews: {}
+reviews: { round: 2, date: 2026-07-12, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-07-11
+**Last updated:** 2026-07-12
 
 ---
 
@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 86 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 44 |
+| done | 45 |
 | deferred | 0 |
 | **total** | **131** |
 
@@ -77,15 +77,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T092 | Amend the token verifier and lifecycle contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T101 | Consolidate the privacy log-invariant scanner | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
+| T102 | Scan for Stargate bearer-token secrets | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T076 | Run every test module in the single green gate | in-progress | ✓ | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -97,7 +96,7 @@ _(none deferred)_
 
 ## Done
 
-_44 ticket(s) done._
+_45 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -141,5 +140,6 @@ _44 ticket(s) done._
 - T031 — Contract test asserting no bridge / pluggable-transport strings appear
 - T032 — Contract test spinning up the live Tor sidecar with the rendered confi
 - T033 — Integration test for the full vertical: bring up `compose/docker-compo
+- T076 — Run every test module in the single green gate
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
 - T096 — Enforce the canonical ticket workflow

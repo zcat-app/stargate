@@ -95,6 +95,22 @@ import "testing"
 func TestDockerOnlyFails(t *testing.T) { t.Fatal("must not run in hermetic PR gate") }
 '
 
+write_mod modf 'package modf
+
+import (
+	"os"
+	"testing"
+)
+
+// TestMain exits non-zero WITHOUT flushing a JSON FAIL event — simulates a
+// test run that hangs/crashes/times out (stargate-redteam finding). The gate
+// MUST account this package FAIL, not SKIP (a dead privacy test must not
+// mask as a clean SKIP while verify.sh stays GREEN).
+func TestMain(m *testing.M) { os.Exit(2) }
+
+func TestNeverReached(t *testing.T) {}
+'
+
 cat > "$SANDBOX/go.work" <<'EOF'
 go 1.26
 
@@ -103,6 +119,7 @@ use (
 	./modb
 	./modc
 	./modd
+	./modf
 )
 EOF
 
@@ -110,12 +127,13 @@ EOF
 HERMETIC_OUT="$(python3 "$GATE" "$SANDBOX" 2>&1)"
 python3 "$GATE" "$SANDBOX" >/dev/null 2>&1; HERMETIC_RC=$?
 
-# Discovery: all four modules enumerated from go.work, by name.
-assert_grep "discovered 4 module\(s\) via go.work" "discover-count" "$HERMETIC_OUT"
+# Discovery: all five modules enumerated from go.work, by name.
+assert_grep "discovered 5 module\(s\) via go.work" "discover-count" "$HERMETIC_OUT"
 assert_grep "moda" "discover-moda" "$HERMETIC_OUT"
 assert_grep "modb" "discover-modb" "$HERMETIC_OUT"
 assert_grep "modc" "discover-modc" "$HERMETIC_OUT"
 assert_grep "modd" "discover-modd" "$HERMETIC_OUT"
+assert_grep "modf" "discover-modf" "$HERMETIC_OUT"
 
 # Core bug fix (§Acceptance #2): modB's all-skip package is SKIP, NEVER PASS.
 assert_grep "SKIP[[:space:]]+.*example\.com/modb" "modb-is-skip" "$HERMETIC_OUT"
@@ -133,8 +151,15 @@ assert_grep "PASS[[:space:]]+.*example\.com/moda" "moda-is-pass" "$HERMETIC_OUT"
 assert_grep "SKIP\[docker\][[:space:]]+.*example\.com/modd" "modd-skip-docker" "$HERMETIC_OUT"
 assert_nogrep "FAIL[[:space:]]+.*example\.com/modd" "modd-not-fail-hermetic" "$HERMETIC_OUT"
 
-# Overall: RED in hermetic mode ONLY because of modC; modD contributed no FAIL.
-[ "$HERMETIC_RC" -eq 1 ] || bail "ASSERT FAIL [hermetic-exit-1]: got rc=$HERMETIC_RC, want 1 (modC required-all-skip)"
+# Masking guard (stargate-redteam finding): modF's TestMain exits non-zero
+# with no JSON FAIL event; the package MUST be FAIL, not SKIP. A dead
+# privacy test must not mask as a clean SKIP while verify.sh stays GREEN.
+assert_grep "FAIL[[:space:]]+.*example\.com/modf" "modf-is-fail" "$HERMETIC_OUT"
+assert_nogrep "SKIP[[:space:]]+.*example\.com/modf" "modf-not-skip" "$HERMETIC_OUT"
+
+# Overall: RED in hermetic mode because of modC (required all-skip) and modF
+# (dead test run); modD's docker suite contributed no FAIL.
+[ "$HERMETIC_RC" -eq 1 ] || bail "ASSERT FAIL [hermetic-exit-1]: got rc=$HERMETIC_RC, want 1 (modC/modF fail)"
 
 # --- run A2: named Docker job (STARGATE_TEST_TAGS=docker) -----------------
 # The SAME entrypoint (no divergent command list — §Acceptance #5) executes
