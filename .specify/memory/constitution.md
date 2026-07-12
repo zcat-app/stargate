@@ -36,6 +36,17 @@ without version bumps. T091 nonetheless runs `stargate-redteam` (good
 practice for a Principle III change) and the maintainer opens a comment
 window via the governance PR.
 
+**T091 pre-release approval (2026-07-12).** The maintainer approves the
+Principle III bullet 3 amendment pre-release. The 7-day public comment
+window and the governance-PR step are **deferred to first public release**
+per the v1.1.0 framing above (no public remote with consumers, no team, no
+binary shipped). The `stargate-redteam` gate ran (4 rounds; Major M1
+resolved + closed at `redteam/findings/closed/20260712-001-...md`; minors
+m1–m5 fixed; CLEAN on round 4) and the boundary is endorsed as
+constitutionally sufficient for v1 given the named residue. The maintainer
+records this approval here in lieu of the PR/comment-window ceremony that
+becomes binding only at first public release.
+
 
 Sync Impact Report — Constitution v1.1.0  (SUPERSEDED — see note above)
 ========================================================================
