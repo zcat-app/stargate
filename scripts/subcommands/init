@@ -43,8 +43,12 @@
 #   R1/R2 key-gen correctness + key FORMAT compatibility are NOT proven by
 #   T016's own contract test (structural only). They are gated DOWNSTREAM by
 #   tests/contract/control-grpc/transport_test.go (T022): a broken key-gen or
-#   an unloadable format fails the mutual-ed25519 handshake there. If you
-#   change the key format here, re-check T022.
+#   an unloadable format fails the mutual-ed25519 handshake there. The full
+#   wire-auth contract — including the per-plane X.509 cert derivation from
+#   these keys, the peer-pin check, and the version-metadata interceptor — is
+#   pinned by tests/contract/compose/inter_plane_wire_test.sh (T095) against
+#   contracts/wire-auth.md. If you change the key format here, re-check BOTH
+#   T022 and the T095 compose-level test.
 
 set -uo pipefail
 
@@ -123,6 +127,20 @@ preflight() {
 # compatibility), then install them into the stargate-keys named volume with
 # the correct ownership and modes via a throwaway debian:12-slim container
 # (named volumes are not host-writable with arbitrary UID).
+#
+# WIRE CONTRACT (T095, contracts/wire-auth.md): this script installs KEYS ONLY.
+# The X.509 certificates used for the TLS-over-UDS handshake are NOT generated
+# here; each plane derives its own self-signed cert from its *.priv key at
+# process startup and holds it in memory only (never persisted). Keeping certs
+# out of the named volume (a) decouples cert validity from long-lived key
+# material, so a plane restart is an implicit cert rotation; (b) keeps the
+# on-disk artefact set reproducible (Constitution VI) — the only persisted
+# bytes are the four PEM keyfiles whose ownership/mode are pinned below; (c)
+# avoids cross-plane cert synchronisation entirely. The 30-day cert validity
+# window, 5-min negative skew, and the no-automated-rotation residue are
+# operator-visible in THREAT-MODEL.md §5.13 + SECURITY-DECISIONS.md (T095).
+# T038/T045/T050 consume contracts/wire-auth.md verbatim for the derivation
+# recipe; this comment is the installer-side half of the contract.
 generate_keys() {
   # M5 (arch §9.3): never clobber existing keys — would invalidate enrolled
   # devices. Count how many of the four expected key files already exist in

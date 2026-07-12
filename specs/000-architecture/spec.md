@@ -292,6 +292,16 @@ constitution-aligned increments; breaking changes require bumping to
 Contract** section). The data plane refuses to handshake if the control
 plane reports a higher major version than it understands.
 
+Version is carried at runtime as authenticated gRPC metadata on **every**
+RPC, not as a one-shot handshake RPC. The metadata keys
+(`x-stargate-proto-major`, `x-stargate-proto-minor`, `x-stargate-capabilities`),
+the rejection rule (unknown-major → `FailedPrecondition` before any application
+handler runs), the v1 closed capability set, and the interceptor placement
+are binding and live in `specs/001-tor-route/contracts/wire-auth.md` §5. T038
+(CP server + client) and T045 (DP server + client) install the interceptors;
+this §5.3 paragraph is the authoritative pointer and intentionally does not
+duplicate the wire shape so a future minor cannot drift the two locations.
+
 ### 5.4 Transport and authentication
 
 - Unix-domain socket at `/run/stargate/control.sock`. Permissions enforce
@@ -299,7 +309,18 @@ plane reports a higher major version than it understands.
 - Mutual auth: each plane has an ed25519 keypair generated at first
   `stargate init`, public keys cross-installed in `/etc/stargate/keys/`.
   Handshake uses gRPC's TLS-over-UDS with self-signed certs derived from
-  these keys; either side rejects an unrecognised peer cert.
+  these keys; either side rejects a peer whose pinned public key does not
+  match (pin-on-key, not pin-on-cert — see `contracts/wire-auth.md` §3).
+- The complete wire contract — X.509 certificate derivation (when, where,
+  field values, determinism), peer public-key pinning (byte-equal against
+  `/etc/stargate/keys/<peer>.pub`, not CA-chain, not hostname), certificate
+  validity policy (`NotBefore = now − 5 min`, `NotAfter = now + 30 days`,
+  re-derived on every plane restart, never persisted), UDS authority/SAN
+  handling (URI SAN `spiffe://stargate.local/<plane>`; pin is load-bearing,
+  SAN is defence-in-depth), and key ownership — is binding and lives in
+  `specs/001-tor-route/contracts/wire-auth.md`. This §5.4 paragraph is the
+  authoritative pointer; T038/T045/T050 consume that document verbatim and
+  add no wire-shape detail of their own.
 - A handshake failure is a startup error for the control plane and a
   non-fatal degraded-mode warning for the data plane (it MUST keep
   forwarding — Principle II).

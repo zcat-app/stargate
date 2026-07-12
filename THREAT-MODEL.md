@@ -1021,6 +1021,59 @@ endpoint hacks. The mitigation against timing-correlation is the
 mixnet's own cover, not Stargate's. We state this here to pre-empt
 "Stargate should add cover traffic" feature requests.
 
+### 5.13 Inter-plane channel authentication and certificate validity
+
+**Concern**: a process that successfully `connect(2)`s to one of the
+inter-plane UDS sockets (`/run/stargate/control.sock` or
+`/run/stargate/dp.sock`) but is NOT the legitimate peer plane could inject
+`ReloadTokens` generations, consume `WatchEvents` streams, or query
+`GetStatus` counters if the mode/group dial gate were the only protection.
+
+**Mitigations** (Constitution Principle II; arch §5.4;
+`specs/001-tor-route/contracts/wire-auth.md`):
+
+- **Mutual Ed25519 TLS-over-UDS** with self-signed certs derived in-memory
+  at plane startup from the on-disk `*.priv` keypairs. Private keys are
+  `0600`, owner-read-only; public keys are `0644`, shared via the
+  `stargate-ipc` GID.
+- **Peer public-key pinning** (not CA-chain, not hostname): the verifier
+  byte-equal-compares the peer cert's extracted public key against the
+  installed `/etc/stargate/keys/<peer>.pub`. A wrong-key peer is rejected
+  at the TLS handshake (`alert: unknown ca`) before any RPC dispatches.
+- **Schema-version interceptor**: every RPC carries `x-stargate-proto-major`
+  / `-minor` / `-capabilities` gRPC metadata; a server interceptor rejects
+  an unknown major with `FailedPrecondition` before invoking application
+  behaviour (arch §5.5 row 4).
+- **Mode/group dial gate** (`0660` + `stargate-ipc` GID) is the outer
+  defence that keeps the dial surface small in the local profile; the
+  mutual-pin is the load-bearing auth gate.
+
+**Residual risk (operator-visible, T095)**:
+
+- The in-memory cert validity window is `NotBefore = now − 5 min`,
+  `NotAfter = now + 30 days`. A plane that does not restart for >30 days
+  serves an expired cert; the next peer dial fails. An operator who
+  restarts the stack on a <30-day cadence never sees this. There is no
+  in-process expiry warning in v1; the cadence is operator-managed. See
+  `SECURITY-DECISIONS.md` (2026-07-12, T095) for the acceptance rationale.
+- **No automated key rotation in v1.** Replacing the on-disk
+  `cp.priv`/`cp.pub` / `dp.priv`/`dp.pub` keypairs is operator-manual
+  (write-tmp + rename + plane restart, ordered per `wire-auth.md` §6.2).
+  Automated rotation is a future feature with its own threat-model row.
+- **A same-host attacker who reads a plane's process memory obtains the
+  long-lived private key** (loaded from `*.priv` for handshake signing)
+  **and can impersonate the plane indefinitely until the operator manually
+  rotates the on-disk keypair.** The 30-day cert-validity window does NOT
+  bound this exposure: the attacker possesses the key, not just a derived
+  cert, and can mint fresh, currently-valid certs at will. A monthly
+  plane restart does NOT help — the same key is re-loaded on restart.
+  This is strictly worse than the transient-cert property and is the
+  binding residue; the operator's only incident-response lever is keypair
+  rotation. In the local profile this is no worse than the §3.1 assumption
+  (same-host code execution is game-over); under a future LAN/VPS profile
+  that introduces TCP transport for the inter-plane channel, this residue
+  MUST be re-reviewed.
+
 ---
 
 ## 6. What Stargate does not protect against

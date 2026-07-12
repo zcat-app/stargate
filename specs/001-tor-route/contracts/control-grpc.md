@@ -269,6 +269,16 @@ but the RPC itself is now in-scope for v1 via the test-harness caller.)
 The contract tests for this feature MUST verify the transport-level
 invariants of the inter-plane channel.
 
+> **Wire-auth contract.** The complete wire contract for Ed25519 X.509
+> certificate derivation, peer public-key pinning, certificate validity,
+> UDS authority/SAN handling, key ownership, and the authenticated gRPC
+> metadata (protocol major/minor + capabilities) carrying the version
+> negotiation lives in **`contracts/wire-auth.md`** (T095). The invariants
+> below name the wire-auth sections they rest on; this document does not
+> re-specify the wire shape. T022 covers the local-process tier of this
+> table; the compose-level rows T022 deferred are owned by
+> `tests/contract/compose/inter_plane_wire_test.sh` (T095).
+
 ### Socket topology
 
 This feature uses **two** UDS files in the shared `stargate-ipc`
@@ -324,8 +334,8 @@ keeping the dial surface small in the local profile.
 | `/run/stargate/dp.sock` mode `0660`, owned `stargate-dp:stargate-ipc`           | Contract test stats the socket file after init.                                                                                                                                                                                                                                                                                 |
 | Peer plane can `connect(2)` its dial-direction socket                            | Contract test as the *peer-plane UID* (in the `stargate-ipc` group) opens the dial-direction socket — the DP-uid process must succeed connecting `control.sock`; the CP-uid process must succeed connecting `dp.sock`. Regression gate against accidental revert to `0600` (which would silently break inter-plane comms).                                                                                                       |
 | Same-host process outside the `stargate-ipc` group cannot dial either socket    | Contract test as an arbitrary UID outside the group: both `connect(2)` calls fail with `EACCES`. Verifies the mode/group scheme actually narrows the dial surface and isn't equivalent to `0666`.                                                                                                                                |
-| Mutual auth: both planes have ed25519 keys                                      | Contract test verifies the data plane refuses a peer cert it cannot validate against `/etc/stargate/keys/control.pub` (on `control.sock`), and the control plane refuses a peer cert it cannot validate against `/etc/stargate/keys/dp.pub` (on `dp.sock`).                                                                     |
-| Schema-version handshake                                                        | Contract test simulates a `stargate.v2` peer offering an unknown major-version marker on either socket → the receiving plane logs to journal and exits non-zero (arch §5.5 row 4).                                                                                                                                              |
+| Mutual auth: both planes have ed25519 keys                                      | Contract test verifies the data plane refuses a peer cert it cannot validate against `/etc/stargate/keys/control.pub` (on `control.sock`), and the control plane refuses a peer cert it cannot validate against `/etc/stargate/keys/dp.pub` (on `dp.sock`). Pinned by byte-equal public-key comparison per `contracts/wire-auth.md` §3 (T095; `tests/contract/compose/inter_plane_wire_test.sh`).                                                                     |
+| Schema-version handshake                                                        | Contract test simulates a `stargate.v2` peer offering an unknown major-version marker (gRPC metadata `x-stargate-proto-major`, per `contracts/wire-auth.md` §5) on either socket → the receiving plane logs to journal and exits non-zero (arch §5.5 row 4). Minor-version compatibility (additive minor accepted) is asserted in the same test. Pinned by `tests/contract/compose/inter_plane_wire_test.sh` (T095).                                                                                                                                              |
 | Plane-down survival                                                             | Contract test stops the control plane after a successful `ReloadTokens`; the data plane MUST continue accepting proxy requests on port 8881 and authenticating them. (When the CP comes back, it re-dials `dp.sock` and pushes the current generation; the DP re-dials `control.sock` with the §"WatchEvents" backoff schedule.) |
 | v1: production CP MUST NOT invoke `GetStatus` on `/run/stargate/dp.sock`; only the contract-test harness invokes it | Contract test greps the control-plane production source tree (excluding `**/test/**` and `**/*Test.java`) for `GetStatus(` and asserts zero matches. Regression gate against the admin-UI feature silently wiring a production caller before research.md §11's deferral is revisited. |
 

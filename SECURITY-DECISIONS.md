@@ -41,6 +41,76 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-07-12 — Inter-plane X.509 certificate validity policy (T095 wire-auth contract)
+
+**Context.** T095 completed the inter-plane wire contract
+(`specs/001-tor-route/contracts/wire-auth.md`) that arch §5.4 had left
+underspecified and that review `sol-review.md` M5 flagged as a Major finding
+("Inter-plane version/auth claims have no complete wire contract"). The
+contract specifies that each plane derives a self-signed X.509 cert from its
+on-disk Ed25519 private key at process startup, holds it in memory only, and
+re-derives it on every restart. This entry records the accepted policy
+decisions around validity and rotation so the residue is operator-visible
+per Constitution V.
+
+**Finding (T095 §Analysis residue).** The certificate validity window and
+the absence of automated key rotation are operator-visible facts that the
+threat model and this log MUST carry — they bound the value of a stolen
+in-memory cert and the operator-action cadence for key replacement.
+
+**Accepted policy (T095 §2.2 + §6).**
+
+- `NotBefore = now − 5 min` (negative-skew window for compose-stack clock
+  drift), `NotAfter = now + 30 days`. The cert is re-derived on every plane
+  restart, so practical lifetime is "until next plane restart, capped at 30
+  days".
+- Certs are never persisted; the on-disk artefact set stays byte-reproducible
+  modulo the keyfiles themselves (Constitution VI).
+- Key rotation (replacing `cp.priv`/`cp.pub` / `dp.priv`/`dp.pub` in the
+  `stargate-keys` volume) is **operator-manual in v1**. Automated rotation
+  (CP-driven key generation + atomic install + plane restart) is explicitly
+  out of scope for T095 and for the Tor-route feature; it is a future feature
+  with its own threat-model entry.
+
+**Why accepted for the local profile.** THREAT-MODEL §3.1 treats same-host
+code execution as game-over; the in-memory cert's 30-day window does not
+expand that surface. The pin-on-public-key design (`wire-auth.md` §3) means
+a stolen cert without the matching private key is worthless, and a stolen
+private key without a plane restart cannot mount a MITM (the peer-pin check
+fails on the attacker's key). **The binding residue is key compromise, not
+cert compromise**: an attacker who reads a plane's process memory obtains
+the long-lived private key (loaded from `*.priv` for handshake signing) and
+can impersonate the plane indefinitely — minting fresh, currently-valid
+certs from the stolen key — until the operator manually rotates the on-disk
+keypair. The 30-day cert-validity window does NOT bound this exposure; a
+monthly plane restart does NOT help (the same key is re-loaded). This is no
+worse than the §3.1 same-host assumption in the local profile; it is the
+operator's keypair-rotation lever (§6.2) that bounds the incident, not the
+cert validity window.
+
+**What changes for LAN/VPS.** Under a LAN/VPS profile the inter-plane
+channel may cross a network (a future feature, see `wire-auth.md` §4.1 and
+§8). The 30-day cert window and the operator-manual rotation cadence MUST
+be re-reviewed against a network-positioned adversary at that point; the
+current acceptance is local-profile-scoped. A LAN/VPS feature that
+introduces TCP transport MUST revisit §4 of `wire-auth.md` (SAN verification
+vs pin) and this entry in the same PR.
+
+**Enforcement cross-reference.**
+
+- Contract document: `specs/001-tor-route/contracts/wire-auth.md` (T095).
+- Compose-level regression test: `tests/contract/compose/inter_plane_wire_test.sh`
+  (T095) gates key-file ownership/mode, peer-plane dial success, out-of-group
+  `EACCES`, wrong-key rejection, major mismatch, minor compatibility, no TCP
+  transport, and CP-restart survival. Runtime rows self-skip until T038/T045/
+  T050 land.
+- Threat-model residue: `THREAT-MODEL.md` §5.13.
+- Downstream consumers: T038 (CP gRPC server + ReloadTokensClient), T045 (DP
+  gRPC server + WatchEvents client), T050 (DP main boot order) — each
+  consumes `wire-auth.md` verbatim per T095 §Acceptance #5.
+
+---
+
 ## 2026-07-06 — docker-socket-proxy `CONTAINERS=1` read surface (corrective supersession, T019c redteam)
 
 **Corrects (partially supersedes)** the 2026-07-04 entry "docker-socket-proxy
