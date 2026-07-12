@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 82 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 48 |
+| done | 49 |
 | deferred | 0 |
 | **total** | **131** |
 
@@ -64,6 +64,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T070b | Contract test for `WatchEvents` failure transitions (`UNHEAL | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T071 | Extend `data-plane/internal/errortpl/render.go` (from T048)  | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T072 | Extend `data-plane/internal/forward/tor.go` (from T047) to m | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
+| T073 | In `data-plane/internal/controlclient/client.go` (from T045) | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T075b | Author `tests/reproducibility/extension_test.sh` | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T077 | Run the `quickstart.md` walkthrough on a clean Linux x86_64  | 6: Polish & Cross-Cutting Concerns |  |  |
@@ -75,6 +76,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T089 | Amend the Tor startup configuration contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T092 | Amend the token verifier and lifecycle contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
+| T095 | Complete the inter-plane wire contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
@@ -82,9 +84,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T090 | Remove control-plane route admission gating | in-progress | ✓ | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -96,7 +96,7 @@ _(none deferred)_
 
 ## Done
 
-_48 ticket(s) done._
+_49 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -142,6 +142,7 @@ _48 ticket(s) done._
 - T033 — Integration test for the full vertical: bring up `compose/docker-compo
 - T076 — Run every test module in the single green gate
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
+- T090 — Remove control-plane route admission gating
 - T091 — Amend the browser-hardening enforcement boundary
 - T096 — Enforce the canonical ticket workflow
 - T101 — Consolidate the privacy log-invariant scanner

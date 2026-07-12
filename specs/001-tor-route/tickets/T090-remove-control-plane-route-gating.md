@@ -1,7 +1,7 @@
 ---
 id: T090
 title: 'Remove control-plane route admission gating'
-status: in-review
+status: done
 created: 2026-07-11
 last_updated: 2026-07-12
 source: review/sol-review.md#B3
@@ -26,7 +26,7 @@ spec_refs:
 decision_refs: []
 spec_amend_for: specs/001-tor-route/data-model.md §2
 remediates: T021
-reviews: {}
+reviews: { round: 2, date: 2026-07-12, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
