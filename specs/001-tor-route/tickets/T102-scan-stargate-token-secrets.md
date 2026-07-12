@@ -1,7 +1,7 @@
 ---
 id: T102
 title: 'Scan for Stargate bearer-token secrets'
-status: in-progress
+status: done
 created: 2026-07-11
 last_updated: 2026-07-12
 source: review/sol-review.md#A3
@@ -21,7 +21,7 @@ spec_refs:
   - specs/001-tor-route/spec.md §FR-017
 decision_refs: []
 remediates: T006
-reviews: {}
+reviews: { round: 1, date: 2026-07-12, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

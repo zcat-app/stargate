@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 85 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 45 |
+| done | 46 |
 | deferred | 0 |
 | **total** | **131** |
 
@@ -83,9 +83,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T102 | Scan for Stargate bearer-token secrets | in-progress | ✓ | 6: Polish & Cross-Cutting Concerns |
+_(nothing in flight)_
 
 ---
 
@@ -97,7 +95,7 @@ _(none deferred)_
 
 ## Done
 
-_45 ticket(s) done._
+_46 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -144,3 +142,4 @@ _45 ticket(s) done._
 - T076 — Run every test module in the single green gate
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
 - T096 — Enforce the canonical ticket workflow
+- T102 — Scan for Stargate bearer-token secrets
