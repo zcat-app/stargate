@@ -89,8 +89,11 @@ services:
       - stargate-keys:/etc/stargate/keys
       - stargate-control-config:/etc/stargate:ro
       - stargate-control-state:/var/lib/stargate
-      # RW: the CP renders torrc into this volume at startup (T037
-      # TorrcRenderer). The Tor sidecar mounts the SAME volume :ro.
+      # RW: dormant for v1. The CP will render torrc into this volume at
+      # startup once T037 (TorrcRenderer) lands; for v1 the safe torrc is
+      # baked into the Tor image (T087) and the Tor sidecar does NOT mount
+      # this volume. Kept declared so the volume set stays stable
+      # (local_compose_test.sh M7) and the T037 render path has its target.
       - stargate-tor-config:/etc/tor
     networks:
       - stargate-internal
@@ -114,8 +117,13 @@ services:
     image: stargate/tor:local
     # T014's Dockerfile drops to the non-root `tor` user via `USER tor`.
     # No `user:` override here — the image's directive wins.
+    # The safe torrc is baked into the image at /etc/tor/torrc (T087,
+    # FR-011 amended by T089); Tor does NOT mount stargate-tor-config for
+    # v1 boot (Constitution Principle II — no CP render dependency; a :ro
+    # mount at /etc/tor would shadow the image-baked torrc). The
+    # stargate-tor-config volume stays declared for the future dynamic-
+    # config feature (T037) but is not mounted into tor for v1.
     volumes:
-      - stargate-tor-config:/etc/tor:ro
       - stargate-tor-state:/var/lib/tor
     networks:
       - stargate-internal
@@ -202,6 +210,8 @@ volumes:
     # Tor DataDirectory (/var/lib/tor) — entry-guard persistence
     # (THREAT-MODEL §4.2). Also hosts the control-port cookie file.
   stargate-tor-config:
-    # Rendered torrc (T037 TorrcRenderer). CP writes (RW); Tor reads (:ro).
-    # Distinct volume from stargate-tor-state so config and runtime state
-    # have different writers and different mount semantics.
+    # Dormant for v1 (T087/T089): the safe torrc is image-baked, so Tor
+    # does not mount this volume for v1 boot. The CP keeps its RW mount
+    # for the future T037 TorrcRenderer (dynamic-config feature). Distinct
+    # volume from stargate-tor-state so config and runtime state have
+    # different writers and different mount semantics.

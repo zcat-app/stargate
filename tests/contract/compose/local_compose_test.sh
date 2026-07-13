@@ -152,11 +152,15 @@ ipc_into_dp="$(q '[.services["stargate-dp"].volumes[] | select(.source == "starg
 ipc_into_cp="$(q '[.services["stargate-control"].volumes[] | select(.source == "stargate-ipc") | .target] | join(",")')"
 [ "$ipc_into_cp" = "/run/stargate" ] || bail "M7: stargate-ipc must be mounted into stargate-control at /run/stargate (got: $ipc_into_cp)"
 
-# stargate-tor-config :ro into tor; RW into stargate-control (rendered torrc).
-tor_cfg_ro="$(q '[.services["tor"].volumes[] | select(.source == "stargate-tor-config") | (.read_only // false) | tostring] | join(",")')"
-[ "$tor_cfg_ro" = "true" ] || bail "M7: stargate-tor-config must be read_only:true into tor (got: $tor_cfg_ro)"
+# stargate-tor-config NOT mounted into tor for v1 (image-baked torrc, T087 /
+# FR-011 amended by T089): a :ro mount at /etc/tor would shadow the
+# image-baked /etc/tor/torrc. RW into stargate-control (dormant, for future
+# T037 TorrcRenderer — data-model.md §6 says the volume stays declared but
+# v1 boot does not depend on it).
+tor_cfg_into_tor="$(q '[.services["tor"].volumes[] | select(.source == "stargate-tor-config")] | length | tostring')"
+[ "$tor_cfg_into_tor" = "0" ] || bail "M7: tor must NOT mount stargate-tor-config for v1 (image-baked torrc, T087 — a :ro mount at /etc/tor would shadow /etc/tor/torrc); got $tor_cfg_into_tor mount(s)"
 tor_cfg_cp_present="$(q '[.services["stargate-control"].volumes[] | select(.source == "stargate-tor-config")] | length | tostring')"
-[ "$tor_cfg_cp_present" = "1" ] || bail "M7: stargate-tor-config must also be mounted into stargate-control (RW for rendered torrc)"
+[ "$tor_cfg_cp_present" = "1" ] || bail "M7: stargate-tor-config must be mounted into stargate-control (dormant RW, for future T037 TorrcRenderer)"
 
 # --- M8: tor service exists (compose DNS name 'tor') -----------------------
 TOR_PRESENT="$(q '.services["tor"] | type')"

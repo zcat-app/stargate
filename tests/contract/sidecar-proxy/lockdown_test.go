@@ -51,7 +51,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
@@ -72,17 +71,6 @@ const proxyBase = "http://docker-socket-proxy:2375"
 // at T019c /start. Bumping is a deliberate pin-rotation decision
 // (SECURITY-DECISIONS.md rotation policy).
 const probeImage = "curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69"
-
-// seedTorrc is the minimal torrc this test writes into the
-// stargate-tor-config volume before starting the tor service. The CP's
-// TorrcRenderer (T037) has not landed, and the tor image's ENTRYPOINT is
-// fatal on a missing -f file — without seeding, tor crash-loops and
-// sub-test (b)'s State.Health assertion would race the restart cycle.
-// DisableNetwork 1 keeps a contract test from generating real Tor-network
-// egress (Constitution Principle III hygiene — this test needs a running
-// container with a HEALTHCHECK, not a bootstrapped Tor). SocksPort 0
-// closes the one listener the default torrc would open.
-const seedTorrc = "DataDirectory /var/lib/tor\nLog notice stdout\nDisableNetwork 1\nSocksPort 0\n"
 
 // TestSocketProxyLockdown gates the five runtime invariants from the
 // T019c ticket §Acceptance after bringing up the tor and
@@ -131,47 +119,35 @@ func TestSocketProxyLockdown(t *testing.T) {
 		}
 	})
 
-	// Create (build, don't start) tor first so its named volumes exist,
-	// seed the torrc, THEN start. Full-stack bring-up is impossible today —
-	// the DP/CP images cannot build until their main sources land (same
-	// constraint T019b documents); tor + docker-socket-proxy is exactly
-	// the surface this contract covers.
-	createCtx, ccancel := context.WithTimeout(ctx, 10*time.Minute)
-	defer ccancel()
-	if out, err := dockerCompose(createCtx, composeFile, envFile, "create", "--build", "tor"); err != nil {
-		t.Fatalf("docker compose create tor: %v\n%s", err, out)
-	}
-
-	// Resolve the tor-config volume via compose labels (NOT the
-	// undocumented `<project>_<name>` naming convention — same rationale
-	// as lookupComposeNetwork below) and write the seed torrc into it.
-	// --user 0 because the volume root is root-owned and the curl image's
-	// default user is unprivileged; the tor user only needs read (0644).
-	cfgVolume, err := lookupComposeVolume(ctx, cli, composeProject, "stargate-tor-config")
-	if err != nil {
-		t.Fatalf("lookup stargate-tor-config volume for project %q: %v", composeProject, err)
-	}
+	// Pull the in-network probe image (used by curlCode below) before
+	// bringing up the stack, so a pull failure surfaces clearly here rather
+	// than mid-assertion.
 	pullCtx, pcancel := context.WithTimeout(ctx, 90*time.Second)
 	defer pcancel()
 	if out, err := exec.CommandContext(pullCtx, "docker", "pull", probeImage).CombinedOutput(); err != nil {
 		t.Fatalf("docker pull %s: %v\n%s", probeImage, err, out)
 	}
-	seedCtx, scancel := context.WithTimeout(ctx, 30*time.Second)
-	defer scancel()
-	seedCmd := exec.CommandContext(seedCtx, "docker",
-		"run", "--rm", "--user", "0", "--entrypoint", "/bin/sh",
-		"-v", cfgVolume+":/etc/tor",
-		probeImage,
-		"-c", fmt.Sprintf("printf '%%s' '%s' > /etc/tor/torrc && chmod 0644 /etc/tor/torrc", seedTorrc),
-	)
-	if out, err := seedCmd.CombinedOutput(); err != nil {
-		t.Fatalf("seed torrc into %s: %v\n%s", cfgVolume, err, out)
-	}
 
+	// Build + start tor and docker-socket-proxy. The torrc is image-baked
+	// (T087 / FR-011 amended by T089) — no harness seeding needed, and the
+	// tor service no longer mounts stargate-tor-config at /etc/tor (that
+	// mount would shadow the image-baked torrc). Full-stack bring-up is
+	// impossible today — the DP/CP images cannot build until their main
+	// sources land (same constraint T019b documents); tor +
+	// docker-socket-proxy is exactly the surface this contract covers.
+	//
+	// Residue: the image-baked torrc does NOT carry DisableNetwork 1 (the
+	// prior seed torrc did, to avoid real Tor-network egress). T019c tests
+	// the docker-socket-proxy, not Tor — the container just needs to be
+	// running with a HEALTHCHECK so sub-test (b) can assert State.Health is
+	// populated. Tor's real bootstrap egress (guard selection, consensus
+	// download) is the same surface T032 and T033 already exercise at the
+	// Docker cadence; restoring DisableNetwork 1 for this test would
+	// require a compose entrypoint override (follow-up).
 	upCtx, ucancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer ucancel()
-	if out, err := dockerCompose(upCtx, composeFile, envFile, "up", "-d", "tor", "docker-socket-proxy"); err != nil {
-		t.Fatalf("docker compose up tor docker-socket-proxy: %v\n%s", err, out)
+	if out, err := dockerCompose(upCtx, composeFile, envFile, "up", "-d", "--build", "tor", "docker-socket-proxy"); err != nil {
+		t.Fatalf("docker compose up -d --build tor docker-socket-proxy: %v\n%s", err, out)
 	}
 
 	torName := waitForRunning(ctx, t, cli, "tor")
@@ -230,9 +206,10 @@ func TestSocketProxyLockdown(t *testing.T) {
 	t.Run("ContainerInspectSurfaceForSidecarMonitor", func(t *testing.T) {
 		// (b) The exact read surface SidecarMonitor (T039) polls. Assert
 		// the fields are POPULATED, not that health is "healthy" — the
-		// seeded torrc gives tor no ControlPort, so the image healthcheck
-		// reports "starting" and later "unhealthy"; both prove the field
-		// exists on the wire, which is what T039 depends on.
+		// image-baked torrc (T087) gives tor a ControlPort and a
+		// healthcheck that probes bootstrap-phase; depending on timing the
+		// status may be "starting", "healthy", or "unhealthy". All three
+		// prove the field exists on the wire, which is what T039 depends on.
 		runCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		out, err := exec.CommandContext(runCtx, "docker",
@@ -392,7 +369,7 @@ func TestSocketProxyLockdown(t *testing.T) {
 // name (compose names it `<project>-<service>-1`; the on-wire inspect
 // path in sub-tests (a)/(b) needs the real name, not the service key).
 // Polling replaces a fixed settle sleep: tor needs a moment to parse the
-// seeded torrc, and a crash-looping container must FAIL here loudly
+// image-baked torrc, and a crash-looping container must FAIL here loudly
 // rather than race the sub-tests.
 func waitForRunning(ctx context.Context, t *testing.T, cli *client.Client, service string) string {
 	t.Helper()
@@ -422,24 +399,6 @@ func waitForRunning(ctx context.Context, t *testing.T, cli *client.Client, servi
 	}
 	t.Fatalf("service %q not Running within 60s (last state: %s) — crash loop? check `docker compose -p %s logs %s`", service, lastState, composeProject, service)
 	return ""
-}
-
-// lookupComposeVolume resolves the docker volume name for a
-// (project, composeVolumeName) pair via compose labels — same rationale
-// as lookupComposeNetwork: `<project>_<name>` is an undocumented
-// convention that shifts across Compose versions.
-func lookupComposeVolume(ctx context.Context, cli *client.Client, project, composeVolume string) (string, error) {
-	f := filters.NewArgs()
-	f.Add("label", "com.docker.compose.project="+project)
-	f.Add("label", "com.docker.compose.volume="+composeVolume)
-	vols, err := cli.VolumeList(ctx, volume.ListOptions{Filters: f})
-	if err != nil {
-		return "", fmt.Errorf("VolumeList: %w", err)
-	}
-	if len(vols.Volumes) == 0 {
-		return "", fmt.Errorf("no docker volume found with labels project=%q volume=%q (did `create` run?)", project, composeVolume)
-	}
-	return vols.Volumes[0].Name, nil
 }
 
 // lookupComposeNetwork, dockerCompose, and findRepoRoot mirror

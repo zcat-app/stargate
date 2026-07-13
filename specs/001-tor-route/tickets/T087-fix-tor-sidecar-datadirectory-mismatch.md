@@ -1,7 +1,7 @@
 ---
 id: T087
 title: 'Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOINT)'
-status: pending
+status: in-progress
 created: 2026-07-11
 last_updated: 2026-07-13
 source: review/sol-review.md#B2+M3

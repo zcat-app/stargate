@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 79 |
-| in-progress | 0 |
+| pending | 78 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 51 |
@@ -76,7 +76,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T083 | Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_resta | 2: Foundational (Blocking Prerequisites) |  |  |
 | T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T087 | Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOI | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
 | T092 | Amend the token verifier and lifecycle contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T094 | Harden Compose network and container boundaries | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
@@ -86,7 +85,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T087 | Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOI | in-progress | ✓ | 2: Foundational (Blocking Prerequisites) |
 
 ---
 

@@ -37,8 +37,9 @@
 #
 # Runtime user: drops to a non-root `tor` user before ENTRYPOINT
 # (Principle VI — least privilege). The Tor state directory
-# /var/lib/tor is the Debian package default (contracts/torrc.md
-# invariant #11 — no DataDirectory override).
+# /var/lib/tor is pinned explicitly in the image-baked torrc
+# (contracts/torrc.md invariant #11 — DataDirectory /var/lib/tor is
+# explicit because the entrypoint does not load Debian's torrc-defaults).
 #
 # HEALTHCHECK design note: contracts/torrc.md invariant #8 renders
 # `Log notice stdout`. The task body phrases the healthcheck as
@@ -109,18 +110,33 @@ RUN echo "deb [signed-by=/usr/share/keyrings/torproject-archive-keyring.gpg] htt
 
 # Non-root `tor` user (T015 prose: "The Tor container drops to its own
 # `tor` user per T014"). system user, no shell, home at the Tor state
-# directory. The Debian tor package's default DataDirectory is
-# /var/lib/tor (contracts/torrc.md invariant #11 — no override); we
-# pre-create it owned by tor so the cookie file lands in the right place.
+# directory. The image-baked torrc pins DataDirectory /var/lib/tor
+# (contracts/torrc.md invariant #11 — explicit because the entrypoint does
+# not load Debian's torrc-defaults, so without the directive Tor would
+# fall back to $HOME/.tor = /var/lib/tor/.tor and land the control cookie
+# at the wrong path); we pre-create /var/lib/tor owned by tor so the
+# cookie file lands in the right place.
 RUN useradd --system --home /var/lib/tor --shell /usr/sbin/nologin tor \
  && install -d -o tor -g tor -m 0700 /var/lib/tor
 
+# Image-baked torrc (T087 / FR-011 amended by T089): the safe torrc is
+# COPY'd into the image at build time so Tor startup never waits for the
+# control plane to render config (Constitution Principle II / sol-review
+# B2 — Compose starts Tor before the CP can render a torrc, so a CP-rendered
+# torrc would be a boot-coupling the principle forbids). The file is the
+# byte-pinned golden from contracts/torrc.md §"Rendered file"; T087's
+# cold-volume regression test verifies image /etc/tor/torrc == wantTorrc
+# without harness-seeded config. Explicit chmod 0644 so USER tor can read
+# it regardless of the source checkout's file mode (redteam m1).
+COPY torrc /etc/tor/torrc
+RUN chmod 0644 /etc/tor/torrc
+
 USER tor
 
-# The control-plane renders /etc/tor/torrc into the stargate-tor-config
-# named volume at startup (contracts/torrc.md). `tor -f /etc/tor/torrc`
-# loads the rendered config; the volume mount (T015) makes the path
-# resolve at container start.
+# The image-baked /etc/tor/torrc is loaded directly by the entrypoint —
+# no stargate-tor-config volume mount (T087 dropped the tor service's
+# mount; a :ro mount at /etc/tor would shadow the image-baked torrc).
+# `tor -f /etc/tor/torrc` loads the baked config at container start.
 ENTRYPOINT ["tor", "-f", "/etc/tor/torrc"]
 
 # Health: probe the control port for bootstrap completion. Reads the
