@@ -3,7 +3,7 @@ id: T087
 title: 'Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOINT)'
 status: pending
 created: 2026-07-11
-last_updated: 2026-07-12
+last_updated: 2026-07-13
 source: review/sol-review.md#B2+M3
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
@@ -100,8 +100,93 @@ THREE documents carry the now-known-wrong path:
 Filed by T032 round-1 review (stargate-codereview finding 2). The T032
 test works around this via `find /var/lib/tor -name control_auth_cookie`
 (robust to any DataDirectory), so T032 is not blocked by this defect.
-T087 is `risk: medium` because it touches the tor image's ENTRYPOINT,
+T087 is `risk: high` because it touches the tor image's ENTRYPOINT,
 which is the highest-trust artefact in the stack (sidecars/tor/Dockerfile
 header: "this front mounts the persisted onion signing key... its image
 is the highest-trust artifact in the stack"). A redteam pass is
 recommended before merge given `privacy_critical: true`.
+
+## Analysis
+
+Property map (privacy_critical: true → required per
+`docs/process/analysis.md`). T089 already amended the contract documents
+(`contracts/torrc.md`, `data-model.md` §6, `SECURITY-DECISIONS.md`, the
+T029/T030 goldens) to the image-baked-torrc posture; T087 lands the
+code/test side and must NOT re-amend those docs. The residue items below
+are all **promoted** into the gated set (Docker cadence) by T087's
+cold-volume + live test additions — the residue left over for redteam is
+the build-time trust surface and the mount-shadowing regression vector.
+
+- **Must hold:**
+  - The image-baked `/etc/tor/torrc` is byte-for-byte equal to the
+    `wantTorrc` golden pinned by T029 (FR-011; invariant #13 — single
+    trailing LF, no CRLF).
+  - `DataDirectory /var/lib/tor` is explicit in the baked torrc, so Tor
+    does NOT fall back to its compile-time default of `$HOME/.tor` =
+    `/var/lib/tor/.tor` (invariant #11; sol-review B2+M3).
+  - The control cookie lands at exactly `/var/lib/tor/control_auth_cookie`
+    — deterministic from the explicit DataDirectory, matching the
+    Dockerfile HEALTHCHECK and T062's future control-port helper.
+  - The tor service does NOT mount `stargate-tor-config` at `/etc/tor` for
+    v1 boot — a `:ro` volume mount at `/etc/tor` would SHADOW the
+    image-baked torrc (Constitution Principle II — no CP render
+    dependency; sol-review B2).
+  - Tor startup never waits for the control plane: ENTRYPOINT loads the
+    image-baked `/etc/tor/torrc`; compose drops the v1 boot dependency on
+    `stargate-tor-config` (Principle II).
+  - The Dockerfile HEALTHCHECK reads the authoritative cookie path
+    (`/var/lib/tor/control_auth_cookie`) and performs the authenticated
+    bootstrap probe (`AUTHENTICATE` + `GETINFO status/bootstrap-phase` +
+    grep `PROGRESS=100`) — FR-014's `UNHEALTHY` verdict drives
+    `routeEnableMask[TOR]` to DISABLED, so a broken healthcheck breaks the
+    whole Tor route at the healthcheck layer.
+  - A cold-volume start (production image, no harness-seeded config)
+    reaches Docker `State.Health.Status == healthy` (acceptance #1).
+  - The loaded configuration (GETCONF over the live control port) contains
+    every torrc contract invariant; SOCKS/control ports remain
+    compose-internal (acceptance #3; FR-012; invariant #2).
+- **Gated:**
+  - `contracts/torrc.md §"Rendered file"` == `wantTorrc` golden: gated by
+    `TestRenderedTorrcByteMatch` (T029, hermetic PR gate).
+  - Per-invariant rows 1–13 on the golden: gated by `invariants_test.go`
+    (T030, hermetic PR gate).
+  - No-bridges substring sweep: gated by `no_bridges_test.go` (T031,
+    hermetic PR gate).
+  - Compose structure (7 volumes, tor has no host ports, DP loopback-only):
+    gated by `local_compose_test.sh` (T015, hermetic PR gate). T087
+    updates M7 to assert tor does NOT mount `stargate-tor-config` (the
+    mount would shadow the image-baked torrc) while the volume stays
+    declared + CP-mounted (dormant, for future T037).
+  - License headers: gated by `scripts/check-license-headers.sh`.
+  - Go compile of `//go:build docker` tests: gated by
+    `go vet -tags docker` in `scripts/go-workspace-gate.py` (hermetic PR
+    gate; the docker-tagged tests RUN in the named Docker job).
+- **Residue:**
+  - The image actually bakes `/etc/tor/torrc` byte-for-byte equal to the
+    golden — no hermetic gate reads a file out of a built Docker image.
+    **Promote**: T087's cold-volume regression test reads
+    `/etc/tor/torrc` from the production image (no harness seeding) and
+    asserts byte-equality with `wantTorrc` (Docker cadence).
+  - Tor actually loads the baked torrc and reaches
+    `State.Health.Status == healthy` — no hermetic gate starts the Tor
+    image. **Promote**: T087's cold-volume test asserts Docker health
+    == healthy (Docker cadence).
+  - The control cookie lands at exactly `/var/lib/tor/control_auth_cookie`
+    (not `/var/lib/tor/.tor/...`) — only a live test catches a
+    DataDirectory regression; the prior `find`-based workaround masked
+    exactly this regression. **Promote**: T087's live test asserts the
+    cookie file exists at the exact path with no `find` fallback (Docker
+    cadence).
+  - The loaded config contains every torrc invariant at runtime — GETCONF
+    over the live control port. **Promote**: T087's live test issues
+    GETCONF for each directive and compares to the golden's expected
+    value (Docker cadence).
+  - Residue left over (redteam scope): the Dockerfile ENTRYPOINT is the
+    highest-trust artefact; a build-pipeline compromise (MITM on
+    deb.torproject.org, key rotation) could inject a malicious tor binary
+    or swap the torrc after the contract test runs but before image push.
+    Mitigated by the keyring stage (fingerprint + PUB_COUNT==1) and
+    final-image digest pinning at release-tag time (T017); residue until
+    then. The mount-shadowing regression (a future ticket re-adding a
+    `/etc/tor` mount) is caught by the updated `local_compose_test.sh` M7
+    at PR cadence.
