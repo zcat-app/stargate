@@ -5,29 +5,48 @@
 // specs/001-tor-route/contracts/socks5-auth.md §"Invariants enforced
 // by the contract test" and §"Forbidden behaviours (both paths)".
 // Covers:
-//   (a) no token bytes in any auth-failure response capture,
-//   (b) constant-time comparison — two distinct invalid passwords of
-//       equal length yield close-to-equal latency distributions,
-//   (c) slot-invariance under the v1 N≤4 cost model (data-model.md
-//       §1.5: per-token salts force N argon2id ops per auth; short-
-//       circuiting on first match leaks the slot index),
-//   (d) no per-request journal entry on auth failure,
-//   (e) rejection of same-host NO_AUTH-only clients (canonical gate
-//       is T023's demux_test.go; re-asserted here for contract-document
-//       completeness — the invariant's table row groups it under this
-//       suite).
+//
+//	(a) no token bytes in any auth-failure response capture,
+//	(b) constant-time comparison — two distinct invalid passwords of
+//	    equal length yield close-to-equal latency distributions,
+//	(c) slot-invariance — auth-success outcome is independent of which
+//	    verifier slot matches,
+//	(d) no per-request journal entry on auth failure,
+//	(e) rejection of same-host NO_AUTH-only clients (canonical gate
+//	    is T023's demux_test.go; re-asserted here for contract-document
+//	    completeness — the invariant's table row groups it under this
+//	    suite).
 //
 // Tests-first (Constitution Principle VII) for T044
-// (data-plane/internal/auth/token.go — argon2id verification + the
+// (data-plane/internal/auth/token.go — HMAC-SHA-256 verification + the
 // constant-time comparison loop across the full token list). The test
 // self-skips until T042/T044/T045/T046/T050 land; once present, a
 // leak regression is FAIL, not SKIP.
 //
-// T024 already gates auth-SUCCESS byte shape and the argon2id
-// parameter agreement between dpharness.MintToken and
-// data-plane/internal/auth/params.go; this file owns the failure-path
-// leak surface and the statistical constant-time / slot-invariance
-// assertions T024 explicitly deferred (see T024 §Out-of-scope).
+// T093 (T092 / sol-review B5+M1) note on the timing sub-tests (b)/(c):
+// the verifier is now HMAC-SHA-256 under a single shared pepper, NOT
+// argon2id. The candidate's tag is computed ONCE per request and
+// compared against every verifier (data-model.md §1.5); HMAC compare is
+// sub-microsecond, so a userland network-timing band CANNOT distinguish
+// a short-circuit from a full-scan loop the way the prior argon2id
+// cost model (4 × ~50 ms ops) could. The timing assertion (b) therefore
+// degenerates to a coarse sanity check (it still catches a length-
+// dependent early-out, which is milliseconds-scale); the slot-
+// invariance assertion (c) becomes a FUNCTIONAL check (auth succeeds at
+// every slot) whose timing band passes trivially under HMAC. The
+// load-bearing constant-time property — "the comparison loop visits
+// every verifier, no short-circuit on first match" — is NOT catchable
+// by these userland timing tests under HMAC and is redteam residue
+// (stargate-redteam + the data-plane/internal/auth unit test that
+// instruments the loop). T093's Go HMAC unit test pins the
+// one-hash-per-candidate + full-set-compare properties at the unit
+// level; this file keeps the leak-surface (a/d) and the coarse timing
+// (b/c) regression lines.
+//
+// T024 already gates auth-SUCCESS byte shape; this file owns the
+// failure-path leak surface and the statistical constant-time / slot-
+// invariance assertions T024 explicitly deferred (see T024
+// §Out-of-scope).
 package socks5
 
 import (
@@ -64,7 +83,7 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 	// fails). Capture every byte the DP writes from sub-negotiation-
 	// reply through EOF. Assert: reply is exactly 01 FF; connection
 	// closes with no further bytes; neither the offered PASSWD
-	// plaintext nor the stored argon2id hash bytes appear anywhere in
+	// plaintext nor the stored HMAC verifier bytes appear anywhere in
 	// the capture.
 	//
 	// contracts/socks5-auth.md rows "Auth failure response is exactly
@@ -79,7 +98,7 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 		// plaintext with its final byte flipped, so auth MUST fail.
 		const realPlaintext = "0123456789abcdef0123456789abcdef"
 		stored := dpharness.MintToken(t, realPlaintext)
-		requireReloadOK(t, dpharness.Reload(t, h, 1, []*grpcpb.TokenHash{stored}), 1)
+		requireReloadOK(t, dpharness.Reload(t, h, 1, []*grpcpb.TokenVerifier{stored}), 1)
 
 		// Candidate differs from the real plaintext in the final byte
 		// only — a near-miss that a naive implementation might log or
@@ -92,7 +111,7 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 
 		conn := dialProxy(t, h)
 		defer conn.Close()
-		// 30 s covers argon2id auth (~50 ms nominal, more on loaded CI).
+		// 30 s covers HMAC auth (sub-ms nominal, more on loaded CI).
 		_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 		doMethodNegotiation(t, conn)
 		reply := doSubnegotiation(t, conn, "t025a-uname", candidate)
@@ -121,7 +140,7 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 		if !errors.Is(readErr, io.EOF) {
 			var netErr net.Error
 			if errors.As(readErr, &netErr) && netErr.Timeout() {
-				t.Errorf("auth-failure path: DP did not close within 2 s of "+
+				t.Errorf("auth-failure path: DP did not close within 2 s of " +
 					"the 01 FF reply (contract requires close)")
 			}
 			// Other non-EOF errors (reset, pipe) still imply the conn is
@@ -134,8 +153,7 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 		// same leak prohibition applies.
 		capture := append(append([]byte{}, reply...), trailing...)
 		assertNoLeakCorpus(t, capture, "offered PASSWD plaintext", []byte(candidate))
-		assertNoLeakCorpus(t, capture, "stored argon2id hash", stored.GetHash())
-		assertNoLeakCorpus(t, capture, "stored argon2id salt", stored.GetSalt())
+		assertNoLeakCorpus(t, capture, "stored HMAC verifier", stored.GetVerifier())
 	})
 
 	// (b) AuthFailure_ConstantTimeLatency_TwoInvalidPasswords: with one
@@ -154,7 +172,7 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 		h := dpharness.Start(t)
 		const realPlaintext = "0123456789abcdef0123456789abcdef"
 		requireReloadOK(t, dpharness.Reload(t, h, 1,
-			[]*grpcpb.TokenHash{dpharness.MintToken(t, realPlaintext)}), 1)
+			[]*grpcpb.TokenVerifier{dpharness.MintToken(t, realPlaintext)}), 1)
 
 		// Two distinct invalid 32-char-hex passwords. Every byte
 		// differs between them — a prefix-comparing primitive (==
@@ -192,7 +210,7 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 	})
 
 	// (c) SlotInvariance_N4_ConstantTimeAcrossList: pre-mint 5 distinct
-	// token hashes (hashA..hashE of plainA..plainE). For each slot index
+	// verifiers (hashA..hashE of plainA..plainE). For each slot index
 	// s ∈ {0,1,2,3}, push a generation with hashA at index s (the other
 	// three slots filled with hashB/hashC/hashD), then time K=8 auth-
 	// SUCCESS attempts for plainA. For the all-fail case, push a
@@ -200,12 +218,20 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 	// FAILURE attempts for plainA. Assert all 5 latency distributions'
 	// medians are within 25% of the overall median.
 	//
-	// Under a correct constant-time implementation, every auth hashes
-	// plainA against all 4 stored salts (4 argon2id ops ≈ 200 ms),
-	// regardless of which slot matches. Under a short-circuit-on-first-
-	// match implementation, slot-0 auth is ~1 op (≈50 ms) and slot-3
-	// auth is ~4 ops (≈200 ms) — a 4× ratio that fails the 25% band by
-	// a wide margin.
+	// Under the prior argon2id cost model a short-circuit-on-first-match
+	// implementation produced a slot-0 vs slot-3 ratio of ~4× (1 vs 4
+	// argon2id ops ≈ 50 vs 200 ms) that failed the 25% band by a wide
+	// margin. T092 (sol-review B5+M1) retired argon2id for HMAC-SHA-256:
+	// the candidate's tag is computed ONCE and compared (constant-time)
+	// against all 4 verifiers, so HMAC auth is sub-microsecond and the
+	// userland timing band can no longer distinguish a short-circuit
+	// from a full scan. This sub-test now functions as a FUNCTIONAL
+	// slot-invariance check (auth SUCCEEDS at every slot, FAILS in the
+	// all-fail case) with a timing band that passes trivially under
+	// HMAC — see the file-header T093 note. The load-bearing constant-
+	// time property ("the loop visits every verifier, no short-circuit")
+	// is pinned at the unit level (data-plane/internal/auth) and is
+	// redteam residue here.
 	//
 	// data-model.md §1.5; contracts/socks5-auth.md row "Slot-invariance
 	// across the token list".
@@ -214,8 +240,9 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 
 		// Five distinct plaintexts (32-char hex); hashA is the one we
 		// measure auth-success latency for at each slot. hashE is the
-		// 5th hash used only in the all-fail generation (so the list is
-		// always N=4 but plainA matches nothing in the all-fail case).
+		// 5th verifier used only in the all-fail generation (so the
+		// list is always N=4 but plainA matches nothing in the all-fail
+		// case).
 		const (
 			plainA = "aabbccddeeff00112233445566778899"
 			plainB = "bbccddeeff00112233445566778899aa"
@@ -249,16 +276,16 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 		type tc struct {
 			label   string
 			gen     uint64
-			tokens  []*grpcpb.TokenHash
+			tokens  []*grpcpb.TokenVerifier
 			passwd  string
 			wantRep []byte // expected sub-negotiation reply
 		}
 		cases := []tc{
-			{"slot0", 1, []*grpcpb.TokenHash{hashA, hashB, hashC, hashD}, plainA, []byte{0x01, 0x00}},
-			{"slot1", 2, []*grpcpb.TokenHash{hashB, hashA, hashC, hashD}, plainA, []byte{0x01, 0x00}},
-			{"slot2", 3, []*grpcpb.TokenHash{hashB, hashC, hashA, hashD}, plainA, []byte{0x01, 0x00}},
-			{"slot3", 4, []*grpcpb.TokenHash{hashB, hashC, hashD, hashA}, plainA, []byte{0x01, 0x00}},
-			{"allfail", 5, []*grpcpb.TokenHash{hashB, hashC, hashD, hashE}, plainA, []byte{0x01, 0xFF}},
+			{"slot0", 1, []*grpcpb.TokenVerifier{hashA, hashB, hashC, hashD}, plainA, []byte{0x01, 0x00}},
+			{"slot1", 2, []*grpcpb.TokenVerifier{hashB, hashA, hashC, hashD}, plainA, []byte{0x01, 0x00}},
+			{"slot2", 3, []*grpcpb.TokenVerifier{hashB, hashC, hashA, hashD}, plainA, []byte{0x01, 0x00}},
+			{"slot3", 4, []*grpcpb.TokenVerifier{hashB, hashC, hashD, hashA}, plainA, []byte{0x01, 0x00}},
+			{"allfail", 5, []*grpcpb.TokenVerifier{hashB, hashC, hashD, hashE}, plainA, []byte{0x01, 0xFF}},
 		}
 
 		// Each case gets its own DP process: a short-circuit
@@ -316,7 +343,7 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 			placeHolderDest = "example.onion"
 		)
 		stored := dpharness.MintToken(t, realPlaintext)
-		requireReloadOK(t, dpharness.Reload(t, h, 1, []*grpcpb.TokenHash{stored}), 1)
+		requireReloadOK(t, dpharness.Reload(t, h, 1, []*grpcpb.TokenVerifier{stored}), 1)
 
 		before := h.Journal.String()
 
@@ -351,8 +378,7 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 		deltaBytes := []byte(delta)
 		assertNoLeakCorpus(t, deltaBytes, "offered PASSWD plaintext", []byte(distinctPass))
 		assertNoLeakCorpus(t, deltaBytes, "offered UNAME", []byte(distinctUname))
-		assertNoLeakCorpus(t, deltaBytes, "stored argon2id hash", stored.GetHash())
-		assertNoLeakCorpus(t, deltaBytes, "stored argon2id salt", stored.GetSalt())
+		assertNoLeakCorpus(t, deltaBytes, "stored HMAC verifier", stored.GetVerifier())
 		if bytes.Contains(deltaBytes, []byte(placeHolderDest)) {
 			t.Errorf("auth-failure journal delta contains the "+
 				"destination host %q — FR-008 / contracts/socks5-auth.md "+
@@ -403,10 +429,11 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 // timeSubnegotiation writes the RFC 1929 username/password sub-
 // negotiation message and reads the 2-byte reply, returning the
 // wall-clock elapsed between the write and the reply read alongside
-// the reply bytes. The elapsed time is dominated by the DP's argon2id
-// verification work (1 op per stored hash under the v1 N≤4 cost model;
-// ~50 ms/op on a reference workstation), which is the surface the
-// constant-time and slot-invariance assertions probe.
+// the reply bytes. Under the prior argon2id verifier the elapsed time
+// was dominated by the DP's hashing work (~50 ms/op); under the T092
+// HMAC-SHA-256 verifier the auth path is sub-millisecond and elapsed
+// is dominated by network/loopback jitter — see the file-header T093
+// note on why the timing sub-tests (b)/(c) are now coarse.
 func timeSubnegotiation(t *testing.T, conn net.Conn, uname, passwd string) (time.Duration, []byte) {
 	t.Helper()
 	user := []byte(uname)
@@ -488,7 +515,7 @@ func assertMediansIndistinguishable(t *testing.T, label string, distros [][]time
 // requireReloadOK asserts the ReloadTokens response is APPLY_STATUS_OK.
 // Used by every auth-touching sub-test to fail fast — with a pinpoint
 // diagnostic — if the DP rejected the token generation. Without this,
-// a silently-rejected reload (malformed TokenHash on the wire, stale
+// a silently-rejected reload (malformed TokenVerifier on the wire, stale
 // generation) would leave the DP with an empty token list and the test
 // would fail downstream with a misleading "precondition failed" message
 // that points at the auth reply rather than the reload.

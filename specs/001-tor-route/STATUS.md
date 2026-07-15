@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 76 |
+| pending | 75 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 54 |
 | deferred | 1 |
@@ -77,7 +77,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T083 | Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_resta | 2: Foundational (Blocking Prerequisites) |  |  |
 | T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T093 | Test the amended token verifier and lifecycle | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T094 | Harden Compose network and container boundaries | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
@@ -86,7 +85,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T093 | Test the amended token verifier and lifecycle | in-review | ✓ | 2: Foundational (Blocking Prerequisites) |
 
 ---
 

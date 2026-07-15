@@ -43,12 +43,63 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 
 ## Acceptance
 
-*(Derive from the spec at `/start` — see `docs/process/ticket-template.md`
-for the preferred shapes: named test, behavioral assertion, runnable command.)*
+*(Derived by T093 acceptance #4 from `plan.md` SC-005 + the T092 HMAC
+amendment. T079a implements the test; this section pins its design so
+the impl ticket has executable acceptance, not just the Notes intent.)*
+
+1. **Peak-RSS-under-flood assertion (the sol-review B5 falsifier).** The
+   SC-005 probe opens **200 concurrent unauthenticated CONNECTs** through
+   port 8881 (the flood surface a local process reaches over loopback).
+   Under the retired Argon2id verifier this allocated ~`200 × 64 MiB ≈
+   12.8 GiB`; under the HMAC-SHA-256 verifier (data-model.md §1.5) each
+   auth allocates O(1) — one 32-byte tag + the per-connection buffer. The
+   test asserts the DP's **peak RSS stays inside a documented ceiling**
+   during the flood, reported as a separate number from the steady-state
+   pool-fill timing. **Ceiling methodology (pinned at first green run,
+   not invented here):** establish the idle baseline (DP RSS with 0
+   inbound connections) and assert peak-RSS-under-flood ≤ `baseline +
+   200 × connDeltaCeiling`, where `connDeltaCeiling` is the documented
+   per-connection memory budget (a single SOCKS5/CONNECT conn's read +
+   write buffers; ~64 KiB/order-of-magnitude, pinned from the first
+   run's measurement). An absolute floor of **512 MiB** is the
+   coarse-grained backstop (a Go proxy serving 200 idle loopback
+   connections with HMAC auth sits well under this); the
+   baseline-relative bound is the precise gate. A run that exceeds
+   either FAILS — that is the B5 regression line.
+
+2. **Steady-state pool-fill + 60 s hold (unchanged SC-005 core).** The
+   probe fills 200 authenticated CONNECTs within 30 s wall-clock, holds
+   them ≥60 s exchanging interleaved frames in both directions, and
+   asserts none dropped / starved / deadline-hit. Reported as a SEPARATE
+   number from peak-RSS — pool-fill timing alone does NOT falsify B5
+   (the RSS-under-flood bound does); both must be present.
+
+3. **No per-request log line during fill or hold** (T025a shared log
+   allowlist applies). The flood must not trigger a per-connection log
+   line — a logger activated per-auth would itself be a resource leak
+   under flood and a Principle III side channel.
+
+4. **HMAC-auth latency floor.** Under the prior Argon2id design each
+   stored token cost ~50 ms of hash work; under HMAC the candidate's tag
+   is computed once and compared (constant-time) against all verifiers
+   (§1.5). The probe reports auth-decision latency as a separate number;
+   no hard assertion (HMAC compare is sub-microsecond and dominated by
+   loopback jitter), but the reported number is the falsifier-input for a
+   future regression ceiling and confirms the flood is not
+   auth-bottlenecked.
+
+5. **CI path filter.** `tests/integration/` runs under the same
+   `scripts/verify.sh` entrypoint (T076), `STARGATE_TEST_TAGS` unchanged
+   — this is a hermetic PR-cadence test, not a Docker/live suite. It
+   content-gates on T044/T047/T049/T050 (self-skips until they land).
 
 ## Out-of-scope
 
-*(Fill at `/start` if the task body references exclusions or other tickets' work.)*
+The **zero-retained-allocation** property (heap profiling) stays with
+the milestone `stargate-perf` agent run (T079) — this ticket is a
+PR-cadence regression line against bottlenecks, deadlocks, accidental
+serialization, and the B5 memory-DoS, NOT a heap-profiling gate. Live
+Tor-network behaviour is release-cadence (T034f / T077–T079).
 
 ## Notes
 
@@ -66,3 +117,11 @@ steady-state pool-fill + 60s stability, reported as separate numbers
 alone does NOT falsify B5 — the RSS-under-flood bound does. T093
 (blocked_by T092) pins the unit-level properties; this ticket is the
 release-cadence perf gate.
+
+**T093 design extension (2026-07-15).** T093 acceptance #4 fleshed out
+the §Acceptance above (peak-RSS ceiling methodology, steady-state
+separation, HMAC-auth latency floor, CI path filter). The concrete
+ceiling numbers are pinned at first green run, not invented here — the
+methodology (baseline-relative + a 512 MiB absolute floor) is the gate.
+T079a remains `pending` (blocked_by T019a, T044, T047, T049, T050, T092,
+T093); it implements the test described above once its blockers land.

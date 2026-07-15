@@ -8,7 +8,7 @@
 //
 // Tests-first (Constitution Principle VII) for:
 //   - T042 (listener RFC 1929 framing) — reads UNAME/PASSWD off the wire
-//   - T044 (auth/token.go argon2id verification) — validates PASSWD
+//   - T044 (auth/token.go HMAC-SHA-256 verification) — validates PASSWD
 //   - T047 (forward/tor.go) — passes UNAME verbatim to upstream SOCKS5
 //
 // The test self-skips until those + T045/T050 land; once present, a
@@ -30,7 +30,7 @@ import (
 )
 
 // knownPlaintext is the bearer-token plaintext the test mints into an
-// argon2id hash via dpharness.MintToken and pushes to the DP via
+// HMAC verifier via dpharness.MintToken and pushes to the DP via
 // ReloadTokens. Any 32-char hex string would do; this one is fixed so
 // the test's intent is grep-friendly.
 const knownPlaintext = "0123456789abcdef0123456789abcdef"
@@ -68,7 +68,7 @@ func TestUserpassSubnegotiationSuccess(t *testing.T) {
 		// acceptable response — a stale-generation or invalid-hash
 		// response would mean T044 / T046 (snapshot) is broken in a
 		// way T020's contract test gates more precisely.
-		resp := dpharness.Reload(t, h, 1, []*grpcpb.TokenHash{dpharness.MintToken(t, knownPlaintext)})
+		resp := dpharness.Reload(t, h, 1, []*grpcpb.TokenVerifier{dpharness.MintToken(t, knownPlaintext)})
 		if resp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
 			t.Fatalf("ReloadTokens returned %v, want APPLY_STATUS_OK — "+
 				"precondition for the auth-success test failed; the DP "+
@@ -77,7 +77,7 @@ func TestUserpassSubnegotiationSuccess(t *testing.T) {
 
 		conn := dialProxy(t, h)
 		defer conn.Close()
-		// 30 s covers argon2id auth (~50 ms nominal, more on loaded CI).
+		// 30 s covers HMAC auth (sub-ms nominal, more on loaded CI).
 		_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 
 		doMethodNegotiation(t, conn)
@@ -100,7 +100,7 @@ func TestUserpassSubnegotiationSuccess(t *testing.T) {
 	t.Run("UNAME_LengthBoundaries", func(t *testing.T) {
 		requireAuth(t)
 		h := dpharness.Start(t)
-		dpharness.Reload(t, h, 1, []*grpcpb.TokenHash{dpharness.MintToken(t, knownPlaintext)})
+		dpharness.Reload(t, h, 1, []*grpcpb.TokenVerifier{dpharness.MintToken(t, knownPlaintext)})
 
 		for _, tc := range []struct {
 			name  string
@@ -168,7 +168,7 @@ func TestUserpassSubnegotiationSuccess(t *testing.T) {
 		// regression for the SOCKS5 path is carried by T021's
 		// AdmissionNotGatedBySidecarEvents; this test focuses on UNAME
 		// verbatim forwarding.
-		dpharness.Reload(t, h, 1, []*grpcpb.TokenHash{dpharness.MintToken(t, knownPlaintext)})
+		dpharness.Reload(t, h, 1, []*grpcpb.TokenVerifier{dpharness.MintToken(t, knownPlaintext)})
 		waitForWatchEventsDial(t, cp)
 		if err := cp.Send(fakecp.Healthy("tor")); err != nil {
 			t.Fatalf("pushing HEALTHY event: %v", err)
@@ -272,11 +272,11 @@ func writeConnectRequest(t *testing.T, conn net.Conn, host string, port uint16) 
 		t.Fatalf("CONNECT target hostname %q exceeds RFC 1929 length", host)
 	}
 	req := []byte{
-		0x05,              // VER
-		0x01,              // CMD = CONNECT
-		0x00,              // RSV
-		0x03,              // ATYP = DOMAIN (SOCKS5h)
-		byte(len(host)),  // domain length
+		0x05,            // VER
+		0x01,            // CMD = CONNECT
+		0x00,            // RSV
+		0x03,            // ATYP = DOMAIN (SOCKS5h)
+		byte(len(host)), // domain length
 	}
 	req = append(req, []byte(host)...)
 	req = append(req, byte(port>>8), byte(port))

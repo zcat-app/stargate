@@ -211,7 +211,7 @@ func (h *dpHarness) socks5ConnectReply(t *testing.T, plaintext string) []byte {
 		t.Fatalf("dial proxy %s: %v", h.proxyAddr, err)
 	}
 	defer conn.Close()
-	// 30 s covers argon2id auth (~50 ms) + worst-case forward dial.
+	// 30 s covers HMAC auth (sub-ms) + worst-case forward dial.
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 
 	// Method negotiation: offer USERNAME/PASSWORD only.
@@ -413,7 +413,7 @@ func TestWatchEvents(t *testing.T) {
 		// request phase, where admission invariance is observed.
 		const plaintext = "t021-plain-alpha"
 		tok := mintToken(t, plaintext)
-		h.reload(t, 1, []*grpcpb.TokenHash{tok})
+		h.reload(t, 1, []*grpcpb.TokenVerifier{tok})
 
 		// Wait for the DP to dial control.sock (WatchEvents consumer up).
 		waitFor(t, "DP to dial control.sock", 20*time.Second, h.journal, func() bool {
@@ -461,7 +461,7 @@ func TestWatchEvents(t *testing.T) {
 		}
 		assertForwards(t, h, plaintext, "after CRASHED with reachable upstream (advisory; admission unchanged)")
 
-		assertNoSecretLeak(t, h, tok.GetHash(), tok.GetSalt(), []byte(plaintext))
+		assertNoSecretLeak(t, h, tok.GetVerifier(), []byte(plaintext))
 	})
 
 	// Contract row 2: an out-of-vocabulary detail is a contract violation.
@@ -493,13 +493,13 @@ func TestWatchEvents(t *testing.T) {
 		}
 		t.Cleanup(func() { _ = upstream.Close() })
 
-	// The fake upstream is started so the baseline + post-reconnect
-	// forward probes are meaningful (REP != 0x03 proves the DP dialled
-	// the upstream, not short-circuited by a gate). requireForwardPath
-	// gates the forward-observation probes (baseline + post-reconnect);
-	// the reconnect-timing assertion itself needs ONLY client.go but is
-	// not separated here for simplicity (the sub-test runs as one unit
-	// once T042/T044/T045/T047/T050 all land).
+		// The fake upstream is started so the baseline + post-reconnect
+		// forward probes are meaningful (REP != 0x03 proves the DP dialled
+		// the upstream, not short-circuited by a gate). requireForwardPath
+		// gates the forward-observation probes (baseline + post-reconnect);
+		// the reconnect-timing assertion itself needs ONLY client.go but is
+		// not separated here for simplicity (the sub-test runs as one unit
+		// once T042/T044/T045/T047/T050 all land).
 		var fakeCP *fakeEventsServer
 		h := startDPWithUpstream(t, upstreamAddr, func(ipcDir string) {
 			fakeCP = startFakeCP(t, ipcDir)
@@ -507,7 +507,7 @@ func TestWatchEvents(t *testing.T) {
 
 		const plaintext = "t021-plain-alpha"
 		tok := mintToken(t, plaintext)
-		h.reload(t, 1, []*grpcpb.TokenHash{tok})
+		h.reload(t, 1, []*grpcpb.TokenVerifier{tok})
 
 		waitFor(t, "DP to dial control.sock", 20*time.Second, h.journal, func() bool {
 			return fakeCP.dialCount() >= 1
@@ -570,6 +570,6 @@ func TestWatchEvents(t *testing.T) {
 		}
 		assertForwards(t, h, plaintext, "after reconnect (admission invariant across disconnect)")
 
-		assertNoSecretLeak(t, h, tok.GetHash(), tok.GetSalt(), []byte(plaintext))
+		assertNoSecretLeak(t, h, tok.GetVerifier(), []byte(plaintext))
 	})
 }

@@ -52,12 +52,12 @@ import (
 // test needs. Each Start call produces an independent instance so
 // generation / token-list state never leaks between sub-tests.
 type Harness struct {
-	ProxyAddr string // 127.0.0.1:<port>; STARGATE_LISTEN_ADDR
+	ProxyAddr    string // 127.0.0.1:<port>; STARGATE_LISTEN_ADDR
 	UpstreamAddr string // loopback fake upstream (fake_socks5_tor); empty in tests that don't forward
-	IPCDir    string // dir hosting dp.sock + where control.sock is dialed
-	Journal   *LockedBuffer
-	PID       int
-	Cmd       *exec.Cmd
+	IPCDir       string // dir hosting dp.sock + where control.sock is dialed
+	Journal      *LockedBuffer
+	PID          int
+	Cmd          *exec.Cmd
 }
 
 // Option configures Start at construction time. The zero Option set
@@ -135,6 +135,10 @@ func Start(t *testing.T, opts ...Option) *Harness {
 	t.Cleanup(func() { os.RemoveAll(ipcDir) })
 	stateDir := t.TempDir()
 	keysDir := t.TempDir()
+	// Write the test pepper to the keys dir so the booted DP's
+	// candidate-side HMAC (T044) and MintToken agree on the verifier
+	// key (data-model.md §1.7; T093 tests-first contract surface).
+	WritePepper(t, keysDir)
 
 	proxyAddr := FreeLoopbackAddr(t)
 	journal := &LockedBuffer{}

@@ -20,17 +20,18 @@
 // close + no-trailing-bytes shape for the valid-format-but-wrong
 // (near-miss password against a populated generation) case. T028
 // does NOT re-assert that case; its distinct contribution is:
-//   (a) the empty-generation case (no tokens loaded — the canonical
-//       AUTH_REQUIRED scenario; T025 always loads a valid token first),
-//   (b) syntactically malformed PASSWD (wrong length, non-hex) against
-//       a populated generation,
-//   (c) the cross-case byte-identity invariant no other test asserts —
-//       the full response captures across all AUTH_REQUIRED cases are
-//       byte-for-byte identical to each other AND equal to [0x01, 0xFF]
-//       exactly.
+//
+//	(a) the empty-generation case (no tokens loaded — the canonical
+//	    AUTH_REQUIRED scenario; T025 always loads a valid token first),
+//	(b) syntactically malformed PASSWD (wrong length, non-hex) against
+//	    a populated generation,
+//	(c) the cross-case byte-identity invariant no other test asserts —
+//	    the full response captures across all AUTH_REQUIRED cases are
+//	    byte-for-byte identical to each other AND equal to [0x01, 0xFF]
+//	    exactly.
 //
 // Tests-first (Constitution Principle VII) for T042
-// (listener RFC 1929 framing) and T044 (auth/token.go argon2id
+// (listener RFC 1929 framing) and T044 (auth/token.go HMAC-SHA-256
 // verification, including the empty-generation fail path). The test
 // self-skips until T042/T044/T045/T050 land; once they do, a byte-
 // shape or cross-case identity regression is FAIL, not SKIP.
@@ -112,7 +113,7 @@ func TestAUTHRequiredSOCKS5Path(t *testing.T) {
 
 		conn := dialProxy(t, h)
 		defer conn.Close()
-		// 30 s covers argon2id auth on a populated path; the empty-
+		// 30 s covers HMAC auth on a populated path; the empty-
 		// generation fail is faster, but the same deadline shape as
 		// the auth-success siblings avoids a per-test surprise when
 		// T044 lands.
@@ -143,7 +144,7 @@ func TestAUTHRequiredSOCKS5Path(t *testing.T) {
 	t.Run("MalformedPasswd_ReplyIsExact_01FF_ThenClose", func(t *testing.T) {
 		requireAuth(t)
 		h := dpharness.Start(t)
-		resp := dpharness.Reload(t, h, 1, []*grpcpb.TokenHash{dpharness.MintToken(t, wellFormedPasswd)})
+		resp := dpharness.Reload(t, h, 1, []*grpcpb.TokenVerifier{dpharness.MintToken(t, wellFormedPasswd)})
 		if resp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
 			t.Fatalf("ReloadTokens(generation=1) status=%v, want "+
 				"APPLY_STATUS_OK — precondition for the malformed-"+
@@ -208,7 +209,7 @@ func TestAUTHRequiredSOCKS5Path(t *testing.T) {
 		// transition is observable only as "the server's state when
 		// this connection authed", which is exactly the dimension the
 		// cross-case identity invariant forbids the response to leak.
-		resp := dpharness.Reload(t, h, 1, []*grpcpb.TokenHash{dpharness.MintToken(t, wellFormedPasswd)})
+		resp := dpharness.Reload(t, h, 1, []*grpcpb.TokenVerifier{dpharness.MintToken(t, wellFormedPasswd)})
 		if resp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
 			t.Fatalf("ReloadTokens(generation=1) status=%v, want "+
 				"APPLY_STATUS_OK — precondition for the cross-case "+

@@ -64,7 +64,7 @@ import (
 )
 
 // authRequiredPlaintext is the bearer-token plaintext the test mints
-// into an argon2id hash via dpharness.MintToken and pushes to the DP
+// into an HMAC verifier via dpharness.MintToken and pushes to the DP
 // via ReloadTokens. The generation is NON-EMPTY — the realistic case
 // where a missing/malformed offer is rejected against a populated
 // generation, not the degenerate empty-generation case. 32 hex chars
@@ -171,7 +171,7 @@ func TestAUTHRequired(t *testing.T) {
 	h := dpharness.Start(t)
 
 	reloadResp := dpharness.Reload(t, h, 1,
-		[]*grpcpb.TokenHash{dpharness.MintToken(t, authRequiredPlaintext)})
+		[]*grpcpb.TokenVerifier{dpharness.MintToken(t, authRequiredPlaintext)})
 	if reloadResp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
 		t.Fatalf("ReloadTokens(generation=1) status=%v, want "+
 			"APPLY_STATUS_OK — precondition for the AUTH_REQUIRED "+
@@ -294,11 +294,11 @@ func sendCONNECT(t *testing.T, h *dpharness.Harness, req string) []byte {
 }
 
 // dialProxy connects to the DP's proxy listener with a deadline that
-// covers the argon2id auth-fail path (~50 ms nominal, more on loaded
-// CI) plus the render + close. Mirrors the package-local dialProxy
+// covers the HMAC auth-fail path (sub-ms nominal, more on loaded CI)
+// plus the render + close. Mirrors the package-local dialProxy
 // in tests/contract/socks5/demux_test.go (T023); not importable
 // across packages, so re-implemented here. 30 s mirrors T025/T026's
-// deadline — generous for argon2id under CI load.
+// deadline — generous for HMAC under CI load.
 func dialProxy(t *testing.T, h *dpharness.Harness) net.Conn {
 	t.Helper()
 	conn, err := net.DialTimeout("tcp", h.ProxyAddr, 5*time.Second)

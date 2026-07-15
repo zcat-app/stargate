@@ -57,7 +57,7 @@ import (
 )
 
 // connectSuccessPlaintext is the bearer-token plaintext the test mints
-// into an argon2id hash via dpharness.MintToken and pushes to the DP
+// into an HMAC verifier via dpharness.MintToken and pushes to the DP
 // via ReloadTokens. 32 hex chars — the CONNECT path's syntactic gate
 // (contracts/socks5-auth.md §"HTTP CONNECT path" step 2:
 // ^[0-9a-f]{32}$) must pass so the 200 + bridge engages. Distinct from
@@ -83,7 +83,7 @@ const connectResponseHeaderCeil = 8 << 10
 // (exact 200 response bytes + bridge engagement + response/journal
 // leak invariants). Single consolidated body — the four must-holds
 // layer on one fixture (one DP boot, one token push, no HEALTHY, one
-// CONNECT success); splitting would multiply argon2id + boot cost
+// CONNECT success); splitting would multiply HMAC-mint + boot cost
 // without adding assertion coverage (the T025a precedent). No HEALTHY
 // is pushed: admission is not CP-gated (T090; data-model.md §2).
 func TestHTTPConnectAuthSuccess(t *testing.T) {
@@ -126,7 +126,7 @@ func TestHTTPConnectAuthSuccess(t *testing.T) {
 	)
 
 	reloadResp := dpharness.Reload(t, h, 1,
-		[]*grpcpb.TokenHash{dpharness.MintToken(t, connectSuccessPlaintext)})
+		[]*grpcpb.TokenVerifier{dpharness.MintToken(t, connectSuccessPlaintext)})
 	if reloadResp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
 		t.Fatalf("ReloadTokens(generation=1) status=%v, want "+
 			"APPLY_STATUS_OK — precondition for the CONNECT success "+
@@ -158,8 +158,7 @@ func TestHTTPConnectAuthSuccess(t *testing.T) {
 
 	conn := dialProxy(t, h)
 	t.Cleanup(func() { _ = conn.Close() })
-	// 30 s covers argon2id auth (~50 ms nominal, more on loaded CI) +
-	// the upstream dial + the echo round-trip.
+	// 30 s covers HMAC auth (sub-ms) + the upstream dial + the echo round-trip.
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 
 	// Minimal valid request shape (contracts/socks5-auth.md §"HTTP

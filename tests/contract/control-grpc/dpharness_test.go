@@ -39,6 +39,7 @@ package controlgrpc
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -52,26 +53,12 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/crypto/argon2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
+	"github.com/zcat-app/stargate/tests/contract/internal/dpharness"
 	"github.com/zcat-app/stargate/tests/internal/loginvariants"
-)
-
-// Argon2id parameters — MUST mirror specs/001-tor-route/data-model.md §1.5
-// and data-plane/internal/auth/params.go byte-for-byte. The mirror is
-// deliberate, not accidental duplication: this module cannot import the
-// data plane's internal package, so agreeing on the values from two
-// independent declarations is itself the cross-plane params-agreement
-// check — a drifted constant surfaces as an auth-probe failure here.
-const (
-	argonTime        uint32 = 3
-	argonMemoryKiB   uint32 = 64 * 1024
-	argonParallelism uint8  = 4
-	argonHashLen     uint32 = 32
-	argonSaltLen     uint32 = 16
 )
 
 // dpHarness is one booted data-plane process plus the probes the contract
@@ -172,6 +159,10 @@ func startDPWithUpstream(t *testing.T, upstreamAddr string, beforeBoot func(ipcD
 	t.Cleanup(func() { os.RemoveAll(ipcDir) })
 	stateDir := t.TempDir()
 	keysDir := t.TempDir() // empty until T022 pins the key-material format
+	// Write the test pepper so the booted DP's candidate-side HMAC
+	// (T044) and mintToken agree on the verifier key (data-model.md
+	// §1.7; T093 tests-first contract surface).
+	dpharness.WritePepper(t, keysDir)
 
 	proxyAddr := freeLoopbackAddr(t)
 	journal := &lockedBuffer{}
@@ -254,7 +245,7 @@ func stopDP(t *testing.T, cmd *exec.Cmd, journal *lockedBuffer) {
 // reloadErr is the goroutine-safe RPC wrapper (no *testing.T calls) the
 // concurrency case needs; reload is the fatal-on-transport-error wrapper
 // every sequential case uses.
-func (h *dpHarness) reloadErr(gen uint64, tokens []*grpcpb.TokenHash) (*grpcpb.ReloadTokensResponse, error) {
+func (h *dpHarness) reloadErr(gen uint64, tokens []*grpcpb.TokenVerifier) (*grpcpb.ReloadTokensResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	return h.client.ReloadTokens(ctx,
@@ -262,7 +253,7 @@ func (h *dpHarness) reloadErr(gen uint64, tokens []*grpcpb.TokenHash) (*grpcpb.R
 		grpc.WaitForReady(true))
 }
 
-func (h *dpHarness) reload(t *testing.T, gen uint64, tokens []*grpcpb.TokenHash) *grpcpb.ReloadTokensResponse {
+func (h *dpHarness) reload(t *testing.T, gen uint64, tokens []*grpcpb.TokenVerifier) *grpcpb.ReloadTokensResponse {
 	t.Helper()
 	resp, err := h.reloadErr(gen, tokens)
 	if err != nil {
@@ -271,17 +262,13 @@ func (h *dpHarness) reload(t *testing.T, gen uint64, tokens []*grpcpb.TokenHash)
 	return resp
 }
 
-// mintToken argon2id-hashes a known plaintext under a fresh random salt,
-// yielding the wire shape the control plane would push (data-model.md
-// §1.2: per-token salt; §1.5 params).
-func mintToken(t *testing.T, plaintext string) *grpcpb.TokenHash {
+// mintToken delegates to the canonical dpharness.MintToken (single HMAC
+// mint implementation under the shared TestPepper; data-model.md §1.5).
+// Kept as a package-local name so the T020 + watch_events call sites read
+// without the dpharness. qualifier; the HMAC logic is NOT duplicated here.
+func mintToken(t *testing.T, plaintext string) *grpcpb.TokenVerifier {
 	t.Helper()
-	salt := make([]byte, argonSaltLen)
-	if _, err := rand.Read(salt); err != nil {
-		t.Fatalf("reading random salt: %v", err)
-	}
-	hash := argon2.IDKey([]byte(plaintext), salt, argonTime, argonMemoryKiB, argonParallelism, argonHashLen)
-	return &grpcpb.TokenHash{Hash: hash, Salt: salt}
+	return dpharness.MintToken(t, plaintext)
 }
 
 // randomBytes backs the malformed-length cases; content is irrelevant,
@@ -312,7 +299,7 @@ func (h *dpHarness) socks5AuthOK(t *testing.T, password string) bool {
 		t.Fatalf("dial proxy %s: %v", h.proxyAddr, err)
 	}
 	defer conn.Close()
-	// Generous deadline: each auth attempt costs the DP one argon2id op
+	// Generous deadline: each auth attempt costs the DP one HMAC op
 	// per stored token (~50 ms nominal, more on loaded CI hardware).
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 
@@ -365,15 +352,15 @@ func (h *dpHarness) requireAuth(t *testing.T, plaintext string, want bool, why s
 	}
 }
 
-// snapshotFile mirrors data-model.md §1.4's informal schema.
+// snapshotFile mirrors data-model.md §1.4's informal schema (amended
+// by T092: schemaVersion 2, verifier-only — no per-token salt).
 type snapshotFile struct {
 	SchemaVersion int    `json:"schemaVersion"`
 	Generation    uint64 `json:"generation"`
 	LoadedAt      string `json:"loadedAt"`
-	Hashes        []struct {
-		Hash string `json:"hash"`
-		Salt string `json:"salt"`
-	} `json:"hashes"`
+	Verifiers     []struct {
+		Verifier string `json:"verifier"`
+	} `json:"verifiers"`
 }
 
 // snapshotBytes returns the raw dp-snapshot.json content, or nil when the
@@ -399,11 +386,18 @@ func (h *dpHarness) readSnapshot(t *testing.T) snapshotFile {
 	var s snapshotFile
 	if err := json.Unmarshal(raw, &s); err != nil {
 		// Content deliberately redacted: the snapshot holds base64
-		// hash+salt material, and failure output lands in CI logs — same
+		// verifier material, and failure output lands in CI logs — same
 		// index-only hygiene as assertNoSecretLeak.
 		t.Fatalf("unmarshal %s (data-model.md §1.4 shape): %v (%d bytes, content redacted)", h.snapshotPath(), err, len(raw))
 	}
 	return s
+}
+
+// verifiersEqual reports whether the base64-encoded verifier string
+// read from dp-snapshot.json equals the raw verifier bytes pushed over
+// the RPC (data-model.md §1.4 persist-content fidelity check).
+func verifiersEqual(b64 string, raw []byte) bool {
+	return b64 == base64.StdEncoding.EncodeToString(raw)
 }
 
 // assertNoSecretLeak scans the captured journal for every rendering of

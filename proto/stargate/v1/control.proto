@@ -24,17 +24,15 @@
 // SECURITY-DECISIONS.md (NOT a stargate.v2 bump; no consumers today).
 // See specs/001-tor-route/data-model.md §1 and §1.5.
 //
-// KNOWN DRIFT (intentional, T092 scope boundary): this .proto SOURCE is the
-// contract of record and is amended here; the GENERATED stubs
-// (`grpcpb/control.pb.go`) and the T020 contract tests still reference the
-// retired `TokenHash { hash; salt }` shape. Regenerating the stubs and
-// remediating the T020 tests is a HARD GATE owned by T093 acceptance #6
-// (blocked_by T092; `remediates: T020`) — the T020 tests are content-gated
-// to SKIP today, so the tree stays green with the stale stubs in place. T092
-// does not regenerate stubs or rewrite test logic (that would break the green
-// gate mid-amendment and pre-empt T093's test-first role). T093 is not done
-// until the drift is resolved (no `TokenHash`/`salt` reference remains in the
-// regenerated `grpcpb` package or the T020 test), not merely documented.
+// DRIFT RESOLVED (T093, 2026-07-15): T092 amended this .proto SOURCE and
+// left the GENERATED stubs + T020 contract tests referencing the retired
+// `TokenHash { hash; salt }` shape (the `KNOWN DRIFT` block T092 carried).
+// T093 acceptance #6 regenerated `grpcpb/control{,_grpc}.pb.go` from this
+// source and reworked the T020 contract test off `TokenHash` onto
+// `TokenVerifier{verifier}` + the HMAC mint helper — no `TokenHash`/`salt`
+// CODE symbol remains in the regenerated `grpcpb` package or the T020 test
+// (explanatory comment mentions of the rename are retained). The drift is
+// resolved, not merely documented; `remediates: T020`.
 
 syntax = "proto3";
 

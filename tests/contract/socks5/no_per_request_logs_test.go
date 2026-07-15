@@ -54,7 +54,7 @@ import (
 )
 
 // successPathPlaintext is the bearer-token plaintext the test mints
-// into an argon2id hash via dpharness.MintToken and pushes to the DP
+// into an HMAC verifier via dpharness.MintToken and pushes to the DP
 // via ReloadTokens. Fixed across the 100-CONNECT burst so the auth
 // surface is identical on every iteration; the corpus scan's job is
 // catching a leak of the per-iteration destination/body/UNAME, not
@@ -67,15 +67,14 @@ const successPathPlaintext = "0123456789abcdef0123456789abcdef"
 // is statistically impossible to miss (a 1%-of-the-time leak would
 // surface ~1 hit per run) but small enough that the sequential test
 // finishes well under the per-test deadline on a CI runner even with
-// argon2id auth at ~50 ms/op (100 × ~50 ms = ~5 s of auth work plus
-// forward-path overhead).
+// HMAC auth at sub-ms/op (100 ops plus forward-path overhead).
 const successPathConnectCount = 100
 
 // TestSOCKS5SuccessPathLogInvariants pins the success-path journal
 // invariants FR-008 / arch §6.4 enumerate. Single consolidated body
 // (not sub-tests) because the §Analysis must-holds are layered on
 // the same 100-CONNECT burst — splitting would force 4× DP boots for
-// the same setup, multiplying the argon2id + container-build cost
+// the same setup, multiplying the HMAC-mint + container-build cost
 // without adding assertion coverage.
 func TestSOCKS5SuccessPathLogInvariants(t *testing.T) {
 	// Boot-minimum gate (T042 listener + T045 gRPC server + T050
@@ -129,7 +128,7 @@ func TestSOCKS5SuccessPathLogInvariants(t *testing.T) {
 	// invalid-hash response would mean T044 / T046 (snapshot) is
 	// broken in a way T020's contract test gates more precisely.
 	reloadResp := dpharness.Reload(t, h, 1,
-		[]*grpcpb.TokenHash{dpharness.MintToken(t, successPathPlaintext)})
+		[]*grpcpb.TokenVerifier{dpharness.MintToken(t, successPathPlaintext)})
 	if reloadResp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
 		t.Fatalf("ReloadTokens(generation=1) status=%v, want "+
 			"APPLY_STATUS_OK — precondition for the success-path "+
@@ -180,9 +179,9 @@ func TestSOCKS5SuccessPathLogInvariants(t *testing.T) {
 	// attributable to a specific CONNECT, not pooled.
 	for i := 0; i < successPathConnectCount; i++ {
 		conn := dialProxy(t, h)
-		// 30 s per iteration covers argon2id auth (~50 ms nominal,
-		// more on loaded CI) + the forward-path dial + the body
-		// echo round-trip.
+		// 30 s per iteration covers HMAC auth (sub-ms nominal, more
+		// on loaded CI) + the forward-path dial + the body echo
+		// round-trip.
 		_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 
 		doMethodNegotiation(t, conn)

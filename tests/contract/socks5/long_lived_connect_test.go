@@ -143,7 +143,7 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 	)
 
 	reloadResp := dpharness.Reload(t, h, 1,
-		[]*grpcpb.TokenHash{dpharness.MintToken(t, longLivedPlaintext)})
+		[]*grpcpb.TokenVerifier{dpharness.MintToken(t, longLivedPlaintext)})
 	if reloadResp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
 		t.Fatalf("ReloadTokens(generation=1) status=%v, want APPLY_STATUS_OK "+
 			"— precondition failed; the DP did not accept the test's token "+

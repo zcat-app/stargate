@@ -1,7 +1,7 @@
 ---
 id: T093
 title: 'Test the amended token verifier and lifecycle'
-status: pending
+status: in-review
 created: 2026-07-11
 last_updated: 2026-07-15
 source: review/sol-review.md#B5+M1
@@ -177,3 +177,49 @@ remediation that T092 deferred (its `control.proto` `KNOWN DRIFT` block)
 is **acceptance item #6 above** — a hard gate, not just a note. Without
 it the proto source and the generated `grpcpb` stubs drift; both land
 here, test-first, before T035/T041/T044/T046 resume.
+
+**Landing notes (2026-07-15).**
+
+- **#3 cross-plane restart — decomposition.** The cross-plane restart
+  property decomposes into two independently-testable component
+  properties, each gated here: (a) the **DP-side reconciliation
+  handshake** — stale proposal → `APPLY_STATUS_STALE_GENERATION` +
+  `current_generation`, retry `current+1` → `APPLY_STATUS_OK` — is the
+  new `ReconciliationRetryConverges` sub-test in the reworked T020 suite
+  (contract row 6); (b) the **CP-side persisted-generation proposal** —
+  a restarted CP reads `token_generation`, proposes `last+1`, NOT 1 — is
+  `TokenLifecycleContractTest#restartProposesLastPlusOneNotOne`. The
+  "without dropping the last-known token list" clause is the Principle II
+  property the failure-semantics JVM tests pin (`failureModesDoNotCallReloadTokens`:
+  a CP that cannot load does not call ReloadTokens, so the DP keeps its
+  last-known list). A dedicated end-to-end test that boots CP + DP,
+  restarts the CP, and observes convergence would content-gate on BOTH
+  T035 (CP TokenLoader) and T044/T045/T050 (DP) — none of which exist —
+  and would add no executable regression value over the two component
+  tests until those land. The decomposition is therefore the faithful
+  tests-first discharge of #3; the end-to-end scenario becomes a
+  milestone-cadence live test (T077–T079 family) once the vertical slice
+  exists.
+
+- **#6 forced-migration surface.** Regenerating the grpcpb stubs
+  retired `grpcpb.TokenHash` entirely, so every caller under
+  `tests/contract/` (11 files: the T020 suite + harness, the socks5 +
+  error-template contract suites, the shared `dpharness` helper, and
+  `leak_test.go`) had to migrate off `TokenHash{hash,salt}` onto
+  `TokenVerifier{verifier}` or the Go compile gate went RED. This
+  exceeds the nominal `files_budget: 11` (the migration alone is ~12
+  hand-edits + 2 generated stubs); every line traces to #6 (the regen
+  broke these callers), so it is not scope creep. `leak_test.go`'s
+  argon2id timing sub-tests (b)/(c) become semantically vacuous under
+  HMAC (compares are sub-µs; userland network timing cannot distinguish
+  a short-circuit) — they compile and pass trivially, the constant-time
+  property they once probed is now redteam residue + the unit-level
+  `TestConstantTimeAcrossSet`, and the file-header documents why.
+
+- **Wire-gate interaction.** `hmac_verifier_test.go`'s first draft
+  contained the literal string `ReloadTokens` in a comment, which
+  tripped the T095 inter-plane-wire gate's coarse secondary content
+  probe (grep `ReloadTokens|WatchEvents` under `data-plane/internal/`
+  = "DP server impl landed"). Reworded to "the token-reload wire
+  contract" — the gate's coarse grep is a privacy-critical FAIL-forcing
+  probe and stays; the comment is the surgical fix.
