@@ -40,13 +40,98 @@ requires executable tests before T035/T044 or related wiring is implemented.
 
 ## Analysis
 
-- **Must hold** — correct HMAC acceptance/rejection, fixed comparison work,
-  no pepper in snapshots/logs, restart-safe generations, and no accidental
-  revoke on file failure.
-- **Gated** — named JVM, Go, and cross-plane tests cover each property and are
-  included by the single green gate through T076.
-- **Residue** — constant-time behavior receives adversarial review in addition
-  to functional tests; tests must not print secret-bearing failure lines.
+Property map (grounding-verified 2026-07-15; `privacy_critical: true` AND
+`complexity: high` → required per `docs/process/analysis.md`). Constitution
+principles land here as concrete properties, not prose. Grounding read the
+amended `data-model.md` §1/§1.5/§1.6/§1.8, `contracts/control-grpc.md`
+§"ReloadTokens · Tests" rows 1–6, `control.proto` (post-T092), the drifted
+`grpcpb/control.pb.go` (still `TokenHash{hash,salt}`), the T020 contract
+test + `dpharness_test.go` (argon2 `mintToken`, `snapshotFile{Hashes[].{Hash,Salt}}`),
+the V001 migration (`configured_tokens`, `token_generation`), and the
+consuming tickets T044 / T035 / T035a / T079a.
+
+- **Must hold**
+  - **Proto drift eliminated (#6, the hard gate).** The regenerated
+    `grpcpb/control.pb.go` + `control_grpc.pb.go` declare `TokenVerifier{
+    verifier bytes}`, `ReloadTokensResponse.current_generation`, and NO
+    `TokenHash`/`salt` symbol. The T020 contract test
+    (`reload_tokens_test.go`) + harness (`dpharness_test.go`) reference
+    `TokenVerifier` and the HMAC mint helper only; the `snapshotFile` shape
+    is `schemaVersion: 2` / `verifiers[].verifier` (base64); the salt-length
+    invalid-length rows are dropped (single shared pepper → no per-token
+    salt); the reconciliation-retry sub-test (contract row 6) is added.
+    `grep -r 'TokenHash\|salt' proto/stargate/v1/grpcpb/
+    tests/contract/control-grpc/{reload_tokens,dpharness}_test.go` is empty.
+  - **One HMAC per candidate (#1).** The verifier computes
+    `HMAC-SHA-256(pepper, candidate)` exactly ONCE per request and compares
+    that single 32-byte tag against every stored verifier — O(1) hash work
+    regardless of token-list size N (Constitution Principle III — no
+    per-request memory-DoS vector; sol-review B5).
+  - **Constant-time across the set (#1).** The comparison loop does NOT
+    short-circuit on the first match (short-circuit leaks which slot
+    matched via timing); the candidate tag is compared against all N
+    verifiers every request (Principle III side-channel resistance).
+  - **Malformed rejected before verification (#1).** A candidate that is
+    not a 32-char lowercase-hex token is rejected BEFORE any HMAC work
+    (data-model.md §1.1 validation rule; no hash allocated for garbage).
+  - **No secret in logs (#1).** No verifier byte, pepper byte, or plaintext
+    byte appears in any test-captured output / failure message (Principle
+    III; index-only hygiene like `assertNoSecretLeak`).
+  - **Configured-token persistence shape (#2).** `configured_tokens(label
+    PK, verifier BLOB NOT NULL 32 B, created_at, last_seen_hour,
+    revoked_at)` and the singleton `token_generation(generation)`
+    apply cleanly via V001 (arch §6.6/§6.7) — the manual-token home separate
+    from `enrolled_devices` (device pubkey NOT NULL).
+  - **Mutable-buffer clearing (#2).** The mutable `byte[]` HMAC input
+    buffer is zeroed (`Arrays.fill`) after each HMAC op — the NARROWED
+    erasure claim (not the SnakeYAML `String` objects the loader cannot
+    reach; data-model.md §1.1 "Memory-erasure claim is deliberately
+    narrow").
+  - **Failure → no ReloadTokens (#2).** A missing / unreadable / invalid /
+    unparseable `tokens.yaml` triggers a `config_error` audit row and does
+    NOT call `ReloadTokens` — the DP keeps its last-known list and keeps
+    serving (Principle II "continue routing"). Only a successfully-parsed
+    explicit `tokens: []` is the revoke-all path.
+  - **Cross-plane restart convergence (#3).** A restarted CP reads its
+    persisted generation record, proposes `last + 1`; if the DP reports a
+    higher `current_generation` the CP adopts `current + 1` and retries
+    deterministically; the last-known token list is NOT dropped during the
+    restart window (Principle II + the reconciliation handshake).
+  - **Peak-RSS under flood (#4).** 200 concurrent unauthenticated attempts
+    keep peak RSS inside a documented memory ceiling — the falsifier for
+    sol-review B5 (the prior Argon2id path allocated ~12.8 GiB here).
+
+- **Gated** — `scripts/go-workspace-gate.py` compile + vet of every
+  workspace module (a test referencing a missing symbol → FAIL, so the
+  Go unit tests compile against existing symbols only); Maven `verify`
+  compiles + runs the JVM tests; the license-header check gates SPDX; the
+  reworked T020 contract suite content-gates via `startDP` on T045/T050
+  and self-skips at runtime (so the #6 regen + rework lands green). T076's
+  JSON skip accounting means an all-skip package is SKIP, never a
+  masquerade PASS.
+
+- **Residue** (accepted; named for redteam + the self-lifting content-gates)
+  - **Constant-time is not fully catchable by functional tests.** A timing
+    side-channel in the comparison loop survives a test that only checks
+    match-position independence functionally. Receives `stargate-redteam`
+    adversarial review (this ticket is `privacy_critical: true`) in
+    addition to the functional assertion that the loop visits every
+    verifier.
+  - **Tests-first lifecycle.** The Go unit tests (#1) and JVM contract
+    tests (#2) establish the executable algorithm/persistence spec against
+    existing symbols (stdlib crypto + the V001 schema + test-local
+    decision helpers); they pass today and pin the contract T044/T035 must
+    conform to. The cross-plane restart test (#3) and the reworked T020
+    suite (#6) content-gate on the DP/CP impl files (T035/T044/T045/T050)
+    and self-lift when those land — at which point a buggy impl is FAIL,
+    not SKIP. This is the repo's established tests-first + content-gate
+    discipline (Constitution Principle VII; see
+    `tests/contract/socks5/connect_auth_success_test.go` lines 31–40,
+    95–107).
+  - **No secret-bearing failure lines.** Test failure messages use
+    index-only hygiene (mirror `assertNoSecretLeak` /
+    `loginvariants.AssertNoSecrets`); a failing run must not itself leak
+    verifier/pepper/plaintext bytes into CI logs.
 
 ## Acceptance
 
