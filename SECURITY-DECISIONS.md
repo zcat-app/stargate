@@ -41,6 +41,107 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-07-15 — Bearer-token verifier: HMAC-SHA-256 + install-time pepper (T092)
+
+**Accepted findings:** sol-review **B5** (Blocker — per-request Argon2id is
+an allocation-based denial-of-service path) and **M1** (Major — token
+lifecycle state is internally inconsistent). Recorded in
+`review/sol-review.md` §B5 and §M1.
+
+**Decision.** Replace the Argon2id bearer-token verifier with
+**HMAC-SHA-256 over a dedicated 32-byte install-time pepper** shared by the
+control plane and data plane. The candidate's tag is computed once per
+request and compared with `crypto/subtle.ConstantTimeCompare` against every
+verifier in the current generation (no short-circuit). The pepper never
+enters `dp-snapshot.json`, the inter-plane RPC, any log, or any audit
+`detail_json`. Full contract in `specs/001-tor-route/data-model.md` §1.
+
+**Why this is the right trade (B5).** A bearer token is a uniformly random
+128-bit value. Offline brute-force of a 128-bit secret is infeasible at
+*any* verifier speed (the 2^128 space dwarfs any feasible guess rate), so
+the slow-KDF property Argon2id provides is worthless for a random token —
+Argon2id earns its keep on *low-entropy human passwords*, which bearer
+tokens are not. Meanwhile the prior 64 MiB / parallelism-4 Argon2id
+allocation was an unbounded memory-DoS vector:
+`golang.org/x/crypto/argon2.IDKey` allocates its full `memory` block slice
+up front, so 200 concurrent one-token auths allocate ~`200 × 64 MiB =
+12.8 GiB`, reachable by any local process via the loopback proxy. HMAC auth
+makes per-request allocation O(1) regardless of token-list size N or
+concurrent flood size. The B5 finding is falsified by **T079a's extended
+design (peak-RSS + unauthenticated-flood bounds, not pool-fill timing
+alone)** — pinned as a test by T093 before production implementation
+resumes (Principle VII). The retired N ≤ 4 cap is gone: HMAC auth is
+O(1) hash work per request regardless of N.
+
+**Why the lifecycle fix (M1).** The prior design had no persistent
+generation source (a CP restart re-hashed and pushed generation 1, which
+would be stale the moment the DP accepted any generation ≥ 1 and silently
+revoke every client), treated `tokens.yaml` I/O failure as revoke-all, and
+required `enrolled_devices` inserts to carry a nonexistent device public
+key. T092 introduces: (a) a persistent `token_generation` record the CP
+reads at start to propose `last + 1`; (b) a `ReloadTokens` reconciliation
+handshake — a stale proposal returns `APPLY_STATUS_STALE_GENERATION` plus
+the DP's `current_generation`, so the CP retries with `current + 1`;
+(c) failure semantics where missing/unreadable/invalid/unparseable input
+makes the CP **not** call `ReloadTokens` (the DP keeps last-known and keeps
+serving — Principle II), and only a successfully-parsed explicit
+`tokens: []` is revoke-all; (d) a dedicated `configured_tokens(label,
+verifier, …)` entity for the manual-YAML path, leaving `enrolled_devices`
+(device pubkey NOT NULL) for the future dashboard-enrollment feature;
+(e) a narrowed memory-erasure claim that covers only the mutable HMAC
+input `byte[]`, not SnakeYAML-materialized immutable `String` values the
+loader cannot reach.
+
+**Breaking pre-release contract change (no `stargate.v2` bump).** The proto
+`TokenHash { hash; salt }` becomes `TokenVerifier { verifier }` (the
+per-token `salt` field is dropped — a single shared pepper makes it dead)
+and `ReloadTokensResponse` gains `current_generation`. Dropping a field
+from a proto3 message is a breaking change. Per the **pre-release
+amendment doctrine** established by T091 / T099 (constitution
+`.specify/memory/constitution.md` Sync Impact Reports): semver-on-
+amendments and the 7-day public comment window become BINDING only at
+first public release; the project has shipped no binary and has no public
+remote with consumers, so the change is recorded HERE as an amendment NOTE
+rather than as a `stargate.v2` bump. The formal governance flow (PR +
+comment window) applies to the same change once the repo is public. This is
+the same boundary used for the Principle III bullet-3 amendment (T091) and
+the Principle VI Tor-reproducibility tier (T099); it is not a new
+exception. The proto comment block and `contracts/control-grpc.md`
+§"ReloadTokens" carry the amendment NOTE in lock-step.
+
+**Residue / supply-chain decision (the pepper is a new secret).**
+
+- **Ownership / mode.** `/etc/stargate/pepper.key`, generated once by
+  `scripts/stargate init` (`openssl rand -bytes 32`), mounted from the
+  `stargate-keys` volume, owned by the reading plane's UID, group-readable
+  by `stargate-ipc` (GID 5100), mode `0640` — the same ownership/mode
+  scheme as the ed25519 inter-plane keypairs in that volume.
+- **Threat-model row.** Pepper compromise + a `dp-snapshot.json` leak lets
+  an attacker test candidate tokens offline at HMAC speed. Mitigated by
+  the 128-bit token entropy: even at billions of HMAC/sec, batch
+  brute-force of a 128-bit space is infeasible — the property Argon2id
+  was over-engineered to defend (needlessly, for a random token). Recorded
+  in `THREAT-MODEL.md` §5.14.
+- **Constant-time over the verifier set** is functionally tested in T093;
+  adversarial confirmation of the timing side-channel bound is a
+  `stargate-redteam` residue (functional tests do not fully capture timing).
+- **Backup / export / wipe / rotation.** The pepper MUST be in any operator
+  backup of `stargate-keys` (without it every persisted verifier is
+  uncomputable and all stored tokens effectively revoke); `export` warns
+  the bundle now carries a secret; `wipe` removes it alongside keys and
+  state; rotation is operator-initiated (re-pepper → re-HMAC every
+  configured token → bump generation). T088 wires provisioning, export,
+  wipe, and rotation.
+
+**Downstream artefacts amended in lock-step (acceptance #7):**
+`data-model.md` §1 (full contract); `spec.md` FR-006/FR-013/FR-017/FR-018;
+`contracts/control-grpc.md` §"ReloadTokens"; `proto/stargate/v1/control.proto`;
+`plan.md` Constitution Check rows II/V/VII + Scale/Scope + SC-005 model;
+arch §6 (configured_tokens + token_generation) + `V001__init.sql`;
+`THREAT-MODEL.md` §5.14. Dependent tickets refined: T020/T020a/T035/T035a/
+T041/T044/T046/T079a/T088. T093 pins the contract as tests before T035/
+T041/T044/T046 resume.
+
 ## 2026-07-12 — Tor `torrc` image-baking contract (T089 static-startup amendment)
 
 **Context.** Review `sol-review.md` B2 found that Compose starts the

@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Applies {@code V001__init.sql} via Flyway against a fresh SQLite database
- * and asserts the schema matches arch §6: exactly the five tables the
+ * and asserts the schema matches arch §6: exactly the seven tables the
  * architecture spec mandates, no more, no less. The migration is a
  * contract-defining artefact (every future feature inherits this schema),
  * so a green test here is the regression line against silent schema drift.
@@ -31,6 +31,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * does not apply), but the schema encodes Principle III invariants
  * (bucketed counters, no per-request data) that later tests build on, so
  * validating it applies cleanly is worth a standing test.
+ *
+ * <p>T092 (sol-review M1) added {@code configured_tokens} (§6.6) and
+ * {@code token_generation} (§6.7) within V001: the manual-token path needs
+ * its own home separate from {@code enrolled_devices} (device pubkey NOT
+ * NULL), and the monotonic ReloadTokens generation needs a persisted
+ * source of truth. Pre-release, nothing has shipped, so the "schema lands
+ * once" window (T012) is the intended time to amend V001 in lock-step
+ * rather than ship a corrective V002. The count moved 5 → 7 deliberately.
  */
 class V001MigrationTest {
 
@@ -38,7 +46,7 @@ class V001MigrationTest {
     Path tempDir;
 
     @Test
-    void v001AppliesCleanlyAndCreatesAllFiveTables() throws SQLException {
+    void v001AppliesCleanlyAndCreatesAllSevenTables() throws SQLException {
         Path dbFile = tempDir.resolve("stargate-control.db");
         String url = "jdbc:sqlite:" + dbFile.toAbsolutePath();
 
@@ -48,14 +56,16 @@ class V001MigrationTest {
         flyway.migrate();
 
         Set<String> tables = userTables(url);
-        // arch §6.1 — §6.5, in declaration order.
+        // arch §6.1 — §6.7, in declaration order.
         assertTrue(tables.contains("enrolled_devices"), "arch §6.1 enrolled_devices missing");
         assertTrue(tables.contains("admin_credentials"), "arch §6.2 admin_credentials missing");
         assertTrue(tables.contains("tor_bridges"), "arch §6.3 tor_bridges missing");
         assertTrue(tables.contains("aggregate_counters"), "arch §6.4 aggregate_counters missing");
         assertTrue(tables.contains("audit_log"), "arch §6.5 audit_log missing");
-        assertEquals(5, tables.size(),
-            "exactly five user tables expected (no churn within V001); got " + tables);
+        assertTrue(tables.contains("configured_tokens"), "arch §6.6 configured_tokens missing (T092)");
+        assertTrue(tables.contains("token_generation"), "arch §6.7 token_generation missing (T092)");
+        assertEquals(7, tables.size(),
+            "exactly seven user tables expected (no churn within V001 beyond the T092 amendment); got " + tables);
     }
 
     @Test

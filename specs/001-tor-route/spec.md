@@ -323,8 +323,13 @@ tests-first suite (Principle VII) before implementation lands.
   request by extracting the bearer token from the SOCKS5 username/
   password pair (password = token) or, for any HTTP CONNECT framing it
   accepts on this port, from `Proxy-Authorization: Bearer <token>` in
-  the CONNECT request. Tokens are compared by constant-time hash
-  against the list provided by the control plane (architecture spec
+  the CONNECT request. The candidate's verifier is computed once as
+  `HMAC-SHA-256(pepper, candidate)` under the install-time pepper
+  (data-model.md §1.5; T092 — Argon2id is retired, see SECURITY-DECISIONS.md)
+  and compared with `crypto/subtle.ConstantTimeCompare` against every
+  verifier in the current generation (no short-circuit on first match —
+  the comparison loop's timing is independent of which slot matched)
+  provided by the control plane (architecture spec
   §5.2 `ReloadTokens`). On absence or mismatch, the data plane MUST
   respond per the inbound protocol:
   - **HTTP CONNECT path**: HTTP 407 (Proxy Authentication Required)
@@ -434,13 +439,20 @@ tests-first suite (Principle VII) before implementation lands.
 
 #### Inter-plane integration
 
-- **FR-013**: The data plane MUST accept a list of bearer-token hashes
-  via the gRPC `ReloadTokens` RPC (architecture spec §5.2) and apply
-  it atomically. In this feature, the source of the list is a config
+- **FR-013**: The data plane MUST accept a list of bearer-token verifiers
+  (HMAC-SHA-256 tags under the install-time pepper; data-model.md §1.5,
+  T092) via the gRPC `ReloadTokens` RPC (architecture spec §5.2) and
+  apply it atomically. In this feature, the source of the list is a config
   file read by the control plane at startup (no dashboard UI yet; see
   Assumptions). The data plane MUST continue serving port 8881 with
   its last-known token list if the control plane is unreachable
-  (Principle II; architecture spec §5.5). Admission is never gated on
+  (Principle II; architecture spec §5.5). **A `ReloadTokens` proposal
+  whose `generation <= currentGeneration` is rejected with
+  `APPLY_STATUS_STALE_GENERATION` and the data plane's
+  `current_generation` echoed in the response, so a restarted control
+  plane reconciles and retries with `current + 1` rather than
+  accidentally revoking every client (T092 / sol-review M1;
+  data-model.md §1.3 / §1.8).** Admission is never gated on
   a control-plane event (data-model.md §2; sol-review B3): a request
   that authenticates against the last-known list reaches the upstream
   dial regardless of `SidecarEvent` state.
@@ -511,31 +523,37 @@ tests-first suite (Principle VII) before implementation lands.
   control-plane container; mounted from a named volume the user
   populates manually for v1). The file format MUST be a list of token
   records, each with a label (free-form string, used in the audit
-  log) and the **plaintext token** (the control plane hashes the token
-  with argon2id at read time and never persists the plaintext beyond
-  the file the user supplies). Each plaintext token MUST be a 32-
+  log) and the **plaintext token** (the control plane computes the
+  verifier `HMAC-SHA-256(pepper, token)` under the 32-byte install-time
+  pepper at read time and never persists the plaintext beyond the file
+  the user supplies; T092 — Argon2id is retired, see data-model.md §1.5
+  and SECURITY-DECISIONS.md). Each plaintext token MUST be a 32-
   character lowercase-hexadecimal string (128 bits of entropy). The
   README quick-start documents `openssl rand -hex 16` as the canonical
   one-liner. Tokens that do not match the expected format MUST be
   rejected at config-load time with a privacy-safe log entry (label
   only, not the offending token bytes).
 - **FR-018**: The control plane reads `tokens.yaml` **once at startup
-  only** in v1. On load, it MUST push the hashed token list to the
-  data plane via `ReloadTokens` (FR-013) and emit audit-log entries
-  per the diff against the previous load: `enrolled` for each new
-  label, `revoked` for each label present last load but missing now,
-  and `config_error` (with sub-kind `parse` | `validation` | `io`)
-  for load failures other than the legitimate first-boot missing-file
-  case. Full row schema and the missing-file exemption (no audit row;
-  the legitimate first-boot state is also "file does not exist yet")
-  are documented in `data-model.md` §4. If the file is missing or
-  unreadable, the control plane MUST log a warning and proceed with
-  an empty token list (this disables routing until a token file is
-  present and the container is restarted; the proxy returns
-  `AUTH_REQUIRED` on all requests — Principle II's "continue routing"
-  applies to the serve-the-port property, not to accepting
-  unauthenticated requests). Token add/revoke requires restarting the
-  control-plane container; per architecture spec §11, the data plane
+  only** in v1. On a successful load, it MUST persist the verifiers and
+  the bumped generation (from the `token_generation` record,
+  data-model.md §1.8), push the verifier list to the data plane via
+  `ReloadTokens` (FR-013), and emit audit-log entries per the diff
+  against the previous load: `enrolled` for each new label, `revoked`
+  for each label present last load but missing now, and `config_error`
+  (with sub-kind `parse` | `validation` | `io`) for load failures other
+  than the legitimate first-boot missing-file case. Full row schema and
+  the missing-file exemption (no audit row; the legitimate first-boot
+  state is also "file does not exist yet") are documented in
+  `data-model.md` §4. **Failure semantics (T092 / sol-review M1):** a
+  missing, unreadable, invalid, or unparseable `tokens.yaml` makes the
+  control plane log a `config_error` and **NOT call `ReloadTokens`** —
+  the data plane keeps its last-known list and keeps serving port 8881
+  (Principle II "continue routing"). Only a successfully-parsed explicit
+  empty list (`tokens: []`) is the revoke-all path: that alone pushes an
+  empty generation, after which the proxy returns `AUTH_REQUIRED` on all
+  requests. A valid empty list and an I/O/parse failure therefore have
+  distinct semantics, by design. Token add/revoke requires restarting
+  the control-plane container; per architecture spec §11, the data plane
   keeps serving with its last-known token list across this restart.
   Filesystem-watch and SIGHUP-reload paths are explicitly deferred to
   the dashboard-UI feature.
@@ -560,8 +578,9 @@ tests-first suite (Principle VII) before implementation lands.
   the SOCKS5 password and (where CONNECT framing is used) in the
   `Proxy-Authorization` header. Identifies *the device* to the data
   plane, not the user. Never persisted in plaintext outside the v1
-  config file the user creates manually; hashed (argon2id) in the
-  control-plane DB and the data plane's in-memory list.
+  config file the user creates manually; stored as an HMAC-SHA-256
+  verifier under the install-time pepper (T092) in the control-plane
+  DB and the data plane's in-memory list.
 - **First-party domain** — a string computed by the extension from the
   browser-supplied `documentUrl` / `originUrl` (preferred) or the
   request URL's eTLD+1 (fallback). Used as the SOCKS5 username on each

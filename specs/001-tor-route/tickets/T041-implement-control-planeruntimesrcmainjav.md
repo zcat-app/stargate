@@ -64,3 +64,13 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+**T092 amendment (2026-07-15) — consume the amended contract.** The CP
+runtime wiring must: (a) read the install-time pepper from
+`/etc/stargate/pepper.key` (mode `0640`, group `stargate-ipc`) and pass it
+to `TokenLoader` for HMAC-SHA-256 verifier construction (`data-model.md`
+§1.7); (b) ensure the pepper is NEVER logged, persisted to
+`dp-snapshot.json`, or sent over the RPC (only verifiers cross the wire);
+(c) seed/migrate the `token_generation` singleton + `configured_tokens`
+table on start (arch §6.6/§6.7). T093 (blocked_by T092) gates this ticket
+test-first.

@@ -25,17 +25,28 @@ rpc ReloadTokens(ReloadTokensRequest) returns (ReloadTokensResponse);
 
 **Direction**: control plane → data plane.
 
+> **Amended by T092 (sol-review B5+M1).** The verifier is an HMAC-SHA-256
+> tag under a shared install-time pepper, not an Argon2id hash. `TokenHash`
+> is renamed `TokenVerifier` and drops its `salt` field (single shared
+> pepper → no per-token salt), carrying only the 32-byte verifier. The
+> response gains a `current_generation` field so a stale CP can reconcile
+> against the DP's truth and retry. This breaking pre-release contract
+> change is recorded as an amendment NOTE (SECURITY-DECISIONS.md §"Bearer-
+> token verifier: HMAC-SHA-256 + install-time pepper (T092)"), NOT a
+> `stargate.v2` bump — no consumers exist today and semver-on-amendments
+> becomes binding at first public release (T091/T099 doctrine). See
+> data-model.md §1.
+
 **Request**:
 
 ```proto
 message ReloadTokensRequest {
-  uint64 generation = 1;              // monotonic
-  repeated TokenHash tokens = 2;
+  uint64 generation = 1;              // monotonic; CP proposal = persisted last + 1
+  repeated TokenVerifier tokens = 2;
 }
 
-message TokenHash {
-  bytes hash = 1;                     // 32 bytes (argon2id output)
-  bytes salt = 2;                     // 16 bytes
+message TokenVerifier {
+  bytes verifier = 1;                 // 32 bytes (HMAC-SHA-256 tag under the pepper)
 }
 ```
 
@@ -45,13 +56,14 @@ message TokenHash {
 message ReloadTokensResponse {
   uint64 applied_generation = 1;
   ApplyStatus status = 2;
+  uint64 current_generation = 3;      // T092: DP's current generation; set on STALE so the CP can retry with current + 1
 }
 
 enum ApplyStatus {
   APPLY_STATUS_UNSPECIFIED = 0;
   APPLY_STATUS_OK = 1;
   APPLY_STATUS_STALE_GENERATION = 2; // request.generation <= current
-  APPLY_STATUS_INVALID = 3;          // malformed hash / wrong length
+  APPLY_STATUS_INVALID = 3;          // malformed verifier / wrong length
 }
 ```
 
@@ -61,26 +73,28 @@ enum ApplyStatus {
   returning `APPLY_STATUS_OK`. In-flight requests holding the previous
   generation continue against it.
 - If `request.generation <= currentGeneration`, the data plane MUST
-  return `APPLY_STATUS_STALE_GENERATION` and leave the current
-  generation unchanged.
-- Each `TokenHash.hash` MUST be exactly 32 bytes and each `salt`
-  exactly 16 bytes; mismatch returns `APPLY_STATUS_INVALID` with no
-  generation change.
+  return `APPLY_STATUS_STALE_GENERATION`, set `current_generation` to its
+  current generation (so the CP can retry with `current + 1`), and leave
+  the current generation unchanged.
+- Each `TokenVerifier.verifier` MUST be exactly 32 bytes; mismatch returns
+  `APPLY_STATUS_INVALID` with no generation change.
 - On `APPLY_STATUS_OK`, the data plane MUST persist the new
-  generation to `dp-snapshot.json` before returning. If the persist
-  fails, the response is still `APPLY_STATUS_OK` (in-memory truth
-  wins; the snapshot is only a cold-start cache).
-- The data plane MUST NOT log the hash bytes, the salt bytes, or any
+  generation to `dp-snapshot.json` (verifiers only — never the pepper)
+  before returning. If the persist fails, the response is still
+  `APPLY_STATUS_OK` (in-memory truth wins; the snapshot is only a cold-start cache).
+- The data plane MUST NOT log the verifier bytes, the pepper, or any
   token label (labels are not in the message anyway, by design —
   labels live only in the control-plane audit log).
 
 **Tests** (`tests/contract/control-grpc/reload_tokens_test.go`):
 
 1. Happy path: new generation applied; subsequent inbound proxy auth
-   uses the new hashes.
+   uses the new verifiers.
 2. Stale generation: `request.generation = currentGeneration` →
-   `APPLY_STATUS_STALE_GENERATION`, current generation unchanged.
-3. Invalid hash length: `request.tokens[i].hash` is 31 or 33 bytes →
+   `APPLY_STATUS_STALE_GENERATION`, current generation unchanged,
+   `current_generation` echoes the DP's current generation (T092
+   reconciliation field).
+3. Invalid verifier length: `request.tokens[i].verifier` is 31 or 33 bytes →
    `APPLY_STATUS_INVALID`, current generation unchanged.
 4. Snapshot persist failure: simulated by mounting `dp-snapshot.json`
    parent dir read-only → response still `APPLY_STATUS_OK`; data plane
@@ -88,6 +102,10 @@ enum ApplyStatus {
 5. Concurrency: two `ReloadTokens` calls with generations N and N+1 in
    parallel; the data plane converges on generation N+1 and rejects
    the older one as stale on retry.
+6. **Reconciliation retry (T092):** a CP that proposes a generation the
+   DP already has receives `APPLY_STATUS_STALE_GENERATION` +
+   `current_generation = N`, then re-proposes `N + 1` and receives
+   `APPLY_STATUS_OK`. Asserts the reconciliation handshake converges.
 
 ### `WatchEvents`
 

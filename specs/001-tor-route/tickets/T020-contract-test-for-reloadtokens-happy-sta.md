@@ -212,3 +212,23 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
   snapshot hash/salt content now matched against the pushed bytes (happy
   path), plaintexts included in every sub-test's leak scan, and
   `readSnapshot`'s failure output redacts snapshot content.
+
+**T092 amendment (2026-07-15) — partial supersession.** The
+Argon2id/`TokenHash{hash,salt}` framing in this ticket's §Acceptance is
+SUPERSEDED by the T092 contract: the verifier is now
+`HMAC-SHA-256(pepper, token)` (no per-token salt), the proto message is
+`TokenVerifier{verifier}`, and `ReloadTokensResponse` gains
+`current_generation` for the stale-CP reconciliation handshake
+(`specs/001-tor-route/data-model.md` §1; `contracts/control-grpc.md`
+§"ReloadTokens"). **T093 (`remediates: T020`, blocked_by T092) owns the
+rewrite of this test file + the regeneration of the `grpcpb` stubs from
+the amended `control.proto`** — that work is NOT in T092's scope (T092
+amends the proto source but leaves the committed stubs + this test file
+as-is so the tree stays green; the T020 tests are content-gated to SKIP).
+When T093 runs it must: (a) `buf`/`protoc`-regenerate `control.pb.go`
+from the amended `control.proto`; (b) rework `TestReloadTokens` onto
+`TokenVerifier` + the HMAC mint helper; (c) drop the `salt`-length table
+rows (no salt); (d) add the reconciliation-retry sub-test mapping to
+contract §"ReloadTokens · Tests" row 6; (e) re-baseline the snapshot
+content match onto `schemaVersion: 2` verifier-only shape
+(`data-model.md` §1.4).

@@ -78,3 +78,19 @@ made authoritative without designing that shape itself.
 
 The regression test must fail against the pre-fix installer for the reasons in
 review B1, then pass after the implementation in this ticket.
+
+**T092 amendment (2026-07-15) — pepper provisioning is authoritative.**
+T092 makes the install-time pepper shape authoritative
+(`specs/001-tor-route/data-model.md` §1.7). This ticket provisions it,
+per its existing out-of-scope note ("this ticket provisions any
+install-time secret shape that T092 has already made authoritative"):
+`init` step 3 generates `/etc/stargate/pepper.key` via
+`openssl rand -bytes 32` (arch §9.1 step 3, amended), mode `0640`, owned
+by the reading plane UID, group `stargate-ipc` (GID 5100) — the same
+ownership/mode scheme as the ed25519 inter-plane keypairs in the
+`stargate-keys` volume. `export` must include it (warn the bundle carries
+a secret), `import` restores it verbatim, `wipe` removes it alongside
+keys and state, and rotation (re-pepper → re-HMAC every configured token
+→ bump generation) is operator-initiated. The regression test should
+cover pepper ownership/mode alongside the existing key-volume checks
+(acceptance #4).

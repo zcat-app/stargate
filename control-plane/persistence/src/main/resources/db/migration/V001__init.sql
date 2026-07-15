@@ -16,12 +16,15 @@
 -- a fixed-vocabulary token (data-model.md §4), never free-text request
 -- data.
 
--- 6.1 enrolled_devices — devices that may use the proxy.
+-- 6.1 enrolled_devices — devices enrolled via the dashboard (future).
+-- (T092 / sol-review M1) reserved for the future dashboard-enrollment
+-- feature, the only path that has a device public key. The manual
+-- tokens.yaml path persists to configured_tokens (§6.6 below), NOT here.
 CREATE TABLE enrolled_devices (
   id              INTEGER PRIMARY KEY,
   name            TEXT    NOT NULL UNIQUE,
   pubkey          BLOB    NOT NULL,             -- ed25519 device key
-  token_hash      BLOB    NOT NULL,             -- argon2id of bearer token
+  token_hash      BLOB    NOT NULL,             -- HMAC-SHA-256 verifier under the pepper (T092; was argon2id)
   created_at      INTEGER NOT NULL,             -- unix seconds
   last_seen_hour  INTEGER,                      -- rounded to hour-bucket
   revoked_at      INTEGER                       -- nullable
@@ -69,3 +72,23 @@ CREATE TABLE audit_log (
   detail_json  TEXT                             -- fixed-schema metadata; never request data
 );
 -- Inserts only; no UPDATE/DELETE in code paths. Verified by stargate-redteam.
+
+-- 6.6 configured_tokens — manual tokens.yaml token records (T092 / sol-review M1).
+-- Manual tokens carry (label, verifier) only — no device public key — so they
+-- live here, not in enrolled_devices (whose pubkey/token_hash are both NOT NULL).
+-- Full contract: specs/001-tor-route/data-model.md §1.9.
+CREATE TABLE configured_tokens (
+  label          TEXT    PRIMARY KEY,             -- from tokens.yaml; audit-log key
+  verifier       BLOB    NOT NULL,                -- 32-byte HMAC-SHA-256 tag under the pepper
+  created_at     INTEGER NOT NULL,                -- unix seconds (audit 'enrolled')
+  last_seen_hour INTEGER,                         -- hour-bucket of last auth pass (Principle III; nullable)
+  revoked_at     INTEGER                          -- nullable; set when label disappears from tokens.yaml
+);
+
+-- 6.7 token_generation — persisted monotonic generation counter (T092 / sol-review M1).
+-- Source of truth for the ReloadTokens generation; lets a CP restart propose
+-- last+1 instead of restarting at 1 and silently revoking every client.
+-- Full semantics: specs/001-tor-route/data-model.md §1.8.
+CREATE TABLE token_generation (
+  generation  INTEGER PRIMARY KEY   -- singleton row; the last-assigned generation
+);

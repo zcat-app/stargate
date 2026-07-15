@@ -53,3 +53,16 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+**T092 amendment (2026-07-15) — the B5 falsifier is in scope here.** The
+sol-review B5 finding (per-request Argon2id → ~12.8 GiB allocation under
+200 concurrent auths) is fixed by the HMAC-SHA-256 verifier (O(1)
+per-request allocation regardless of N or flood size; `data-model.md`
+§1.5). **This ticket's gate is the falsifier for that fix**: extend the
+SC-005 probe to assert (a) **peak RSS stays inside a documented memory
+ceiling** under a 200-connection unauthenticated flood, and (b) the
+steady-state pool-fill + 60s stability, reported as separate numbers
+(`plan.md` SC-005 measurement model, T092 amendment). Pool-fill timing
+alone does NOT falsify B5 — the RSS-under-flood bound does. T093
+(blocked_by T092) pins the unit-level properties; this ticket is the
+release-cadence perf gate.

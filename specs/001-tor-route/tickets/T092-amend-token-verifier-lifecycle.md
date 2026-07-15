@@ -1,7 +1,7 @@
 ---
 id: T092
 title: 'Amend the token verifier and lifecycle contract'
-status: pending
+status: in-progress
 created: 2026-07-11
 last_updated: 2026-07-15
 source: review/sol-review.md#B5+M1
@@ -9,7 +9,7 @@ phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
 blocked_by: []
 parallel: false
-files_budget: 16
+files_budget: 22
 privacy_critical: true
 constitution_refs:
   - "II: Plane separation"

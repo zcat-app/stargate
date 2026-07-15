@@ -68,3 +68,20 @@ requires executable tests before T035/T044 or related wiring is implemented.
 ## Out-of-scope
 
 Implementing T035, T041, T044, or T046; those tickets consume this contract.
+
+## Notes
+
+**T092 dependency (2026-07-15).** T092 amended the contract this ticket
+pins (`data-model.md` §1; `contracts/control-grpc.md` §"ReloadTokens";
+`proto/stargate/v1/control.proto`). This ticket also owns: (a)
+regenerating the `grpcpb` stubs (`control.pb.go`) from the amended
+`control.proto` — T092 amended the proto SOURCE but intentionally left
+the committed stubs at the retired `TokenHash{hash,salt}` shape so the
+tree stays green (the T020 tests are content-gated SKIP); and (b)
+remediating `T020` (`remediates: T020`) — reworking
+`tests/contract/control-grpc/reload_tokens_test.go` onto
+`TokenVerifier{verifier}` + the HMAC mint helper, dropping the
+salt-length table rows, and adding the reconciliation-retry sub-test
+(contract §"ReloadTokens · Tests" row 6). Without (a) the proto source
+and the generated stubs drift; both land here, test-first, before T035/
+T041/T044/T046 resume.

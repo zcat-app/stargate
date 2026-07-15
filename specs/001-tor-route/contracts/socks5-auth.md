@@ -101,10 +101,13 @@ The data plane MUST:
    to the auth layer and is passed through verbatim to the upstream
    Tor SOCKS5 connection (FR-007).
 2. Read `PASSWD` (1–255 bytes) as the candidate bearer token.
-3. Hash `PASSWD` with argon2id using the parameters in data-model.md
-   §1.5 and the salt stored alongside each hash in the current token
-   generation. Compare with `crypto/subtle.ConstantTimeCompare`
-   against every hash in the generation.
+3. Compute `verifier = HMAC-SHA-256(pepper, PASSWD)` under the
+   install-time pepper (`/etc/stargate/pepper.key`; data-model.md §1.5,
+   amended by T092 — Argon2id is retired, there is no per-token salt).
+   Compare the candidate's verifier with
+   `crypto/subtle.ConstantTimeCompare` against EVERY verifier in the
+   current generation — no short-circuit on first match (the comparison
+   loop's timing must be independent of which slot matched).
 
 On auth success, the data plane MUST respond:
 

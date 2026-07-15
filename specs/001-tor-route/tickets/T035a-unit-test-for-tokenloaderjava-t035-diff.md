@@ -53,3 +53,16 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+**T092 amendment (2026-07-15) — consume the amended contract.** The unit
+test must cover: (a) HMAC-SHA-256 verifier construction under the pepper
+(not Argon2id); (b) the **narrowed memory-erasure claim** — assert the
+mutable `byte[]` HMAC input buffer is zeroed, and do NOT assert that
+SnakeYAML-materialized `String` values were erased (the parser hands back
+immutable `String`s the loader cannot reach; `data-model.md` §1.1 "Memory-
+erasure claim is deliberately narrow"); (c) the failure semantics —
+missing/unreadable/invalid/unparseable `tokens.yaml` triggers
+`config_error` and NO `ReloadTokens` call, while a successfully-parsed
+`tokens: []` is the revoke-all path (`data-model.md` §1.6); (d) manual
+token persistence to `configured_tokens`. T093 (blocked_by T092) is the
+cross-plane/Go side of the test-first discipline.

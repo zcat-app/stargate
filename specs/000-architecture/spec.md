@@ -271,9 +271,14 @@ service Control {
 - `EnableProtocolRequest { Route route; }`  
   `ProtocolStatus { Route route; bool listening; uint32 bound_port; HealthState health; }`
 - `RestartSidecarRequest { string sidecar_name; bool drain_existing_streams; }`
-- `ReloadTokensRequest { repeated TokenHash tokens; uint64 generation; }`  
+- `ReloadTokensRequest { repeated TokenVerifier tokens; uint64 generation; }`  
   The data plane stores only the *current* generation; older generations
-  are dropped (Principle III — no per-user history).
+  are dropped (Principle III — no per-user history). **(T092 / sol-review
+  B5+M1)** the verifier is `HMAC-SHA-256(pepper, token)` (no per-token
+  salt); `ReloadTokensResponse` carries `current_generation` so a stale CP
+  reconciles and retries. The detailed contract lives in
+  `specs/001-tor-route/contracts/control-grpc.md` §"ReloadTokens" and the
+  pepper/verifier lifecycle in `specs/001-tor-route/data-model.md` §1.
 - `StatusResponse { repeated ProtocolStatus per_protocol; AggregateCounters counters; }`  
   `AggregateCounters` contains only `route × hour-bucket` counts — never
   per-destination or per-token (Principle III, ≥1 h resolution).
@@ -357,20 +362,29 @@ Stored in the control-plane container under
 opened in **WAL mode** (constitution Tech Stack). Hibernate Panache entities
 back each table; Flyway manages migrations (`control-plane/persistence/src/main/resources/db/migration/`).
 
-### 6.1 `enrolled_devices` — devices that may use the proxy
+### 6.1 `enrolled_devices` — devices enrolled via the dashboard (future)
 
 ```
 CREATE TABLE enrolled_devices (
   id              INTEGER PRIMARY KEY,
   name            TEXT    NOT NULL UNIQUE,
   pubkey          BLOB    NOT NULL,             -- ed25519 device key
-  token_hash      BLOB    NOT NULL,             -- argon2id of bearer token
+  token_hash      BLOB    NOT NULL,             -- HMAC-SHA-256 verifier under the pepper (T092)
   created_at      INTEGER NOT NULL,             -- unix seconds
   last_seen_hour  INTEGER,                      -- rounded to hour-bucket
   revoked_at      INTEGER                       -- nullable
 );
 -- last_seen_hour is bucketed to satisfy Principle III (≥1h log resolution).
 ```
+
+> **Amended by T092 / sol-review M1.** Both `pubkey` and `token_hash`
+> remain NOT NULL: this table is reserved for the future **dashboard-
+> enrollment** feature, the only path that has a device public key. The
+> **manual `tokens.yaml` path** (v1) persists to the dedicated
+> `configured_tokens` table (§6.6) — it does NOT touch this table, so no
+> manual insert requires a nonexistent device key. The `token_hash` column
+> holds an HMAC-SHA-256 verifier under the install-time pepper (the prior
+> Argon2id comment is superseded; see data-model.md §1.5).
 
 ### 6.2 `admin_credentials` — admin login credentials (WebAuthn + ed25519 fallback)
 
@@ -425,6 +439,44 @@ CREATE TABLE audit_log (
 );
 -- Inserts only; no UPDATE/DELETE in code paths. Verified by stargate-redteam.
 ```
+
+### 6.6 `configured_tokens` — manual `tokens.yaml` token records (T092)
+
+```
+CREATE TABLE configured_tokens (
+  label          TEXT    PRIMARY KEY,             -- from tokens.yaml; audit-log key
+  verifier       BLOB    NOT NULL,                -- 32-byte HMAC-SHA-256 tag under the pepper
+  created_at     INTEGER NOT NULL,                -- unix seconds (audit 'enrolled')
+  last_seen_hour INTEGER,                         -- hour-bucket of last auth pass (Principle III; nullable until first use)
+  revoked_at     INTEGER                          -- nullable; set when label disappears from tokens.yaml (audit 'revoked')
+);
+```
+
+> Added by T092 / sol-review M1. Manual tokens carry `(label, verifier)`
+> only — no device public key — so they cannot live in `enrolled_devices`
+> (§6.1, both `pubkey` and `token_hash` NOT NULL). This table is the
+> manual-path home; `enrolled_devices` is reserved for the future
+> dashboard-enrollment feature that actually has a device key. Full
+> contract + the rejected alternative (nullable `enrolled_devices.pubkey`)
+> in `specs/001-tor-route/data-model.md` §1.9. `verifier` is an HMAC tag
+> under the install-time pepper, NOT an Argon2id hash (§1.5).
+
+### 6.7 `token_generation` — persisted monotonic generation counter (T092)
+
+```
+CREATE TABLE token_generation (
+  generation  INTEGER PRIMARY KEY   -- singleton row; the last-assigned generation
+);
+```
+
+> Added by T092 / sol-review M1. The source of truth for the monotonic
+> `ReloadTokens` generation, so a control-plane restart proposes `last + 1`
+> instead of restarting at 1 (which would be stale the moment the data
+> plane accepted any generation ≥ 1 and would silently revoke every
+> client). Read at CP start; bumped after a successful `tokens.yaml` parse.
+> If the row is absent (CP DB wiped) the CP reconciles against the data
+> plane's reported `current_generation` rather than guessing. Full
+> semantics in `specs/001-tor-route/data-model.md` §1.8.
 
 **What is deliberately NOT in this schema** (Principle III):
 
@@ -529,6 +581,12 @@ destructive change.
      prompt for WireGuard peer configuration before any container is started.
 3. **Key generation**
    - Generate inter-plane ed25519 keypairs (data plane + control plane).
+   - Generate the 32-byte bearer-token pepper (`openssl rand -bytes 32`)
+     shared by CP and DP for HMAC-SHA-256 verifier computation (T092;
+     `specs/001-tor-route/data-model.md` §1.7). Written to
+     `/etc/stargate/pepper.key` in the `stargate-keys` volume, mode `0640`,
+     group `stargate-ipc`, so both planes can read it. Never regenerated
+     unless the operator explicitly rotates.
    - Generate WebAuthn relying-party id and a one-time admin enrollment
      code (printed once, never stored).
    - Write into `stargate-keys` volume with `0600` perms.

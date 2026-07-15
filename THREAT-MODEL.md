@@ -1100,6 +1100,53 @@ inter-plane UDS sockets (`/run/stargate/control.sock` or
   that introduces TCP transport for the inter-plane channel, this residue
   MUST be re-reviewed.
 
+### 5.14 Bearer-token verifier key material — install-time pepper (T092)
+
+The bearer-token verifier is `HMAC-SHA-256(pepper, token)` over a 32-byte
+install-time pepper shared by the control plane and data plane
+(`specs/001-tor-route/data-model.md` §1.5; SECURITY-DECISIONS.md
+§"Bearer-token verifier: HMAC-SHA-256 + install-time pepper (T092)"). The
+pepper is a new long-lived secret introduced by T092; its residue is
+recorded here so it is not silently widened later.
+
+**Protects.** Per-request authentication with O(1) memory regardless of
+token-list size or concurrent flood size — retiring the Argon2id
+allocation-DoS path (sol-review B5). A `dp-snapshot.json` leak alone does
+NOT let an attacker verify guesses: the snapshot carries verifiers only,
+never the pepper, and the pepper never crosses the inter-plane RPC or any
+log.
+
+**Does NOT protect against (residue).**
+
+- **Pepper compromise + snapshot leak → offline candidate testing at HMAC
+  speed.** An attacker who obtains BOTH `/etc/stargate/pepper.key` AND a
+  `dp-snapshot.json` can test candidate tokens offline as fast as they can
+  compute HMAC-SHA-256. Mitigation: the bearer token is a uniformly random
+  128-bit value, so batch brute-force of the 2^128 space is infeasible even
+  at billions of HMAC/sec — the slow-KDF defence Argon2id provided was
+  unnecessary for a random token (which is why it was retired). The
+  threat-model entry names the residue honestly rather than relying on
+  verifier speed for security.
+- **Pepper is long-lived.** Like the inter-plane ed25519 keypairs (§5.13),
+  the pepper is generated once at `init` and rotated only on explicit
+  operator action (re-pepper → re-HMAC every configured token → bump
+  generation). A same-host attacker who reads process memory obtains the
+  pepper; in the local profile this is no worse than the §3.1 / §2.8
+  assumption (same-host code execution is game-over).
+- **Pepper loss ≠ safety.** If the operator loses the pepper (no backup of
+  `stargate-keys`), every persisted verifier becomes uncomputable and all
+  stored tokens effectively revoke — the operator must re-issue tokens.
+  Documented in `quickstart.md`; the pepper MUST be in any operator backup.
+- **Constant-time comparison** over the verifier set is functionally tested
+  (T093); adversarial confirmation of the timing side-channel bound is a
+  `stargate-redteam` residue (functional tests do not fully capture timing).
+
+**Ownership / export / wipe.** `/etc/stargate/pepper.key`, mode `0640`,
+owned by the reading plane's UID, group `stargate-ipc` (GID 5100) so both
+planes read it. `scripts/stargate export` includes it (warns the bundle
+carries a secret); `wipe` removes it alongside keys and state. T088 wires
+provisioning, export, wipe, and rotation.
+
 ---
 
 ## 6. What Stargate does not protect against

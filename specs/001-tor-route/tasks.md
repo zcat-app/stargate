@@ -1,5 +1,21 @@
 # Tasks: Tor Route — v1 Vertical Slice
 
+> **T092 amendment note (2026-07-15).** This file is the `/speckit-tasks`
+> output and is REGENERATED on the next `/speckit-tasks` run. Several task
+> bodies below (T011, T025, T035, T035a, T044, T079a) still describe the
+> RETIRED Argon2id verifier (`TokenHash{hash,salt}`, per-token salt,
+> `Argon2idParams`, N≤4 cost model, "push empty ReloadTokensRequest on
+> missing file"). They are SUPERSEDED by the T092 contract: HMAC-SHA-256
+> over an install-time pepper, `TokenVerifier{verifier}` (no salt),
+> persisted `token_generation` + reconciliation handshake, and the
+> missing/unreadable/invalid/unparseable → no-`ReloadTokens` failure
+> semantics. The AUTHORITATIVE per-task wording lives in the refined
+> ticket files (`specs/001-tor-route/tickets/T020-T079a`), each of which
+> carries a "T092 amendment" note naming the amended-contract sections it
+> must consume. When `/speckit-tasks` next regenerates this file it should
+> be re-derived against the amended `data-model.md §1` / `spec.md` FRs /
+> `contracts/control-grpc.md`. Source: `review/sol-review.md` B5+M1.
+
 **Input**: Design documents from `/specs/001-tor-route/`
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/

@@ -53,3 +53,13 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+**T092 amendment (2026-07-15).** The snapshot shape this test must assert
+changed: `dp-snapshot.json` is now `schemaVersion: 2` carrying
+`verifiers[]` (32-byte HMAC-SHA-256 tags), NOT the v1 `hashes[]` of
+`{hash, salt}` pairs, and NEVER the pepper (`specs/001-tor-route/data-model.md`
+§1.4). A cold-start read of a stale `schemaVersion: 1` snapshot MUST be
+ignored (log a warning, serve no tokens until the CP pushes a fresh
+generation) rather than misparsed — add a sub-test for that. The cold-start
+Principle-II property under test (DP serves from snapshot when CP is
+unreachable) is unchanged.
