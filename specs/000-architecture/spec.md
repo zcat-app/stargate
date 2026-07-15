@@ -444,7 +444,7 @@ CREATE TABLE audit_log (
 
 ```
 CREATE TABLE configured_tokens (
-  label          TEXT    PRIMARY KEY,             -- from tokens.yaml; audit-log key
+  label          TEXT    NOT NULL PRIMARY KEY,    -- from tokens.yaml (non-empty, §1.1); NOT NULL closes SQLite's TEXT-PK NULL quirk (T100)
   verifier       BLOB    NOT NULL,                -- 32-byte HMAC-SHA-256 tag under the pepper
   created_at     INTEGER NOT NULL,                -- unix seconds (audit 'enrolled')
   last_seen_hour INTEGER,                         -- hour-bucket of last auth pass (Principle III; nullable until first use)

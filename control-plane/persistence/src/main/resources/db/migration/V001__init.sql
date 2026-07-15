@@ -72,13 +72,50 @@ CREATE TABLE audit_log (
   detail_json  TEXT                             -- fixed-schema metadata; never request data
 );
 -- Inserts only; no UPDATE/DELETE in code paths. Verified by stargate-redteam.
+--
+-- Append-only BY MECHANISM (arch §6.5; Constitution Principle III —
+-- "by construction"): triggers reject every mutation that could change or
+-- remove an existing audit row, so the admin-action log's integrity does not
+-- depend on caller discipline. The diagnostic surfaces verbatim in any stack
+-- trace that trips it. Added by T100 (sol-review A1) within the pre-release
+-- "schema lands once" window.
+--
+-- Three DML paths are guarded, each connection-config-independent (the fix does
+-- NOT rely on PRAGMA recursive_triggers, which is per-connection and would
+-- silently reopen on any connection that omits it):
+--   * UPDATE                       -> audit_log_no_update
+--   * DELETE                       -> audit_log_no_delete
+--   * row overwrite via INSERT OR  -> audit_log_no_replace (stargate-redteam
+--     REPLACE / REPLACE conflict     M1: REPLACE's internal delete of a
+--     resolution                     conflicting PK row does NOT fire
+--                                     BEFORE DELETE under the default
+--                                     recursive_triggers=OFF, so the
+--                                     overwrite is caught here, at INSERT,
+--                                     by detecting the already-existing id.)
+-- DDL/admin access (DROP TRIGGER, PRAGMA writable_schema) can still defeat
+-- these — that is the documented THREAT-MODEL §8.3 residue (the log lives in
+-- the same DB a host/admin-compromise attacker can read or wipe), not a gap
+-- this ticket claims to close.
+CREATE TRIGGER audit_log_no_update BEFORE UPDATE ON audit_log
+BEGIN
+  SELECT RAISE(ABORT, 'audit_log is append-only: UPDATE rejected');
+END;
+CREATE TRIGGER audit_log_no_delete BEFORE DELETE ON audit_log
+BEGIN
+  SELECT RAISE(ABORT, 'audit_log is append-only: DELETE rejected');
+END;
+CREATE TRIGGER audit_log_no_replace BEFORE INSERT ON audit_log
+WHEN EXISTS (SELECT 1 FROM audit_log WHERE id = NEW.id)
+BEGIN
+  SELECT RAISE(ABORT, 'audit_log is append-only: row overwrite rejected');
+END;
 
 -- 6.6 configured_tokens — manual tokens.yaml token records (T092 / sol-review M1).
 -- Manual tokens carry (label, verifier) only — no device public key — so they
 -- live here, not in enrolled_devices (whose pubkey/token_hash are both NOT NULL).
 -- Full contract: specs/001-tor-route/data-model.md §1.9.
 CREATE TABLE configured_tokens (
-  label          TEXT    PRIMARY KEY,             -- from tokens.yaml; audit-log key
+  label          TEXT    NOT NULL PRIMARY KEY,    -- from tokens.yaml (non-empty, §1.1); NOT NULL closes SQLite's TEXT-PK NULL quirk (T100)
   verifier       BLOB    NOT NULL,                -- 32-byte HMAC-SHA-256 tag under the pepper
   created_at     INTEGER NOT NULL,                -- unix seconds (audit 'enrolled')
   last_seen_hour INTEGER,                         -- hour-bucket of last auth pass (Principle III; nullable)

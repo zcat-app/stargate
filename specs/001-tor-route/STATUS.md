@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 75 |
+| pending | 74 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 55 |
 | deferred | 1 |
@@ -83,14 +83,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T094 | Harden Compose network and container boundaries | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T100 | Strengthen persistence contract tests | 2: Foundational (Blocking Prerequisites) | ✓ | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T100 | Strengthen persistence contract tests | in-review | ✓ | 2: Foundational (Blocking Prerequisites) |
 
 ---
 

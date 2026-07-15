@@ -1,9 +1,9 @@
 ---
 id: T100
 title: 'Strengthen persistence contract tests'
-status: pending
+status: in-review
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-07-15
 source: review/sol-review.md#A1
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
