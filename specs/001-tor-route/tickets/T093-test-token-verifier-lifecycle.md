@@ -3,13 +3,13 @@ id: T093
 title: 'Test the amended token verifier and lifecycle'
 status: pending
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-07-15
 source: review/sol-review.md#B5+M1
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
 blocked_by: [T092]
 parallel: false
-files_budget: 8
+files_budget: 11
 privacy_critical: true
 constitution_refs:
   - "II: Plane separation"
@@ -64,6 +64,20 @@ requires executable tests before T035/T044 or related wiring is implemented.
 5. Tests are authored before production implementation, fail for the intended
    missing behavior, and are then content-gated only where the repository's
    incremental green-gate policy requires it.
+6. **Eliminate the proto-source-vs-generated-stub drift left by T092.**
+   Regenerate `proto/stargate/v1/grpcpb/{control.pb.go,control_grpc.pb.go}`
+   from the amended `proto/stargate/v1/control.proto` (now `TokenVerifier{
+   verifier}`, no `salt`, response `current_generation`) so the committed
+   stubs match the contract of record; rework the T020 contract test
+   (`tests/contract/control-grpc/reload_tokens_test.go`, `remediates: T020`)
+   off the retired `TokenHash{hash,salt}` onto `TokenVerifier` + the HMAC
+   mint helper, drop the salt-length table rows, add the reconciliation-retry
+   sub-test (contract §"ReloadTokens · Tests" row 6), and re-baseline the
+   snapshot content match onto `schemaVersion: 2` verifier-only shape. The
+   gate passes when `scripts/verify.sh` is GREEN with the regenerated stubs
+   in place and no `TokenHash`/`salt` reference remains in the regenerated
+   `grpcpb` package or the T020 test — i.e. the T092 `KNOWN DRIFT` block in
+   `control.proto` is resolved, not merely documented.
 
 ## Out-of-scope
 
@@ -73,15 +87,8 @@ Implementing T035, T041, T044, or T046; those tickets consume this contract.
 
 **T092 dependency (2026-07-15).** T092 amended the contract this ticket
 pins (`data-model.md` §1; `contracts/control-grpc.md` §"ReloadTokens";
-`proto/stargate/v1/control.proto`). This ticket also owns: (a)
-regenerating the `grpcpb` stubs (`control.pb.go`) from the amended
-`control.proto` — T092 amended the proto SOURCE but intentionally left
-the committed stubs at the retired `TokenHash{hash,salt}` shape so the
-tree stays green (the T020 tests are content-gated SKIP); and (b)
-remediating `T020` (`remediates: T020`) — reworking
-`tests/contract/control-grpc/reload_tokens_test.go` onto
-`TokenVerifier{verifier}` + the HMAC mint helper, dropping the
-salt-length table rows, and adding the reconciliation-retry sub-test
-(contract §"ReloadTokens · Tests" row 6). Without (a) the proto source
-and the generated stubs drift; both land here, test-first, before T035/
-T041/T044/T046 resume.
+`proto/stargate/v1/control.proto`). The stub regeneration + T020
+remediation that T092 deferred (its `control.proto` `KNOWN DRIFT` block)
+is **acceptance item #6 above** — a hard gate, not just a note. Without
+it the proto source and the generated `grpcpb` stubs drift; both land
+here, test-first, before T035/T041/T044/T046 resume.

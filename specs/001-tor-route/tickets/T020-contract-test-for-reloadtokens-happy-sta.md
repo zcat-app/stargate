@@ -220,15 +220,17 @@ SUPERSEDED by the T092 contract: the verifier is now
 `TokenVerifier{verifier}`, and `ReloadTokensResponse` gains
 `current_generation` for the stale-CP reconciliation handshake
 (`specs/001-tor-route/data-model.md` §1; `contracts/control-grpc.md`
-§"ReloadTokens"). **T093 (`remediates: T020`, blocked_by T092) owns the
-rewrite of this test file + the regeneration of the `grpcpb` stubs from
-the amended `control.proto`** — that work is NOT in T092's scope (T092
-amends the proto source but leaves the committed stubs + this test file
-as-is so the tree stays green; the T020 tests are content-gated to SKIP).
-When T093 runs it must: (a) `buf`/`protoc`-regenerate `control.pb.go`
+§"ReloadTokens"). **T093 acceptance #6 (`remediates: T020`, blocked_by
+T092) is the hard gate that owns regenerating the `grpcpb` stubs from the
+amended `control.proto` AND rewriting this test file** — that work is NOT
+in T092's scope (T092 amends the proto source but leaves the committed
+stubs + this test file as-is so the tree stays green; the T020 tests are
+content-gated to SKIP). When T093 runs it must: (a) `buf`/`protoc`-regenerate `control.pb.go`/`control_grpc.pb.go`
 from the amended `control.proto`; (b) rework `TestReloadTokens` onto
 `TokenVerifier` + the HMAC mint helper; (c) drop the `salt`-length table
 rows (no salt); (d) add the reconciliation-retry sub-test mapping to
 contract §"ReloadTokens · Tests" row 6; (e) re-baseline the snapshot
 content match onto `schemaVersion: 2` verifier-only shape
-(`data-model.md` §1.4).
+(`data-model.md` §1.4); (f) verify no `TokenHash`/`salt` reference
+remains in the regenerated `grpcpb` package or this test (the T092
+`control.proto` `KNOWN DRIFT` block is resolved, not just documented).
