@@ -61,12 +61,50 @@
 #   - debian:12-slim digest: docker buildx imagetools inspect (registry)
 #   - Tor apt key fingerprint: deb.torproject.org/torproject.org/ index
 #   - Current Tor (bookworm): 0.4.9.11-1~d12.bookworm+1 (2026-07-03)
+#
+# T099 — immutable build inputs (Constitution Principle IV). The Debian
+# archive is pinned to a snapshot.debian.org run so a clean rebuild selects
+# byte-identical packages, freezing tor's link-time closure (libssl3,
+# libevent-2.1-7, zlib1g, libc6 — the residual named in
+# SECURITY-DECISIONS.md §"Residual risk"). Every apt package carries an
+# explicit =version pin; apt verifies each .deb sha256 against the
+# PGP-signed Packages index (a mismatch fails the build closed — acceptance
+# #2). `tor` stays on deb.torproject.org (FR-015: the Tor Project's own
+# build, NOT Debian's archive rebuild 0.4.9.11-0+deb12u1). Resolved at
+# /start 2026-07-15; recorded cross-file in SECURITY-DECISIONS.md:
+#   - Debian snapshot run: 20260714T082229Z (bookworm 12.15; Date 2026-07-11)
+#   - ca-certificates  20230311+deb12u1   sha256 0d5f444f594e48c1e16a41d8fc628a09b24c658916a1274025c2330f2a802bed
+#   - curl             7.88.1-10+deb12u15 sha256 0dd9b6bf7a0bd11af2d68a52ec44c2a223fa7c11f9104c36ce1047e1137d4a8f  (stage 1 only)
+#   - gnupg            2.2.40-1.1+deb12u2 sha256 d3f860cf16da5d61875a324859045fd1f4a888ed0ddef55d7e9f977dd729a76e  (stage 1 only)
+#   - netcat-openbsd   1.219-1           sha256 85adebc045f48eb9a91515202a49940a0a57eff790223402333253ff121dfbdd
+#   - tor (torproject) 0.4.9.11-1~d12.bookworm+1 sha256 1a9fa54dece42c21fffd142963ad5e13eec735654b95f82386d7c18702145d28
+# Transitive (audit-only, frozen by the snapshot): libssl3 3.0.20-1~deb12u2,
+# libevent-2.1-7 2.1.12-stable-8. Refresh is a manual, review-driven PR
+# (Principle IV): bump the snapshot run + every =version pin together.
 
 # ---------- Stage 1: keyring builder ----------
 FROM debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS keyring
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates curl gnupg \
+# T099: replace the base image's mutable deb.debian.org source with the pinned
+# snapshot.debian.org run (Constitution Principle IV). The base image ships
+# /etc/apt/sources.list.d/debian.sources (deb822); removing it + sources.list
+# ensures ONLY the immutable snapshot is consulted. snapshot.debian.org is
+# fetched over HTTP (the base ships no ca-certificates, so an HTTPS bootstrap
+# would be circular — ca-certificates is itself the first package installed).
+# Integrity is NOT transport-based: apt verifies the InRelease PGP signature
+# (Debian archive keyring, shipped in the base) and every .deb sha256 against
+# the signed Packages index — a MITM cannot forge either, so the signed
+# metadata is the load-bearing guarantee (TLS would be defense-in-depth only).
+# snapshot.debian.org's InRelease carries no Valid-Until (it never expires);
+# no Check-Valid-Until defeat is applied.
+RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources \
+ && echo "deb http://snapshot.debian.org/archive/debian/20260714T082229Z/ bookworm main" \
+        > /etc/apt/sources.list.d/snapshot.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+        ca-certificates=20230311+deb12u1 \
+        curl=7.88.1-10+deb12u15 \
+        gnupg=2.2.40-1.1+deb12u2 \
  && rm -rf /var/lib/apt/lists/*
 
 COPY apt-key.fingerprint /tmp/apt-key.fingerprint
@@ -102,10 +140,31 @@ COPY --from=keyring /tmp/torproject-archive-keyring.gpg /usr/share/keyrings/
 # deb.torproject.org's TLS during `apt-get update`; it is a small (~300 KB)
 # harmless residual, retained. `apt-transport-https` is NOT installed —
 # apt on Debian 12 has native HTTPS support.
-RUN echo "deb [signed-by=/usr/share/keyrings/torproject-archive-keyring.gpg] https://deb.torproject.org/torproject.org bookworm main" \
+#
+# T099: the Debian closure is pinned to the same immutable snapshot.debian.org
+# run as stage 1 (the base's mutable deb.debian.org source is removed first).
+# This freezes tor's link-time dependencies — libssl3 (OpenSSL; carries Tor's
+# authenticated TLS to guards), libevent-2.1-7, zlib1g, libc6 — which
+# previously resolved fresh from Debian's archive at every build
+# (SECURITY-DECISIONS.md §"Residual risk"). The snapshot is fetched over HTTP
+# (see stage 1 comment: integrity is the PGP-signed InRelease + sha256
+# package verification, not TLS). ca-certificates + netcat-openbsd install
+# from the snapshot FIRST; then the deb.torproject.org repo (HTTPS, now that
+# ca-certificates is present) is added and `tor` is version-pinned from it
+# (NOT the Debian archive rebuild 0.4.9.11-0+deb12u1 — FR-015). apt verifies
+# every .deb sha256 against the signed Packages indexes of both repos.
+RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources \
+ && echo "deb http://snapshot.debian.org/archive/debian/20260714T082229Z/ bookworm main" \
+        > /etc/apt/sources.list.d/snapshot.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+        ca-certificates=20230311+deb12u1 \
+        netcat-openbsd=1.219-1 \
+ && echo "deb [signed-by=/usr/share/keyrings/torproject-archive-keyring.gpg] https://deb.torproject.org/torproject.org bookworm main" \
         > /etc/apt/sources.list.d/tor.list \
  && apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates tor netcat-openbsd \
+ && apt-get install -y --no-install-recommends \
+        tor=0.4.9.11-1~d12.bookworm+1 \
  && rm -rf /var/lib/apt/lists/*
 
 # Non-root `tor` user (T015 prose: "The Tor container drops to its own

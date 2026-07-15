@@ -470,9 +470,13 @@ tests-first suite (Principle VII) before implementation lands.
   sha256 digest in `compose/docker-compose.local.yml` (Principle IV).
   The Tor Project's signing key for the apt repository MUST be
   pinned by fingerprint in the Dockerfile and verified at build time.
-  The trust rationale MUST be recorded in `SECURITY-DECISIONS.md` and
-  the architecture spec §7 amended in lock-step to remove the
-  `NEEDS CLARIFICATION` for the Tor row.
+  The Debian build inputs (base + every `apt-get install` package,
+  including `tor`'s transitive closure) MUST be pinned to an immutable
+  `snapshot.debian.org` run with explicit `=version` pins and retained
+  sha256 hashes, so a clean rebuild selects byte-identical packages
+  (T099; Principle IV). The trust rationale and rotation procedure MUST
+  be recorded in `SECURITY-DECISIONS.md` and the architecture spec §7
+  amended in lock-step to remove the `NEEDS CLARIFICATION` for the Tor row.
 - **FR-016**: Contract-test suites under `tests/contract/**/` MUST exist
   and pass in CI before this feature merges. The v1 surface comprises
   six directories, each gating a distinct boundary the feature depends

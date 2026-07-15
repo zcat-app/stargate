@@ -151,7 +151,14 @@ or backdoored binary.
 
 Each sidecar is in the **per-route privacy TCB**. Pinned-digest selection
 and the contract-test gate (Principle IV; architecture spec §7) are the
-mitigations, but neither eliminates the risk. See §5.7.
+mitigations, but neither eliminates the risk. For the Tor sidecar
+specifically, the build inputs are pinned to an immutable
+`snapshot.debian.org` run with explicit `=version` pins (T099), so a clean
+rebuild selects byte-identical packages and the resolved closure (incl.
+`libssl3`) is frozen and auditable — but this makes the binary *auditable*,
+not *trustworthy*: the closure still rides Debian's archive key, and a
+malicious-but-behaviourally-conforming library is undetected. See §5.7,
+§5.9, and `SECURITY-DECISIONS.md` §"Debian archive snapshot pin".
 
 ### 2.7 Malicious browser extension
 
@@ -953,6 +960,10 @@ a malicious version of Stargate or a sidecar to all users.
   dashboard; no background auto-update.
 - Releases are reproducibly built (Principle VI); auditors can verify
   the published artefacts match the source.
+- The Tor sidecar's Debian build inputs are pinned to an immutable
+  `snapshot.debian.org` run with explicit `=version` pins (T099), so a
+  compromised mirror cannot drift the resolved package set between builds;
+  the trust + rotation procedure is in `SECURITY-DECISIONS.md`.
 - Release artefacts are signed (architecture spec §12.5 — signing tool
   NEEDS CLARIFICATION).
 

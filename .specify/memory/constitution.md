@@ -30,6 +30,26 @@ version bumps:
      THREAT-MODEL §2.7/§5.3/§5.4/§5.5. Dependent tickets T034b/T051/T054/
      T055 refined at step 17 (acceptance #6), only after acceptance.
 
+  3. (T099) Principle VI reproducibility tiers — a new tier added for the
+     Tor sidecar image (and Stargate-built sidecars): best-effort
+     reproducible via snapshot.debian.org-pinned build inputs +
+     =version pins; the gated property is a byte-stable package manifest
+     (asserted at release cadence); the final image digest is NOT
+     guaranteed byte-stable and its expected variance is documented in
+     BUILD-DIFFS.md. This closes a drift flagged at T099 grounding: the
+     tiers previously enumerated only the Go data plane, Quarkus
+     JVM/native, and the extension. Downstream sections amended: arch
+     §7 Tor row + §12.4; spec FR-015; THREAT-MODEL §2.6/§5.9;
+     SECURITY-DECISIONS.md (Debian archive snapshot pin entry).
+     Principle VI is outside the I/III/V privacy core, so the mandatory
+     stargate-redteam gate does not trigger; running it voluntarily
+     remains good practice.
+
+     Templates reviewed against this amendment:
+       ✅ .specify/templates/plan-template.md      — no edit required.
+       ✅ .specify/templates/spec-template.md      — no edit required.
+       ✅ .specify/templates/tasks-template.md     — no edit required.
+
 Constitution semver-on-amendments + the 7-day public comment window become
 BINDING at first public release. Until then, amendments are recorded here
 without version bumps. T091 nonetheless runs `stargate-redteam` (good
@@ -290,6 +310,16 @@ Builds are reproducible at the following tiers:
 - **Quarkus native-image**: best-effort reproducible, built from verified
   bytecode. Expected variations (build IDs, embedded timestamp metadata) are
   documented in `BUILD-DIFFS.md` so auditors verify only the unexpected diffs.
+- **Tor sidecar image (and Stargate-built sidecars)**: best-effort
+  reproducible. Build inputs are pinned to an immutable `snapshot.debian.org`
+  run with explicit `=version` pins, so a clean rebuild selects a
+  byte-stable package manifest (the gated property, asserted at release
+  cadence). The final image digest is NOT guaranteed byte-stable — apt
+  postinst scripts, dpkg status mtimes, and Docker layer `created` timestamps
+  introduce expected variance, documented in `BUILD-DIFFS.md`. The signed
+  InRelease + per-package sha256 verification (Principle IV) is the integrity
+  guarantee; reproducibility makes the resolved set auditable, not the
+  maintainer trustworthy. (Added by T099; see `SECURITY-DECISIONS.md`.)
 - **Browser extension**: fully reproducible via deterministic zip packaging.
 
 This constitution, the architecture spec, the threat model, and the security

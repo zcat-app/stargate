@@ -561,6 +561,58 @@ the TCB base is one image, not two. Bumping this digest is a manual
 promotion: resolve the new digest online, update both Dockerfile stages +
 this entry, run the contract suite.
 
+**Debian archive snapshot pin — T099 (immutable build inputs, Principle IV).**
+
+The base image + signing key are pinned, but until T099 the resolved
+*package set* was not: stage 2's `apt-get install tor` resolved tor's
+link-time closure (libssl3, libevent-2.1-7, zlib1g, libc6) fresh from
+Debian's mutable archive index on every build, so two builds of the same
+commit could select different bytes. T099 pins the Debian archive to an
+immutable `snapshot.debian.org` run and pins every directly-installed
+package to an explicit `=version`:
+
+- **Snapshot run:** `20260714T082229Z` (bookworm 12.15; archive `Date`
+  2026-07-11). Pinned in both Dockerfile stages + recorded here; the
+  cross-file agreement is gated by
+  `tests/contract/security-decisions/tor_build_inputs_test.sh` (B6).
+  `snapshot.debian.org`'s InRelease carries no `Valid-Until` (it never
+  expires), so no `Check-Valid-Until` defeat is applied; the snapshot is
+  buildable indefinitely.
+- **Transport — HTTP, not HTTPS.** The base image ships no `ca-certificates`,
+  so an HTTPS bootstrap would be circular (ca-certificates is the first
+  package installed). Integrity is NOT transport-based: apt verifies the
+  InRelease PGP signature (Debian archive keyring, shipped in the base) and
+  every `.deb` sha256 against the signed Packages index — a MITM cannot forge
+  either, so signed metadata is the load-bearing guarantee (TLS would be
+  defense-in-depth only).
+- **Pinned packages (sha256 retained for audit):**
+
+  | package | version | sha256 | source |
+  |---|---|---|---|
+  | ca-certificates | `20230311+deb12u1` | `0d5f444f594e48c1e16a41d8fc628a09b24c658916a1274025c2330f2a802bed` | snapshot (both stages) |
+  | curl | `7.88.1-10+deb12u15` | `0dd9b6bf7a0bd11af2d68a52ec44c2a223fa7c11f9104c36ce1047e1137d4a8f` | snapshot (stage 1 only) |
+  | gnupg | `2.2.40-1.1+deb12u2` | `d3f860cf16da5d61875a324859045fd1f4a888ed0ddef55d7e9f977dd729a76e` | snapshot (stage 1 only) |
+  | netcat-openbsd | `1.219-1` | `85adebc045f48eb9a91515202a49940a0a57eff790223402333253ff121dfbdd` | snapshot (stage 2) |
+  | tor | `0.4.9.11-1~d12.bookworm+1` | `1a9fa54dece42c21fffd142963ad5e13eec735654b95f82386d7c18702145d28` | `deb.torproject.org` (Tor Project build — NOT Debian's archive rebuild `0.4.9.11-0+deb12u1`, per FR-015) |
+
+  Transitive deps (libssl3 `3.0.20-1~deb12u2`, libevent-2.1-7
+  `2.1.12-stable-8`, …) are frozen by the snapshot and verified by apt; their
+  hashes ride the signed Packages index. The gated reproducibility property
+  (stable package manifest across cold rebuilds) is asserted by
+  `tests/reproducibility/tor_sidecar_manifest_test.sh`.
+
+- **Rotation.** Refreshing the snapshot is a manual, review-driven PR
+  (Principle IV): bump the `snapshot.debian.org` run timestamp, every
+  `=version` pin, and the sha256 table here in one commit; the contract test
+  re-confirms the timestamp agrees cross-file; the reproducibility test
+  re-confirms the manifest is stable. The Tor package version rotates when the
+  Tor Project ships a new `bookworm` build — caught by the same manual PR.
+  `deb.torproject.org` is NOT snapshotted (the Tor Project offers no frozen
+  index); its immutability is the `=version` pin + apt's sha256 verification
+  against its signed Packages index, with the residual that the Tor Project
+  could remove an old `.deb` (a removal fails the build closed → manual
+  refresh, exactly the Principle IV promotion discipline).
+
 **Final-image digest values — RELEASE-TAG-TIME (T081), NOT YET PINNED.**
 
 FR-015's literal text requires that "the final composed image MUST be pinned
@@ -600,16 +652,18 @@ container in compose) is documented by a separate entry (T017a).
   the core anonymity property the sidecar exists to provide, with no
   Stargate-side verification reach. This is the single most
   security-relevant component of the sidecar's TCB and it sits OUTSIDE the
-  fingerprint-verified channel. **No Stargate-side mitigation reaches the
-  runtime `libssl3`:** the digest-pinned Debian base fixes only the base
-  layer's contents — stage 2's `apt-get install tor` resolves `libssl3`
-  (and the rest of the closure) fresh from Debian's archive index at every
-  build, so the runtime copy floats under Debian's archive key, exactly
-  the trust gap this bullet documents. The only mitigations are Debian's
-  own archive-signing integrity (out of Stargate's control) and the
-  contract-test suite gating Tor's documented behavioural invariants —
-  neither detects a malicious library that conforms behaviourfully.
-  Residual. (THREAT-MODEL §2.6, §5.9.)
+  fingerprint-verified channel. **T099 closed the reproducibility half of
+  this gap** — the Debian archive is now pinned to an immutable
+  `snapshot.debian.org` run with every package `=version`-pinned, so the
+  closure (libssl3 included) is frozen and auditable: every build selects
+  the SAME bytes, and the exact `libssl3` `3.0.20-1~deb12u2` is recorded.
+  The TRUST half remains residual: the closure still rides Debian's archive
+  signing key (not the Tor Project's), and neither the snapshot pin nor the
+  contract-test suite detects a malicious library that conforms
+  behaviourfully — the pin makes it auditable, not trustworthy. The
+  mitigations are Debian's own archive-signing integrity (out of Stargate's
+  control) and the contract-test suite gating Tor's documented behavioural
+  invariants. Residual. (THREAT-MODEL §2.6, §5.9.)
 - The build-time TLS fetch of the signing key trusts `deb.torproject.org`'s
   TLS at build time (a CA- or BGP-level adversary on the build host's
   upstream could attempt delivery of a malicious key file); the

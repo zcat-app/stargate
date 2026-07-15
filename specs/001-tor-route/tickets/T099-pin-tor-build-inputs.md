@@ -1,7 +1,7 @@
 ---
 id: T099
 title: 'Pin immutable Tor build inputs'
-status: pending
+status: in-progress
 created: 2026-07-11
 last_updated: 2026-07-15
 source: review/sol-review.md#M7

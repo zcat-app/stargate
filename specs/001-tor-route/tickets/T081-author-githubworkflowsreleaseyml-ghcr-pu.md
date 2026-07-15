@@ -156,7 +156,13 @@ tag-trigger/write-back language elsewhere in this ticket:
    publishes those bytes; it MUST NOT commit to the repository, append
    `SECURITY-DECISIONS.md`, or rewrite source metadata after the tag.
 3. T099's immutable Tor package inputs and T098's reproducible JVM artifact
-   are release prerequisites alongside T075/T075b/T097.
+   are release prerequisites alongside T075/T075b/T097. Note (T099): the Tor
+   image **digest is not byte-stable across rebuilds** (apt postinst / dpkg
+   mtimes / Docker layer `created` timestamps — see `BUILD-DIFFS.md`); the
+   release pins ONE build's digest and the **package manifest** is the
+   reproducibility anchor (gated by
+   `tests/reproducibility/tor_sidecar_manifest_test.sh`). A re-build to
+   re-sign therefore produces a different (but manifest-equivalent) digest.
 4. A repeated/deleted tag with different source is rejected; release identity
    is commit plus immutable digest, not a mutable tag.
 5. Refine the generated-artifact location so the release compose file is

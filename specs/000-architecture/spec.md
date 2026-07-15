@@ -443,7 +443,7 @@ opens a PR with a newer digest and contract tests pass.
 
 | Sidecar     | Candidate image                                  | Digest pinning                                          |
 |-------------|--------------------------------------------------|---------------------------------------------------------|
-| Tor         | **`stargate/tor`** — Stargate-built image installing `tor` from `deb.torproject.org` (Tor Project's official Debian apt repository) on a pinned Debian-slim base. Dockerfile lives in `sidecars/tor/`. Tor Project signing key pinned by fingerprint (`A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89`, in `sidecars/tor/apt-key.fingerprint`) and verified at build time. Resolved by `specs/001-tor-route/` §Clarifications 2026-05-17 Q1. | **Pinned by sha256 digest per FR-015**: the Debian-slim base (`debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df`) and the final composed image are both pinned in `compose/docker-compose.local.yml` / `compose/env/local.env.example` and cross-checked by `tests/contract/compose/` (T015) and `tests/contract/security-decisions/tor_entry_test.sh` (T017). The trust rationale is in `SECURITY-DECISIONS.md` (T017). |
+| Tor         | **`stargate/tor`** — Stargate-built image installing `tor` from `deb.torproject.org` (Tor Project's official Debian apt repository) on a pinned Debian-slim base. Dockerfile lives in `sidecars/tor/`. Tor Project signing key pinned by fingerprint (`A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89`, in `sidecars/tor/apt-key.fingerprint`) and verified at build time. Resolved by `specs/001-tor-route/` §Clarifications 2026-05-17 Q1. | **Pinned by sha256 digest per FR-015**: the Debian-slim base (`debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df`) and the final composed image are both pinned in `compose/docker-compose.local.yml` / `compose/env/local.env.example` and cross-checked by `tests/contract/compose/` (T015) and `tests/contract/security-decisions/tor_entry_test.sh` (T017). The Debian build inputs (every `apt-get install` package incl. `tor`'s transitive closure) are pinned to an immutable `snapshot.debian.org` run with explicit `=version` pins and retained sha256 hashes (T099), cross-checked by `tests/contract/security-decisions/tor_build_inputs_test.sh` and verified stable across cold rebuilds by `tests/reproducibility/tor_sidecar_manifest_test.sh`. The trust rationale and rotation procedure are in `SECURITY-DECISIONS.md` (T017, T099). |
 | i2pd        | `purplei2p/i2pd` (upstream maintainer)           | `NEEDS CLARIFICATION` — pin at first release tag        |
 | Nym client  | `NEEDS CLARIFICATION: Nym's official Docker distribution status is not resolved in this spec; either pin an upstream image if maintained or build from a pinned `nymtech/nym` source tree.` | `NEEDS CLARIFICATION` |
 | WireGuard   | `linuxserver/wireguard`                          | `NEEDS CLARIFICATION` — pin at first release tag        |
@@ -733,6 +733,12 @@ X") before the user confirms.
   control plane. Both pinned by digest.
 - Built with `docker buildx build --provenance=true --sbom=true` so SBOM
   and provenance attestations ship with each release.
+- The Tor sidecar's Debian build inputs are pinned to an immutable
+  `snapshot.debian.org` run with explicit `=version` pins (T099), so a
+  clean rebuild selects a byte-stable package manifest (incl. `tor`'s
+  transitive closure); the final image digest is pinned at release-tag time
+  by T081, with any expected image-digest variance documented in
+  `BUILD-DIFFS.md` (Principle VI).
 
 ### 12.5 Release artefacts
 

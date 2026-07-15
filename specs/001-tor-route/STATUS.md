@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-07-13
+**Last updated:** 2026-07-15
 
 ---
 
@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 78 |
-| in-progress | 0 |
+| pending | 77 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 52 |
@@ -80,14 +80,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T092 | Amend the token verifier and lifecycle contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T094 | Harden Compose network and container boundaries | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T099 | Pin immutable Tor build inputs | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T099 | Pin immutable Tor build inputs | in-progress | ✓ | 2: Foundational (Blocking Prerequisites) |
 
 ---
 
