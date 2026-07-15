@@ -1,7 +1,7 @@
 ---
 id: T100
 title: 'Strengthen persistence contract tests'
-status: in-review
+status: done
 created: 2026-07-11
 last_updated: 2026-07-15
 source: review/sol-review.md#A1
@@ -23,7 +23,7 @@ spec_refs:
   - specs/001-tor-route/data-model.md §4
 decision_refs: []
 remediates: T012
-reviews: {}
+reviews: { round: 1, date: 2026-07-15, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
