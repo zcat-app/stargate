@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 77 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 52 |
+| done | 53 |
 | deferred | 1 |
 | **total** | **131** |
 
@@ -86,9 +86,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T099 | Pin immutable Tor build inputs | in-progress | ✓ | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -102,7 +100,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_52 ticket(s) done._
+_53 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -154,5 +152,6 @@ _52 ticket(s) done._
 - T091 — Amend the browser-hardening enforcement boundary
 - T095 — Complete the inter-plane wire contract
 - T096 — Enforce the canonical ticket workflow
+- T099 — Pin immutable Tor build inputs
 - T101 — Consolidate the privacy log-invariant scanner
 - T102 — Scan for Stargate bearer-token secrets

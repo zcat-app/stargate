@@ -1,7 +1,7 @@
 ---
 id: T099
 title: 'Pin immutable Tor build inputs'
-status: in-progress
+status: done
 created: 2026-07-11
 last_updated: 2026-07-15
 source: review/sol-review.md#M7
@@ -25,7 +25,7 @@ spec_refs:
 decision_refs:
   - SECURITY-DECISIONS.md §"2026-07-04 — Tor sidecar trust rationale (FR-015)"
 remediates: T014
-reviews: {}
+reviews: { round: 2, date: 2026-07-15, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
