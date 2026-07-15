@@ -1,7 +1,7 @@
 ---
 id: T092
 title: 'Amend the token verifier and lifecycle contract'
-status: in-progress
+status: done
 created: 2026-07-11
 last_updated: 2026-07-15
 source: review/sol-review.md#B5+M1
@@ -25,7 +25,7 @@ spec_refs:
   - specs/001-tor-route/contracts/control-grpc.md §"ReloadTokens"
 decision_refs: []
 spec_amend_for: specs/001-tor-route/data-model.md §1
-reviews: {}
+reviews: { round: 2, date: 2026-07-15, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
