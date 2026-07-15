@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 78 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 51 |
+| done | 52 |
 | deferred | 1 |
 | **total** | **131** |
 
@@ -51,6 +51,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T059 | Integration test in `tests/integration/stream_isolation_test | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T060 | Integration test in `tests/integration/same_origin_shared_ci | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T061 | Integration test in `tests/integration/circuit_isolation_cor | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
+| T062 | Author `tests/contract/tor/control_port.go` | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 | T063 | Author `tests/integration/synthetic_onion_corpus.txt` | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  |  |
 | T064 | Author the curated leak corpus `tests/contract/error-templat | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T065 | Contract test `tests/contract/error-template/route_down_test | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
@@ -79,15 +80,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T092 | Amend the token verifier and lifecycle contract | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T094 | Harden Compose network and container boundaries | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
+| T099 | Pin immutable Tor build inputs | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T087 | Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOI | in-progress | ✓ | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -101,7 +101,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_51 ticket(s) done._
+_52 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -147,6 +147,7 @@ _51 ticket(s) done._
 - T033 — Integration test for the full vertical: bring up `compose/docker-compo
 - T076 — Run every test module in the single green gate
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
+- T087 — Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOINT)
 - T089 — Amend the Tor startup configuration contract
 - T090 — Remove control-plane route admission gating
 - T091 — Amend the browser-hardening enforcement boundary

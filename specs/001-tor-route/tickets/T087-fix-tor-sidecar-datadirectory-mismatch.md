@@ -1,7 +1,7 @@
 ---
 id: T087
 title: 'Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOINT)'
-status: in-progress
+status: done
 created: 2026-07-11
 last_updated: 2026-07-13
 source: review/sol-review.md#B2+M3
@@ -19,7 +19,7 @@ spec_refs:
   - spec.md §FR-011
   - contracts/torrc.md §"Invariants" row 11
 decision_refs: []
-reviews: {}
+reviews: { round: 2, date: 2026-07-13, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
