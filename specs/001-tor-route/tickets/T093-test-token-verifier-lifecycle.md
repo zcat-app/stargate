@@ -1,7 +1,7 @@
 ---
 id: T093
 title: 'Test the amended token verifier and lifecycle'
-status: in-review
+status: done
 created: 2026-07-11
 last_updated: 2026-07-15
 source: review/sol-review.md#B5+M1
@@ -23,7 +23,7 @@ spec_refs:
   - specs/001-tor-route/contracts/control-grpc.md §"ReloadTokens"
 decision_refs: []
 remediates: T020
-reviews: {}
+reviews: { round: 3, date: 2026-07-15, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
