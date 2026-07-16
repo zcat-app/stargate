@@ -23,6 +23,15 @@ run-task.sh's prompts*, nothing else.
 `/run next` — pick the lowest-id runnable ticket via `scripts/next-task.sh`
 and drive that.
 
+**Autopilot must run in auto-approve mode** — start opencode with `--auto`
+(or use `opencode run --auto`). The review/redteam subagents are
+non-interactive; any tool call that resolves to `"ask"` inside one (e.g. a
+bash command form not on the global allow-list, an `external_directory` or
+`webfetch` hit) hangs silently until interrupted. `--auto` auto-approves
+everything that is not explicitly `"deny"`, and the review agents' dangerous
+surfaces are already `"deny"` (`edit`, and bash outside read-only git), so no
+subagent can stall. Do NOT run `/run` unattended without `--auto`.
+
 ## What autopilot IS
 
 - It removes the per-phase human rubber-stamp that `run-task.sh`'s
@@ -136,6 +145,11 @@ re-invokes. Pseudocode:
 
 ## Cross-cutting rules this skill must obey
 
+- **Run autopilot in `--auto` mode.** A non-interactive subagent that hits an
+  `"ask"` permission hangs forever (this was the root cause of the
+  2026-07-16 review-agent freezes). `--auto` removes that hang surface;
+  explicit `deny` rules still hold. The review agents are also `task: deny`
+  so they cannot delegate to child subagents that would re-introduce it.
 - **Push to the current feature branch only, never main, never force-push.**
   Autopilot pushes per-ticket after green review + CLEAN redteam. On push
   rejection (credential scope, non-fast-forward, protected-branch rule),

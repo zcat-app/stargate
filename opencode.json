@@ -100,24 +100,30 @@
     "stargate-codereview": {
       "description": "Fresh-context correctness + scope review of a single implemented task against its acceptance criteria and the constitution. Blind to the implementer's rationale.",
       "mode": "subagent",
+      "model": "zai-coding-plan/glm-5.2",
       "permission": {
         "edit": "deny",
+        "task": "deny",
         "bash": { "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "*": "deny" }
       }
     },
     "stargate-redteam": {
       "description": "Adversarial security/privacy review of Stargate code against the constitution and threat model. Invoke at the end of each implementation cycle and before each release.",
       "mode": "subagent",
+      "model": "zai-coding-plan/glm-5.2",
       "permission": {
         "edit": "deny",
+        "task": "deny",
         "bash": { "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "*": "deny" }
       }
     },
     "stargate-perf": {
       "description": "Performance and resource review of Stargate code. Identifies allocations in hot paths, blocking I/O on event loops, leaks, and cold-start issues. Invoke at milestone boundaries.",
       "mode": "subagent",
+      "model": "zai-coding-plan/glm-5.2",
       "permission": {
         "edit": "deny",
+        "task": "deny",
         "bash": { "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "*": "deny" }
       }
     }

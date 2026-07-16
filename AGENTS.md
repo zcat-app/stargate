@@ -129,3 +129,24 @@ editing any `.claude/agents/*.md`.
   stable): Sonnet-class.
 - **Per-task code review** (`stargate-codereview`): Opus-class, fresh context,
   blind to the implementer's rationale.
+
+> **Known drift (2026-07-16).** The Opus-class guidance above is aspirational:
+> no Opus-capable provider is configured in opencode (the only provider is
+> `zai-coding-plan`, serving `glm-*`). The opencode review agents are now
+> explicitly pinned to `zai-coding-plan/glm-5.2` in `opencode.json` so their
+> model is deterministic rather than inherited — still not Opus-class. The
+> Claude Code path is unaffected and already correct: `.claude/agents/*.md`
+> pin `model: opus` (codereview, redteam) and `model: sonnet` (perf), which
+> Claude Code resolves natively. To fully close this on the opencode side: add
+> an Opus-class provider and repoint the three `model` fields.
+
+The review agents (`stargate-codereview`, `stargate-redteam`, `stargate-perf`)
+are `task: deny` in `opencode.json` **on purpose**: they must not spawn child
+subagents. A child resolves permissions against the global config (whose bash
+catch-all is `"ask"`), and an `"ask"` inside a non-interactive subagent hangs
+silently until interrupted — the root cause of the 2026-07-16 review freezes.
+These agents receive the diff in their prompt and inspect it with their own
+allow-listed, fail-fast (`"deny"`, never `"ask"`) git tools. Do not remove
+`task: deny` without first making every subagent safe under `"ask"` (e.g.
+running autopilot with `--auto`, which auto-approves anything not explicitly
+`"deny"`). See `.claude/skills/run/SKILL.md` "Cross-cutting rules".
