@@ -77,6 +77,58 @@ paths from inside each container's namespace.
     segmentation) is a `/start` grounding decision; the must-hold is the
     reach-matrix above, not a specific net count.
 
+### Grounding decisions (2026-07-16 /run T094b)
+
+- **Network shape — 3-net model (resolves the open `/start` decision above).**
+  - `stargate-egress` — bridge, **NOT** `internal` (keeps Docker's default
+    NAT egress). Attached: `tor` only. This is the sole egress path; Tor
+    is the only service that can reach the public network.
+  - `stargate-internal` — bridge, `internal: true`. Attached: `stargate-dp`
+    + `tor`. Carries DP→`tor:9050` (FR-007). Internal ⇒ DP has no public
+    egress and no route to CP or to `tor:9051`.
+  - `stargate-cp-tor` — bridge, `internal: true`. Attached: `stargate-control`
+    + `tor`. Carries CP→`tor:9051` (cookie-auth ControlPort, T094a).
+    Internal ⇒ CP has no public egress and no route to DP or to `tor:9050`.
+  Reach matrix held by construction: DP→{tor:9050}; CP→{tor:9051};
+  Tor→{public, DP, CP}; no DP↔CP shared network; no application-plane
+  public egress.
+- **`stargate-internal` name preserved deliberately.** T019b's
+  `tests/contract/tor/port_exposure_test.go` resolves the DP↔tor network by
+  the literal compose name `stargate-internal` (lookupComposeNetwork,
+  line 257). Renaming it would be a cross-ticket drive-by; keeping it as the
+  DP↔tor transport net is the surgical choice (no edit to port_exposure_test
+  .go). M13 is updated to the split topology instead.
+- **Hardening — applied uniformly to all three services.** `read_only: true`;
+  `tmpfs: [/tmp, /run]` (arch §8 "minimal tmpfs"); `cap_drop: [ALL]`;
+  `security_opt: [no-new-privileges:true]`; explicit `mem_limit` +
+  `pids_limit`. Chosen limits (no spec pin exists; documented here as the
+  grounding choice): DP `mem_limit: 512m`, `pids_limit: 256`; Tor
+  `mem_limit: 512m`, `pids_limit: 256`; CP `mem_limit: 1g`, `pids_limit: 512`
+  (JVM thread count). Only the documented named volumes remain writable.
+  Tor needs no extra caps (binds >1024) and writes only to
+  `/var/lib/tor` (`stargate-tor-state`) with `AvoidDiskWrites 1`.
+- **DP/CP images are NOT buildable today** (`data-plane/cmd/stargate-proxy/
+  main.go` absent; same state T019b's sub-test (c) content-gates on). The new
+  Go suite therefore tests **network reachability via ephemeral digest-pinned
+  probes on each network** — which exist once `tor` is up — so acceptance #1
+  (a)/(b)/(d) (negative paths + intended internal paths) and the runtime
+  network/hardening inspection on `tor` RUN now without DP/CP buildable.
+  Only the DP/CP **container** hardening inspection self-skips on the
+  content-gate (mirroring T019b (c)), lifting when their main.go lands.
+- **THREAT-MODEL edit is minimal.** §5.8 already states "Docker isolation is
+  not a security sandbox... a sufficiently malicious image with kernel-level
+  exploit can break out" (lines 942–948). This ticket adds the load-bearing
+  framing it currently lacks — **the network split makes Tor the sole egress
+  TCB** — to §5.8, and a one-line pointer in §3.1 (the local profile gains
+  the internal-network split + the trusted-Docker-daemon residual already
+  noted there). No §5.8 removal; honest additive note per Principle V.
+- **Cadence.** The Go suite is `//go:build docker` (SKIP[docker] in the
+  hermetic verify.sh PR gate; compile-checked via `go vet -tags docker`;
+  executed in the named job `STARGATE_TEST_TAGS=docker scripts/verify.sh`,
+  which this environment can run — Docker 29.1.3 daemon present). M13
+  (shell) runs at PR cadence under verify.sh gate 4 and is the static
+  topology gate.
+
 ## Acceptance
 
 1. **Tests first.** Add a `//go:build docker` Go suite (mirroring the
