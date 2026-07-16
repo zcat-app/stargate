@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-07-15
+**Last updated:** 2026-07-16
 
 ---
 
@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 74 |
+| pending | 75 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 56 |
-| deferred | 1 |
-| **total** | **131** |
+| deferred | 2 |
+| **total** | **133** |
 
 ---
 
@@ -82,7 +82,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T083 | Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_resta | 2: Foundational (Blocking Prerequisites) |  |  |
 | T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T094 | Harden Compose network and container boundaries | 2: Foundational (Blocking Prerequisites) | ✓ |  |
+| T094a | Drop docker-socket-proxy; use Tor cookie-auth control port | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
@@ -99,6 +99,7 @@ _(nothing in flight)_
 | ID | Title | Reason | Blocked on |
 |---|---|---|---|
 | T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | spec-amend | T089 |
+| T094 | Harden Compose network and container boundaries | decomposed | T094a |
 
 ---
 

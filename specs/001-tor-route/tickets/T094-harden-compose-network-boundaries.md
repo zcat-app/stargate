@@ -1,15 +1,17 @@
 ---
 id: T094
 title: 'Harden Compose network and container boundaries'
-status: pending
+status: deferred
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-07-16
 source: review/sol-review.md#M2
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
 blocked_by: [T089, T090]
 parallel: false
 files_budget: 10
+deferred_on: T094a
+deferred_reason: decomposed
 privacy_critical: true
 constitution_refs:
   - "II: Plane separation"
@@ -35,6 +37,29 @@ clarity_check: {}
 ---
 
 # T094: Harden Compose network and container boundaries
+
+> **Decomposed 2026-07-16** — the `/run` autopilot hit bright-line #2
+> (Scope): the full acceptance touches ~15-17 files (4 spec/governance
+> docs + compose + env + the rewritten `local_compose_test.sh` + removal
+> of `sidecar-proxy/` + the two docker-socket-proxy cross-consistency
+> tests + a new docker-backed regression test + T039/T074/T019c ticket
+> refinements + a SECURITY-DECISIONS superseding entry), decisively over
+> `files_budget: 10`. Per workflow.md §"Escalation menu" item 3
+> (decompose), split into two serial children along the "coupling to the
+> proxy" vs "independent hardening" seam:
+>
+> - **T094a** — Drop docker-socket-proxy; CP observes Tor via the
+>   cookie-authenticated ControlPort (reuses `CookieAuthFileGroupReadable`
+>   + the T062 control-port helper). Removes the proxy + its 5 tests,
+>   syncs arch §16.1 / spec FR-012 / plan / THREAT-MODEL / SECURITY-
+>   DECISIONS, refines T039/T074. `files_budget: 14`.
+> - **T094b** — Split compose networks (Tor sole egress), add container
+>   hardening (`read_only` / `cap_drop` / limits), write the docker-backed
+>   negative-path regression test first (Principle VII). Blocked on T094a.
+>   `files_budget: 6`.
+>
+> This ticket stays `deferred` (reason `decomposed`) as the audit record;
+> its acceptance is satisfied when both children are `done`.
 
 ## Context
 
