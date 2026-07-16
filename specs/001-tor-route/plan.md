@@ -56,7 +56,7 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 
 - **Data plane unit + integration**: Go `testing`, table-driven. Integration tests in `tests/integration/` exercise port 8881 against the live Tor sidecar via docker-compose.
 - **Control plane**: JUnit 5 via Quarkus Test framework; gRPC server tested against an in-process client.
-- **Contract tests**: six directories under `tests/contract/` — `tor/` (Tor SOCKS surface), `torrc/` (rendered config invariants), `socks5/` (RFC 1928/1929 surface on port 8881), `error-template/` (privacy-safe template invariants), `control-grpc/` (inter-plane RPC + event-kind invariants), and `sidecar-proxy/` (docker-socket-proxy ACL surface). Authoritative list is FR-016 + the project-structure tree below. Harness language: **Go** (research.md §5) so the suite runs in the same toolchain as the data plane and can spin sidecars via the docker SDK.
+- **Contract tests**: five directories under `tests/contract/` — `tor/` (Tor SOCKS surface), `torrc/` (rendered config invariants), `socks5/` (RFC 1928/1929 surface on port 8881), `error-template/` (privacy-safe template invariants), and `control-grpc/` (inter-plane RPC + event-kind invariants). Authoritative list is FR-016 + the project-structure tree below. Harness language: **Go** (research.md §5) so the suite runs in the same toolchain as the data plane and can spin sidecars via the docker SDK.
 - **Reproducibility**: `tests/reproducibility/` builds the Go binary twice in clean containers and `cmp`s the output (arch §12.1).
 - **Extension JS units**: Node 20 LTS + built-in `node:test` runner; MV2 background scripts are loaded into the test via `vm.runInNewContext()` with a synthesized `browser` global, so production code stays in idiomatic browser-script style (no UMD wrapper, no test-only export branch). Used in this feature for the FR-004 hardening-audit test (research.md §10).
 - **Browser-level**: Mullvad Browser integration tests are run manually for the SC-001 walkthrough in this feature; automation is deferred (no headless privacy-safe Mullvad Browser harness exists in v1).
@@ -268,7 +268,7 @@ the tree.
 
 ### Compose topology (this feature)
 
-`compose/docker-compose.local.yml` declares **four services** on a single
+`compose/docker-compose.local.yml` declares **three services** on a single
 compose-internal bridge network. The only externally bound port is the
 data plane's `127.0.0.1:8881` (loopback-only); every other inter-service
 edge is on the compose-internal network or on a UDS in the shared
@@ -277,20 +277,21 @@ edge is on the compose-internal network or on a UDS in the shared
 | Service                | Image (digest-pinned)                            | Role in this feature                                                                                                                                                                                                                                       |
 |------------------------|--------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `stargate-dp`          | Stargate-built (Go data plane; Dockerfile T002a, digest pinned by T015)  | Listens on `127.0.0.1:8881` (FR-005); dials `tor:9050` for SOCKS5h forward (FR-007); hosts `/run/stargate/dp.sock` exposing `ReloadTokens` + the minimum-subset `GetStatus` per T007 / T045. Runtime UID `stargate-dp` (5102), supplementary group `stargate-ipc` (GID 5100).                              |
-| `stargate-control`     | Stargate-built (Quarkus CP; Dockerfile T003a, digest pinned by T015)     | Hosts `/run/stargate/control.sock` exposing `WatchEvents` (T038); reads `tokens.yaml` (T035); observes Tor lifecycle via `docker-socket-proxy` (T039). Does NOT render `torrc` in this slice — the safe `torrc` is baked into the Tor image (T089/T087, FR-011). No host ports — only the UDS surface and Compose healthcheck. Runtime UID `stargate-cp` (5101), supplementary group `stargate-ipc` (GID 5100). |
+| `stargate-control`     | Stargate-built (Quarkus CP; Dockerfile T003a, digest pinned by T015)     | Hosts `/run/stargate/control.sock` exposing `WatchEvents` (T038); reads `tokens.yaml` (T035); observes Tor lifecycle via the cookie-authenticated ControlPort `tor:9051` (T039; T094a removed the `docker-socket-proxy` that previously brokered this). Does NOT render `torrc` in this slice — the safe `torrc` is baked into the Tor image (T089/T087, FR-011). No host ports — only the UDS surface and Compose healthcheck. Runtime UID `stargate-cp` (5101), supplementary group `stargate-ipc` (GID 5100). |
 | `tor`                  | Stargate-built (Tor from `deb.torproject.org`, T014) | `SocksPort 9050` + `ControlPort 9051`, **both compose-internal only** (FR-012, gated by T019b). Loads the byte-pinned safe `torrc` baked into the image at `/etc/tor/torrc` (T087, per T089's amendment to FR-011) — no `stargate-tor-config` mount for v1 (deferred to dynamic config). Runtime user is the upstream-declared `tor` user.                                          |
-| `docker-socket-proxy`  | `tecnativa/docker-socket-proxy` (digest-pinned, T015) | The **only** service that mounts `/var/run/docker.sock` (read-only). Bridges Docker's UNIX socket to a filtered HTTP API at `http://docker-socket-proxy:2375`, locked to `EVENTS=1 CONTAINERS=1 POST=0` so the CP can observe but cannot spawn / kill / exec containers (T019c). |
 
-The `docker-socket-proxy` is in the privacy TCB on the local profile —
-compromise of it is host-root-equivalent — but exists specifically to
-keep `stargate-control` *out* of the TCB: the CP holds no docker.sock
-handle and can only invoke the GET-only surface the proxy exposes, so a
-compromise of the Quarkus stack (YAML parser, gRPC server, future admin
-UI) does not escalate to host root. The trust rationale is recorded in
-`SECURITY-DECISIONS.md` (appended by T017a), and any future LAN/VPS
-profile is release-blocked on revisiting this mechanism because exposing
-the CP to non-localhost callers changes the compromise-probability
-calculus.
+The control plane observes Tor lifecycle through Tor's **cookie-
+authenticated ControlPort** (`tor:9051`) — not through a Docker Engine
+observer. The `docker-socket-proxy` auxiliary container that previously
+brokered this observation (and was in the privacy TCB as host-root-
+equivalent) was removed by T094a; the CP holds no `docker.sock` handle
+and the stack has no auxiliary host-root-pivot surface (Constitution
+Principle III). The removal rationale + supersession of the T017a trust
+entry is recorded in `SECURITY-DECISIONS.md` (T094a). Any future LAN/VPS
+profile is release-blocked on re-evaluating the CP's sidecar-observation
+surface, because exposing the CP (and DP) to non-localhost callers
+changes the compromise-probability calculus; the network-split +
+container hardening deferred from T094 is T094b's mandate.
 
 **Structure Decision**: This feature follows the multi-language repo layout
 fixed by architecture spec §3. No new top-level directories are introduced.

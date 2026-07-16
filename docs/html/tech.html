@@ -133,10 +133,10 @@ reaches each by its compose-internal DNS name
 <p>Every sidecar image is pinned by <code>sha256</code> digest per
 Constitution Principle IV. The Tor sidecar's apt-repo signing key is
 verified at build time against <code>sidecars/tor/apt-key.fingerprint</code>
-(ticket T014, FR-015). The <code>docker-socket-proxy</code> aux container
-(audit-trail at <code>SECURITY-DECISIONS.md</code>) is the only service
-that mounts <code>/var/run/docker.sock</code>, exposed as a GET-only
-filtered HTTP API.</p>
+(ticket T014, FR-015). The control plane observes Tor lifecycle via Tor's
+cookie-authenticated ControlPort (tor:9051); no auxiliary container mounts
+<code>/var/run/docker.sock</code> (the docker-socket-proxy that previously
+did was removed by T094a — audit-trail at <code>SECURITY-DECISIONS.md</code>).</p>
 
 <h2>Privacy-critical surfaces (where reviewers focus)</h2>
 

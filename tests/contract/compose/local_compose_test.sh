@@ -6,22 +6,31 @@
 # test for compose/docker-compose.local.yml (T015).
 #
 # Why this is a static test (not a runtime bring-up): the runtime properties
-# (Tor port exposure from the host, docker-socket-proxy POST=0 lockdown over
-# HTTP, peer-dial UID/GID semantics) are gated by T019b, T019c, and T022
-# respectively, which bring up the compose stack. This test gates the
+# (Tor port exposure from the host, inter-plane UDS topology) are gated by
+# T019b and T022, which bring up the compose stack. This test gates the
 # compose-FILE preconditions those runtime tests depend on — properties a
 # silent compose-file edit could regress between runtime-test runs:
 #   - DP port 8881 bound to loopback only (FR-005; FR-012-in-spirit).
 #   - Tor SocksPort/ControlPort never host-published (FR-012).
-#   - docker-socket-proxy never host-published (T017a trust surface).
-#   - /var/run/docker.sock mounted by docker-socket-proxy ONLY, read-only.
-#   - Proxy env lockdown (EVENTS=1, CONTAINERS=1, POST=0; no other grant).
+#   - NO service mounts /var/run/docker.sock (Constitution Principle III).
 #   - UID/GID numerics match the Dockerfiles exactly (control-grpc.md
 #     §"Socket topology").
 #   - Exactly the seven named volumes from data-model.md §6.
-#   - docker-socket-proxy image pinned by sha256 digest (Principle IV).
 #   - DP has no depends_on (Constitution Principle II — DP keeps routing
 #     if CP is unreachable).
+#
+# T094a removed the docker-socket-proxy auxiliary container: the CP now
+# observes Tor lifecycle via the cookie-authenticated ControlPort
+# (tor:9051), NOT a Docker Engine observer. This file's prior proxy-
+# specific assertions (docker.sock sole-mounter == docker-socket-proxy,
+# the proxy env lockdown EVENTS=1/CONTAINERS=1/POST=0, the proxy image
+# digest shape) are moot now that the proxy is gone, and the runtime
+# lockdown contract test tests/contract/sidecar-proxy/ was removed in the
+# same ticket. The old "sole-mounter == docker-socket-proxy" check is
+# inverted here to the load-bearing "ZERO docker.sock mounters" property
+# (Principle III — no auxiliary host-root-pivot surface). The network-
+# split + per-container hardening that T094 deferred is T094b's mandate;
+# this test still asserts a single stargate-internal network for now.
 #
 # Mechanism: `docker compose -f <file> --env-file <env> config --format json`
 # renders the compose file to canonical JSON (long-form schema: ports use
@@ -56,10 +65,10 @@ rm -f /tmp/T015.compose.err
 # q <filter> — print jq output (single line expected).
 q() { jq -r "$1" "$RENDER"; }
 
-# --- M11: exactly four services --------------------------------------------
+# --- M11: exactly three services (T094a dropped docker-socket-proxy) -----
 ALL_SVCS="$(q '.services | keys_unsorted | sort | join(",")')"
-[ "$ALL_SVCS" = "docker-socket-proxy,stargate-control,stargate-dp,tor" ] \
-  || bail "M11: expected exactly 4 services (docker-socket-proxy,stargate-control,stargate-dp,tor); got: $ALL_SVCS"
+[ "$ALL_SVCS" = "stargate-control,stargate-dp,tor" ] \
+  || bail "M11: expected exactly 3 services (stargate-control,stargate-dp,tor — docker-socket-proxy removed by T094a); got: $ALL_SVCS"
 
 # --- M1: DP port 8881 loopback-only, no 0.0.0.0 short form ------------------
 # Long-form schema: ports[] = {host_ip, target, published, protocol}.
@@ -79,41 +88,15 @@ TOR_PORTS_RAW="$(q '.services["tor"].ports // "" | tostring')"
 [ "$TOR_PORTS_RAW" = "null" ] || [ "$TOR_PORTS_RAW" = "" ] \
   || bail "M2: tor must have NO ports key (FR-012); got: $TOR_PORTS_RAW"
 
-# --- M3: docker-socket-proxy has NO host port mapping ----------------------
-PROXY_PORTS_RAW="$(q '.services["docker-socket-proxy"].ports // "" | tostring')"
-[ "$PROXY_PORTS_RAW" = "null" ] || [ "$PROXY_PORTS_RAW" = "" ] \
-  || bail "M3: docker-socket-proxy must have NO ports key; got: $PROXY_PORTS_RAW"
-
-# --- M4: /var/run/docker.sock mounted ONLY by docker-socket-proxy, RO -----
-# Long-form volume schema: {type: bind, source: "/var/run/docker.sock", target: ..., read_only: bool}.
-# Iterate every service's volumes and find which services bind-source /var/run/docker.sock.
+# --- M4 (Principle III): NO service mounts /var/run/docker.sock ------------
+# T094a removed the docker-socket-proxy; the CP observes Tor via the
+# cookie-authenticated ControlPort (tor:9051), NOT a Docker Engine observer.
+# Zero docker.sock mounters is the load-bearing invariant (no auxiliary
+# host-root-pivot surface). The prior "sole-mounter == docker-socket-proxy"
+# check is inverted to "no mounter at all."
 SOCK_MOUNTERS="$(q '[.services | to_entries[] | {key: .key, vols: (.value.volumes // [])} | select(.vols | any((.type == "bind") and (.source == "/var/run/docker.sock"))) | .key] | join(",")')"
-[ "$SOCK_MOUNTERS" = "docker-socket-proxy" ] \
-  || bail "M4: /var/run/docker.sock must be mounted ONLY by docker-socket-proxy; mounters: '$SOCK_MOUNTERS'"
-PROXY_SOCK_RO="$(q '[.services["docker-socket-proxy"].volumes[] | select(.source == "/var/run/docker.sock") | (.read_only // false) | tostring] | join(",")')"
-[ "$PROXY_SOCK_RO" = "true" ] || bail "M4: docker-socket-proxy's docker.sock mount must be read_only:true (got: $PROXY_SOCK_RO)"
-
-# --- M5: proxy env lockdown (EVENTS=1, CONTAINERS=1, POST=0; no other grant)
-PROXY_EV="$(q '.services["docker-socket-proxy"].environment.EVENTS // "?"')"
-PROXY_CN="$(q '.services["docker-socket-proxy"].environment.CONTAINERS // "?"')"
-PROXY_PO="$(q '.services["docker-socket-proxy"].environment.POST // "?"')"
-[ "$PROXY_EV" = "1" ] || bail "M5: docker-socket-proxy.EVENTS must be '1' (got: $PROXY_EV)"
-[ "$PROXY_CN" = "1" ] || bail "M5: docker-socket-proxy.CONTAINERS must be '1' (got: $PROXY_CN)"
-[ "$PROXY_PO" = "0" ] || bail "M5: docker-socket-proxy.POST must be '0' (got: $PROXY_PO)"
-# VERSION and PING must be EXPLICITLY 0: the pinned upstream image defaults
-# both to ALLOW (probed empirically at T019c /start), so "unset means deny"
-# does not hold for these two flags. Removing either line would silently
-# reopen the endpoint until the runtime test (sidecar-proxy/lockdown_test.go,
-# container-validation cadence) next runs — this static check is the
-# PR-cadence gate.
-PROXY_VS="$(q '.services["docker-socket-proxy"].environment.VERSION // "?"')"
-PROXY_PG="$(q '.services["docker-socket-proxy"].environment.PING // "?"')"
-[ "$PROXY_VS" = "0" ] || bail "M5: docker-socket-proxy.VERSION must be explicitly '0' — upstream defaults it to allow; T019c (got: $PROXY_VS)"
-[ "$PROXY_PG" = "0" ] || bail "M5: docker-socket-proxy.PING must be explicitly '0' — upstream defaults it to allow; T019c (got: $PROXY_PG)"
-# Collect all proxy env keys set to "1"; only EVENTS and CONTAINERS are allowed.
-GRANT_HITS="$(q '[.services["docker-socket-proxy"].environment // {} | to_entries[] | select((.value | tostring) == "1") | .key] | join(",")')"
-BAD_GRANTS="$(echo "$GRANT_HITS" | tr ',' '\n' | grep -vE '^(EVENTS|CONTAINERS)$' | paste -sd, -)"
-[ -z "$BAD_GRANTS" ] || bail "M5: docker-socket-proxy has grant flags set to 1 beyond EVENTS/CONTAINERS: $BAD_GRANTS"
+[ "$SOCK_MOUNTERS" = "" ] \
+  || bail "M4: NO service may mount /var/run/docker.sock (Principle III; docker-socket-proxy removed by T094a); mounters: '$SOCK_MOUNTERS'"
 
 # --- M6: UID/GID user directives match Dockerfiles exactly -----------------
 CP_USER="$(q '.services["stargate-control"].user // "?"')"
@@ -166,24 +149,23 @@ tor_cfg_cp_present="$(q '[.services["stargate-control"].volumes[] | select(.sour
 TOR_PRESENT="$(q '.services["tor"] | type')"
 [ "$TOR_PRESENT" = "object" ] || bail "M8: tor service missing — FR-007/T047 dial target tor:9050 depends on this service key"
 
-# --- M9: docker-socket-proxy image is digest-pinned ------------------------
-PROXY_IMG="$(q '.services["docker-socket-proxy"].image // "?"')"
-echo "$PROXY_IMG" | grep -qE '^tecnativa/docker-socket-proxy:[^@]+@sha256:[0-9a-f]{64}$' \
-  || bail "M9: docker-socket-proxy.image must be '<tag>@sha256:<64hex>' (Principle IV); got: $PROXY_IMG"
-
 # --- M10: DP has no depends_on (Constitution Principle II) -----------------
 DP_DEPS="$(q '.services["stargate-dp"].depends_on // "" | tostring')"
 [ "$DP_DEPS" = "null" ] || [ "$DP_DEPS" = "" ] \
   || bail "M10: stargate-dp MUST NOT declare depends_on (Constitution II — DP keeps routing if CP/sidecars are unreachable); got: $DP_DEPS"
 
-# --- M13: exactly one network, all four services attached ------------------
+# --- M13: exactly one network, all three services attached ------------------
+# T094a left the stack on a single stargate-internal network; the network
+# split (Tor sole egress) is T094b's mandate. All three services stay
+# attached so DP<->tor:9050 (FR-007) and CP<->tor:9051 (the cookie-auth
+# ControlPort observation surface T094a established) resolve.
 NET_COUNT="$(q '.networks | length | tostring')"
 [ "$NET_COUNT" = "1" ] || bail "M13: exactly one network expected (FR-005 'single compose-internal bridge'); got: $NET_COUNT"
 NET_NAME="$(q '.networks | keys | join(",")')"
 [ -n "$NET_NAME" ] || bail "M13: network key missing"
-for svc in stargate-dp stargate-control tor docker-socket-proxy; do
+for svc in stargate-dp stargate-control tor; do
   attached="$(q ".services[\"$svc\"].networks | type")"
-  [ "$attached" = "object" ] || bail "M13: service '$svc' must be attached to the '$NET_NAME' network (FR-012 requires all four services on the shared compose-internal bridge so DP↔tor:9050, CP↔docker-socket-proxy:2375, and CP↔tor render paths resolve); got networks type: '$attached'"
+  [ "$attached" = "object" ] || bail "M13: service '$svc' must be attached to the '$NET_NAME' network (DP<->tor:9050 and CP<->tor:9051 paths); got networks type: '$attached'"
 done
 
 # === Report ================================================================
@@ -192,4 +174,4 @@ if (( ${#errs[@]} > 0 )); then
   for e in "${errs[@]}"; do printf '  - %s\n' "$e" >&2; done
   exit 1
 fi
-echo "OK: compose/docker-compose.local.yml passes all T015 structural assertions."
+echo "OK: compose/docker-compose.local.yml passes all T015 structural assertions (T094a: 3 services, no docker.sock mounter)."

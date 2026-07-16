@@ -41,6 +41,90 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-07-16 — docker-socket-proxy mechanism removed (T094a)
+
+**Supersedes** §"2026-07-06 — docker-socket-proxy `CONTAINERS=1` read
+surface (corrective supersession, T019c redteam)" and §"2026-07-04 —
+docker-socket-proxy trust rationale (auxiliary container)" below —
+**in full, by removal**: the proxy mechanism no longer exists in the
+code, so both entries' rationale (property bought, residual trust,
+mitigations, exposure surface) is moot for forward-going work. Their
+prose is retained verbatim below for the audit trail, each carrying a
+`Superseded by:` back-link to this entry.
+
+**Decision.** T094a removed the `docker-socket-proxy` auxiliary
+container from the local profile entirely. No service in
+`compose/docker-compose.local.yml` mounts `/var/run/docker.sock`
+(gated by `tests/contract/compose/local_compose_test.sh` M4 — zero
+mounters). The control plane now observes Tor lifecycle through Tor's
+own **cookie-authenticated ControlPort** (`tor:9051`, enabled by
+`CookieAuthentication 1` + `CookieAuthFileGroupReadable 1`;
+`specs/001-tor-route/contracts/torrc.md` invariants #3–#4) over the
+compose-internal network, NOT through a Docker Engine observer.
+
+**Why the proxy is unnecessary for routing correctness.** T090 removed
+control-plane route-admission gating (the DP no longer waits on a CP
+`HEALTHY` event before routing). The proxy existed to let the CP observe
+sidecar container lifecycle for that admission gate; with the gate gone,
+the proxy's only remaining job was feeding `SidecarMonitor` (T039) its
+`STARTED`/`HEALTHY` transitions. Tor's control port reports bootstrap
+and health state authoritatively (the Tor Dockerfile's own HEALTHCHECK
+already probes `GETINFO status/bootstrap-phase` over cookie auth), so
+the control port is a strictly narrower observation surface than a
+generic Docker Engine observer — and one that introduces no
+host-root-pivot path (Constitution Principle III: no service holds a
+`docker.sock` handle).
+
+**Why this is the narrower surface (net privacy improvement).** The
+superseded 2026-07-06 entry flagged that the proxy's `CONTAINERS=1` ACL
+was section-granular, not path-granular: it granted `GET /archive` over
+EVERY container's filesystem — including Tor's entry-guard state under
+`/var/lib/tor` (THREAT-MODEL §4.2). Removing the proxy retires that
+exfiltration path entirely. The control-port cookie exchange carries
+only what `SidecarMonitor` needs (bootstrap/health state), and the
+narrow cookie-read volume is constrained (T094a §Analysis "Grounding
+decisions") to avoid re-introducing a broad `/var/lib/tor` read.
+
+**What changed in the tree (T094a).**
+
+- Removed `docker-socket-proxy` from `compose/docker-compose.local.yml`
+  (service, `/var/run/docker.sock` mount, env lockdown, CP
+  `depends_on`); removed `DOCKER_SOCKET_PROXY_IMAGE` from
+  `compose/env/local.env.example`.
+- Rewrote `tests/contract/compose/local_compose_test.sh` to assert
+  exactly three services and ZERO `docker.sock` mounters (M4 inverted
+  from "sole-mounter == proxy" to "no mounter at all").
+- Removed `tests/contract/sidecar-proxy/lockdown_test.go` (T019c) and
+  the `tests/contract/sidecar-proxy/` directory — the proxy it gated no
+  longer exists.
+- Removed `tests/contract/security-decisions/docker_socket_proxy_entry_
+  test.sh` (T017a) and `tests/contract/arch/docker_socket_proxy_section_
+  test.sh` (T018) — both hard-asserted the removed entry/§16.1/digest;
+  their load-bearing invariants are moot now that the proxy is gone,
+  and this superseding entry carries the record.
+- Amended `specs/000-architecture/spec.md` §16, `specs/001-tor-route/
+  spec.md` FR-012, and `specs/001-tor-route/plan.md` so no governance
+  artifact describes a proxy the code lacks (Principle V).
+
+**THREAT-MODEL cross-reference.** THREAT-MODEL.md does not name the
+proxy (§5.8 Sidecar compromise and §3.1 Local profile never did); no
+threat-model edit was required for the removal. §3.1's "Docker daemon
+on the host" trusted-party line is mode-level, not proxy-level, and
+stands. The "Docker isolation is not a security sandbox" honest note
+for the split/hardening work is T094b's mandate (its acceptance #5),
+not T094a's.
+
+**LAN/VPS release-blocker (carried forward, re-scoped).** The cookie-
+auth ControlPort observation surface inherits the local-profile scoping
+of the mechanism it replaces (THREAT-MODEL §3.1: local code execution
+is already game-over). Any future LAN or VPS profile feature spec MUST
+revisit how the control plane observes sidecar lifecycle: a non-
+localhost profile exposes the CP and DP to remote callers and changes
+the compromise-probability calculus for every observation surface (the
+DP is the most concerning reacher — it faces internet-supplied input
+the CP does not). The chosen surface must be re-evaluated before that
+profile's compose file ships.
+
 ## 2026-07-15 — Bearer-token verifier: HMAC-SHA-256 + install-time pepper (T092)
 
 **Accepted findings:** sol-review **B5** (Blocker — per-request Argon2id is
@@ -296,6 +380,10 @@ vs pin) and this entry in the same PR.
 
 ## 2026-07-06 — docker-socket-proxy `CONTAINERS=1` read surface (corrective supersession, T019c redteam)
 
+**Superseded by:** §"2026-07-16 — docker-socket-proxy mechanism removed
+(T094a)" above — in full, by removal. The prose below is retained
+verbatim for the audit trail.
+
 **Corrects (partially supersedes)** the 2026-07-04 entry "docker-socket-proxy
 trust rationale (auxiliary container)" below. Scope of the correction: the
 characterization of the **read** surface the env-flag filter grants.
@@ -345,9 +433,11 @@ redteam minor finding, resolved in-code).
 
 ## 2026-07-04 — docker-socket-proxy trust rationale (auxiliary container)
 
-**Superseded by:** §"2026-07-06 — docker-socket-proxy `CONTAINERS=1` read
-surface (corrective supersession, T019c redteam)" above — read-surface
-characterization only; the remainder of this entry stands.
+**Superseded by:** §"2026-07-16 — docker-socket-proxy mechanism removed
+(T094a)" above — in full, by removal. (Previously partially superseded by
+§"2026-07-06 — docker-socket-proxy `CONTAINERS=1` read surface" on the
+read-surface characterization only.) The prose below is retained verbatim
+for the audit trail.
 
 **Decision.** Stargate's local profile runs a digest-pinned
 `tecnativa/docker-socket-proxy` container as the **only** service that

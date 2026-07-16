@@ -1,7 +1,7 @@
 ---
 id: T094a
 title: 'Drop docker-socket-proxy; use Tor cookie-auth control port'
-status: pending
+status: in-review
 created: 2026-07-16
 last_updated: 2026-07-16
 source: specs/001-tor-route/tickets/T094-harden-compose-network-boundaries.md (decomposed)
@@ -9,7 +9,7 @@ phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
 blocked_by: [T089, T090]
 parallel: false
-files_budget: 14
+files_budget: 16  # 14 -> 16 (redteam M1): sweep pom.xml + tech.html stale proxy prose
 privacy_critical: true
 complexity: high
 risk: high
@@ -133,6 +133,18 @@ network (the network split is T094b's mandate).
   moment the proxy service is removed; updated for operator-facing
   honesty (Principle V). Consumes the one file of budget headroom freed
   by the THREAT-MODEL no-op.
+- **Redteam M1 — two more stale-prose orphans (files_budget 14 → 16).**
+  The privacy-critical redteam pass caught two operator/production-
+  facing artifacts the acceptance sweep missed: `control-plane/core/
+  pom.xml:22-23` (the `<description>` still named the docker-socket-proxy
+  event stream — propagates into the published POM/JAR metadata) and
+  `docs/html/tech.html:136-139` (rendered operator HTML presenting the
+  proxy as the CURRENT /var/run/docker.sock mounter). Both are orphans
+  T094a's removal created; both violate the "no stale proxy prose
+  remains" must-hold (Principle V). Resolved in-round by the same prose
+  sweep as §16.1/FR-012/plan.md; `files_budget` bumped 14 → 16 to admit
+  the two files (a budget amendment, not scope creep — the changes are
+  2-line prose fixes, each traced to an orphan this change created).
 - **Verify-gate safety (confirmed):** `scripts/ground-check.sh:207-216`
   skips `stargate/*` build-keyed image refs and tolerates zero external
   refs (`:242-244`), so removing the only external image stays GREEN;

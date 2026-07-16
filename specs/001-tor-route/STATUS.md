@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 75 |
-| in-progress | 0 |
+| pending | 74 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 56 |
@@ -82,7 +82,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T083 | Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_resta | 2: Foundational (Blocking Prerequisites) |  |  |
 | T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T094a | Drop docker-socket-proxy; use Tor cookie-auth control port | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
@@ -90,7 +89,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T094a | Drop docker-socket-proxy; use Tor cookie-auth control port | in-progress | ✓ | 2: Foundational (Blocking Prerequisites) |
 
 ---
 

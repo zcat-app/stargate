@@ -1155,62 +1155,50 @@ implementation choices within the space the constitution allows.
 
 ## 16. Auxiliary Infrastructure Containers
 
-Beyond the route sidecars enumerated in §7, the compose stack runs a
+Beyond the route sidecars enumerated in §7, the compose stack MAY run a
 small number of **auxiliary containers** that do not carry user traffic
 but support the proxy's operation (privilege isolation, future
 observability hooks, etc.). Each must be declared here so that any
 future profile (LAN, VPS) inherits a complete picture of the trusted
 component set.
 
-### 16.1 `docker-socket-proxy`
+**Current state (T094a):** the local profile runs **no auxiliary
+containers**. The `docker-socket-proxy` auxiliary container that
+previously lived in this section — a digest-pinned
+`tecnativa/docker-socket-proxy` that bridged `/var/run/docker.sock` to a
+filtered HTTP API so the control plane could observe sidecar lifecycle
+(`EVENTS=1`, `CONTAINERS=1`, `POST=0`) — was **removed by T094a**. The
+control plane now observes Tor lifecycle through Tor's own **cookie-
+authenticated ControlPort** (`tor:9051`, enabled by
+`CookieAuthentication 1` + `CookieAuthFileGroupReadable 1`; see
+`specs/001-tor-route/contracts/torrc.md` invariants #3–#4) over the
+compose-internal network — a strictly narrower surface than a Docker
+Engine observer, and one that introduces no host-root-pivot path
+(Constitution Principle III). No service in
+`compose/docker-compose.local.yml` mounts `/var/run/docker.sock`
+(gated by `tests/contract/compose/local_compose_test.sh` M4). ControlPort
+is NEVER host-published (FR-012). The narrow cookie-read volume + GID
+alignment is finalised with the SidecarMonitor client (T039),
+constrained to avoid over-broad entry-guard read (THREAT-MODEL §4.2).
 
-The local profile runs a digest-pinned `tecnativa/docker-socket-proxy`
-container as the **only** service that mounts `/var/run/docker.sock`
-from the host (read-only). It exposes a filtered HTTP API at
-`http://docker-socket-proxy:2375` (compose-internal DNS); the CP uses
-this filtered surface to observe sidecar container lifecycle events.
-The proxy is locked to the minimum surface `SidecarMonitor` needs:
-`EVENTS=1`, `CONTAINERS=1`, all other endpoint flags default deny, and
-`POST=0` forbids container spawn/kill/exec. The lockdown is gated by
-the contract test at `specs/001-tor-route/` T019c.
+The removal rationale — why T090's removal of control-plane route-
+admission gating made the proxy unnecessary for routing correctness,
+and why the cookie-auth control port is the narrower observation
+surface — is recorded in `SECURITY-DECISIONS.md` §"2026-07-16 —
+docker-socket-proxy mechanism removed (T094a)", which supersedes the
+2026-07-04 and 2026-07-06 docker-socket-proxy trust-rationale entries.
+Those entries' prose is retained verbatim (append-only discipline) with
+`Superseded by:` back-links.
 
-**Property bought**: a compromise of the Quarkus CP (YAML parser,
-gRPC server, future admin UI) does NOT escalate to host root; the CP
-holds no `docker.sock` handle and can only invoke the GET-only surface
-the proxy exposes. The same property holds for the DP and Tor on the
-same condition (both also on `stargate-internal`; see Profile
-applicability below and the `SECURITY-DECISIONS.md` entry's Exposure
-surface) — the proxy's env-flag filter + HAProxy frontend + base
-closure behave as documented. Naming the DP explicitly so an auditor
-does not conclude "the proxy isolates only the CP."
-
-**Residual trust** (Principle V — honest threat model): the proxy
-itself IS in the TCB; a compromise of the proxy is host-root-equivalent.
-The trade is accepted under THREAT-MODEL §3.1 (local profile assumes
-local code execution is already game-over). Mitigations recorded in
-`SECURITY-DECISIONS.md` (entry created by `specs/001-tor-route/` T017a):
-digest pin (`tecnativa/docker-socket-proxy:0.3.0@sha256:9e4b9e7517a6b660f2cc903a19b257b1852d5b3344794e3ea334ff00ae677ac2`,
-pinned verbatim in `compose/env/local.env.example`), `POST=0` lockdown
-(gated at runtime by T019c), proxy unreachable from outside the
-compose-internal network. **No defense-in-depth user-isolation control
-exists**: the proxy runs as root — verified at T017a commit time via
-`docker image inspect` (the tecnativa image's `Config.User` is empty),
-so the docker.sock handle is the pivot and Docker binds as root
-regardless of the calling UID (see `SECURITY-DECISIONS.md` docker-socket-
-proxy entry Mitigation #1 for the rationale and the residual-defeatability
-acknowledgement).
-
-**Profile applicability**: this mechanism is sized for the local
-profile. The LAN and VPS profiles expose the CP, DP, and Tor sidecar to
-non-localhost callers and shift the compromise-probability calculus —
-the DP is the most concerning pivot since it faces internet-supplied
-input the CP does not, and Tor is a third reacher over the compose-
-internal network. All three profiles are **release-blocked on revisiting
-this section** (and likely replacing the proxy with a narrower mechanism
-— e.g. a CP→host RPC over a dedicated UDS with a purpose-built daemon —
-before those profile specs ship). See `SECURITY-DECISIONS.md`'s
-docker-socket-proxy entry Release-blocker paragraph for the lock-step
-framing on the CP/DP/Tor reacher set.
+**LAN/VPS release-blocker (carried forward).** The cookie-auth
+ControlPort observation surface inherits the local-profile scoping of
+the mechanism it replaces (THREAT-MODEL §3.1: local code execution is
+already game-over). Any future LAN or VPS profile feature spec MUST
+revisit how the control plane observes sidecar lifecycle: a non-
+localhost profile changes the compromise-probability calculus for every
+observation surface (the data plane is the most concerning reacher since
+it faces internet-supplied input the CP does not), and the chosen
+surface must be re-evaluated before that profile's compose file ships.
 
 ---
 

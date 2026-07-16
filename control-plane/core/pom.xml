@@ -19,9 +19,11 @@
     <name>Stargate Control Plane :: core</name>
     <description>
         Domain logic: tokens.yaml loader (SnakeYAML — plan.md §"Technical
-        Context"), sidecar lifecycle monitor that consumes the
-        docker-socket-proxy event stream and writes the audit log
-        (T039 / data-model.md §4), the healthcheck endpoint (T040).
+        Context"), sidecar lifecycle monitor that observes Tor lifecycle
+        via the cookie-authenticated ControlPort (tor:9051) and writes the
+        audit log (T039 / data-model.md §4; T094a removed the
+        docker-socket-proxy that previously fed this), the healthcheck
+        endpoint (T040).
     </description>
 
     <dependencies>

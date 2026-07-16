@@ -3,11 +3,11 @@ id: T039
 title: 'Implement `control-plane/core/src/main/java/.../SidecarMonitor.java`'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-11
+last_updated: 2026-07-16
 source: tasks.md#T039
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
-blocked_by: [T009, T094]
+blocked_by: [T009, T094a]
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true
@@ -34,7 +34,9 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 
 > **Full task body (verbatim from tasks.md):**
 >
-> Implement `control-plane/core/src/main/java/.../SidecarMonitor.java` — for the Tor sidecar only, emit `STARTED` + `HEALTHY` `SidecarEvent`s (with fixed-vocabulary `detail` `container_start`, `healthcheck_pass`) over the gRPC stream when the docker-socket-proxy (T015) reports the corresponding events, **and** write a `sidecar_healthy` row to `audit_log` via `AuditLogService` (T036) on each transition into HEALTHY (`detail_json` shape per data-model.md §4). Observation channel: long-poll `GET http://docker-socket-proxy:2375/events?filters={"type":["container"]}` for the container event stream (the `type=container` filter has been stable since Engine API v1.22 and sharply reduces volume vs no filter); the SidecarMonitor then drops any event whose `Actor.Attributes.name` is not in a CP-internal allowlist (`{"tor"}` for this feature; later sidecar features add their names to the set). Keeping the container-name filter in CP code rather than the URL avoids Engine API filter-syntax versioning quirks and makes the test surface a plain Java set-membership check. On each surviving event and on a bounded interval, poll `GET /containers/{name}/json` to read `State.Health.Status` (`healthy` → `HEALTHY`; `unhealthy` is mapped in T074). SidecarMonitor MUST NOT issue any HTTP method other than `GET` to the proxy and MUST NOT call any path outside `/events` and `/containers/{name}/json` — both invariants are gated by T019c at the proxy boundary and by a per-test mock at the CP unit-test layer. UNHEALTHY/STOPPED/CRASHED/RESTARTED transitions are added in T074.
+> Implement `control-plane/core/src/main/java/.../SidecarMonitor.java` — for the Tor sidecar only, emit `STARTED` + `HEALTHY` `SidecarEvent`s (with fixed-vocabulary `detail` `container_start`, `healthcheck_pass`) over the gRPC stream, **and** write a `sidecar_healthy` row to `audit_log` via `AuditLogService` (T036) on each transition into HEALTHY (`detail_json` shape per data-model.md §4).
+>
+> **Observation channel (T094a amendment):** the CP observes Tor via Tor's cookie-authenticated ControlPort at `tor:9051` over the compose-internal network, authenticating with the control cookie (`CookieAuthentication 1` + `CookieAuthFileGroupReadable 1`; `contracts/torrc.md` invariants #3–#4). This **replaces** the `docker-socket-proxy` Docker-Engine observer that T094a removed (the proxy's `CONTAINERS=1` ACL granted `GET /archive` over every container's filesystem, including Tor's entry-guard state — THREAT-MODEL §4.2). SidecarMonitor opens an authenticated control-port connection and polls Tor's bootstrap/health state on a bounded interval — the same surface the Tor Dockerfile's HEALTHCHECK probes (`GETINFO status/bootstrap-phase`, `PROGRESS=100` → `HEALTHY`). SidecarMonitor MUST connect only to `tor:9051` (never a host-published port — FR-012 forbids it), MUST authenticate with the cookie (no other control-port auth method), and MUST issue only the read-only `GETINFO`/`GETCONF` commands it needs. The narrow cookie-read volume + GID alignment that lands with this ticket MUST NOT over-grant read of Tor's entry-guard state beyond the cookie exchange (T094a §Analysis "Grounding decisions" constrains this). UNHEALTHY/STOPPED/CRASHED/RESTARTED transitions are added in T074.
 
 ## Analysis
 

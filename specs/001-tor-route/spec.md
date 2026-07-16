@@ -432,10 +432,14 @@ tests-first suite (Principle VII) before implementation lands.
 - **FR-012**: The Tor sidecar's `SocksPort` (9050) and `ControlPort`
   (9051, cookie-authenticated) MUST NOT be published to the host or to
   any compose network mapping. Both are reachable only internally on the
-  compose bridge network shared with the data plane container, and only
-  the data plane container needs SocksPort access while only the
-  contract-test harness needs ControlPort access (via the cookie file
-  on the `stargate-tor-state` volume; see T062). (Architecture spec §4.2.)
+  compose-internal bridge network. Only the data plane needs SocksPort
+  access; the ControlPort is reached by the control plane's
+  `SidecarMonitor` (T039/T074) AND by the contract-test harness, both via
+  the control cookie (`CookieAuthFileGroupReadable 1`;
+  `contracts/torrc.md` invariants #3–#4). Before T094a the CP observed
+  Tor through a `docker-socket-proxy`; T094a removed it in favour of this
+  narrower cookie-authenticated surface (arch §16). (Architecture spec
+  §4.2.)
 
 #### Inter-plane integration
 
@@ -511,8 +515,7 @@ tests-first suite (Principle VII) before implementation lands.
   request-phase failures); `error-template/` (privacy-safe error
   template invariants for all four codes plus leak-corpus scan);
   `control-grpc/` (inter-plane RPC + transport invariants for both
-  UDS sockets); `sidecar-proxy/` (docker-socket-proxy lockdown
-  invariants for the C1 privacy-TCB property). Adding a new
+  UDS sockets). Adding a new
   `tests/contract/<surface>/` directory in a future feature
   automatically extends this gate.
 

@@ -8,16 +8,18 @@
 # on a single host, with the data plane's inbound proxy port (8881) bound
 # to loopback only and every other service reachable solely on the
 # compose-internal bridge network. This file is the single source of truth
-# for service topology, runtime users, volume mounts, and the
-# docker-socket-proxy trust boundary (T017a).
+# for service topology, runtime users, and volume mounts. The CP observes
+# Tor lifecycle via the cookie-authenticated ControlPort (tor:9051), not a
+# Docker Engine observer — the docker-socket-proxy auxiliary container was
+# removed by T094a (Constitution Principle III — no host-root-pivot
+# surface); see SECURITY-DECISIONS.md §"2026-07-16 — docker-socket-proxy
+# mechanism removed (T094a)".
 #
 # Verification:
 #   - Static structural contract test: tests/contract/compose/local_compose_test.sh
 #     (PR cadence; no daemon containers started).
 #   - Runtime port-exposure contract test: tests/contract/tor/port_exposure_test.go
 #     (T019b; brings this file up).
-#   - Runtime proxy-lockdown contract test: tests/contract/sidecar-proxy/
-#     (T019c; HTTP probes against POST=0 lockdown).
 #   - Runtime inter-plane UDS topology: tests/contract/control-grpc/ (T022).
 #
 # Out-of-scope here: the LAN (WireGuard sidecar) and VPS (WireGuard/Tailscale
@@ -71,9 +73,19 @@ services:
   # ─────────────────────────────────────────────────────────────────────
   # stargate-control — the Quarkus control plane (Principle II: control
   # plane unreachable ≠ data plane down). Hosts /run/stargate/control.sock
-  # exposing WatchEvents; renders torrc; observes Tor lifecycle via
-  # docker-socket-proxy. UID 5101 / supplementary GID 5100 MUST match
-  # control-plane/Dockerfile exactly.
+  # exposing WatchEvents; observes Tor lifecycle via the cookie-
+  # authenticated ControlPort (tor:9051). UID 5101 / supplementary GID
+  # 5100 MUST match control-plane/Dockerfile exactly.
+  #
+  # T094a (Principle III): the docker-socket-proxy that previously brokered
+  # this observation was removed; the CP reaches Tor's ControlPort directly
+  # over the compose-internal network and authenticates with the control
+  # cookie (CookieAuthFileGroupReadable 1; contracts/torrc.md invariant
+  # #4). ControlPort is NEVER host-published (FR-012). The narrow cookie-
+  # read volume + GID alignment lands with the SidecarMonitor client
+  # (T039), constrained to avoid over-broad entry-guard read (THREAT-MODEL
+  # §4.2) — see T094a §Analysis "Grounding decisions". local_compose_test
+  # .sh M4 gates that no service mounts /var/run/docker.sock.
   # ─────────────────────────────────────────────────────────────────────
   stargate-control:
     build:
@@ -83,7 +95,6 @@ services:
     user: "5101:5100"
     depends_on:
       - tor
-      - docker-socket-proxy
     volumes:
       - stargate-ipc:/run/stargate
       - stargate-keys:/etc/stargate/keys
@@ -125,59 +136,6 @@ services:
     # config feature (T037) but is not mounted into tor for v1.
     volumes:
       - stargate-tor-state:/var/lib/tor
-    networks:
-      - stargate-internal
-    restart: unless-stopped
-
-  # ─────────────────────────────────────────────────────────────────────
-  # docker-socket-proxy — the ONLY service that mounts /var/run/docker.sock
-  # (T017a trust rationale). Bridges the host docker socket to a filtered
-  # HTTP API at http://docker-socket-proxy:2375 over the compose-internal
-  # network. Locked to EVENTS=1 + CONTAINERS=1 + POST=0 so the control
-  # plane can OBSERVE but cannot spawn/kill/exec (T019c gates the lockdown
-  # at runtime).
-  #
-  # NEVER add a `ports:` key here — the proxy is compose-internal only.
-  # NEVER add another service that mounts /var/run/docker.sock — T017a's
-  # trust model is "the proxy is the single point of docker.sock exposure,
-  # and a compromise of the proxy is host-root-equivalent"; adding a
-  # second mounter voids that isolation property.
-  # ─────────────────────────────────────────────────────────────────────
-  docker-socket-proxy:
-    image: ${DOCKER_SOCKET_PROXY_IMAGE}
-    volumes:
-      # NOTE on the `:ro` suffix: for a Unix-domain socket node it is
-      # convention-only, NOT a security boundary. The kernel does not
-      # enforce a read-only direction on AF_UNIX sockets — the proxy can
-      # still issue write-direction requests (POST /containers/create etc.)
-      # to the Docker daemon regardless of the mount mode. The actual
-      # enforcement of "observe but cannot mutate" is the HTTP-level filter
-      # inside the proxy (EVENTS=1, CONTAINERS=1, POST=0 below), gated at
-      # runtime by T019c. We retain `:ro` purely because it documents
-      # intent and is a harmless no-op; do NOT rely on it for isolation.
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      EVENTS: 1
-      CONTAINERS: 1
-      POST: 0
-      # VERSION and PING are EXPLICITLY 0, not left unset: the pinned
-      # upstream image defaults BOTH to allow (probed empirically at T019c
-      # /start), so "unset defaults to deny" is false for these two flags.
-      # SidecarMonitor (T039) needs neither /version nor /_ping — its
-      # documented surface is plain GET /events + /containers/{name}/json.
-      # If a future CP client library pings/negotiates against the daemon,
-      # it must re-grant PING via an explicit threat-model amendment
-      # rather than by deleting these lines (local_compose_test.sh M5 and
-      # tests/contract/sidecar-proxy/lockdown_test.go both gate them).
-      VERSION: 0
-      PING: 0
-      # Every other endpoint flag is intentionally UNSET —
-      # tecnativa/docker-socket-proxy defaults the remaining flags to
-      # deny (runtime-verified by T019c's DenyByDefaultSurface). Do not
-      # add EXEC, BUILD, IMAGES, INFO, NETWORKS, NODES, PLUGINS, SERVICES,
-      # SESSION, SWARM, SYSTEM, TASKS, VOLUMES, AUTH, DISTRIBUTION,
-      # SECRETS, CONFIGS, COMMIT, or GET without an explicit threat-model
-      # amendment (the contract test local_compose_test.sh M5 will fail).
     networks:
       - stargate-internal
     restart: unless-stopped
