@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 74 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 56 |
+| done | 57 |
 | deferred | 2 |
 | **total** | **133** |
 
@@ -38,6 +38,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T035a | Unit test for `TokenLoader.java` (T035) diff logic and valid | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T036 | Implement `control-plane/persistence/src/main/java/.../entit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T038 | In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcS | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T039 | Implement `control-plane/core/src/main/java/.../SidecarMonit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
 | T042 | Implement `data-plane/internal/listener/socks5.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T043 | Implement `data-plane/internal/listener/connect.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
@@ -82,6 +83,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T083 | Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_resta | 2: Foundational (Blocking Prerequisites) |  |  |
 | T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
+| T094b | Split compose networks; harden containers | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
@@ -89,9 +91,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T094a | Drop docker-socket-proxy; use Tor cookie-auth control port | in-progress | ✓ | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -106,7 +106,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_56 ticket(s) done._
+_57 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -158,6 +158,7 @@ _56 ticket(s) done._
 - T091 — Amend the browser-hardening enforcement boundary
 - T092 — Amend the token verifier and lifecycle contract
 - T093 — Test the amended token verifier and lifecycle
+- T094a — Drop docker-socket-proxy; use Tor cookie-auth control port
 - T095 — Complete the inter-plane wire contract
 - T096 — Enforce the canonical ticket workflow
 - T099 — Pin immutable Tor build inputs

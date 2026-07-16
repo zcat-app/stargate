@@ -1,7 +1,7 @@
 ---
 id: T094a
 title: 'Drop docker-socket-proxy; use Tor cookie-auth control port'
-status: in-review
+status: done
 created: 2026-07-16
 last_updated: 2026-07-16
 source: specs/001-tor-route/tickets/T094-harden-compose-network-boundaries.md (decomposed)
@@ -23,7 +23,7 @@ decision_refs:
   - SECURITY-DECISIONS.md §"2026-07-04 — docker-socket-proxy trust rationale"
   - SECURITY-DECISIONS.md §"2026-07-06 — docker-socket-proxy CONTAINERS=1 read surface"
 decomposed_from: T094
-reviews: {}
+reviews: { round: 1, date: 2026-07-16, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
