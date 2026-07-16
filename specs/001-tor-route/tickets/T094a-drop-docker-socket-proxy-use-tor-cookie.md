@@ -86,15 +86,60 @@ network (the network split is T094b's mandate).
   - T094b's docker-backed regression test (later) gates the negative-path
     network properties; this ticket does not assert them.
 - **Residue:**
-  - The exact least-privilege cookie-access mechanism (sub-path volume
-    mount vs. a dedicated cookie-sharing volume vs. supplementary GID) is
-    resolved at `/start` grounding against the tor user's UID/GID and the
-    `CookieAuthFileGroupReadable` group semantics — recorded here as a
-    design pointer, not pre-decided. This is the load-bearing privacy
-    surface `stargate-redteam` should hunt.
+  - The least-privilege cookie-access mechanism is the load-bearing
+    privacy surface `stargate-redteam` should hunt. See grounding below.
   - arch §16.1 becomes "no auxiliary containers" or is folded into the Tor
     section — the exact structural edit is a grounding decision; the
     must-hold is "no stale proxy prose remains."
+
+### Grounding decisions (2026-07-16 /run T094a)
+
+- **Cookie-access mechanism — NOT wired in T094a; deferred to T039.**
+  Grounding against `sidecars/tor/Dockerfile` + the live-sidecar contract
+  test (`tests/contract/torrc/live_sidecar_test.go` §"Control-port
+  access", lines 40-46) shows the cookie lives at
+  `/var/lib/tor/control_auth_cookie` on `stargate-tor-state`, mounted
+  ONLY into tor; the AUTHENTICATE exchange runs INSIDE tor as USER tor
+  because **no peer can read the cookie today** (T062's Go-side client
+  is still `pending`). The only compose-only CP mechanisms either (a)
+  mount all of `stargate-tor-state` :ro into the CP — over-granting
+  entry-guard read, violating must-hold #2 / THREAT-MODEL §4.2 and
+  recreating the `/containers/archive` exfil the proxy's removal exists
+  to close — or (b) relocate the cookie via a `CookieAuthFile` directive,
+  a torrc byte-contract change owned by T087 and explicitly out of bounds
+  (T094b Out-of-scope). T094a therefore removes the Docker observer and
+  preserves `tor:9051` reachability (shared `stargate-internal` network)
+  **without** adding a CP cookie mount; the narrow cookie-read path +
+  GID alignment lands with T039 (SidecarMonitor impl), constrained by
+  must-hold #2. The compose why-comment records this. (Acceptance #1's
+  "wire the CP to read the cookie" resolves to: surface established +
+  documented; volume deferred for the must-hold-#2 safety reason above.)
+- **THREAT-MODEL.md — NO edit.** A grep of `THREAT-MODEL.md` finds ZERO
+  `docker-socket-proxy` / `2375` / root-pivot references; §5.8 (Sidecar
+  compromise) and §3.1 (Local profile) never name the proxy. Acceptance
+  #6's "drop the proxy from §5.8 / §3.1" is a no-op (nothing to drop);
+  §3.1's "Docker daemon" trusted-party line stays (it predates the proxy
+  and is mode-level, not proxy-level). The "Docker isolation is not a
+  sandbox" note belongs to **T094b** (its acceptance #5), not T094a.
+  Falsified per "falsify before publishing."
+- **T039 / T074 — `blocked_by` amended `T094` → `T094a`.** Both carry
+  `blocked_by: [..., T094, ...]`; T094 is now `deferred` (decomposed), so
+  it can never reach `done` and would strand both tickets un-runnable.
+  T094a is the real blocker (it establishes the control-port surface
+  T039's SidecarMonitor targets). Folded into the acceptance #11 edits
+  (same two files — no budget cost).
+- **quickstart.md — orphan cleanup.** Its "docker ps will also list a
+  fourth container, docker-socket-proxy" blockquote becomes false the
+  moment the proxy service is removed; updated for operator-facing
+  honesty (Principle V). Consumes the one file of budget headroom freed
+  by the THREAT-MODEL no-op.
+- **Verify-gate safety (confirmed):** `scripts/ground-check.sh:207-216`
+  skips `stargate/*` build-keyed image refs and tolerates zero external
+  refs (`:242-244`), so removing the only external image stays GREEN;
+  `tests/contract/security-decisions/tor_entry_test.sh` has NO functional
+  dependency on the proxy entry (mentions are comment-only); the
+  `sidecarproxy` Go package has NO external importers (safe to delete the
+  directory).
 
 ## Acceptance
 
