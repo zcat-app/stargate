@@ -6,9 +6,11 @@
 # The `local` deployment profile (per THREAT-MODEL.md §3.1: assumes local
 # code execution is already game-over) brings up the full Stargate runtime
 # on a single host, with the data plane's inbound proxy port (8881) bound
-# to loopback only and every other service reachable solely on the
-# compose-internal bridge network. This file is the single source of truth
-# for service topology, runtime users, and volume mounts. The CP observes
+# to loopback only. T094b splits the services across three Compose networks
+# so only Tor has egress (THREAT-MODEL §5.8): stargate-egress (Tor only),
+# stargate-internal (DP↔tor, internal:true), stargate-cp-tor (CP↔tor,
+# internal:true). This file is the single source of truth for service
+# topology, runtime users, and volume mounts. The CP observes
 # Tor lifecycle via the cookie-authenticated ControlPort (tor:9051), not a
 # Docker Engine observer — the docker-socket-proxy auxiliary container was
 # removed by T094a (Constitution Principle III — no host-root-pivot
@@ -66,8 +68,23 @@ services:
       - stargate-ipc:/run/stargate
       - stargate-keys:/etc/stargate/keys:ro
       - stargate-dp-state:/var/lib/stargate
+    # T094b: DP sits ONLY on the internal:true stargate-internal net
+    # (DP↔tor:9050 transport). It has no public egress and no route to CP.
     networks:
       - stargate-internal
+    # T094b hardening (arch §8): read-only rootfs, all caps dropped, no
+    # privilege escalation, bounded resources. Only the named volumes
+    # (ipc/keys/dp-state) remain writable; /tmp + /run are tmpfs.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 256
     restart: unless-stopped
 
   # ─────────────────────────────────────────────────────────────────────
@@ -106,8 +123,25 @@ services:
       # this volume. Kept declared so the volume set stays stable
       # (local_compose_test.sh M7) and the T037 render path has its target.
       - stargate-tor-config:/etc/tor
+    # T094b: CP sits ONLY on the internal:true stargate-cp-tor net
+    # (CP↔tor:9051 cookie ControlPort, T094a). No public egress, no route
+    # to DP or to tor:9050. CP never shared a network with DP.
     networks:
-      - stargate-internal
+      - stargate-cp-tor
+    # T094b hardening (arch §8): read-only rootfs, all caps dropped, no
+    # privilege escalation, bounded resources. Only the named volumes
+    # (ipc/keys/control-config/control-state/tor-config) remain writable;
+    # /tmp + /run are tmpfs.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 512
     restart: unless-stopped
 
   # ─────────────────────────────────────────────────────────────────────
@@ -136,13 +170,53 @@ services:
     # config feature (T037) but is not mounted into tor for v1.
     volumes:
       - stargate-tor-state:/var/lib/tor
+    # T094b: Tor is the SOLE service attached to an egress-capable network.
+    # It carries three attachments: stargate-egress (NOT internal — Tor's
+    # only NAT route to the Tor network), stargate-internal (internal:true,
+    # exposes tor:9050 to DP, FR-007), and stargate-cp-tor (internal:true,
+    # exposes tor:9051 to CP, T094a). DP and CP share no network. The net
+    # split makes Tor the sole egress TCB (THREAT-MODEL §5.8).
     networks:
+      - stargate-egress
       - stargate-internal
+      - stargate-cp-tor
+    # T094b hardening (arch §8): read-only rootfs, all caps dropped, no
+    # privilege escalation, bounded resources. Tor binds 9050/9051 (>1024,
+    # no cap needed), runs as USER tor, and writes only to /var/lib/tor
+    # (stargate-tor-state, the cookie + state) under AvoidDiskWrites 1;
+    # /tmp + /run are tmpfs. HEALTHCHECK reads the cookie in the volume.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 256
     restart: unless-stopped
 
 networks:
-  stargate-internal:
+  # T094b: three networks split so only Tor has egress.
+  stargate-egress:
+    # NOT internal: keeps Docker's default NAT egress. Attached: tor only.
+    # This is Tor's sole route to the Tor network — every other service is
+    # on an internal:true net with no external connectivity.
     driver: bridge
+  stargate-internal:
+    # internal:true: no public egress. Attached: stargate-dp + tor. Carries
+    # DP→tor:9050 (FR-007). The name is preserved deliberately — T019b's
+    # tests/contract/tor/port_exposure_test.go resolves the DP↔tor network
+    # by this literal compose name (lookupComposeNetwork).
+    driver: bridge
+    internal: true
+  stargate-cp-tor:
+    # internal:true: no public egress. Attached: stargate-control + tor.
+    # Carries CP→tor:9051 (cookie-auth ControlPort, T094a). CP and DP share
+    # no network → mutually unreachable at L3.
+    driver: bridge
+    internal: true
 
 volumes:
   # Exactly the seven named volumes from data-model.md §6 — local_compose_test.sh

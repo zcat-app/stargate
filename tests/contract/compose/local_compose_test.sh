@@ -28,9 +28,12 @@
 # lockdown contract test tests/contract/sidecar-proxy/ was removed in the
 # same ticket. The old "sole-mounter == docker-socket-proxy" check is
 # inverted here to the load-bearing "ZERO docker.sock mounters" property
-# (Principle III — no auxiliary host-root-pivot surface). The network-
-# split + per-container hardening that T094 deferred is T094b's mandate;
-# this test still asserts a single stargate-internal network for now.
+# (Principle III — no auxiliary host-root-pivot surface). The network-split
+# + per-container hardening landed in T094b: M13 now asserts the split
+# topology statically (3 nets, internal:true flags, per-service membership,
+# Tor as sole egress attachee); the runtime reachability + hardening is
+# gated by tests/contract/compose/network_hardening_test.go (//go:build
+# docker, T094b, run via STARGATE_TEST_TAGS=docker).
 #
 # Mechanism: `docker compose -f <file> --env-file <env> config --format json`
 # renders the compose file to canonical JSON (long-form schema: ports use
@@ -154,18 +157,45 @@ DP_DEPS="$(q '.services["stargate-dp"].depends_on // "" | tostring')"
 [ "$DP_DEPS" = "null" ] || [ "$DP_DEPS" = "" ] \
   || bail "M10: stargate-dp MUST NOT declare depends_on (Constitution II — DP keeps routing if CP/sidecars are unreachable); got: $DP_DEPS"
 
-# --- M13: exactly one network, all three services attached ------------------
-# T094a left the stack on a single stargate-internal network; the network
-# split (Tor sole egress) is T094b's mandate. All three services stay
-# attached so DP<->tor:9050 (FR-007) and CP<->tor:9051 (the cookie-auth
-# ControlPort observation surface T094a established) resolve.
+# --- M13: split networks, internal flags, membership, Tor sole egress (T094b) --
+# T094b split the stack into three networks so only Tor has egress:
+#   stargate-egress   (NOT internal) — tor only; Tor's sole NAT route.
+#   stargate-internal (internal:true) — stargate-dp + tor (DP→tor:9050, FR-007).
+#   stargate-cp-tor   (internal:true) — stargate-control + tor (CP→tor:9051).
+# DP and CP share no network → mutually unreachable at L3. The runtime
+# reachability + per-container hardening is gated by
+# tests/contract/compose/network_hardening_test.go (//go:build docker);
+# this is the static topology gate that runs at PR cadence (no daemon).
 NET_COUNT="$(q '.networks | length | tostring')"
-[ "$NET_COUNT" = "1" ] || bail "M13: exactly one network expected (FR-005 'single compose-internal bridge'); got: $NET_COUNT"
-NET_NAME="$(q '.networks | keys | join(",")')"
-[ -n "$NET_NAME" ] || bail "M13: network key missing"
-for svc in stargate-dp stargate-control tor; do
-  attached="$(q ".services[\"$svc\"].networks | type")"
-  [ "$attached" = "object" ] || bail "M13: service '$svc' must be attached to the '$NET_NAME' network (DP<->tor:9050 and CP<->tor:9051 paths); got networks type: '$attached'"
+[ "$NET_COUNT" = "3" ] || bail "M13: expected exactly 3 networks (stargate-egress, stargate-internal, stargate-cp-tor — T094b split); got: $NET_COUNT"
+NET_NAMES="$(q '.networks | keys | sort | join(",")')"
+[ "$NET_NAMES" = "stargate-cp-tor,stargate-egress,stargate-internal" ] \
+  || bail "M13: network set must be {stargate-egress, stargate-internal, stargate-cp-tor}; got: $NET_NAMES"
+
+# internal flags: egress NOT internal (Tor's route out); transport nets internal:true.
+EGRESS_INTERNAL="$(q '.networks["stargate-egress"].internal // false')"
+[ "$EGRESS_INTERNAL" = "false" ] || bail "M13: stargate-egress must NOT be internal (Tor's sole egress path); internal=$EGRESS_INTERNAL"
+DPTOR_INTERNAL="$(q '.networks["stargate-internal"].internal // false')"
+[ "$DPTOR_INTERNAL" = "true" ] || bail "M13: stargate-internal must be internal:true (DP has no public egress); internal=$DPTOR_INTERNAL"
+CPTOR_INTERNAL="$(q '.networks["stargate-cp-tor"].internal // false')"
+[ "$CPTOR_INTERNAL" = "true" ] || bail "M13: stargate-cp-tor must be internal:true (CP has no public egress); internal=$CPTOR_INTERNAL"
+
+# Per-service membership. .services[svc].networks renders as an object keyed
+# by network name; its keys are exactly the nets the service attaches to.
+svc_nets() { q ".services[\"$1\"].networks | keys | sort | join(\",\")"; }
+[ "$(svc_nets stargate-dp)" = "stargate-internal" ] \
+  || bail "M13: stargate-dp must be attached ONLY to stargate-internal (DP↔tor:9050, FR-007); got: $(svc_nets stargate-dp)"
+[ "$(svc_nets stargate-control)" = "stargate-cp-tor" ] \
+  || bail "M13: stargate-control must be attached ONLY to stargate-cp-tor (CP↔tor:9051, T094a); got: $(svc_nets stargate-control)"
+[ "$(svc_nets tor)" = "stargate-cp-tor,stargate-egress,stargate-internal" ] \
+  || bail "M13: tor must be attached to all three networks (sole egress + the two transport nets); got: $(svc_nets tor)"
+
+# Tor is the sole egress attachee: stargate-egress has exactly one member
+# (tor). DP and CP are not on it → they have no egress path.
+for svc in stargate-dp stargate-control; do
+  on_egress="$(q ".services[\"$svc\"].networks[\"stargate-egress\"] | type")"
+  [ "$on_egress" = "null" ] \
+    || bail "M13: service '$svc' must NOT be attached to stargate-egress (only Tor has egress); got type: '$on_egress'"
 done
 
 # === Report ================================================================

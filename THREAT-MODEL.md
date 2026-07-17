@@ -239,6 +239,12 @@ is on the same machine.
 - Network-level adversaries (§2.1, §2.3) seeing *plaintext request
   metadata* for routed traffic — they see only the encrypted outer tunnel
   to the chosen anonymity network's first hop.
+- A compromised application plane (data or control) exfiltrating directly
+  to the public network, the Docker API, or the other plane's surfaces —
+  the Compose network split (T094b) seats both planes on `internal: true`
+  networks with no external connectivity and no shared network between
+  them; only Tor attaches to an egress-capable network, making Tor the
+  sole egress trusted computing base (see §5.8 "Network segmentation").
 
 **Does NOT protect against**:
 
@@ -938,14 +944,44 @@ network visibility for its route (§2.6).
   config volume.
 - **Per-sidecar Docker volumes**: cross-sidecar disk visibility is
   prevented by per-volume mounts.
+- **Network segmentation — Tor is the sole egress TCB** (T094b): the
+  local stack is split into three Compose networks so only Tor attaches
+  to an egress-capable network (`stargate-egress`); the data plane and
+  control plane sit on `internal: true` networks (`stargate-internal`,
+  `stargate-cp-tor`) with no external connectivity, and the two
+  application planes share no network with each other. Every service
+  additionally runs `read_only: true` with `cap_drop: [ALL]`,
+  `no-new-privileges`, and explicit memory/PID limits. A compromised
+  application plane therefore has no direct route to the public network,
+  the Docker API, or the other plane's surfaces — Tor is the only path
+  out, and it is the anonymity network's own first hop. Gated statically
+  by `tests/contract/compose/local_compose_test.sh` (M13) and at runtime
+  by `tests/contract/compose/network_hardening_test.go`.
 
 **Residual risk**: a backdoored sidecar that passes contract tests can
 still leak data through its anonymity-network channel. Docker isolation
 is not a sandbox in the security sense; a sufficiently malicious image
-with kernel-level exploit can break out. We accept this risk and rely on
-upstream maintainer trust plus reproducibility checks where the upstream
-publishes them. See `SECURITY-DECISIONS.md` (once authored) for the
-per-image trust rationale required by architecture spec §7.
+with kernel-level exploit can break out — the network split above does
+not change that (it constrains a compromised *application* plane, not a
+compromised *kernel*). A second, narrower residue: `tor` binds both
+`SocksPort` and `ControlPort` on `0.0.0.0` and is multi-homed across the
+three networks, so a compromised application plane can additionally
+TCP-reach Tor's *other* port — CP→`tor:9050` (the unauthenticated SOCKS
+surface, a Tor-transiting exfil channel that bypasses the data plane's
+routing authority and per-first-party stream isolation) and DP→`tor:9051`
+(inert without the auth cookie, which is volume-isolated to `tor` on
+`stargate-tor-state`). This is wider than the intended
+`DP→{tor:9050}; CP→{tor:9051}` matrix but does **not** breach "Tor is the
+sole egress TCB" (the exfil still transits Tor; there is no clearnet leak
+— `internal:true` removes the default route and Docker's embedded DNS
+returns SERVFAIL for external names on those nets, blocking DNS-tunnel
+side-channels). Closing the cross-plane tor-port residue requires
+per-interface port binds, a torrc byte-contract change owned by T087 and
+deferred; it is accepted v1 residue and pinned as expected-reachable in
+`tests/contract/compose/network_hardening_test.go`. We accept this risk
+and rely on upstream maintainer trust plus reproducibility checks where
+the upstream publishes them. See `SECURITY-DECISIONS.md` (once authored)
+for the per-image trust rationale required by architecture spec §7.
 
 ### 5.9 Update channel compromise
 

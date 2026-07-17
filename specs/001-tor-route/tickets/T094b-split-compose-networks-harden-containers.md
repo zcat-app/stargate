@@ -1,7 +1,7 @@
 ---
 id: T094b
 title: 'Split compose networks; harden containers'
-status: pending
+status: in-review
 created: 2026-07-16
 last_updated: 2026-07-16
 source: specs/001-tor-route/tickets/T094-harden-compose-network-boundaries.md (decomposed)
@@ -84,14 +84,36 @@ paths from inside each container's namespace.
     NAT egress). Attached: `tor` only. This is the sole egress path; Tor
     is the only service that can reach the public network.
   - `stargate-internal` — bridge, `internal: true`. Attached: `stargate-dp`
-    + `tor`. Carries DP→`tor:9050` (FR-007). Internal ⇒ DP has no public
-    egress and no route to CP or to `tor:9051`.
+    + `tor`. Carries DP→`tor:9050` (FR-007). `internal:true` removes the
+    default route AND blocks DNS exfil via Docker's embedded resolver
+    (127.0.0.11 returns SERVFAIL for external names — verified at runtime
+    in T094b, and confirmed by a non-internal control that resolves the
+    same names) ⇒ DP has no public egress and no clearnet side-channel.
   - `stargate-cp-tor` — bridge, `internal: true`. Attached: `stargate-control`
-    + `tor`. Carries CP→`tor:9051` (cookie-auth ControlPort, T094a).
-    Internal ⇒ CP has no public egress and no route to DP or to `tor:9050`.
-  Reach matrix held by construction: DP→{tor:9050}; CP→{tor:9051};
-  Tor→{public, DP, CP}; no DP↔CP shared network; no application-plane
-  public egress.
+    + `tor`. Carries CP→`tor:9051` (cookie-auth ControlPort, T094a). Same
+    no-public-egress / no-DNS-exfil properties as above.
+  - DP and CP share no network ⇒ mutually unreachable at L3 (gated
+    statically by M13 and, once the images build, at runtime).
+  - **Cross-plane tor-port residue (Principle V — documented, NOT closed
+    here; corrected after redteam M1).** An earlier draft of this section
+    asserted the narrow matrix "DP→{tor:9050}; CP→{tor:9051}" with
+    "Internal ⇒ no route to the other tor port." That is **false**: `tor`
+    binds `SocksPort 0.0.0.0:9050` + `ControlPort 0.0.0.0:9051`
+    (contracts/torrc.md) and is multi-homed across all three networks, so
+    the ACTUAL L3 reach matrix is wider — DP can also TCP-reach `tor:9051`
+    (inert: the auth cookie is volume-isolated to `tor` on
+    `stargate-tor-state`, mounted only into tor) and CP can also TCP-reach
+    `tor:9050` (the unauthenticated SOCKS surface — a Tor-transiting exfil
+    channel that bypasses the DP's routing authority + per-first-party
+    stream isolation). This does NOT breach "Tor is the sole egress TCB"
+    (the exfil still transits Tor; no clearnet leak, no Docker-API route,
+    no DP↔CP surface), but it IS wider than the design-intent matrix.
+    Closing it requires per-interface SocksPort/ControlPort binds, a torrc
+    byte-contract change owned by T087 and explicitly out-of-scope here.
+    Accepted as v1 residue; stated honestly in THREAT-MODEL §5.8 and pinned
+    as expected-reachable in `network_hardening_test.go`
+    (CrossPlaneTorPortResidue…) so a future T087 change that closes it
+    fails the test and forces §5.8 to update in lockstep.
 - **`stargate-internal` name preserved deliberately.** T019b's
   `tests/contract/tor/port_exposure_test.go` resolves the DP↔tor network by
   the literal compose name `stargate-internal` (lookupComposeNetwork,
