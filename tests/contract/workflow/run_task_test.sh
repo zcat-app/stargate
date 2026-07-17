@@ -271,8 +271,24 @@ git checkout -q -b 001-testfeat main
 printf 'work\n' > w.txt; git add w.txt; git commit -q -m "Implement 001-testfeat: T307 work"
 run_task T307 --merge
 assert '[ "$rt_rc" -eq 0 ]' "S8: milestone merge exits 0 (got $rt_rc)"
-git checkout -q main
-assert 'git log --oneline | grep -q "milestone squash"' "S8: main has the milestone squash commit"
+# T105: assert the milestone commit landed on main by reading main's TIP
+# subject directly — `git show -s --format=%s main` is a single read-only op
+# against one object, independent of HEAD/working-tree (no branch switch).
+#
+# Grounding finding (falsified the ticket's hypothesis): the run-task --merge
+# logic is correct — across 50+ reproducing sandboxes refs/heads/main ALWAYS
+# carried the squash commit and run-task's rc was 0. The flake is a transient
+# read-side failure under heavy CONCURRENT host load (40+ parallel instances),
+# where a git subprocess intermittently returns partial/empty output. The prior
+# form (`git checkout -q main` then `git log --oneline | grep`) had TWO
+# load-sensitive subprocesses plus a mutating checkout; eliminating the
+# checkout and reading the tip subject directly minimises the subprocess
+# surface. This makes the assertion deterministic under normal (single-invoked,
+# reasonably-loaded) verify.sh operation, which is what the acceptance repro
+# (8 sequential runs) exercises. A residual transient-infra failure under
+# artificial extreme parallelism is not eliminable without a retry band-aid,
+# which §Acceptance #2 and the process doctrine forbid.
+assert 'git show -s --format=%s main | grep -q "milestone squash"' "S8: main tip is the milestone squash commit"
 assert 'git show-ref --verify --quiet refs/heads/001-testfeat' "S8: feature branch retained"
 
 # ===========================================================================

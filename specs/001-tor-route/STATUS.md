@@ -14,12 +14,12 @@
 | Status | Count |
 |---|---|
 | pending | 73 |
-| in-progress | 0 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 60 |
 | deferred | 1 |
-| **total** | **134** |
+| **total** | **135** |
 
 ---
 
@@ -88,13 +88,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T103 | Add a scoped shell quality gate | 6: Polish & Cross-Cutting Concerns |  |  |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
-| T105 | Stabilize the flaky run_task_test.sh S8 milestone-merge asse | 6: Polish & Cross-Cutting Concerns |  |  |
+| T106 | Make the init count-probe failure path fail-closed (no key c | 6: Polish & Cross-Cutting Concerns |  |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T105 | Stabilize the flaky run_task_test.sh S8 milestone-merge asse | in-progress |  | 6: Polish & Cross-Cutting Concerns |
 
 ---
 

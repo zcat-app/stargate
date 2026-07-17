@@ -1,7 +1,7 @@
 ---
 id: T105
 title: 'Stabilize the flaky run_task_test.sh S8 milestone-merge assertion'
-status: pending
+status: in-progress
 created: 2026-07-17
 last_updated: 2026-07-17
 source: found during /run T088 (verify.sh gate reliability)
@@ -118,3 +118,32 @@ which branch fires.
 Found while running `/run T088` — T088's own gates are all green; this test
 flips independent of T088's diff (the sandbox copies only untouched
 `run-task.sh` + `lint-ticket.py`). Filed separately so T088 stays surgical.
+
+### Grounding finding (falsifies the §"Suspect root cause")
+
+Empirical repro under concurrent host load (40+ parallel full-harness
+instances: ~6-10% fail rate; sequential/single-invoked: 0%) showed the
+ticket's stated hypothesis — "run-task exits 0 with no milestone commit" — is
+**false**. Across 50+ reproducing sandboxes, `refs/heads/main` ALWAYS carried
+the squash commit and run-task's exit code was always 0; the FIRST S8 assert
+(`--merge exits 0`) always passed; only the SECOND (the grep) ever failed, and
+it passed when re-run on the same sandbox moments later. So the run-task
+`--merge` logic is correct. The flake is a transient **read-side** failure of
+S8's own post-merge git subprocess under heavy concurrent load, not a write
+bug. Fixes applied:
+  1. `scripts/run-task.sh` `--merge` path hardened to fail-closed (capture the
+     `git commit` rc; confirm `main` advanced; exit non-zero + stay on main
+     with staged changes if the milestone commit does not land). This was a
+     real latent fail-open even though it was not the flake's cause, and is
+     authorised by §Acceptance #2.
+  2. `tests/contract/workflow/run_task_test.sh` S8 narrowed to assert the
+     deterministic property (main's TIP is the milestone commit) via
+     `git show -s --format=%s main` — a single read-only op against one
+     object, no mutating `git checkout`, minimal subprocess surface. This
+     replaces the prior two-step `git checkout -q main` + `git log --oneline |
+     grep` (more subprocesses + a branch switch). Deterministic under normal
+     verify.sh operation (3×8 sequential repro: pass=8/8 each; 2×40 parallel:
+     80/80). A residual transient git-infra failure under *artificial extreme*
+     parallelism is not eliminable without a retry band-aid, which §Acceptance
+     #2 and the process doctrine forbid.
+
