@@ -1,9 +1,9 @@
 ---
 id: T094b
 title: 'Split compose networks; harden containers'
-status: in-review
+status: done
 created: 2026-07-16
-last_updated: 2026-07-16
+last_updated: 2026-07-17
 source: specs/001-tor-route/tickets/T094-harden-compose-network-boundaries.md (decomposed)
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
@@ -22,7 +22,7 @@ spec_refs:
   - THREAT-MODEL.md §3.1
 decision_refs: []
 decomposed_from: T094
-reviews: {}
+reviews: { round: 2, date: 2026-07-17, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

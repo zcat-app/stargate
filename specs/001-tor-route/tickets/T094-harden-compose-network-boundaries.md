@@ -1,9 +1,9 @@
 ---
 id: T094
 title: 'Harden Compose network and container boundaries'
-status: deferred
+status: done
 created: 2026-07-11
-last_updated: 2026-07-16
+last_updated: 2026-07-17
 source: review/sol-review.md#M2
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
@@ -58,8 +58,13 @@ clarity_check: {}
 >   negative-path regression test first (Principle VII). Blocked on T094a.
 >   `files_budget: 6`.
 >
-> This ticket stays `deferred` (reason `decomposed`) as the audit record;
-> its acceptance is satisfied when both children are `done`.
+> **Closed 2026-07-17** — both children reached `done` (T094a round 1
+> APPROVE 2026-07-16; T094b round 2 APPROVE 2026-07-17), satisfying this
+> ticket's acceptance. Status flipped `deferred → done`; `deferred_on:
+> T094a` + `deferred_reason: decomposed` retained as the decomposition
+> audit trail. This was also the sole remaining blocker for T088
+> (`next-task.sh` gates `blocked_by` on `status == done`), so closing
+> T094 unblocks T088.
 
 ## Context
 

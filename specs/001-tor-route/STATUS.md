@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-07-16
+**Last updated:** 2026-07-17
 
 ---
 
@@ -15,10 +15,10 @@
 |---|---|
 | pending | 73 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 57 |
-| deferred | 2 |
+| done | 59 |
+| deferred | 1 |
 | **total** | **133** |
 
 ---
@@ -35,6 +35,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T034c | Unit test for `extension/popup/popup.js` per-tab indicator ( | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034d | Unit test for `extension/lib/firstparty.js` (Principle VII | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T034e | Unit test for the canonical `storage.local` warning text (Pr | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
+| T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T035a | Unit test for `TokenLoader.java` (T035) diff logic and valid | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T036 | Implement `control-plane/persistence/src/main/java/.../entit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T038 | In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcS | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
@@ -80,9 +81,11 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T078 | Run the `stargate-redteam` agent against the completed featu | 6: Polish & Cross-Cutting Concerns |  |  |
 | T079 | Run the `stargate-perf` agent against the data plane (Princi | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T080 | Sweep with `scripts/check-license-headers.sh` (from T006); v | 6: Polish & Cross-Cutting Concerns | ✓ |  |
+| T082 | Reconcile the threat model with the local stack | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T083 | Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_resta | 2: Foundational (Blocking Prerequisites) |  |  |
 | T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
+| T088 | Repair local init and Compose provisioning | 2: Foundational (Blocking Prerequisites) | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
@@ -90,9 +93,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T094b | Split compose networks; harden containers | in-review | ✓ | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -101,13 +102,12 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | ID | Title | Reason | Blocked on |
 |---|---|---|---|
 | T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | spec-amend | T089 |
-| T094 | Harden Compose network and container boundaries | decomposed | T094a |
 
 ---
 
 ## Done
 
-_57 ticket(s) done._
+_59 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -159,7 +159,9 @@ _57 ticket(s) done._
 - T091 — Amend the browser-hardening enforcement boundary
 - T092 — Amend the token verifier and lifecycle contract
 - T093 — Test the amended token verifier and lifecycle
+- T094 — Harden Compose network and container boundaries
 - T094a — Drop docker-socket-proxy; use Tor cookie-auth control port
+- T094b — Split compose networks; harden containers
 - T095 — Complete the inter-plane wire contract
 - T096 — Enforce the canonical ticket workflow
 - T099 — Pin immutable Tor build inputs
