@@ -1,0 +1,74 @@
+# Copyright 2026 The Stargate Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# tests/contract/stargate-cli/fixtures/fixture-compose.yml — a TINY stand-in
+# for compose/docker-compose.local.yml so the init regression test
+# (init_docker_test.sh) can exercise `stargate init`'s full provisioning
+# path — env-file handling, project-scoped volume resolution, key+pepper
+# install, volume-root ownership init, health discovery via `compose ps -q`,
+# idempotent rerun, and two-project isolation — WITHOUT building the three
+# Stargate images (B1 recommendation: "tiny fixture images ... without
+# building Stargate").
+#
+# Service names mirror the real compose (stargate-dp / stargate-control /
+# tor) because init's health loop and verify_tor probe reference those
+# names + port 8881. The services are trivial: stargate-dp re-arms a
+# busybox nc listener on 8881 (enough for init's TCP-connect verify_tor);
+# the other two just stay running. The regression test sets
+# STARGATE_COMPOSE_FILE to this file + STARGATE_PROJECT to a disposable
+# name, runs init, then asserts the post-conditions on the volumes.
+
+services:
+  # Mirrors the real stargate-dp: publishes 127.0.0.1:8881 and listens so
+  # init's verify_tor (TCP connect to 127.0.0.1:8881) succeeds.
+  stargate-dp:
+    image: alpine:3.20
+    command: ["sh", "-c", "while true; do nc -l -p 8881 </dev/null >/dev/null 2>&1 || sleep 0.2; done"]
+    ports:
+      - "127.0.0.1:8881:8881/tcp"
+    volumes:
+      - stargate-ipc:/run/stargate
+      - stargate-keys:/etc/stargate/keys:ro
+      - stargate-dp-state:/var/lib/stargate
+    restart: "no"
+
+  # Mirrors the real stargate-control: just needs to be RUNNING for init's
+  # health loop. Mounts the volume set the real CP does, EXCEPT the real
+  # compose's `stargate-control-config:/etc/stargate:ro` parent mount (which
+  # would shadow the `stargate-keys:/etc/stargate/keys` child in an alpine
+  # image that has no pre-created /etc/stargate/keys dir — the real CP image
+  # pre-creates it; the fixture need not, and that nesting is not load-bearing
+  # for what this test asserts: init's provisioning). control-config stays
+  # declared in the volumes set below for 7-volume parity; init does not
+  # initialise it (operator-authored, :ro).
+  stargate-control:
+    image: alpine:3.20
+    command: ["sleep", "3600"]
+    volumes:
+      - stargate-ipc:/run/stargate
+      - stargate-keys:/etc/stargate/keys
+      - stargate-control-state:/var/lib/stargate
+      - stargate-tor-config:/etc/tor
+    restart: "no"
+
+  # Mirrors the real tor sidecar: just needs to be RUNNING.
+  tor:
+    image: alpine:3.20
+    command: ["sleep", "3600"]
+    volumes:
+      - stargate-tor-state:/var/lib/tor
+    restart: "no"
+
+volumes:
+  # The seven named volumes from data-model.md §6 (the real compose's exact
+  # set). init initialises the roots of the five UID-5101/5102-writable ones
+  # (keys + ipc + control-state + dp-state + tor-config); control-config
+  # (operator-authored, :ro) and tor-state (written by the tor user, not
+  # 5101/5102) are declared for set parity but not chowned by init.
+  stargate-keys: {}
+  stargate-ipc: {}
+  stargate-control-config: {}
+  stargate-control-state: {}
+  stargate-dp-state: {}
+  stargate-tor-state: {}
+  stargate-tor-config: {}

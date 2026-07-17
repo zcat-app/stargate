@@ -102,7 +102,7 @@ The data plane MUST:
    Tor SOCKS5 connection (FR-007).
 2. Read `PASSWD` (1–255 bytes) as the candidate bearer token.
 3. Compute `verifier = HMAC-SHA-256(pepper, PASSWD)` under the
-   install-time pepper (`/etc/stargate/pepper.key`; data-model.md §1.5,
+   install-time pepper (`/etc/stargate/keys/pepper.key`; data-model.md §1.5,
    amended by T092 — Argon2id is retired, there is no per-token salt).
    Compare the candidate's verifier with
    `crypto/subtle.ConstantTimeCompare` against EVERY verifier in the

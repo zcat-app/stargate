@@ -195,7 +195,7 @@ exception. The proto comment block and `contracts/control-grpc.md`
 
 **Residue / supply-chain decision (the pepper is a new secret).**
 
-- **Ownership / mode.** `/etc/stargate/pepper.key`, generated once by
+- **Ownership / mode.** `/etc/stargate/keys/pepper.key`, generated once by
   `scripts/stargate init` (`openssl rand -bytes 32`), mounted from the
   `stargate-keys` volume, owned by the reading plane's UID, group-readable
   by `stargate-ipc` (GID 5100), mode `0640` — the same ownership/mode

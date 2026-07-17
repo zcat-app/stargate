@@ -44,6 +44,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 DISPATCHER="scripts/stargate"
 INIT="scripts/subcommands/init"
+LIB="scripts/lib/compose.sh"          # T088: the authoritative compose-command builder init sources.
 COMPOSE="compose/docker-compose.local.yml"
 DP_DOCKERFILE="data-plane/Dockerfile"
 CP_DOCKERFILE="control-plane/Dockerfile"
@@ -77,7 +78,9 @@ lacks_literal() {
 }
 
 # --- existence + executability + license header (M1, M13) -----------------
-for f in "$DISPATCHER" "$INIT"; do
+# Executable: dispatcher + init + the Docker-backed regression test. The lib
+# is SOURCED (no +x required) but must exist + carry the SPDX header.
+for f in "$DISPATCHER" "$INIT" "tests/contract/stargate-cli/init_docker_test.sh"; do
   [ -f "$f" ]     || { echo "FAIL: $f missing" >&2; exit 1; }
   [ -x "$f" ]     || bail "M1/M13: $f not executable"
   head -3 "$f" | grep -qi "Copyright 2026 The Stargate Authors" \
@@ -85,6 +88,15 @@ for f in "$DISPATCHER" "$INIT"; do
   head -3 "$f" | grep -qi "SPDX-License-Identifier: Apache-2.0" \
     || bail "M13: SPDX-License-Identifier line missing in $f"
 done
+for f in "$LIB" "tests/contract/stargate-cli/fixtures/fixture-compose.yml"; do
+  [ -f "$f" ] || { echo "FAIL: $f missing" >&2; exit 1; }
+  head -3 "$f" | grep -qi "Copyright 2026 The Stargate Authors" \
+    || bail "M13: SPDX copyright header missing in $f"
+done
+
+# T088: init MUST source the lib (the authoritative compose-command builder).
+grep -Eq '\.\s+".*/?lib/compose\.sh"|source\b.*lib/compose\.sh' "$INIT" \
+  || bail "T088: init must source scripts/lib/compose.sh (the compose-command builder)"
 
 # --- M1: dispatcher behaviour ---------------------------------------------
 # no-args → non-zero, usage on stderr.
@@ -153,10 +165,14 @@ bash "$DISPATCHER" init --profile=local </dev/null >/dev/null 2>&1; rc=$?
 [ "$rc" -ne 0 ] \
   || bail "M6: 'stargate init --profile=local' (equals form) should exit non-zero (got 0); --profile must be rejected"
 
-# --- M4: key ownership/perms literals + cross-file consistency -------------
-for lit in 0600 0644 5101 5102 5100; do
-  has_literal "$INIT" "${lit}([^0-9]|\$)" \
-    "M4: literal ${lit} missing from $INIT"
+# --- M4: key/pepper ownership/perms literals + cross-file consistency -------
+# T088: the UID/GID/mode literals + key filenames now live authoritatively in
+# scripts/lib/compose.sh (the builder init sources); grep the LIB as the
+# source of truth. 0640 + pepper.key assert the T092 pepper-provisioning shape
+# (data-model §1.7).
+for lit in 0600 0644 0640 5101 5102 5100; do
+  has_literal "$LIB" "${lit}([^0-9]|\$)" \
+    "M4: literal ${lit} missing from $LIB (key/pepper ownership constants)"
 done
 # Cross-file: the same UID/GID numerics must appear in the Dockerfiles and
 # the compose user: directives. Drift across any pair fails (T015 M6 trick).
@@ -167,10 +183,57 @@ has_literal "$DP_DOCKERFILE" "5100" "M4: data-plane/Dockerfile must define GID 5
 has_literal "$COMPOSE" '"5101:5100"' "M4: compose must set stargate-control user: \"5101:5100\""
 has_literal "$COMPOSE" '"5102:5100"' "M4: compose must set stargate-dp user: \"5102:5100\""
 
-# Key file names (cp.priv/dp.priv/cp.pub/dp.pub) referenced per arch §4.3.
-for kf in cp\.priv dp\.priv cp\.pub dp\.pub; do
-  has_literal "$INIT" "${kf}" "M4: key filename ${kf} missing from $INIT"
+# Key file names (cp.priv/dp.priv/cp.pub/dp.pub per arch §4.3) + the T092
+# pepper file (data-model §1.7). These are literals in init's install +
+# do-not-clobber count loop; the ownership CONSTANTS live in the lib (above).
+for kf in cp\.priv dp\.priv cp\.pub dp\.pub pepper\.key; do
+  has_literal "$INIT" "${kf}" "M4: key/pepper filename ${kf} missing from $INIT"
 done
+
+# T088: init provisions the pepper (T092) and uses the lib's project-scoped
+# compose-command builder + Compose-ID health discovery (B1 fixes).
+has_literal "$INIT" "PEPPER_FILE" \
+  "T088: init must reference PEPPER_FILE (T092 pepper provisioning)"
+has_literal "$INIT" "openssl rand" \
+  "T088: init must generate the pepper via openssl rand"
+has_literal "$INIT" "compose_run" \
+  "T088: init must use compose_run (project-scoped compose command, B1)"
+has_literal "$INIT" "compose_health_ids" \
+  "T088: init must discover service containers via compose_health_ids (B1, never guessed names)"
+
+# T088 redteam Major #1: every keygen/init helper `docker run` MUST be
+# network-less + capability-dropped (the helper runs as root with RW on the
+# keys volume; it only chowns/chmods/installs and must not be able to
+# exfiltrate keys/pepper). The helpers are `--rm`, so a structural pin here
+# plus the functional proof in init_docker_test.sh (init succeeds → the
+# hardened helpers ran) close the finding. Per-helper OCCURRENCE count
+# (redteam round-2 + codereview Minor #3): init has exactly TWO network-less
+# helpers (count-probe + install); the lib has ONE (init_volume_root).
+nn_init=$(grep -c -- '--network none' "$INIT" 2>/dev/null)
+nn_lib=$(grep -c -- '--network none' "$LIB" 2>/dev/null)
+[ "$nn_init" -ge 2 ] || bail "T088/redteam#1: init must have >=2 --network none helpers (count-probe + install); found $nn_init"
+[ "$nn_lib" -ge 1 ] || bail "T088/redteam#1: lib init_volume_root must be --network none; found $nn_lib in $LIB"
+has_literal "$INIT" "--cap-drop ALL" \
+  "T088/redteam#1: init's keygen helpers must drop all caps"
+has_literal "$LIB" "--cap-drop ALL" \
+  "T088/redteam#1: lib's init_volume_root helper must drop all caps"
+# T088 redteam round-2: the count-probe runs as the NON-ROOT volume owner
+# (no DAC_OVERRIDE → cannot read 0600 contents) AND its stdout is sanitized
+# before interpolation (closes the stdout→stderr exfil channel).
+has_literal "$INIT" '--user.*CP_UID.*IPC_GID' \
+  "T088/redteam#2: count-probe must run as the non-root volume owner (--user CP_UID:IPC_GID)"
+has_literal "$INIT" "non-numeric" \
+  "T088/redteam#2: count-probe stdout must be sanitized (abort non-numeric without echoing)"
+
+# T088: the lib defines the authoritative builder + project-scoped volume +
+# health primitives the B1 fix depends on.
+has_literal "$LIB" "compose_cmd"           "T088: lib must define compose_cmd"
+has_literal "$LIB" 'docker compose -p %s -f %s --env-file %s' \
+  "T088: compose_cmd must render -p <project> -f <file> --env-file <env> (B1)"
+has_literal "$LIB" "ensure_project_volume" "T088: lib must define ensure_project_volume (project-scoped volumes, B1)"
+has_literal "$LIB" "resolve_physical_volume" "T088: lib must define resolve_physical_volume (label-based, B1)"
+has_literal "$LIB" "init_volume_root"      "T088: lib must define init_volume_root (writable-mount root init, B1)"
+has_literal "$LIB" "compose_health_ids"    "T088: lib must define compose_health_ids (ps -q health discovery, B1)"
 
 # --- M5: idempotence — do-not-clobber-keys guard present -------------------
 # Structural proxy: the script must reference the stargate-keys volume AND
@@ -209,20 +272,21 @@ lacks_literal "$INIT" "[Nn]ym[[:space:]]+(sidecar|HEALTHY|STARTING)" \
 # --- R5 promotion: key-gen helper digest == tor Dockerfile base digest -----
 # T016 §Analysis R5 promised that IF the implementer reuses the exact
 # debian:12-slim digest pinned in sidecars/tor/Dockerfile, this gate
-# cross-checks the two for drift (Constitution IV). The implementer did
-# reuse it; promote R5 from residue into the gated set.
+# cross-checks the two for drift (Constitution IV). T088 moved the
+# STARGATE_KEYGEN_IMAGE default into scripts/lib/compose.sh (the authoritative
+# builder init sources), so the digest is read from the LIB, not init.
 TOR_DOCKERFILE="sidecars/tor/Dockerfile"
 [ -f "$TOR_DOCKERFILE" ] || bail "R5: $TOR_DOCKERFILE missing (cannot cross-check digest)"
 # Extract the debian:12-slim@sha256:<hex> digest from each file.
 digest_in() { grep -Eo 'debian:12-slim@sha256:[0-9a-f]{64}' "$1" | head -1; }
-script_digest="$(digest_in "$INIT")"
+lib_digest="$(digest_in "$LIB")"
 tor_digest="$(digest_in "$TOR_DOCKERFILE")"
-[ -n "$script_digest" ] \
-  || bail "R5: no debian:12-slim@sha256 digest found in $INIT (key-gen helper image unpinned — Constitution IV)"
+[ -n "$lib_digest" ] \
+  || bail "R5: no debian:12-slim@sha256 digest found in $LIB (key-gen helper image unpinned — Constitution IV)"
 [ -n "$tor_digest" ] \
   || bail "R5: no debian:12-slim@sha256 digest found in $TOR_DOCKERFILE (cannot cross-check)"
-[ "$script_digest" = "$tor_digest" ] \
-  || bail "R5: key-gen helper digest drift: $INIT has '$script_digest' but $TOR_DOCKERFILE has '$tor_digest'"
+[ "$lib_digest" = "$tor_digest" ] \
+  || bail "R5: key-gen helper digest drift: $LIB has '$lib_digest' but $TOR_DOCKERFILE has '$tor_digest'"
 
 # Constitution IV runtime guard: an override of STARGATE_KEYGEN_IMAGE must be
 # refused if it is not digest-pinned (redteam MINOR 1). Structural proxy: the

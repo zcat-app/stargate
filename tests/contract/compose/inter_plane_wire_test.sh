@@ -18,7 +18,8 @@
 #     pin check, validity window, metadata keys, interceptor placement).
 #   - arch §5.3/§5.4 reference wire-auth.md (single-source-of-truth guard).
 #   - contracts/control-grpc.md §"Transport invariants" references wire-auth.md.
-#   - init script references wire-auth.md and installs KEYS ONLY (no certs).
+#   - init script references wire-auth.md and installs keys (+ pepper from
+#     T092), NOT certs (certs derived at plane startup).
 #   - compose file mounts stargate-keys at /etc/stargate/keys with the right
 #     UID/GID numerics matching the Dockerfiles.
 #   - proto package is stargate.v1 (the runtime major-version source).
@@ -228,11 +229,15 @@ has_literal "$CONTROL_GRPC" "contracts/wire-auth\.md" \
 has_literal "$CONTROL_GRPC" "inter_plane_wire_test\.sh" \
   "S3: control-grpc.md must name the T095 compose-level test as the deferred-rows owner"
 
-# --- S4: init installs KEYS ONLY (no cert files on disk) -------------------
+# --- S4: init installs keys (+ pepper from T092), NO certs on disk ---------
 has_literal "$INIT" "contracts/wire-auth\.md" \
   "S4: init script must reference contracts/wire-auth.md (installer key contract)"
-has_literal "$INIT" "KEYS ONLY" \
-  "S4: init script must document that it installs KEYS ONLY (certs derived at plane startup)"
+# T088/T092: init now installs the bearer-token pepper alongside the keys, so
+# the pre-T092 "KEYS ONLY" marker no longer holds. The load-bearing invariant
+# is "no certs installed — certs derived at plane startup" (the privacy
+# property the certs-absence check below gates); assert init DOCUMENTS it.
+has_literal "$INIT" "self-signed cert" \
+  "S4: init must document certs are derived at plane startup (not installed by init)"
 # The four key filenames must appear (already gated by init_test.sh M4; re-pin
 # here so the wire-contract test is self-contained).
 for kf in cp\.priv dp\.priv cp\.pub dp\.pub; do

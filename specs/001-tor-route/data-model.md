@@ -36,7 +36,7 @@ maintains the in-memory token list and the data-plane snapshot file.
 ```
                 ┌─────────────────────────────────┐
                 │  install-time pepper (32 B)     │
-                │  /etc/stargate/pepper.key       │
+                │  /etc/stargate/keys/pepper.key       │
                 │  (generated once by `init`)     │
                 └───────────┬──────────┬──────────┘
        read by CP at start  │          │ read by DP at start (auth path)
@@ -258,13 +258,13 @@ identifier are wired in shared constants (`auth.PepperLen`,
 `auth.VerifierAlgo`) so both planes agree; the DP never needs the pepper
 length from the RPC — it receives ready-made verifiers. The candidate-side
 HMAC in the DP uses the SAME pepper the CP used to mint verifiers (both
-read `/etc/stargate/pepper.key`); a pepper mismatch authenticates nothing
+read `/etc/stargate/keys/pepper.key`); a pepper mismatch authenticates nothing
 and is a misconfiguration surfaced as "all auth fails" at first boot.
 
 ### 1.6 Entity-level invariants
 
 - Plaintext tokens never persist outside `tokens.yaml`.
-- The pepper never persists outside `/etc/stargate/pepper.key` and never
+- The pepper never persists outside `/etc/stargate/keys/pepper.key` and never
   appears in `dp-snapshot.json`, the inter-plane RPC, any log, or any audit
   `detail_json`.
 - The data plane never sees plaintext tokens (only verifiers) over the RPC.
@@ -281,7 +281,7 @@ and is a misconfiguration surfaced as "all auth fails" at first boot.
   path: that alone pushes an empty generation, after which the DP returns
   `AUTH_REQUIRED` on all requests.
 
-### 1.7 Install-time pepper (`/etc/stargate/pepper.key`)
+### 1.7 Install-time pepper (`/etc/stargate/keys/pepper.key`)
 
 A 32-byte secret generated once by `scripts/stargate init` (arch §9.1 step
 3), shared by CP and DP. T092 makes this shape authoritative; T088
@@ -289,7 +289,7 @@ provisions it.
 
 | Concern            | Rule                                                                                                                                                                                                       |
 |--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Path               | `/etc/stargate/pepper.key` inside both containers, mounted from the `stargate-keys` named volume (alongside the inter-plane ed25519 keypairs).                                                              |
+| Path               | `/etc/stargate/keys/pepper.key` inside both containers, mounted from the `stargate-keys` named volume (alongside the inter-plane ed25519 keypairs).                                                              |
 | Generation         | `openssl rand -bytes 32` (256 bits) at first `init`, written once. Never regenerated unless the operator explicitly rotates (below).                                                                       |
 | Ownership / mode   | Owned by the runtime UID of the plane that reads it; group-readable by `stargate-ipc` (GID 5100) so both planes can read it; mode `0640`. (Same ownership/mode scheme as the ed25519 keypairs in that volume.) |
 | What reads it      | CP `TokenLoader` (to mint verifiers) and DP `auth` (to mint the candidate's tag). No other component.                                                                                                       |

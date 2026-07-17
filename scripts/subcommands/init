@@ -5,21 +5,37 @@
 # scripts/subcommands/init — `stargate init`: bring up a fresh Stargate stack
 # (local profile), minimum subset per research.md §8 / arch §9.1.
 #
-# WHAT THIS SHIPS (research §8 "delivered" subset):
+# WHAT THIS SHIPS (research §8 "delivered" subset + T088 repair):
 #   1. Preflight         — docker + docker compose v2 + docker socket + openssl.
-#   2. Key generation    — ed25519 inter-plane keypairs into the stargate-keys
-#                          named volume with arch-§4.3 ownership/perms.
-#   3. Compose up        — hard-coded compose/docker-compose.local.yml, bounded
-#                          healthcheck wait (default 60 s).
-#   4. Verification      — Tor route only (no I2P/Nym/Direct).
-#   5. Status table      — DP + CP + Tor sidecar (the components present).
-#   6. Exit codes        — 0/10/20/30/40/50 (stable contract surface).
+#   2. Project volumes   — create the project-scoped named volumes (resolved
+#                          by Compose LABEL, never a literal stargate-* physical
+#                          name) and initialise their roots for the non-root
+#                          service UIDs (B1 fix).
+#   3. Key + pepper gen  — ed25519 inter-plane keypairs + the 32-byte bearer-
+#                          token pepper (T092) into the stargate-keys volume
+#                          with arch-§4.3 / data-model-§1.7 ownership/perms.
+#   4. Compose up        — one authoritative compose command (project name +
+#                          compose file + env file) via scripts/lib/compose.sh.
+#   5. Healthcheck wait  — `docker compose ps -q <service>`, never guessed
+#                          container names (B1 fix). Bounded (default 60 s).
+#   6. Verification      — Tor route only (no I2P/Nym/Direct).
+#   7. Status table      — DP + CP + Tor sidecar (the components present).
+#   8. Exit codes        — 0/10/20/30/40/50 (stable contract surface).
+#
+# T088 (review/sol-review.md#B1) repairs the shipped installer: it previously
+# ran `docker compose -f ... up` with no `--env-file` and no project name,
+# wrote keys to the literal volume `stargate-keys` (Compose renders that as
+# `<project>_stargate-keys`, so keys landed in an unused volume the planes
+# never mounted), guessed container names (`docker inspect stargate-dp`) that
+# never matched Compose's `<project>-stargate-dp-1` naming, and initialised
+# only the key volume — leaving the other writable mounts root-owned so the
+# non-root planes could not create their UDS / SQLite / snapshot files.
 #
 # WHAT IS DEFERRED (T016 §Out-of-scope): --profile selection, admin enrollment
 # URL / WebAuthn setup, --force / --repair, export/import/wipe subcommands,
 # verification of non-Tor routes. Re-running init against an initialized stack
 # is handled ONLY to the extent of M5 (do-not-clobber-keys): if stargate-keys
-# already contains keys, key generation is skipped (arch §9.3).
+# already contains the full key+pepper set, generation is skipped (arch §9.3).
 #
 # EXIT CODES (arch §9.1 §7):
 #   0   success
@@ -35,7 +51,7 @@
 #   - The key-gen helper reuses the exact debian:12-slim digest pinned in
 #     sidecars/tor/Dockerfile (Constitution IV). The T016 contract test
 #     cross-checks the two digests match; drift fails the gate.
-#   - Private key material (cp.priv/dp.priv) lives only inside the
+#   - Private key material (cp.priv/dp.priv) + the pepper live only inside the
 #     stargate-keys named volume. Host temp dirs used during generation are
 #     0700 and shredded on exit (M11).
 #
@@ -48,27 +64,37 @@
 #   these keys, the peer-pin check, and the version-metadata interceptor — is
 #   pinned by tests/contract/compose/inter_plane_wire_test.sh (T095) against
 #   contracts/wire-auth.md. If you change the key format here, re-check BOTH
-#   T022 and the T095 compose-level test.
+#   T022 and the T095 compose-level test. The T088 Docker-backed regression
+#   test (tests/contract/stargate-cli/init_docker_test.sh) gates the B1
+#   provisioning path (project-scoped volumes, key+pepper ownership, volume-
+#   root init, health discovery, idempotence, two-project isolation).
 
 set -uo pipefail
 
+# Source the authoritative compose-command builder (T088). Provides the
+# project/compose-file/env-file defaults, compose_run / compose_cmd /
+# compose_env_file / resolve_physical_volume / ensure_project_volume /
+# init_volume_root / compose_health_ids helpers, and the UID/GID/mode +
+# key/pepper constants (CP_UID/DP_UID/IPC_GID, KEY_*_MODE, PEPPER_MODE,
+# KEYS_VOLUME/IPC_VOLUME/..., PEPPER_FILE). Resolve the lib path the same
+# way the dispatcher resolves its own dir so it holds under any $0.
+case "${BASH_SOURCE[0]}" in
+  */*) _SG_INIT_DIR="${BASH_SOURCE[0]%/*}" ;;
+  *)   _SG_INIT_DIR="." ;;
+esac
+case "$_SG_INIT_DIR" in
+  /*) : ;;
+  *)  _SG_INIT_DIR="$(cd "$_SG_INIT_DIR" && pwd)" ;;
+esac
+# shellcheck source=lib/compose.sh
+. "$_SG_INIT_DIR/../lib/compose.sh"
+
 # ---- tunables -------------------------------------------------------------
 : "${STARGATE_HEALTHCHECK_TIMEOUT:=60}"        # arch §9.1 step 4 (seconds)
-: "${STARGATE_COMPOSE_FILE:=compose/docker-compose.local.yml}"
-: "${STARGATE_KEYGEN_IMAGE:=debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df}"
-# The digest above MUST match the base-image pin in sidecars/tor/Dockerfile
-# (both stages). The T016 contract test asserts this cross-file invariant.
 
-# Inter-plane key ownership (arch §4.3; numerics match the Dockerfiles + the
-# compose user: directives — T016 M4 cross-checks all three).
-CP_UID=5101          # stargate-cp (control-plane/Dockerfile useradd --uid 5101)
-DP_UID=5102          # stargate-dp (data-plane/Dockerfile passwd stargate-dp:x:5102)
-IPC_GID=5100         # stargate-ipc (both Dockerfiles groupadd --gid 5100)
-PRIVATE_MODE=0600
-PUBLIC_MODE=0644
-
-KEYS_VOLUME="stargate-keys"
-KEY_FILES=("cp.priv" "dp.priv" "cp.pub" "dp.pub")
+# Services init waits on (mirrors compose/docker-compose.local.yml). The
+# health loop resolves each by `compose ps -q <service>` (B1: never guessed).
+SERVICES=(stargate-dp stargate-control tor)
 
 EXIT_PREFLIGHT=10
 EXIT_KEYGEN=20
@@ -79,9 +105,8 @@ EXIT_VERIFY=50
 # ---- helpers --------------------------------------------------------------
 say()  { printf '%s\n' "$*" >&2; }
 note() { printf 'stargate init: %s\n' "$*" >&2; }
-die()  { local code="$1"; shift; printf 'stargate init: ERROR: %s\n' "$*" >&2; exit "$code"; }
 
-# tmpdir for host-side key generation; cleaned on any exit (M11).
+# tmpdir for host-side key + pepper generation; cleaned on any exit (M11).
 KEYS_TMP=""
 cleanup() {
   if [ -n "$KEYS_TMP" ] && [ -d "$KEYS_TMP" ]; then
@@ -115,80 +140,149 @@ preflight() {
     return "$EXIT_PREFLIGHT"
   fi
   if ! command -v openssl >/dev/null 2>&1; then
-    say "openssl not found on PATH (required to generate ed25519 inter-plane keys)."
+    say "openssl not found on PATH (required to generate ed25519 inter-plane keys + the bearer-token pepper)."
     return "$EXIT_PREFLIGHT"
   fi
   return 0
 }
 
-# ---- 2. KEY GENERATION (arch §9.1 step 3; arch §4.3) -----------------------
+# ---- 2. SUPPLY-CHAIN GUARD + PROJECT VOLUMES (arch §9.1 step 3; B1) ---------
+# Defence-in-depth (Constitution IV): the key-gen/init helper image runs as
+# root with RW on the keys volume. Refuse an unpinned override so a hostile
+# env var (CI, dotfile) cannot silently swap in an arbitrary image. The
+# default is digest-pinned and cross-checked against sidecars/tor/Dockerfile
+# by the contract test; this guard covers the override path. Runs AFTER
+# preflight (preflight is the unconditional first gate — T016 M3).
+supply_chain_guard() {
+  case "$STARGATE_KEYGEN_IMAGE" in
+    *@sha256:*) : ;;
+    *) note "STARGATE_KEYGEN_IMAGE must be digest-pinned (@sha256:<64hex>); refusing unpinned image: $STARGATE_KEYGEN_IMAGE"
+       return "$EXIT_KEYGEN" ;;
+  esac
+  # redteam Minor #3: surface an audit-trail note when the key-handling
+  # root-RW helper image differs from the contract-tested default, so a
+  # hostile *@sha256:* override (corporate mirror, debug image) set via
+  # dotfile/CI env is not invisible.
+  if [ "$STARGATE_KEYGEN_IMAGE" != "$STARGATE_KEYGEN_IMAGE_DEFAULT" ]; then
+    note "STARGATE_KEYGEN_IMAGE override in effect (differs from default $STARGATE_KEYGEN_IMAGE_DEFAULT): $STARGATE_KEYGEN_IMAGE"
+  fi
+  # Suppress core dumps for the duration of key generation so a crash does
+  # not write private-key bytes to a host core_pattern location outside the
+  # 0700 tmpdir (redteam INFO; cheap defence-in-depth).
+  ulimit -c 0 2>/dev/null || true
+  # Pre-pull the helper image (a daemon-side operation needing the daemon's
+  # own network) so the hardened helpers below can run with --network none
+  # against the cached image (redteam Major #1: no egress for the key-
+  # handling root container). Pull is idempotent; absence is fatal (keygen
+  # cannot proceed without the helper).
+  if ! docker image inspect "$STARGATE_KEYGEN_IMAGE" >/dev/null 2>&1; then
+    note "pulling keygen helper image (first run)…"
+    if ! docker pull "$STARGATE_KEYGEN_IMAGE" >/dev/null 2>&1; then
+      note "docker pull $STARGATE_KEYGEN_IMAGE failed (cannot run the keygen helper)."
+      return "$EXIT_KEYGEN"
+    fi
+  fi
+  return 0
+}
+
+# Create the project-scoped writable volumes (B1: resolve physical names by
+# Compose label, never a literal stargate-* physical name) and initialise
+# their roots for the non-root service UIDs — empty named-volume roots are
+# root-owned, so UID 5101/5102 cannot create their UDS / SQLite / snapshot
+# files there. stargate-keys root is chowned before the key+pepper install
+# step; the four state volumes to their owning plane.
+ensure_volumes() {
+  local vol phys
+  for vol in "$KEYS_VOLUME" "$IPC_VOLUME" "$CONTROL_STATE_VOLUME" \
+             "$DP_STATE_VOLUME" "$TOR_CONFIG_VOLUME"; do
+    phys="$(ensure_project_volume "$vol")"
+    [ -n "$phys" ] || { note "ensure_project_volume failed for $vol"; return "$EXIT_KEYGEN"; }
+  done
+  # stargate-keys: CP-owned (writes pubs/pepper at runtime), group ipc.
+  init_volume_root "$(ensure_project_volume "$KEYS_VOLUME")" \
+    "$CP_UID" "$IPC_GID" 0750 \
+    || { note "init_volume_root failed for $KEYS_VOLUME"; return "$EXIT_KEYGEN"; }
+  # stargate-ipc: both planes create UDS sockets → group-writable (0770),
+  # group stargate-ipc. Owner is DP (arbitrary); CP writes via the group.
+  init_volume_root "$(ensure_project_volume "$IPC_VOLUME")" \
+    "$DP_UID" "$IPC_GID" 0770 \
+    || { note "init_volume_root failed for $IPC_VOLUME"; return "$EXIT_KEYGEN"; }
+  init_volume_root "$(ensure_project_volume "$CONTROL_STATE_VOLUME")" \
+    "$CP_UID" "$IPC_GID" 0750 \
+    || { note "init_volume_root failed for $CONTROL_STATE_VOLUME"; return "$EXIT_KEYGEN"; }
+  init_volume_root "$(ensure_project_volume "$DP_STATE_VOLUME")" \
+    "$DP_UID" "$IPC_GID" 0750 \
+    || { note "init_volume_root failed for $DP_STATE_VOLUME"; return "$EXIT_KEYGEN"; }
+  init_volume_root "$(ensure_project_volume "$TOR_CONFIG_VOLUME")" \
+    "$CP_UID" "$IPC_GID" 0750 \
+    || { note "init_volume_root failed for $TOR_CONFIG_VOLUME"; return "$EXIT_KEYGEN"; }
+  return 0
+}
+
+# ---- 3. KEY + PEPPER GENERATION (arch §9.1 step 3; arch §4.3; data-model §1.7)
 # Generate ed25519 keypairs on the host with openssl (PKCS#8 PEM — loadable by
 # Go crypto/x509 and Java PKCS8EncodedKeySpec; T022 §handshake gates format
-# compatibility), then install them into the stargate-keys named volume with
-# the correct ownership and modes via a throwaway debian:12-slim container
-# (named volumes are not host-writable with arbitrary UID).
+# compatibility), plus the 32-byte bearer-token pepper (T092), then install
+# them into the project-scoped stargate-keys volume with the correct
+# ownership and modes via a throwaway debian:12-slim container.
 #
-# WIRE CONTRACT (T095, contracts/wire-auth.md): this script installs KEYS ONLY.
-# The X.509 certificates used for the TLS-over-UDS handshake are NOT generated
-# here; each plane derives its own self-signed cert from its *.priv key at
-# process startup and holds it in memory only (never persisted). Keeping certs
-# out of the named volume (a) decouples cert validity from long-lived key
-# material, so a plane restart is an implicit cert rotation; (b) keeps the
-# on-disk artefact set reproducible (Constitution VI) — the only persisted
-# bytes are the four PEM keyfiles whose ownership/mode are pinned below; (c)
-# avoids cross-plane cert synchronisation entirely. The 30-day cert validity
-# window, 5-min negative skew, and the no-automated-rotation residue are
-# operator-visible in THREAT-MODEL.md §5.13 + SECURITY-DECISIONS.md (T095).
-# T038/T045/T050 consume contracts/wire-auth.md verbatim for the derivation
-# recipe; this comment is the installer-side half of the contract.
+# WIRE CONTRACT (T095, contracts/wire-auth.md): this script installs KEYS +
+# pepper ONLY. The X.509 certificates used for the TLS-over-UDS handshake are
+# NOT generated here; each plane derives its own self-signed cert from its
+# *.priv key at process startup and holds it in memory only (never
+# persisted). T038/T045/T050 consume contracts/wire-auth.md verbatim for the
+# derivation recipe; this comment is the installer-side half of the contract.
 generate_keys() {
+  local keys_phys
+  keys_phys="$(ensure_project_volume "$KEYS_VOLUME")"
+  [ -n "$keys_phys" ] || { note "cannot resolve $KEYS_VOLUME volume"; return "$EXIT_KEYGEN"; }
+
   # M5 (arch §9.3): never clobber existing keys — would invalidate enrolled
-  # devices. Count how many of the four expected key files already exist in
-  # the volume (0 → fresh; 4 → initialised; 1–3 → corrupt partial state).
-  # `exit 0` inside the helper so the docker-run exit status reflects success
-  # rather than the last `[ -e ]` result (redteam INFO: avoids conflating a
-  # missing last file with a probe failure).
+  # devices. Count the 4 key files + the pepper already present (0 → fresh;
+  # 5 → initialised; 1–4 → corrupt partial state).
   local existing
-  existing=$(docker run --rm -v "${KEYS_VOLUME}:/keys:ro" "$STARGATE_KEYGEN_IMAGE" \
-    sh -c 'n=0; for f in cp.priv dp.priv cp.pub dp.pub; do [ -e "/keys/$f" ] && n=$((n+1)); done; echo "$n"; exit 0' \
+  # HARDENED (redteam round-2): --network none closes the network exfil
+  # channel, and this probe runs as the NON-ROOT volume OWNER (5101:5100)
+  # with ALL caps dropped — `[ -e ]` needs only SEARCH on the 0750 /keys
+  # root (owner has it), so existence is detectable WITHOUT reading any
+  # 0600 key/pepper contents (no DAC_OVERRIDE, not root). The stdout is
+  # sanitized below before ANY interpolation, so even a backdoored helper's
+  # stdout can never reach an operator-visible log line.
+  existing=$(docker run --rm --network none --cap-drop ALL --read-only \
+    --user "$CP_UID:$IPC_GID" \
+    -v "${keys_phys}:/keys:ro" "$STARGATE_KEYGEN_IMAGE" \
+    sh -c 'n=0; for f in cp.priv dp.priv cp.pub dp.pub pepper.key; do [ -e "/keys/$f" ] && n=$((n+1)); done; echo "$n"; exit 0' \
     2>/dev/null) || existing="0"
+  # Sanitize before interpolation: a legit count is one digit 0-5. Anything
+  # else (a backdoored helper emitting key bytes / garbage on stdout) aborts
+  # WITHOUT echoing the value — closes the stdout→stderr exfil channel.
+  case "$existing" in
+    [0-5]) : ;;
+    *) note "$KEYS_VOLUME count-probe returned non-numeric output (possible helper tamper); aborting keygen without echoing the value."
+       return "$EXIT_KEYGEN" ;;
+  esac
   case "${existing:-0}" in
-    4)
-      note "stargate-keys already initialised (4/4 key files present); skipping key generation (arch §9.3)."
+    5)
+      note "$KEYS_VOLUME already initialised (4/4 keys + pepper present); skipping key+pepper generation (arch §9.3)."
       return 0
       ;;
     0)
       :   # fresh volume — proceed to generate
       ;;
     *)
-      note "stargate-keys is partially initialised (${existing}/4 key files present) — refusing to regenerate or proceed."
-      note "Manual recovery required: inspect volume $KEYS_VOLUME and either complete or wipe it."
+      note "$KEYS_VOLUME is partially initialised (${existing}/5 key+pepper files present) — refusing to regenerate or proceed."
+      note "Manual recovery required: inspect volume $keys_phys and either complete or wipe it."
       return "$EXIT_KEYGEN"
       ;;
   esac
 
-  # Ensure the named volume exists (idempotent).
-  docker volume create "$KEYS_VOLUME" >/dev/null 2>&1 \
-    || { note "docker volume create $KEYS_VOLUME failed"; return "$EXIT_KEYGEN"; }
-
-  # Defence-in-depth (Constitution IV): the key-gen helper image runs as root
-  # with RW on the keys volume. Refuse an unpinned override so a hostile env
-  # var (CI, dotfile) cannot silently swap in an arbitrary image. The default
-  # is digest-pinned and cross-checked against sidecars/tor/Dockerfile by the
-  # contract test; this guard covers the override path.
-  case "$STARGATE_KEYGEN_IMAGE" in
-    *@sha256:*) : ;;
-    *) note "STARGATE_KEYGEN_IMAGE must be digest-pinned (@sha256:<64hex>); refusing unpinned image: $STARGATE_KEYGEN_IMAGE"
-       return "$EXIT_KEYGEN" ;;
-  esac
-
-  # Suppress core dumps for the duration of key generation so a crash does
-  # not write private-key bytes to a host core_pattern location outside the
-  # 0700 tmpdir (redteam INFO; cheap defence-in-depth).
-  ulimit -c 0 2>/dev/null || true
-
-  KEYS_TMP="$(mktemp -d)" || { note "mktemp failed"; return "$EXIT_KEYGEN"; }
+  KEYS_TMP="$(mktemp -d /dev/shm/stargate.keys.XXXXXX 2>/dev/null || mktemp -d)" || { note "mktemp failed"; return "$EXIT_KEYGEN"; }
   chmod 0700 "$KEYS_TMP"
+  # redteam Info #4: prefer tmpfs (/dev/shm on Linux) so the ed25519 private
+  # keys + pepper never touch persisted storage (shred is ineffective on COW
+  # / SSD / journaled FS). Fallback to $TMPDIR where /dev/shm is absent
+  # (macOS/BSD); that fallback is accepted residue under THREAT-MODEL §3.1
+  # (local execution is already game-over).
 
   local prefix priv pub
   for prefix in cp dp; do
@@ -202,66 +296,87 @@ generate_keys() {
       note "openssl pkey (pubout) failed for $prefix"
       return "$EXIT_KEYGEN"
     fi
-    chmod "$PRIVATE_MODE" "$priv"
-    chmod "$PUBLIC_MODE" "$pub"
+    chmod "$KEY_PRIVATE_MODE" "$priv"
+    chmod "$KEY_PUBLIC_MODE" "$pub"
   done
 
-  # Install into the volume with correct ownership/mode. Private keys: 0600
-  # owned by the owning plane's UID. Public keys: 0644 (both planes read both
-  # pubs for the mutual handshake). All share the stargate-ipc GID.
-  # NOTE: `install` runs inside the container as root (default), so chown to
-  # arbitrary UID works. The host temp dir is mounted :ro so the container
-  # cannot mutate the source.
-  if ! docker run --rm \
-        -v "${KEYS_VOLUME}:/keys" \
+  # T092 amendment (data-model §1.7): 32-byte bearer-token pepper, generated
+  # once at install, shared by CP (mints verifiers) and DP (mints candidate
+  # tags). Never regenerated short of explicit operator rotation. NOTE: the
+  # spec's `openssl rand -bytes 32` shorthand is not valid openssl CLI (no
+  # -bytes flag); the real form is `openssl rand -out <file> 32` (T088
+  # grounding reconciliation, same class as the pepper-path fix).
+  if ! openssl rand -out "$KEYS_TMP/$PEPPER_FILE" 32 2>/dev/null; then
+    note "openssl rand (pepper) failed"
+    return "$EXIT_KEYGEN"
+  fi
+  chmod "$PEPPER_MODE" "$KEYS_TMP/$PEPPER_FILE"
+
+  # Install into the project-scoped volume with correct ownership/mode.
+  # Private keys: 0600 owned by the owning plane's UID. Public keys: 0644
+  # (both planes read both pubs for the mutual handshake). Pepper: 0640 owned
+  # by stargate-cp (the provisioner), group stargate-ipc so BOTH planes read
+  # it via their shared supplementary GID. `install` runs inside the
+  # container as root (default), so chown to arbitrary UID works. The host
+  # temp dir is mounted :ro so the container cannot mutate the source.
+  # HARDENED (redteam Major #1): --network none is the load-bearing anti-exfil
+  # gate. CAP_CHOWN + CAP_FOWNER do the install -o/-g/-m work; DAC_OVERRIDE is
+  # retained so root can read the host-generated 0600 private keys in /src:ro
+  # (a network-less, read-rootfs, scoped-mount helper cannot exfiltrate them).
+  if ! docker run --rm --network none --cap-drop ALL \
+        --cap-add CHOWN --cap-add FOWNER --cap-add DAC_OVERRIDE \
+        --read-only --tmpfs /tmp \
+        -v "${keys_phys}:/keys" \
         -v "${KEYS_TMP}:/src:ro" \
         "$STARGATE_KEYGEN_IMAGE" \
         sh -c '
           set -e
-          install -m '"$PRIVATE_MODE"' -o '"$CP_UID"' -g '"$IPC_GID"' /src/cp.priv /keys/cp.priv
-          install -m '"$PRIVATE_MODE"' -o '"$DP_UID"' -g '"$IPC_GID"' /src/dp.priv /keys/dp.priv
-          install -m '"$PUBLIC_MODE"'  -o '"$CP_UID"' -g '"$IPC_GID"' /src/cp.pub  /keys/cp.pub
-          install -m '"$PUBLIC_MODE"'  -o '"$DP_UID"' -g '"$IPC_GID"' /src/dp.pub  /keys/dp.pub
+          install -m '"$KEY_PRIVATE_MODE"' -o '"$CP_UID"' -g '"$IPC_GID"' /src/cp.priv /keys/cp.priv
+          install -m '"$KEY_PRIVATE_MODE"' -o '"$DP_UID"' -g '"$IPC_GID"' /src/dp.priv /keys/dp.priv
+          install -m '"$KEY_PUBLIC_MODE"'  -o '"$CP_UID"' -g '"$IPC_GID"' /src/cp.pub  /keys/cp.pub
+          install -m '"$KEY_PUBLIC_MODE"'  -o '"$DP_UID"' -g '"$IPC_GID"' /src/dp.pub  /keys/dp.pub
+          install -m '"$PEPPER_MODE"'      -o '"$CP_UID"' -g '"$IPC_GID"' /src/'"$PEPPER_FILE"' /keys/'"$PEPPER_FILE"'
         ' >/dev/null 2>&1; then
-    note "installing keys into $KEYS_VOLUME failed"
+    note "installing keys+pepper into $keys_phys failed"
     return "$EXIT_KEYGEN"
   fi
 
-  note "generated ed25519 inter-plane keys in volume $KEYS_VOLUME (cp.priv/dp.priv 0600, cp.pub/dp.pub 0644)."
+  note "generated ed25519 inter-plane keys + bearer-token pepper in $keys_phys (cp.priv/dp.priv 0600, cp.pub/dp.pub 0644, pepper.key 0640)."
   return 0
 }
 
-# ---- 3. COMPOSE UP (arch §9.1 step 4) --------------------------------------
-# Hard-coded local profile (research §8). Bounded healthcheck wait; on timeout
-# exit 40 and LEAVE CONTAINERS UP (arch §9.2) so the operator can inspect
-# `docker logs`. init never tears the stack down on failure (no destructive
-# teardown on the healthcheck-timeout path).
+# ---- 4. COMPOSE UP (arch §9.1 step 4) --------------------------------------
+# One authoritative compose command (project name + compose file + env file)
+# via compose_run (T088/B1). Bounded healthcheck wait; on timeout exit 40 and
+# LEAVE CONTAINERS UP (arch §9.2) so the operator can inspect `docker logs`.
+# init never tears the stack down on failure (no destructive teardown on the
+# healthcheck-timeout path).
 compose_up() {
-  note "building + starting stack ($STARGATE_COMPOSE_FILE)..."
-  if ! docker compose -f "$STARGATE_COMPOSE_FILE" up -d --build >/dev/null 2>&1; then
-    note "docker compose up failed (see 'docker compose -f $STARGATE_COMPOSE_FILE logs' above)."
+  note "building + starting stack (project $STARGATE_PROJECT, $STARGATE_COMPOSE_FILE)..."
+  if ! compose_run up -d --build >/dev/null 2>&1; then
+    note "docker compose up failed (see logs)."
     return "$EXIT_COMPOSE"
   fi
   return 0
 }
 
-# ---- 4. HEALTHCHECK WAIT (arch §9.1 step 4; arch §9.2 on timeout) ----------
+# ---- 5. HEALTHCHECK WAIT (arch §9.1 step 4; arch §9.2 on timeout) ----------
+# Health discovery via `compose ps -q <service>` against the project — never
+# guessed container names like `<project>-stargate-dp-1` (B1). A "no
+# healthcheck defined" container is accepted as healthy once State.Running is
+# true (mirrors the T016 heuristic; real healthcheck: blocks are a separate
+# ticket).
 wait_healthy() {
-  # The compose file (T015) does not yet declare healthcheck: blocks, so we
-  # poll container running state as the interim signal and accept a "no
-  # healthcheck defined" container as healthy once State.Running is true.
-  # Adding real healthcheck: blocks is a separate ticket (would modify T015's
-  # contract surface); this heuristic is documented in T016 §Notes.
-  local services=(stargate-dp stargate-control tor)
   local deadline=$(( $(date +%s) + STARGATE_HEALTHCHECK_TIMEOUT ))
   note "waiting up to ${STARGATE_HEALTHCHECK_TIMEOUT}s for services to be healthy..."
-  local all_ok=false s
+  local all_ok s cid running health
   while [ "$(date +%s)" -lt "$deadline" ]; do
     all_ok=true
-    for s in "${services[@]}"; do
-      local running health
-      running="$(docker inspect -f '{{.State.Running}}' "$s" 2>/dev/null || echo false)"
-      health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$s" 2>/dev/null || echo none)"
+    for s in "${SERVICES[@]}"; do
+      cid="$(compose_health_ids "$s" | head -n1)"
+      if [ -z "$cid" ]; then all_ok=false; break; fi
+      running="$(docker inspect -f '{{.State.Running}}' "$cid" 2>/dev/null || echo false)"
+      health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid" 2>/dev/null || echo none)"
       case "$running:$health" in
         true:none|true:healthy) : ;;            # ok
         *) all_ok=false ;;
@@ -272,11 +387,11 @@ wait_healthy() {
   done
   note "healthcheck timeout — services did not all report healthy within ${STARGATE_HEALTHCHECK_TIMEOUT}s."
   note "Containers have been LEFT UP (arch §9.2) — inspect with:"
-  note "  docker compose -f $STARGATE_COMPOSE_FILE logs"
+  note "  $(compose_cmd) logs"
   return "$EXIT_HEALTHCHECK"
 }
 
-# ---- 5. TOR-ONLY VERIFICATION (research §8) --------------------------------
+# ---- 6. TOR-ONLY VERIFICATION (research §8) --------------------------------
 # Probe ONLY the Tor route surface: the data plane's loopback proxy port
 # (8881) accepts a connection. No I2P, Nym, or Direct route probe — those
 # routes are out of scope this feature. Verify failure → 50.
@@ -294,12 +409,12 @@ verify_tor() {
   return "$EXIT_VERIFY"
 }
 
-# ---- 6. STATUS TABLE (arch §9.1 step 6) ------------------------------------
+# ---- 7. STATUS TABLE (arch §9.1 step 6) ------------------------------------
 print_status() {
   # Only the components present in the local profile (research §8). No
   # placeholder rows for absent sidecars (i2pd/nym not in this feature).
   printf '\n'
-  printf 'Stargate status (local profile):\n'
+  printf 'Stargate status (local profile, project %s):\n' "$STARGATE_PROJECT"
   printf '  %-18s %-10s %-12s %s\n' "Component" "Status" "Bind" "Notes"
   printf '  %-18s %-10s %-12s %s\n' "data plane"   "HEALTHY" "127.0.0.1" "proxy 8881 (Tor route)"
   printf '  %-18s %-10s %-12s %s\n' "control plane" "HEALTHY" "127.0.0.1" "gRPC control.sock"
@@ -310,6 +425,12 @@ print_status() {
 
 # ---- main -----------------------------------------------------------------
 preflight; rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+
+supply_chain_guard; rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+
+ensure_volumes; rc=$?
 [ "$rc" -eq 0 ] || exit "$rc"
 
 generate_keys; rc=$?

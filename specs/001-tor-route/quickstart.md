@@ -24,9 +24,19 @@ runs in a Stargate-managed container.
 ## Step 1 — Clone and build (1 minute)
 
 ```bash
-git clone https://github.com/zcat-app/stargate.git
+git clone https://github.com/zcatapp/stargate.git
 cd stargate
 ./scripts/stargate init
+```
+
+`init` establishes the Compose project name **`stargate`** and writes
+`compose/env/local.env` (copied from `compose/env/local.env.example`). Every
+`docker compose` command below MUST use the same project name + env file, so
+`init` and the quickstart share one identity (T088 / B1). Set this shell
+variable once and reuse it for every command in this walkthrough:
+
+```bash
+COMPOSE="docker compose -p stargate -f compose/docker-compose.local.yml --env-file compose/env/local.env"
 ```
 
 `init` does the following in order:
@@ -74,8 +84,9 @@ Write the token file. The path inside the control-plane container is
 directly:
 
 ```bash
-# Resolve the host-side path:
-VOL_PATH=$(docker volume inspect stargate-control-config --format '{{ .Mountpoint }}')
+# init established the `stargate` project, so the token volume's physical
+# name is <project>_<volume> = stargate_stargate-control-config.
+VOL_PATH=$(docker volume inspect stargate_stargate-control-config --format '{{ .Mountpoint }}')
 
 cat <<EOF | sudo tee "${VOL_PATH}/tokens.yaml"
 tokens:
@@ -83,8 +94,9 @@ tokens:
     token: 9f2c3a14b8d7e60f5a3c2e1d0b9c8a7f
 EOF
 
-# Re-read the file by restarting the control-plane container:
-docker compose -f compose/docker-compose.local.yml restart stargate-control
+# Re-read the file by restarting the control-plane container (same project
+# identity + env file `init` uses — T088):
+$COMPOSE restart stargate-control
 ```
 
 The data plane keeps serving on port 8881 across the control-plane
@@ -162,7 +174,7 @@ DuckDuckGo's onion mirror renders.
 
 If the page does not render:
 
-- Check `docker compose -f compose/docker-compose.local.yml logs tor` for bootstrap failures.
+- Check `$COMPOSE logs tor` for bootstrap failures.
 - Check that the token in the extension matches the token in `tokens.yaml` (case-sensitive 32-char hex).
 - Verify the data plane's journal for `AUTH_REQUIRED` or `ROUTE_DOWN`
   entries.
@@ -200,7 +212,7 @@ volume). Each first-party domain should attach to a distinct circuit.
 Stop the Tor sidecar:
 
 ```bash
-docker compose -f compose/docker-compose.local.yml stop tor
+$COMPOSE stop tor
 ```
 
 Refresh a `.onion` page. The browser shows the privacy-safe error
@@ -214,7 +226,7 @@ template body with:
 Restart the sidecar to recover:
 
 ```bash
-docker compose -f compose/docker-compose.local.yml start tor
+$COMPOSE start tor
 ```
 
 ---
@@ -222,23 +234,27 @@ docker compose -f compose/docker-compose.local.yml start tor
 ## Teardown
 
 ```bash
-docker compose -f compose/docker-compose.local.yml down
+$COMPOSE down
 ```
 
 This stops the stack but leaves all named volumes (and therefore the
-Tor entry-guard state, the audit log, and the inter-plane keys) intact.
+Tor entry-guard state, the audit log, and the inter-plane keys + pepper)
+intact.
 
 To remove all state, the future `scripts/stargate wipe` subcommand will
-be the documented path. In v1 of this feature, manual volume removal is
-the operator's responsibility:
+be the documented path. In v1 of this feature, project-scoped volume
+removal is the operator's responsibility — `$COMPOSE down -v` removes
+the seven named volumes Compose created for the `stargate` project (no
+literal volume names to keep in sync; the project identity `init`
+established does the work):
 
 ```bash
-docker volume rm \
-  stargate-keys stargate-ipc stargate-control-config \
-  stargate-control-state stargate-dp-state \
-  stargate-tor-config stargate-tor-state
+$COMPOSE down -v
 ```
 
-> **Warning**: Wiping `stargate-tor-state` discards Tor's entry-guard set, which
-> degrades anonymity if you re-install (THREAT-MODEL §4.2). Only wipe
-> if you intend a fresh installation.
+> **Warning**: `down -v` discards Tor's entry-guard set (in
+> `stargate-tor-state`), which degrades anonymity if you re-install
+> (THREAT-MODEL §4.2). It also removes the inter-plane keys and the
+> bearer-token pepper (`stargate-keys`) — a re-install generates fresh
+> ones, invalidating any previously configured tokens. Only wipe if you
+> intend a fresh installation.

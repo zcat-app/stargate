@@ -1155,7 +1155,7 @@ log.
 **Does NOT protect against (residue).**
 
 - **Pepper compromise + snapshot leak → offline candidate testing at HMAC
-  speed.** An attacker who obtains BOTH `/etc/stargate/pepper.key` AND a
+  speed.** An attacker who obtains BOTH `/etc/stargate/keys/pepper.key` AND a
   `dp-snapshot.json` can test candidate tokens offline as fast as they can
   compute HMAC-SHA-256. Mitigation: the bearer token is a uniformly random
   128-bit value, so batch brute-force of the 2^128 space is infeasible even
@@ -1177,7 +1177,7 @@ log.
   (T093); adversarial confirmation of the timing side-channel bound is a
   `stargate-redteam` residue (functional tests do not fully capture timing).
 
-**Ownership / export / wipe.** `/etc/stargate/pepper.key`, mode `0640`,
+**Ownership / export / wipe.** `/etc/stargate/keys/pepper.key`, mode `0640`,
 owned by the reading plane's UID, group `stargate-ipc` (GID 5100) so both
 planes read it. `scripts/stargate export` includes it (warns the bundle
 carries a secret); `wipe` removes it alongside keys and state. T088 wires

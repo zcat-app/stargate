@@ -56,7 +56,7 @@ Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
 
 **T092 amendment (2026-07-15) — consume the amended contract.**
 `TokenLoader.java` must: (a) compute verifiers as `HMAC-SHA-256(pepper,
-token)` reading the 32-byte pepper from `/etc/stargate/pepper.key`
+token)` reading the 32-byte pepper from `/etc/stargate/keys/pepper.key`
 (`data-model.md` §1.7), NOT Argon2id; (b) read+write the monotonic
 generation from the persisted `token_generation` record and propose
 `last + 1` (`data-model.md` §1.8); (c) on a stale `ReloadTokens` reply,

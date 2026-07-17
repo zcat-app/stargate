@@ -584,7 +584,7 @@ destructive change.
    - Generate the 32-byte bearer-token pepper (`openssl rand -bytes 32`)
      shared by CP and DP for HMAC-SHA-256 verifier computation (T092;
      `specs/001-tor-route/data-model.md` §1.7). Written to
-     `/etc/stargate/pepper.key` in the `stargate-keys` volume, mode `0640`,
+     `/etc/stargate/keys/pepper.key` in the `stargate-keys` volume, mode `0640`,
      group `stargate-ipc`, so both planes can read it. Never regenerated
      unless the operator explicitly rotates.
    - Generate WebAuthn relying-party id and a one-time admin enrollment

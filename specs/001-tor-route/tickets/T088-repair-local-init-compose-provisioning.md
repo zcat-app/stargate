@@ -1,7 +1,7 @@
 ---
 id: T088
 title: 'Repair local init and Compose provisioning'
-status: pending
+status: in-review
 created: 2026-07-11
 last_updated: 2026-07-17
 source: review/sol-review.md#B1
@@ -9,7 +9,7 @@ phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
 blocked_by: [T087, T092, T094, T095, T099]
 parallel: false
-files_budget: 12
+files_budget: 20
 privacy_critical: true
 constitution_refs:
   - "II: Plane separation"
@@ -143,17 +143,22 @@ T015/T016 and is a release blocker for SC-001.
   absent; already gitignored at `.gitignore:37`) and always passes
   `--env-file compose/env/local.env`. This future-proofs the surface and
   is what the fixture test's env-loading assertion exercises.
-- **Pepper path reconciled to `/etc/stargate/keys/pepper.key`.** data-
-  model §1.7 lists the path as `/etc/stargate/pepper.key` "mounted from
-  the stargate-keys volume ... alongside the inter-plane ed25519
-  keypairs." The keypairs live at `/etc/stargate/keys/cp.priv` (the keys
-  volume's mount point per compose lines 69/117). "Alongside the
-  keypairs" + "in the stargate-keys volume" therefore resolves to
-  `/etc/stargate/keys/pepper.key`; the literal `/etc/stargate/pepper.key`
-  in the spec row would land in the read-only `stargate-control-config`
-  mount for the CP (unwritable). No spec amendment; the spec's INTENT
-  (keys volume, alongside keypairs, 0640, group stargate-ipc) is what is
-  implemented.
+- **Pepper path: `/etc/stargate/keys/pepper.key` (specs amended by redteam
+  mandate).** data-model §1.7 originally listed `/etc/stargate/pepper.key`
+  "mounted from the stargate-keys volume ... alongside the inter-plane
+  ed25519 keypairs." The keypairs live at `/etc/stargate/keys/cp.priv` (the
+  keys volume's mount point per compose lines 69/117); the literal
+  `/etc/stargate/pepper.key` would land in the read-only
+  `stargate-control-config` mount for the CP (unwritable). Grounding
+  initially reconciled this as "no spec amendment; implement the intent."
+  The stargate-redteam pass (Major #2) correctly flagged that as a live
+  contract drift: consumers T035/T041/T044 `os.ReadFile` the spec's literal
+  path and would fail-closed (DoS) or, on a lenient handler, HMAC with an
+  empty pepper (forged-token auth). The impl + `tests/contract/internal/
+  dpharness/auth.go` already use `/etc/stargate/keys/pepper.key`, so the
+  SPECS were the stale side. This ticket amends data-model §1.7 + THREAT-
+  MODEL §5.14 + SECURITY-DECISIONS.md + arch §9.1 + socks5-auth.md +
+  T035/T041/T044 to `/etc/stargate/keys/pepper.key`, eliminating the drift.
 
 ## Acceptance
 
@@ -188,9 +193,11 @@ T092 makes the install-time pepper shape authoritative
 (`specs/001-tor-route/data-model.md` §1.7). This ticket provisions it,
 per its existing out-of-scope note ("this ticket provisions any
 install-time secret shape that T092 has already made authoritative"):
-`init` step 3 generates `/etc/stargate/pepper.key` via
-`openssl rand -bytes 32` (arch §9.1 step 3, amended), mode `0640`, owned
-by the reading plane UID, group `stargate-ipc` (GID 5100) — the same
+`init` step 3 generates `/etc/stargate/keys/pepper.key` via
+`openssl rand -out <file> 32` (arch §9.1 step 3, amended; the spec's
+`openssl rand -bytes 32` shorthand is not valid openssl CLI — real form
+`openssl rand -out <f> 32`), mode `0640`, owned by the reading plane UID,
+group `stargate-ipc` (GID 5100) — the same
 ownership/mode scheme as the ed25519 inter-plane keypairs in the
 `stargate-keys` volume. `export` must include it (warn the bundle carries
 a secret), `import` restores it verbatim, `wipe` removes it alongside

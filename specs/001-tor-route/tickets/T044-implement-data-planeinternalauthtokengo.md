@@ -57,7 +57,7 @@ Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
 **T092 amendment (2026-07-15) — consume the amended contract.**
 `auth/token.go` must: (a) compute the candidate's verifier ONCE per request
 as `HMAC-SHA-256(pepper, candidate)` reading the pepper from
-`/etc/stargate/pepper.key` (`data-model.md` §1.5), NOT Argon2id; (b)
+`/etc/stargate/keys/pepper.key` (`data-model.md` §1.5), NOT Argon2id; (b)
 compare with `crypto/subtle.ConstantTimeCompare` against EVERY verifier in
 the current generation with NO short-circuit on first match (timing must
 be independent of which slot matched); (c) keep per-request allocation
