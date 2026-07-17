@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 72 |
+| pending | 73 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 59 |
+| done | 60 |
 | deferred | 1 |
-| **total** | **133** |
+| **total** | **134** |
 
 ---
 
@@ -86,15 +86,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
+| T103 | Add a scoped shell quality gate | 6: Polish & Cross-Cutting Concerns |  |  |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
+| T105 | Stabilize the flaky run_task_test.sh S8 milestone-merge asse | 6: Polish & Cross-Cutting Concerns |  |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T088 | Repair local init and Compose provisioning | in-review | ✓ | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -108,7 +108,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_59 ticket(s) done._
+_60 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -155,6 +155,7 @@ _59 ticket(s) done._
 - T076 — Run every test module in the single green gate
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
 - T087 — Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOINT)
+- T088 — Repair local init and Compose provisioning
 - T089 — Amend the Tor startup configuration contract
 - T090 — Remove control-plane route admission gating
 - T091 — Amend the browser-hardening enforcement boundary

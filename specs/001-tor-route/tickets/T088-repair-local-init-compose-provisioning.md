@@ -1,7 +1,7 @@
 ---
 id: T088
 title: 'Repair local init and Compose provisioning'
-status: in-review
+status: done
 created: 2026-07-11
 last_updated: 2026-07-17
 source: review/sol-review.md#B1
@@ -24,7 +24,7 @@ spec_refs:
   - specs/001-tor-route/data-model.md §6
 decision_refs: []
 remediates: T016
-reviews: {}
+reviews: { round: 1, date: 2026-07-17, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
