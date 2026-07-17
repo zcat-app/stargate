@@ -1,7 +1,7 @@
 ---
 id: T105
 title: 'Stabilize the flaky run_task_test.sh S8 milestone-merge assertion'
-status: in-progress
+status: done
 created: 2026-07-17
 last_updated: 2026-07-17
 source: found during /run T088 (verify.sh gate reliability)
@@ -19,7 +19,7 @@ spec_refs:
   - docs/process/workflow.md §"Verification — the single green gate"
 decision_refs: []
 remediates: T096
-reviews: {}
+reviews: { round: 1, date: 2026-07-17, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

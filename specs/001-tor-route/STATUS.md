@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 73 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 60 |
+| done | 61 |
 | deferred | 1 |
 | **total** | **135** |
 
@@ -94,9 +94,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T105 | Stabilize the flaky run_task_test.sh S8 milestone-merge asse | in-progress |  | 6: Polish & Cross-Cutting Concerns |
+_(nothing in flight)_
 
 ---
 
@@ -110,7 +108,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_60 ticket(s) done._
+_61 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -172,3 +170,4 @@ _60 ticket(s) done._
 - T100 — Strengthen persistence contract tests
 - T101 — Consolidate the privacy log-invariant scanner
 - T102 — Scan for Stargate bearer-token secrets
+- T105 — Stabilize the flaky run_task_test.sh S8 milestone-merge assertion
