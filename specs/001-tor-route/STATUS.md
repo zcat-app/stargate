@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-07-17
+**Last updated:** 2026-07-18
 
 ---
 
@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 73 |
-| in-progress | 0 |
+| pending | 72 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 61 |
@@ -88,13 +88,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T103 | Add a scoped shell quality gate | 6: Polish & Cross-Cutting Concerns |  |  |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
-| T106 | Make the init count-probe failure path fail-closed (no key c | 6: Polish & Cross-Cutting Concerns |  |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T106 | Make the init count-probe failure path fail-closed (no key c | in-progress |  | 6: Polish & Cross-Cutting Concerns |
 
 ---
 

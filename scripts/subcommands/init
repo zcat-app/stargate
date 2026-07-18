@@ -248,11 +248,16 @@ generate_keys() {
   # 0600 key/pepper contents (no DAC_OVERRIDE, not root). The stdout is
   # sanitized below before ANY interpolation, so even a backdoored helper's
   # stdout can never reach an operator-visible log line.
+  # FAIL-CLOSED (T106, arch §9.3 do-not-clobber): a non-zero exit from the
+  # probe (transient daemon hiccup / OOM / attacker-induced helper crash)
+  # MUST NOT default to "0" (fresh) — that would regenerate ed25519 keys +
+  # pepper over existing ones and invalidate every enrolled device. Abort
+  # as EXIT_KEYGEN; only a successful 0-5 count reaches the decision below.
   existing=$(docker run --rm --network none --cap-drop ALL --read-only \
     --user "$CP_UID:$IPC_GID" \
     -v "${keys_phys}:/keys:ro" "$STARGATE_KEYGEN_IMAGE" \
     sh -c 'n=0; for f in cp.priv dp.priv cp.pub dp.pub pepper.key; do [ -e "/keys/$f" ] && n=$((n+1)); done; echo "$n"; exit 0' \
-    2>/dev/null) || existing="0"
+    2>/dev/null) || { note "count-probe helper failed (docker run non-zero exit); aborting to avoid clobbering existing keys"; return "$EXIT_KEYGEN"; }
   # Sanitize before interpolation: a legit count is one digit 0-5. Anything
   # else (a backdoored helper emitting key bytes / garbage on stdout) aborts
   # WITHOUT echoing the value — closes the stdout→stderr exfil channel.

@@ -1,9 +1,9 @@
 ---
 id: T106
 title: 'Make the init count-probe failure path fail-closed (no key clobber)'
-status: pending
+status: in-progress
 created: 2026-07-17
-last_updated: 2026-07-17
+last_updated: 2026-07-18
 source: redteam round-3 + codereview round-3 of T088
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
