@@ -1,7 +1,7 @@
 ---
 id: T106
 title: 'Make the init count-probe failure path fail-closed (no key clobber)'
-status: in-progress
+status: done
 created: 2026-07-17
 last_updated: 2026-07-18
 source: redteam round-3 + codereview round-3 of T088
@@ -19,7 +19,7 @@ spec_refs:
   - specs/001-tor-route/tickets/T088-repair-local-init-compose-provisioning.md §Analysis M5
 decision_refs: []
 remediates: T088
-reviews: {}
+reviews: { round: 1, date: 2026-07-18, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
