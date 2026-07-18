@@ -65,7 +65,10 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
     --*) echo "derive-deps: unknown flag: $1" >&2; exit 2 ;;
-    *) [ -z "$FEATURE_DIR" ] && FEATURE_DIR="$1" && shift || { echo "derive-deps: unexpected arg: $1" >&2; exit 2; } ;;
+    # if/then/else (not A && B || C): a second positional is a hard error,
+    # not a masked assignment failure (T103 A4 / SC2015).
+    *) if [ -z "$FEATURE_DIR" ]; then FEATURE_DIR="$1"; shift
+       else echo "derive-deps: unexpected arg: $1" >&2; exit 2; fi ;;
   esac
 done
 

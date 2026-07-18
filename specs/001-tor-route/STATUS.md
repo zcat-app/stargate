@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 72 |
-| in-progress | 0 |
+| pending | 71 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 62 |
@@ -86,14 +86,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T103 | Add a scoped shell quality gate | 6: Polish & Cross-Cutting Concerns |  |  |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T103 | Add a scoped shell quality gate | in-progress |  | 6: Polish & Cross-Cutting Concerns |
 
 ---
 

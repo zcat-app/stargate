@@ -30,7 +30,9 @@
 
 set -uo pipefail   # NOT -e: run every gate and aggregate, don't abort early.
 
-cd "$(git rev-parse --show-toplevel)"
+# `cd || exit`, not bare `cd`: a failed cd would otherwise run every gate
+# against the wrong $PWD and silently mis-report (T103 A4 / SC2164).
+cd "$(git rev-parse --show-toplevel)" || exit 1
 
 # Make the Go toolchain discoverable even when the caller's shell never sourced
 # ~/.profile — e.g. a non-interactive CI runner, or the tool-shell an autopilot
@@ -89,6 +91,68 @@ elif [ -x scripts/ground-check.sh ]; then
   run_cmd "ground-check" -- scripts/ground-check.sh
 else
   record "ground-check" SKIP "scripts/ground-check.sh absent"
+fi
+
+# === Gate 1c: shell quality (release-critical scripts/) ====================
+# T103 §Acceptance #1 + #2: bash -n on every Bash entrypoint under scripts/,
+# plus a PINNED + SCOPED ShellCheck gate covering only the four A4 categories
+# from review/sol-review.md#A4 — SC2012 (ls-for-file-selection), SC2015
+# (A&&B||C as if-then-else), SC2148 (missing shebang), SC2164 (unchecked cd).
+# Installer/workflow shell is release-critical; the gate keeps the scope
+# narrow on purpose so it stays tight without churning style-only findings.
+# Absence of ShellCheck is SKIP locally; CI (CI=true | GITHUB_ACTIONS=true)
+# requires it — the policy is enforced here so a shellcheck-less CI run can
+# never claim GREEN on release-critical shell.
+#
+# Discovery (§Acceptance #4): every tracked *.sh under scripts/ (incl. the
+# agent-cli/ adapters) PLUS the named non-.sh shell entrypoints
+# (scripts/stargate, scripts/subcommands/init). scripts/subcommands/.keep
+# is excluded explicitly — it is a placeholder, not shell. A new shell file
+# added under scripts/ is gated automatically — no gate edit needed.
+if ! have bash; then
+  record "shell-quality" SKIP "bash toolchain not installed"
+else
+  mapfile -t _shell_files < <(
+    git ls-files 'scripts/*.sh' 'scripts/**/*.sh' \
+                 scripts/stargate scripts/subcommands/init 2>/dev/null \
+      | grep -v '^scripts/subcommands/\.keep$' || true
+  )
+  if [ "${#_shell_files[@]}" -eq 0 ]; then
+    record "shell-quality" SKIP "no shell entrypoints under scripts/"
+  else
+    _sq_fail=0; _sq_notes=()
+    # §Acceptance #1: bash -n on every entrypoint (syntax never has false positives).
+    for f in "${_shell_files[@]}"; do
+      [ -f "$f" ] || continue
+      if ! bash -n "$f" >>"$LOG" 2>&1; then
+        _sq_fail=1; _sq_notes+=("bash -n: $f")
+      fi
+    done
+    # §Acceptance #2: scoped ShellCheck (the four A4 codes only).
+    if have shellcheck; then
+      _sq_sc=""; _sq_checked=0
+      for f in "${_shell_files[@]}"; do
+        [ -f "$f" ] || continue
+        _sq_checked=$((_sq_checked + 1))
+        # -x follows `source` across files; -i restricts to the pinned A4 set.
+        if _out="$(shellcheck -i SC2012,SC2015,SC2148,SC2164 -x -- "$f" 2>&1)"; then :
+        else
+          _sq_fail=1; _sq_notes+=("shellcheck: $f"); _sq_sc+="$_out"$'\n'
+        fi
+      done
+      [ -n "$_sq_sc" ] && printf '%s\n' "$_sq_sc" >>"$LOG"
+      if [ "$_sq_fail" -ne 0 ]; then
+        record "shell-quality" FAIL "${_sq_notes[*]}"
+      else
+        _sq_ver="$(shellcheck --version | awk '/^version:/ {print $2; exit}')"
+        record "shell-quality" PASS "$_sq_checked entrypoint(s), shellcheck $_sq_ver"
+      fi
+    elif [ "${CI:-false}" = "true" ] || [ "${GITHUB_ACTIONS:-false}" = "true" ]; then
+      record "shell-quality" FAIL "shellcheck absent in CI (required; install or the gate is hollow)"
+    else
+      record "shell-quality" SKIP "shellcheck absent — required in CI, locally SKIP"
+    fi
+  fi
 fi
 
 # === Gate 2: Go workspace modules (discovered via go.work) ================

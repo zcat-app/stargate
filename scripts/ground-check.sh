@@ -29,7 +29,9 @@
 # defect. Phase-aware: skips checks whose inputs do not exist yet.
 
 set -uo pipefail
-cd "$(git rev-parse --show-toplevel)"
+# `cd || exit`, not bare `cd`: a failed cd would otherwise continue against
+# the wrong $PWD and silently mis-ground every pin (T103 A4 / SC2164).
+cd "$(git rev-parse --show-toplevel)" || exit 1
 
 ONLINE="${STARGATE_GROUND_ONLINE:-0}"
 fail=0; warn=0

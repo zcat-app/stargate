@@ -38,7 +38,9 @@ for arg in "$@"; do
     --round)   shift_if_value=1 ;;
     --round=*) ROUND="${arg#--round=}" ;;
     --*) echo "handoff: unknown flag: $arg" >&2; exit 2 ;;
-    *) [ -z "$TICKET_ID" ] && [ "$SESSION" = "0" ] && TICKET_ID="$arg" || true ;;
+    # if/then (not A && B || C): the second positional stays a silent no-op,
+    # not a masked assignment failure (T103 A4 / SC2015).
+    *) if [ -z "$TICKET_ID" ] && [ "$SESSION" = "0" ]; then TICKET_ID="$arg"; fi ;;
   esac
 done
 
@@ -69,7 +71,9 @@ TICKET_TITLE=""
 TICKET_STATUS=""
 TICKET_PHASE=""
 if [ -n "$TICKET_ID" ] && [ "$SESSION" = "0" ]; then
-  TICKET_PATH="$(ls "$FEATURE_DIR/tickets/$TICKET_ID"-*.md 2>/dev/null | head -1 || true)"
+  # find(1) instead of ls: stable parsing + unusual-filename safe (T103 A4 / SC2012).
+  # find exits 0 with empty output on no match, so the `|| true` ls needed is gone.
+  TICKET_PATH="$(find "$FEATURE_DIR/tickets" -maxdepth 1 -name "${TICKET_ID}-*.md" 2>/dev/null | head -1)"
   if [ -z "$TICKET_PATH" ]; then
     echo "handoff: ticket $TICKET_ID not found under $FEATURE_DIR/tickets/" >&2
     exit 2

@@ -83,7 +83,8 @@ ADAPTER="scripts/agent-cli/${AGENT_CLI}.sh"
   echo "agent-cli: adapter not found for AGENT_CLI=$AGENT_CLI" >&2
   echo "  looked at: $ADAPTER" >&2
   echo "  available adapters:" >&2
-  ls scripts/agent-cli/*.sh 2>/dev/null | sed 's/^/    /' >&2
+  # find(1) instead of ls: stable output + handles unusual filenames (T103 A4 / SC2012).
+  find scripts/agent-cli -maxdepth 1 -name '*.sh' 2>/dev/null | sed 's/^/    /' >&2
   exit 2
 }
 

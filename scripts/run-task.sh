@@ -69,7 +69,10 @@ for arg in "$@"; do
     --merge)  DO_MERGE=1 ;;
     --reset)  RESET_ROUND=1 ;;
     --*) echo "run-task: unknown flag: $arg" >&2; exit 2 ;;
-    *) [ -z "$TICKET_ID" ] && TICKET_ID="$arg" || { echo "run-task: unexpected arg: $arg" >&2; exit 2; } ;;
+    # if/then/else (not A && B || C): a second positional is a hard error,
+    # not a masked assignment failure (T103 A4 / SC2015).
+    *) if [ -z "$TICKET_ID" ]; then TICKET_ID="$arg"
+       else echo "run-task: unexpected arg: $arg" >&2; exit 2; fi ;;
   esac
 done
 

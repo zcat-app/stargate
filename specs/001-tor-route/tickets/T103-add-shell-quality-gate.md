@@ -1,9 +1,9 @@
 ---
 id: T103
 title: 'Add a scoped shell quality gate'
-status: pending
+status: in-progress
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-07-18
 source: review/sol-review.md#A4
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'

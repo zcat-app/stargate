@@ -1,7 +1,9 @@
+#!/usr/bin/env bash
 # Copyright 2026 The Stargate Authors
 # SPDX-License-Identifier: Apache-2.0
 #
-# Claude Code adapter for scripts/agent-cli.sh. Sourced, not executed.
+# Claude Code adapter for scripts/agent-cli.sh. Sourced, not executed; the
+# shebang documents the shell dialect for editors and ShellCheck (T103 A4).
 #
 # Status: STUB. opencode is stargate's primary agent CLI; this adapter
 # exists so the dispatcher's swappability is real and tested, not as a

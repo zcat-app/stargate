@@ -134,7 +134,8 @@ runnable=()
 for id in "${!STATUS[@]}"; do
   [ "${STATUS[$id]}" = "pending" ] || continue
   # Find this ticket's blocked_by. Re-read the file (cheap; ~100 files).
-  f="$(ls "$TICKETS_DIR"/$id-*.md 2>/dev/null | head -1)"
+  # find(1) instead of ls: stable parsing + unusual-filename safe (T103 A4 / SC2012).
+  f="$(find "$TICKETS_DIR" -maxdepth 1 -name "${id}-*.md" 2>/dev/null | head -1)"
   [ -z "$f" ] && continue
   deps="$(get_field "$f" blocked_by)"
   all_done=1
