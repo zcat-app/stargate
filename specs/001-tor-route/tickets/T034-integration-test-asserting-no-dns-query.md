@@ -1,7 +1,7 @@
 ---
 id: T034
 title: 'Integration test asserting no DNS query for any `*.onion` name appears'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-07-19
 source: tasks.md#T034
@@ -22,7 +22,7 @@ decision_refs: []
 constitution_refs:
   - "III: No outbound except routed request"
   - "VII: Tests-first for privacy-critical paths"
-reviews: {}
+reviews: { round: 2, date: 2026-07-19, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

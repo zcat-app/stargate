@@ -15,9 +15,9 @@
 |---|---|
 | pending | 70 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 63 |
+| done | 64 |
 | deferred | 1 |
 | **total** | **135** |
 
@@ -91,9 +91,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T034 | Integration test asserting no DNS query for any `*.onion` na | in-review | ✓ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
+_(nothing in flight)_
 
 ---
 
@@ -107,7 +105,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_63 ticket(s) done._
+_64 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -151,6 +149,7 @@ _63 ticket(s) done._
 - T031 — Contract test asserting no bridge / pluggable-transport strings appear
 - T032 — Contract test spinning up the live Tor sidecar with the rendered confi
 - T033 — Integration test for the full vertical: bring up `compose/docker-compo
+- T034 — Integration test asserting no DNS query for any `*.onion` name appears
 - T076 — Run every test module in the single green gate
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
 - T087 — Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOINT)
