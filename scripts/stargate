@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+# Copyright 2026 The Stargate Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# scripts/stargate — thin shell dispatcher to subcommand scripts.
+#
+# Architecture (arch spec §3 file-tree note): "`scripts/stargate` is a thin
+# shell dispatcher to subcommand scripts; language choice is shell to keep
+# zero runtime deps for ops tooling." This file dispatches ONLY; every real
+# command lives under scripts/subcommands/<name>.
+#
+# Scope (T016 / research.md §8): only the `init` subcommand is wired in this
+# feature. `export`, `import`, `wipe`, and any `--profile` selection are
+# deferred to later features (see T016 §Out-of-scope) and are rejected here
+# as unknown subcommands / unknown flags so a future feature wires them
+# explicitly rather than inheriting an accidental half-implementation.
+#
+# No outbound network. The dispatcher never opens a socket itself; subcommands
+# inherit the Constitution-III doctrine (no outbound except what an operator
+# action explicitly needs — the Docker daemon socket for `init`).
+#
+# Path-independence: this script resolves its own directory via pure bash
+# parameter expansion (no `dirname`/`readlink` call), so dispatch works even
+# when PATH is empty (the T016 contract test exercises `init` dispatch under
+# PATH= to assert preflight exit-10 hermetically).
+
+set -uo pipefail
+
+# Resolve the script's own directory without external commands (pure bash).
+case "${BASH_SOURCE[0]}" in
+  */*) SCRIPT_DIR="${BASH_SOURCE[0]%/*}" ;;
+  *)   SCRIPT_DIR="." ;;
+esac
+case "$SCRIPT_DIR" in
+  /*) : ;;                      # already absolute
+  *)  SCRIPT_DIR="$(cd "$SCRIPT_DIR" && pwd)" ;;
+esac
+
+SUBCOMMANDS_DIR="$SCRIPT_DIR/subcommands"
+
+usage() {
+  cat <<'EOF'
+Usage: stargate <subcommand> [args...]
+
+Stargate operator entry point.
+
+Subcommands:
+  init        Initialise a fresh Stargate stack (local profile). See
+              `stargate init` for details. (T016)
+
+Other subcommands (export, import, wipe) and profile selection (--profile)
+are not yet implemented; they ship with later features.
+
+Environment:
+  STARGATE_HEALTHCHECK_TIMEOUT  Per-sidecar healthcheck wait in seconds
+                                (default 60). See `stargate init`.
+EOF
+}
+
+# Top-level flags.
+case "${1:-}" in
+  -h|--help|help)
+    usage
+    exit 0
+    ;;
+  "")
+    usage >&2
+    exit 2
+    ;;
+esac
+
+# Reject --profile regardless of placement (research §8: local-only this
+# feature). `stargate --profile local init` (--profile as the first token) AND
+# `stargate init --profile local` (--profile after the subcommand) both exit
+# non-zero with an explicit message; without this, the first form would fall
+# through to "unknown subcommand: --profile", which is a misleading error for
+# what is really a rejected flag.
+case "${1:-}" in
+  --profile|--profile=*)
+    echo "stargate: --profile is not supported in this release (local profile only)." >&2
+    usage >&2
+    exit 2
+    ;;
+esac
+
+subcmd="$1"
+shift
+
+# Also catch --profile (space OR equals form) appearing AFTER the subcommand.
+for arg in "$@"; do
+  case "$arg" in
+    --profile|--profile=*)
+      echo "stargate: --profile is not supported in this release (local profile only)." >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+subcmd_path="$SUBCOMMANDS_DIR/$subcmd"
+if [ ! -x "$subcmd_path" ]; then
+  printf 'stargate: unknown subcommand: %s\n' "$subcmd" >&2
+  usage >&2
+  exit 2
+fi
+
+# Dispatch using the ALREADY-RUNNING bash binary ($BASH, an absolute path set
+# by bash itself) rather than relying on the subcommand's `#!/usr/bin/env
+# bash` shebang. Under an empty PATH (the T016 contract test exercises
+# dispatch + preflight-exit-10 with PATH=), `/usr/bin/env bash` cannot resolve
+# `bash`, so `exec "$subcmd_path"` would fail with 127 instead of reaching
+# init's preflight. Routing through "$BASH" side-steps both PATH and the
+# shebang, and inherits the same bash binary running this dispatcher.
+# The subcommand owns its exit codes (init: 0/10/20/30/40/50 per arch §9.1).
+exec "${BASH:-bash}" "$subcmd_path" "$@"

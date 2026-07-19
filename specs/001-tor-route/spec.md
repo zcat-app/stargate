@@ -16,7 +16,7 @@ Principles I, II, III apply in full."
 
 **Derives from**:
 
-- `.specify/memory/constitution.md` v1.1.0 — Principles I (Dumb Router),
+- `.specify/memory/constitution.md` v1.0.0 (with the pre-release T091 amendment to Principle III bullet 3) — Principles I (Dumb Router),
   II (Plane Separation), III (Privacy-Preserving by Construction), VII
   (Tests-First), VIII (Adversarial Review).
 - `specs/000-architecture/spec.md` — §2 topology, §4 ports (Tor on 8881),
@@ -170,9 +170,8 @@ demonstrate value without it, but a release cannot ship without it.
 (`docker compose stop tor`). Issue a request to a `.onion` URL through
 port 8881. Capture the full response (status, headers, body). Assert
 the response byte-for-byte matches the privacy-safe template from the
-architecture spec §10.2 after substitution of only the four permitted
-fields (`{ROUTE_LABEL}`, `{CODE}`, `{LOCAL_REFERENCE_ID}`, and the fixed
-title/body chrome). Run the response through the curated leak-corpus
+architecture spec §10.2 after substitution of only the three permitted
+fields (`{ROUTE_LABEL}`, `{CODE}`, `{LOCAL_REFERENCE_ID}`). Run the response through the curated leak-corpus
 check from architecture spec §10.3 to confirm no forbidden substring
 appears in any header or body byte.
 
@@ -223,14 +222,18 @@ tests-first suite (Principle VII).
   surfaces a normal connection error. **No upstream-derived information
   is propagated** to the browser through error headers or response
   bodies (the data plane has none at that layer to leak).
-- **Bearer token missing or invalid**. The data plane rejects the request
-  with HTTP 407 (Proxy Authentication Required) and a privacy-safe body
-  (per architecture spec §10 template, with `{CODE} = AUTH_REQUIRED` —
-  this is a new error code added by this feature; see FR-006). The error
-  body MUST NOT distinguish "missing token" from "invalid token" beyond
-  the fact of auth failure. The data plane MUST NOT log the token,
-  the offered token's hash, or the destination of the rejected request
-  (Principle III — no per-request metadata).
+- **Bearer token missing or invalid**. On the HTTP CONNECT path, the
+  data plane rejects the request with HTTP 407 (Proxy Authentication
+  Required) and a privacy-safe body (per architecture spec §10
+  template, with `{CODE} = AUTH_REQUIRED` — this is a new error code
+  added by this feature; see FR-006). On the SOCKS5 path, the
+  rejection is the 2-byte RFC 1929 sub-negotiation failure
+  `0x01 0xFF` followed by socket close — no body is sent
+  (`contracts/socks5-auth.md` §"Auth failure response"). The CONNECT
+  body MUST NOT distinguish "missing token" from "invalid token"
+  beyond the fact of auth failure. The data plane MUST NOT log the
+  token, the offered token's hash, or the destination of the rejected
+  request (Principle III — no per-request metadata).
 - **Hostname is `.onion` but the service is unreachable or does not
   exist**. The Tor sidecar's SOCKS5 handshake responds with a SOCKS5
   failure (e.g., `general SOCKS server failure`, `host unreachable`).
@@ -273,9 +276,11 @@ tests-first suite (Principle VII) before implementation lands.
 - **FR-002**: The extension MUST set the SOCKS5 username on each request
   to the first-party domain string used by the request, computed per
   architecture spec §14.3 (prefer `requestDetails.documentUrl` /
-  `originUrl` eTLD+1; for a top-level `.onion` navigation the document
-  URL is the onion address itself; for first-party `.onion` subresources
-  the document URL is the parent page's onion address). The SOCKS5
+  `originUrl` eTLD+1), **extended by this feature with `.onion`-specific
+  rules** that arch §14.3 does not carry: for a top-level `.onion`
+  navigation the document URL is the onion address itself; for first-
+  party `.onion` subresources the document URL is the parent page's
+  onion address. The SOCKS5
   password MUST be set to the device's bearer token. **A privacy-critical
   test MUST verify that distinct first-party domains produce distinct
   Tor circuits in the running stack** (US2 acceptance scenarios 1 & 2
@@ -287,14 +292,24 @@ tests-first suite (Principle VII) before implementation lands.
   verify that no DNS query for any `.onion` hostname leaves the host's
   network namespace during a routed Tor session** (US1 acceptance
   scenario 3 encodes this).
-- **FR-004**: Before issuing routed requests, the extension MUST verify
-  the hardening preconditions from architecture spec §14.5 (DoH off,
-  WebRTC restricted to `disable_non_proxied_udp` or stricter, HTTP/3
-  off). If any precondition fails, the extension MUST display a
-  blocking dialog explaining the issue and MUST NOT route requests
-  through port 8881 until the user remediates. The audit details and
-  the prefs it touches live in architecture spec §14.5; this feature
-  uses that audit but does not redefine it.
+- **FR-004**: Non-Direct routing is fail-closed against a hardened
+  target-browser profile. (a) The extension ships only in a release whose
+  live-e2e hardening test (`tests/live-e2e/mullvad-browser-hardening/`) was
+  green against a test profile that models the target browser's hardened
+  defaults (DoH off, DoT off, HTTP/3 / QUIC off) — this is a **release-
+  process** precondition, not a per-session runtime check. (b) At runtime,
+  the extension gates WebRTC via the stable
+  `browser.privacy.network.peerConnectionEnabled` API (the only hardening
+  surface Firefox's stable WebExtensions API exposes — sol-review B4). If
+  WebRTC is enabled at runtime, the extension MUST display a blocking
+  dialog (architecture spec §14.5 failure UX) and MUST NOT route non-Direct
+  requests through port 8881 until the user remediates. The extension does
+  NOT claim to read or write the DoH/DoT/HTTP-3 preferences via the
+  WebExtensions API; those three surfaces are release-cadence-verified, not
+  runtime-enforced, and their post-verification drift is accepted residue
+  (THREAT-MODEL §5.4/§5.5). (Aligns with Constitution Principle III bullet 3
+  as amended by T091 — non-Direct routing is fail-closed at runtime against
+  WebRTC; DoH/DoT/HTTP-3 are release-cadence-verified.)
 
 #### Data plane behaviour
 
@@ -308,15 +323,27 @@ tests-first suite (Principle VII) before implementation lands.
   request by extracting the bearer token from the SOCKS5 username/
   password pair (password = token) or, for any HTTP CONNECT framing it
   accepts on this port, from `Proxy-Authorization: Bearer <token>` in
-  the CONNECT request. Tokens are compared by constant-time hash
-  against the list provided by the control plane (architecture spec
+  the CONNECT request. The candidate's verifier is computed once as
+  `HMAC-SHA-256(pepper, candidate)` under the install-time pepper
+  (data-model.md §1.5; T092 — Argon2id is retired, see SECURITY-DECISIONS.md)
+  and compared with `crypto/subtle.ConstantTimeCompare` against every
+  verifier in the current generation (no short-circuit on first match —
+  the comparison loop's timing is independent of which slot matched)
+  provided by the control plane (architecture spec
   §5.2 `ReloadTokens`). On absence or mismatch, the data plane MUST
-  respond with HTTP 407 (for CONNECT framing) or a SOCKS5
-  authentication-failure response, both carrying the privacy-safe
-  template body keyed `{CODE} = AUTH_REQUIRED`. **The data plane MUST
-  NOT include the offered token, its hash, or the rejected
-  destination's hostname/port in any response, log, or counter
-  increment.**
+  respond per the inbound protocol:
+  - **HTTP CONNECT path**: HTTP 407 (Proxy Authentication Required)
+    carrying the privacy-safe template body keyed
+    `{CODE} = AUTH_REQUIRED`. Detailed contract:
+    `contracts/error-template.md`.
+  - **SOCKS5 path**: the 2-byte RFC 1929 sub-negotiation failure
+    `0x01 0xFF`, then close the connection — no body, no template
+    (the sub-negotiation framing has no body field). Detailed
+    contract: `contracts/socks5-auth.md` §"Auth failure response".
+
+  **The data plane MUST NOT include the offered token, its hash, or
+  the rejected destination's hostname/port in any response, log, or
+  counter increment.**
 - **FR-007**: The data plane MUST forward authenticated inbound bytes
   on port 8881 to the Tor sidecar's SOCKS5 endpoint
   (`tor:9050` on the compose network), passing through the
@@ -330,51 +357,125 @@ tests-first suite (Principle VII) before implementation lands.
   bodies, or any per-request timestamp at finer resolution than the
   ≥1-hour aggregate bucket defined in architecture spec §6.4
   (`aggregate_counters`). Only the per-route, per-hour
-  `(request_count, byte_count)` pair is recorded.
-- **FR-009**: When the Tor sidecar is unreachable (no TCP connection),
-  unhealthy (gRPC `Sidecar` health status reports UNHEALTHY in
-  architecture spec §5.2), or refuses the SOCKS5 target, the data
-  plane MUST return the privacy-safe error template defined in
-  architecture spec §10.2 with status and `{CODE}` chosen per §10.1
-  (`ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT` as applicable),
-  and `{ROUTE_LABEL} = "Tor"`. Response headers MUST be exactly the
-  four headers enumerated in architecture spec §10.3.
+  `(request_count, byte_count)` pair is recorded. Only requests that
+  pass authentication increment `request_count`; auth failures leave
+  the counter unchanged (Principle III — counting them would be a
+  side channel for token-guessing attacks; `data-model.md` §3
+  records the rule). Route failures (`ROUTE_DOWN`, `ROUTE_REFUSED`,
+  `ROUTE_TIMEOUT`) DO increment `request_count` once authentication
+  has passed: unlike auth failures they are not attacker-controlled
+  in the same way (the attacker cannot induce a route failure at
+  will without already routing), and the gap between `request_count`
+  and the fraction of buckets with `byte_count > 0` gives the
+  operator sidecar-health visibility at negligible privacy cost
+  (data-model.md §3 records the asymmetry). **v1 persistence note**:
+  in this feature, the aggregates live in data-plane process memory
+  only; persistence to the `aggregate_counters` SQLite table via the
+  CP→DP `GetStatus` pull (arch §5.2) is deferred to the admin-UI
+  feature (data-model.md §3 / `contracts/control-grpc.md`
+  §"GetStatus (minimum subset)", which authoritatively records both
+  the in-scope test-harness caller and the deferred production
+  caller). The invariant on *what* is counted (this FR)
+  is independent of the deferral on *where* the counts persist.
+- **FR-009**: When the Tor sidecar is unreachable (no TCP connection) or
+  refuses the SOCKS5 target, the data plane MUST return a privacy-safe
+  failure response with `{CODE}` chosen per architecture spec §10.1
+  (`ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT` as applicable) and
+  shape chosen per the inbound protocol. The upstream dial/handshake
+  result alone decides success or the route error; a `SidecarEvent`
+  (`UNHEALTHY` / `STOPPED` / `CRASHED`) is an advisory hint and MUST NOT
+  be a mandatory precondition for dialing or forwarding (Constitution
+  Principle II; data-model.md §2; sol-review B3):
+  - **HTTP CONNECT path**: HTML template from architecture spec §10.2
+    with `{ROUTE_LABEL} = "Tor"` and the exactly-four headers
+    enumerated in §10.3. Detailed contract: `contracts/error-template.md`.
+  - **SOCKS5 path**: 10-byte RFC 1928 §6 reply with `BND.ADDR`/`BND.PORT`
+    zeroed, then close. The `REP` mapping is `ROUTE_DOWN→0x03`,
+    `ROUTE_REFUSED→0x04`, `ROUTE_TIMEOUT→0x06`; detailed contract:
+    `contracts/socks5-auth.md` §"SOCKS5 request-phase failures (post-auth)".
+  - **Both paths** MUST NOT carry destination, upstream, token, or
+    sidecar-derived bytes in any field of the response.
 - **FR-010**: The data plane MUST refuse to start if the bind-safety
   check would publish port 8881 on a non-loopback interface in the
-  local profile. (Architecture spec §4 + §9.1 step 4 verification.)
-  In this feature, the local profile binds to `127.0.0.1` only; LAN/VPS
-  are out of scope.
+  local profile. (Architecture spec §4 bind-safety paragraph,
+  enforced in `data-plane/internal/bind`.) In this feature, the local
+  profile binds to `127.0.0.1` only; LAN/VPS are out of scope.
 
 #### Sidecar configuration
 
-- **FR-011**: The Tor sidecar MUST be configured (via control-plane-
-  rendered `torrc`, architecture spec §8) with: `SocksPort 9050
-  IsolateClientAddr IsolateSOCKSAuth`, `ControlPort 9051`,
-  `CookieAuthentication 1`, `ClientUseIPv6 0`, `AvoidDiskWrites 1`,
-  `UseBridges 0`. Bridge lines MUST be absent from the rendered
-  `torrc` for this feature (bridges are a separate feature spec).
-  **A contract test MUST verify the rendered `torrc` contains exactly
-  these directives** for v1 of this feature.
-- **FR-012**: The Tor sidecar's `SocksPort` MUST NOT be published to
-  the host or to any compose network mapping. It is reachable only
-  internally on the compose bridge network shared with the data plane
-  container. (Architecture spec §4.2.)
+- **FR-011**: The Tor sidecar MUST be configured with the directive set
+  pinned byte-for-byte in `contracts/torrc.md §"Rendered file"`:
+  `SocksPort 0.0.0.0:9050 IsolateClientAddr IsolateSOCKSAuth`,
+  `ControlPort 0.0.0.0:9051`, `CookieAuthentication 1`,
+  `CookieAuthFileGroupReadable 1`, `DataDirectory /var/lib/tor`,
+  `ClientUseIPv6 0`, `AvoidDiskWrites 1`, `UseBridges 0`,
+  `Log notice stdout`, `SafeLogging 1`. For this static Tor-only slice
+  the safe `torrc` is **baked into the Tor image at build time**
+  (`sidecars/tor/Dockerfile`, T087) and loaded by the entrypoint at
+  container start; the control plane does NOT render `torrc` at boot
+  (Constitution Principle II — Compose starts Tor before the CP, so a
+  CP-rendered `torrc` would couple Tor startup to control-plane
+  availability; sol-review B2). `DataDirectory /var/lib/tor` is explicit
+  because the entrypoint does not load Debian's `torrc-defaults`, so
+  without the directive Tor would fall back to `$HOME/.tor` and land the
+  control cookie at the wrong path (T087 / sol-review B2+M3).
+  Control-plane-rendered `torrc` (atomic write into the
+  `stargate-tor-config` volume) is future work for a dynamic-config
+  feature and is deferred by T089 (T037 `TorrcRenderer` is deferred with
+  it). Bridge lines MUST be absent from the image-baked `torrc` for this
+  feature (bridges are a separate feature spec). **A contract test
+  (`tests/contract/torrc/render_byte_match_test.go`, per T029) MUST
+  verify the `torrc` template in `contracts/torrc.md` is byte-for-byte
+  equal to the pinned Go golden** for v1 of this feature; T087's
+  cold-volume regression test verifies the `/etc/tor/torrc` baked into
+  the image equals the same golden without harness-seeded config.
+- **FR-012**: The Tor sidecar's `SocksPort` (9050) and `ControlPort`
+  (9051, cookie-authenticated) MUST NOT be published to the host or to
+  any compose network mapping. Both are reachable only internally on the
+  compose-internal bridge network. Only the data plane needs SocksPort
+  access; the ControlPort is reached by the control plane's
+  `SidecarMonitor` (T039/T074) AND by the contract-test harness, both via
+  the control cookie (`CookieAuthFileGroupReadable 1`;
+  `contracts/torrc.md` invariants #3–#4). Before T094a the CP observed
+  Tor through a `docker-socket-proxy`; T094a removed it in favour of this
+  narrower cookie-authenticated surface (arch §16). (Architecture spec
+  §4.2.)
 
 #### Inter-plane integration
 
-- **FR-013**: The data plane MUST accept a list of bearer-token hashes
-  via the gRPC `ReloadTokens` RPC (architecture spec §5.2) and apply
-  it atomically. In this feature, the source of the list is a config
+- **FR-013**: The data plane MUST accept a list of bearer-token verifiers
+  (HMAC-SHA-256 tags under the install-time pepper; data-model.md §1.5,
+  T092) via the gRPC `ReloadTokens` RPC (architecture spec §5.2) and
+  apply it atomically. In this feature, the source of the list is a config
   file read by the control plane at startup (no dashboard UI yet; see
   Assumptions). The data plane MUST continue serving port 8881 with
   its last-known token list if the control plane is unreachable
-  (Principle II; architecture spec §5.5).
+  (Principle II; architecture spec §5.5). **A `ReloadTokens` proposal
+  whose `generation <= currentGeneration` is rejected with
+  `APPLY_STATUS_STALE_GENERATION` and the data plane's
+  `current_generation` echoed in the response, so a restarted control
+  plane reconciles and retries with `current + 1` rather than
+  accidentally revoking every client (T092 / sol-review M1;
+  data-model.md §1.3 / §1.8).** Admission is never gated on
+  a control-plane event (data-model.md §2; sol-review B3): a request
+  that authenticates against the last-known list reaches the upstream
+  dial regardless of `SidecarEvent` state.
 - **FR-014**: The control plane MUST emit a `SidecarEvent` with kind
-  `HEALTHY` / `UNHEALTHY` / `STARTED` / `STOPPED` for the Tor sidecar
-  (architecture spec §5.2 events). The `detail` field MUST be a
-  fixed-vocabulary token from the enum, not free text from Tor logs.
-  The data plane consumes these events to decide whether to return
-  `ROUTE_DOWN` on requests.
+  `STARTED` / `HEALTHY` / `UNHEALTHY` / `STOPPED` / `CRASHED` /
+  `RESTARTED` for the Tor sidecar (architecture spec §5.2 events). The
+  `detail` field MUST be a fixed-vocabulary token from the enum, not
+  free text from Tor logs. The data plane consumes these events as
+  **advisory local status/audit hints** (data-model.md §2; Constitution
+  Principle II): they MUST NOT be a mandatory precondition for listening,
+  authenticating, dialing, or forwarding, and they MUST NOT
+  short-circuit the upstream dial. The data plane MUST always attempt
+  the fixed `tor:9050` dial on every admitted request; the dial result
+  alone selects `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`.
+  `SidecarEvent`s feed the audit journal (`sidecar_healthy` /
+  `sidecar_unhealthy` rows) and status reporting only — a stale or
+  forged event cannot suppress a dial that would succeed (Principle II:
+  a compromise of the management UI cannot silently corrupt routing
+  decisions). `RESTARTED` is informational.
 
 #### Build and contract testing
 
@@ -385,16 +486,38 @@ tests-first suite (Principle VII) before implementation lands.
   sha256 digest in `compose/docker-compose.local.yml` (Principle IV).
   The Tor Project's signing key for the apt repository MUST be
   pinned by fingerprint in the Dockerfile and verified at build time.
-  The trust rationale MUST be recorded in `SECURITY-DECISIONS.md` and
-  the architecture spec §7 amended in lock-step to remove the
-  `NEEDS CLARIFICATION` for the Tor row.
-- **FR-016**: A contract-test suite at `tests/contract/tor/` MUST exist
-  and pass in CI before this feature merges. The suite MUST exercise:
-  SOCKS5h handshake on the rendered config; SOCKS5 connection to a
-  known-reachable onion service; rejection of SOCKS5 username-less
-  requests with the configured `IsolateSOCKSAuth` setting (to verify
-  the stream-isolation knob is actually applied); response on the
-  control port for a `GETINFO version` query under cookie auth.
+  The Debian build inputs (base + every `apt-get install` package,
+  including `tor`'s transitive closure) MUST be pinned to an immutable
+  `snapshot.debian.org` run with explicit `=version` pins and retained
+  sha256 hashes, so a clean rebuild selects byte-identical packages
+  (T099; Principle IV). The trust rationale and rotation procedure MUST
+  be recorded in `SECURITY-DECISIONS.md` and the architecture spec §7
+  amended in lock-step to remove the `NEEDS CLARIFICATION` for the Tor row.
+- **FR-016**: Contract-test suites under `tests/contract/**/` MUST exist
+  and pass in CI before this feature merges. The v1 surface comprises
+  six directories, each gating a distinct boundary the feature depends
+  on: `tor/` (Tor sidecar behavioural invariants under the rendered
+  config — port-exposure invariants (T019b); default-circuit fallback
+  under `IsolateSOCKSAuth` when an upstream SOCKS5 client provides no
+  username (T058a, pins the threat surface T047's outbound contract is
+  defensive against); cookie-authenticated control-port helper (T062)
+  consumed by tests under `torrc/` and `integration/`. SOCKS5h handshake
+  on the rendered config is verified transitively by T029 (torrc/
+  byte-match) and T033 (integration/ onion load); reachable-onion
+  connection is verified by T033 directly; `GETINFO version` under
+  cookie auth is verified transitively by any T062-consumer test
+  passing — these three are intentionally not duplicated as `tor/`
+  tasks per analyze finding E1: direct duplication adds CI bring-up
+  cost without privacy gain); `torrc/` (rendered Tor config byte-match
+  and
+  per-invariant assertions); `socks5/` (port 8881 inbound SOCKS5
+  demux, auth, leak invariants, counter side-channel resistance,
+  request-phase failures); `error-template/` (privacy-safe error
+  template invariants for all four codes plus leak-corpus scan);
+  `control-grpc/` (inter-plane RPC + transport invariants for both
+  UDS sockets). Adding a new
+  `tests/contract/<surface>/` directory in a future feature
+  automatically extends this gate.
 
 #### Bearer token configuration (v1 manual flow)
 
@@ -403,36 +526,54 @@ tests-first suite (Principle VII) before implementation lands.
   control-plane container; mounted from a named volume the user
   populates manually for v1). The file format MUST be a list of token
   records, each with a label (free-form string, used in the audit
-  log) and the **plaintext token** (the control plane hashes the token
-  with argon2id at read time and never persists the plaintext beyond
-  the file the user supplies). Each plaintext token MUST be a 32-
+  log) and the **plaintext token** (the control plane computes the
+  verifier `HMAC-SHA-256(pepper, token)` under the 32-byte install-time
+  pepper at read time and never persists the plaintext beyond the file
+  the user supplies; T092 — Argon2id is retired, see data-model.md §1.5
+  and SECURITY-DECISIONS.md). Each plaintext token MUST be a 32-
   character lowercase-hexadecimal string (128 bits of entropy). The
   README quick-start documents `openssl rand -hex 16` as the canonical
   one-liner. Tokens that do not match the expected format MUST be
   rejected at config-load time with a privacy-safe log entry (label
   only, not the offending token bytes).
 - **FR-018**: The control plane reads `tokens.yaml` **once at startup
-  only** in v1. On load, it MUST push the hashed token list to the
-  data plane via `ReloadTokens` (FR-013) and emit a single audit-log
-  entry of kind `enrolled` for each new label. If the file is missing
-  or unreadable, the control plane MUST log a warning and proceed with
-  an empty token list (this disables routing until a token file is
-  present and the container is restarted; the proxy returns
-  `AUTH_REQUIRED` on all requests — Principle II's "continue routing"
-  applies to the serve-the-port property, not to accepting
-  unauthenticated requests). Token add/revoke requires restarting the
-  control-plane container; per architecture spec §11, the data plane
+  only** in v1. On a successful load, it MUST persist the verifiers and
+  the bumped generation (from the `token_generation` record,
+  data-model.md §1.8), push the verifier list to the data plane via
+  `ReloadTokens` (FR-013), and emit audit-log entries per the diff
+  against the previous load: `enrolled` for each new label, `revoked`
+  for each label present last load but missing now, and `config_error`
+  (with sub-kind `parse` | `validation` | `io`) for load failures other
+  than the legitimate first-boot missing-file case. Full row schema and
+  the missing-file exemption (no audit row; the legitimate first-boot
+  state is also "file does not exist yet") are documented in
+  `data-model.md` §4. **Failure semantics (T092 / sol-review M1):** a
+  missing, unreadable, invalid, or unparseable `tokens.yaml` makes the
+  control plane log a `config_error` and **NOT call `ReloadTokens`** —
+  the data plane keeps its last-known list and keeps serving port 8881
+  (Principle II "continue routing"). Only a successfully-parsed explicit
+  empty list (`tokens: []`) is the revoke-all path: that alone pushes an
+  empty generation, after which the proxy returns `AUTH_REQUIRED` on all
+  requests. A valid empty list and an I/O/parse failure therefore have
+  distinct semantics, by design. Token add/revoke requires restarting
+  the control-plane container; per architecture spec §11, the data plane
   keeps serving with its last-known token list across this restart.
   Filesystem-watch and SIGHUP-reload paths are explicitly deferred to
   the dashboard-UI feature.
 - **FR-019**: The bearer token configured in the extension's
-  `storage.local` (or browser credential store; architecture spec
-  §14.4 `NEEDS CLARIFICATION` carried forward) MUST match one of the
-  tokens in the control plane's config file. The extension UX for
-  pasting/storing this token is in scope for this feature at a minimum
-  level: an options page with a single field for the token, persisted
-  to `storage.local` (or the available credential store), with a
-  visible warning if `storage.local` is the fallback path.
+  `storage.local` MUST match one of the tokens in the control plane's
+  config file. The extension UX for pasting/storing this token is in
+  scope for this feature at a minimum level: an options page with a
+  single field for the token, persisted to `storage.local`, with a
+  visible warning that `storage.local` is not credential-grade storage
+  (the canonical warning text is pinned in `data-model.md` §5.1; the
+  rationale for accepting `storage.local` rather than a keyring path
+  in v1 is in `research.md` §6 — Firefox ESR exposes no credential-
+  grade storage API to extensions). The architecture spec §14.4
+  `NEEDS CLARIFICATION` is **resolved-for-v1 by this FR** in
+  combination with `research.md` §6; a future feature may revisit the
+  decision if WebExtensions on Firefox ESR gain a credential-grade
+  storage API.
 
 ### Key Entities
 
@@ -440,8 +581,9 @@ tests-first suite (Principle VII) before implementation lands.
   the SOCKS5 password and (where CONNECT framing is used) in the
   `Proxy-Authorization` header. Identifies *the device* to the data
   plane, not the user. Never persisted in plaintext outside the v1
-  config file the user creates manually; hashed (argon2id) in the
-  control-plane DB and the data plane's in-memory list.
+  config file the user creates manually; stored as an HMAC-SHA-256
+  verifier under the install-time pepper (T092) in the control-plane
+  DB and the data plane's in-memory list.
 - **First-party domain** — a string computed by the extension from the
   browser-supplied `documentUrl` / `originUrl` (preferred) or the
   request URL's eTLD+1 (fallback). Used as the SOCKS5 username on each
@@ -473,8 +615,9 @@ tests-first suite (Principle VII) before implementation lands.
   the steps "install Stargate extension → paste bearer token → load a
   known `.onion`" in **under 5 minutes** of wall-clock time on a
   reference workstation, **without** consulting any documentation
-  beyond the README's quick-start section. Measured by walkthrough on
-  a clean profile.
+  beyond the project quick-start (`specs/001-tor-route/quickstart.md`
+  in this feature; a top-level README will mirror or supersede it in a
+  later feature). Measured by the walkthrough in T077 on a clean profile.
 - **SC-002**: Over a run of **100 sequential CONNECTs to 100 distinct
   first-party `.onion` domains** (synthetic test corpus published in
   `tests/integration/`), the Tor sidecar reports **≥95 distinct circuit
@@ -485,8 +628,13 @@ tests-first suite (Principle VII) before implementation lands.
   loading only `.onion` content** through Stargate, a Wireshark capture
   on the host's loopback interface and on its egress NIC contains
   **zero** DNS queries (A, AAAA, MX, or otherwise) for any name ending
-  in `.onion`. Measured by capture filter `dns and frame contains
-  ".onion"` returning zero packets across both interfaces.
+  in `.onion`. Canonical assertion: no DNS packet's query or answer
+  fields contain a hostname matching `*.onion`. Wireshark/tshark
+  display filter: `dns.qry.name contains ".onion" || dns.resp.name
+  contains ".onion"`; expected zero matches across both interfaces.
+  The per-PR gate (T034) implements the same assertion via `gopacket`'s
+  DNS-layer parse; the release-tag measurement (T034a) and the
+  operator quickstart sanity check use the display filter above.
 - **SC-004**: For each of the four failure modes covered by the privacy-
   safe error template in this feature (`ROUTE_DOWN`, `ROUTE_REFUSED`,
   `ROUTE_TIMEOUT`, `AUTH_REQUIRED`), the rendered response contains
@@ -518,8 +666,8 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
   the local-profile slice is proven. The bind-safety check (FR-010)
   still verifies the loopback-only invariant.
 - **No bridges.** Tor bridge support (Constitution v1 Scope) is
-  delivered as a separate feature spec. The `torrc` rendered by this
-  feature has `UseBridges 0` and no `Bridge` lines (FR-011).
+  delivered as a separate feature spec. The `torrc` baked into the Tor
+  image by this feature has `UseBridges 0` and no `Bridge` lines (FR-011).
 - **Manual bearer-token configuration for v1.** The control-plane reads
   tokens from a yaml file the user populates (FR-017). The admin
   dashboard UI, including the enrollment flow with QR/JSON exchange
@@ -562,6 +710,14 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
   design migrates per the open question in architecture spec §15 #6 —
   this feature's spec does not foreclose either path, but the v1
   delivery assumes MV2 remains available.
+- **`proxy.onRequest` failover timeout: Firefox default.** The router
+  does not set `failoverTimeout` on the returned `proxy.ProxyInfo`
+  descriptor; Firefox's 5-second default applies. Pinning the value
+  would create a magic number with no spec-level rationale. If a
+  future feature needs a tighter or looser failover (e.g. for
+  high-latency bridge transports), the change ships with a
+  justification in that feature's research doc and an amendment to
+  this assumption. See tasks.md T054 for the v1 decision.
 
 ---
 
@@ -575,11 +731,11 @@ is recorded as not-applicable.
 | Principle                                   | Status in this feature                                            |
 |---------------------------------------------|-------------------------------------------------------------------|
 | I — Dumb Router                             | Met. Data plane parses only SOCKS5/CONNECT framing (FR-007); no TLS termination, no header inspection, no local DNS, no payload logs, no cover traffic. Port 8881 → Tor sidecar binding fixed at startup (FR-005). |
-| II — Plane Separation                       | Met. Control plane is advisor (token loader, sidecar lifecycle); data plane keeps serving on last-known token list if control plane is down (FR-013). Inter-plane uses gRPC over UDS, authenticated, versioned (`stargate.v1`, architecture spec §5.4). |
-| III — Privacy-Preserving by Construction    | Met. SOCKS5h enforced (FR-003, FR-007); per-first-party stream isolation by SOCKS5 username (FR-002, FR-011); no per-request logs, only hour-bucketed counters (FR-008); no outbound channels other than the routed request itself; hardening audit covers DoH/WebRTC/QUIC (FR-004). |
+| II — Plane Separation                       | Met. Control plane is advisor (token loader, sidecar lifecycle); data plane keeps serving on last-known token list if control plane is down (FR-013). Admission is never gated on a control-plane `SidecarEvent` — the upstream dial is the ground truth (FR-009, FR-014, data-model.md §2; sol-review B3). Inter-plane uses gRPC over UDS, authenticated, versioned (`stargate.v1`, architecture spec §5.4). |
+| III — Privacy-Preserving by Construction    | Met (as amended by T091). Non-Direct routing is fail-closed at runtime against WebRTC (FR-004; arch §14.5). SOCKS5h enforced (FR-003, FR-007); per-first-party stream isolation by SOCKS5 username (FR-002, FR-011); no per-request logs, only hour-bucketed counters (FR-008); no outbound channels other than the routed request itself. The extension gates only WebRTC (stable API) and SOCKS5h at runtime; DoH/DoT/HTTP-3 are release-cadence-verified out-of-band (sol-review B4), not runtime-enforced — their post-verification drift is accepted residue (THREAT-MODEL §5.4/§5.5). |
 | IV — Pinned, Tested, Manually Promoted Updates | Met. Tor sidecar pinned by digest (FR-015); contract tests gate updates (FR-016); no background auto-update logic added in this feature. |
 | V — Honest Threat Model                     | Met. Threat statements for the Tor onion route already live in `THREAT-MODEL.md` §4.2; this feature does not add unmodelled claims. Local-profile residual risks (THREAT-MODEL §3.1) are documented and unchanged. |
-| VI — Open and Auditable                     | Met. All artefacts of this feature live in the repo: spec, contract tests (FR-016), rendered torrc (FR-011 — a test asserts its exact content). |
+| VI — Open and Auditable                     | Met. All artefacts of this feature live in the repo: spec, contract tests (FR-016), image-baked torrc (FR-011 — a test asserts its exact content). |
 | VII — Tests-First                           | Met. Privacy-critical FRs (FR-002 stream isolation; FR-003 DNS leak absence; FR-006 auth; FR-008 logging restraint; FR-009 error template) each carry a "test MUST verify" clause and are gated by Principle VII discipline before implementation. |
 | VIII — Adversarial Review                   | To be exercised at end of implementation. `stargate-redteam` and `stargate-perf` run against the completed feature; findings either resolved or recorded in `SECURITY-DECISIONS.md`. |
 

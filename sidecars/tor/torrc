@@ -1,0 +1,17 @@
+# Stargate v1 — Tor sidecar configuration.
+# Baked into the Tor image at build time. Do not edit by hand.
+# Source: specs/001-tor-route/contracts/torrc.md
+
+SocksPort 0.0.0.0:9050 IsolateClientAddr IsolateSOCKSAuth
+ControlPort 0.0.0.0:9051
+CookieAuthentication 1
+CookieAuthFileGroupReadable 1
+DataDirectory /var/lib/tor
+ClientUseIPv6 0
+AvoidDiskWrites 1
+UseBridges 0
+
+# Logging — Notice level to stdout for healthcheck parsing only.
+# Stargate does NOT consume Tor log lines as request data.
+Log notice stdout
+SafeLogging 1

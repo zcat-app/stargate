@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stargate — Administrator guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="inner">
+    <span class="brand"><a href="index.html">⭐ Stargate</a></span>
+    <ul>
+      <li><a href="user-guide.html">User guide</a></li>
+      <li><a href="advanced-guide.html">Advanced</a></li>
+      <li><a href="admin.html" class="current">Admin</a></li>
+      <li><a href="tech.html">Technical</a></li>
+      <li><a href="developer.html">Developer</a></li>
+      <li><a href="diagrams.html">Diagrams</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container">
+
+<h1>Administrator guide</h1>
+
+<div class="banner future">
+  <p><strong>Status: placeholder.</strong> Most admin operations
+  (observability stack, dashboard UI, automated upgrade flow) are
+  post-v1. The principles and constraints below are decided; the
+  tooling to execute them is not yet built.</p>
+</div>
+
+<h2>Principles that bind admin operations</h2>
+
+<p>Two Constitution principles shape what an admin can and cannot do, even
+once the tooling lands:</p>
+
+<dl>
+  <dt>Principle III — no outbound except routed request</dt>
+  <dd>The proxy itself makes <em>no</em> outbound connections for status,
+  monitoring, telemetry, update checks, or notifications. All
+  observability is local-only in v1. There is no "phone home" path; the
+  admin reads metrics off the local control plane, not a cloud
+  dashboard.</dd>
+
+  <dt>Principle IV — every external component is digest-pinned</dt>
+  <dd>Sidecar images, base images, build tools — every external artefact
+  the proxy depends on is pinned by <code>sha256</code> digest, not tag.
+  Upgrades are explicit, audited, and reproducible. There is no
+  <code>latest</code> tag anywhere in the deployment graph.</dd>
+
+  <dt>Principle VI — Open and Auditable</dt>
+  <dd>Every admin action lands in the append-only audit log
+  (<code>audit_log</code> table; data-model §4). The audit log is
+  row-level append-only — it cannot be silently truncated; only the
+  owner role can <code>TRUNCATE</code> it.</dd>
+</dl>
+
+<h2>What this page WILL cover (when v1+ lands)</h2>
+
+<h3>Upgrade procedure</h3>
+
+<p>Target flow:</p>
+<ol>
+  <li>Pin the new release's image digests in
+  <code>compose/env/&lt;profile&gt;.env</code>.</li>
+  <li><code>scripts/stargate update</code> pulls the new digests, verifies
+  them against the release manifest, and stages a parallel-stack
+  bring-up.</li>
+  <li>Healthcheck on the new stack; if green, swap the routing and drain
+  the old one. If red, refuse and surface the failing check.</li>
+  <li>The old stack's state volume is preserved across the swap (token
+  generation, audit log, snapshot cache); no re-enrollment needed.</li>
+</ol>
+
+<p>Sidecar upgrades specifically (Tor, I2P, Nym) require additional care:
+the new sidecar image's signing-key fingerprint is verified at build
+time against <code>sidecars/&lt;route&gt;/apt-key.fingerprint</code>
+(ticket T014 for Tor; equivalent contracts for I2P/Nym land with those
+features).</p>
+
+<h3>Observability</h3>
+
+<p>What lands in v1:</p>
+<ul>
+  <li>The control plane exposes a local <code>GET /healthz</code> for the
+  compose healthcheck (ticket T040). Reachable only inside the
+  compose-internal network; no host port mapping.</li>
+  <li>The data plane exposes a <code>GetStatus</code> gRPC RPC for
+  aggregate counters (per-route request count, byte count, hour bucket).
+  Used by the test harness in v1; the admin UI consumes it post-v1.</li>
+  <li>Per-request data is <strong>never</strong> exposed. Aggregate
+  counters only.</li>
+</ul>
+
+<p>What is explicitly NOT in v1:</p>
+<ul>
+  <li>Prometheus exporter (no outbound from Stargate; the local-only
+  constraint applies).</li>
+  <li>Distributed tracing.</li>
+  <li>Per-user, per-host, or per-destination metrics.</li>
+</ul>
+
+<h3>Backup and restore</h3>
+
+<p>The state worth preserving is small in v1:</p>
+<ul>
+  <li><strong>Control plane:</strong> SQLite database (audit log,
+  enrolled devices, settings). Filesystem-level backup of the volume.</li>
+  <li><strong>Data plane:</strong> <code>dp-snapshot.json</code> — the
+  cold-start cache of the current token generation. Without it, the data
+  plane cold-starts DISABLED and waits for the control plane to push a
+  fresh generation (Principle II survival).</li>
+  <li><strong>Identity:</strong> ed25519 plane keys
+  (<code>cp.priv</code>, <code>dp.priv</code>, <code>cp.pub</code>,
+  <code>dp.pub</code>) in the <code>stargate-keys</code> volume. Losing
+  these requires re-enrollment of every enrolled device.</li>
+</ul>
+
+<p>Restore procedure lands post-v1; target is a one-shot
+<code>scripts/stargate import</code> from a backup archive.</p>
+
+<h3>Security advisories</h3>
+
+<p>Reporting and disclosure are documented in
+<code>CONTRIBUTING.md §"Reporting security issues"</code>:</p>
+
+<blockquote>
+<p><strong>Do not open a public GitHub issue for security bugs.</strong>
+Report privately via GitHub Security Advisories. The maintainer aims to
+acknowledge within 7 days. Coordinated disclosure is the default. If a
+privacy property documented in <code>THREAT-MODEL.md</code> does not
+hold, that is a security issue.</p>
+</blockquote>
+
+<p>Accepted Blocker/Major findings get a rationale entry in
+<code>SECURITY-DECISIONS.md</code> (append-only) — the
+<em>audit trail of which findings were accepted rather than fixed and
+why</em>. This is itself auditable.</p>
+
+<h2>What is explicitly out of scope for admin tooling</h2>
+
+<ul>
+  <li><strong>Remote administration</strong> over the network. The admin
+  UI is local-only in v1; remote admin (e.g. managing a VPS-deployed
+  instance from a laptop) requires a tunnel (WireGuard/Tailscale), not a
+  Stargate-side feature.</li>
+  <li><strong>Automatic security updates</strong>. Sidecar version bumps
+  follow the same digest-pin process as Quarkus LTS bumps
+  (<code>CONTRIBUTING.md §Development environment</code>); they are
+  never silent or automatic.</li>
+  <li><strong>Multi-tenant administration</strong>. v1 is
+  family-shareable; per-user admin roles land in a later feature.</li>
+</ul>
+
+<footer>
+  <p>Placeholder. Principles are binding today; tooling is post-v1.
+  Last updated 2026-07-04.</p>
+</footer>
+
+</div>
+</body>
+</html>

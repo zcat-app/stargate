@@ -23,8 +23,14 @@ Related artefacts (some may not exist yet — author when needed):
 - `BUILD-DIFFS.md` — expected variations in native-image reproducibility.
 
 <!-- SPECKIT START -->
+**Current plan**: `specs/001-tor-route/plan.md` (Tor route v1 vertical
+slice — first end-to-end working route; local profile only, manual
+bearer-token config). Phase 0/1 artefacts alongside: `research.md`,
+`data-model.md`, `quickstart.md`, `contracts/`.
+
 For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan.
+shell commands, and other important information, read the current plan
+and its sibling artefacts.
 <!-- SPECKIT END -->
 
 ## Architecture at a glance
@@ -34,7 +40,7 @@ Two processes, distinct lifecycles, gRPC over Unix socket between them:
 | Plane | Language | Responsibility |
 |---|---|---|
 | **Data plane** | Go | Network transport, sidecar coordination, per-port routing. Privacy-critical hot path. |
-| **Control plane** | Quarkus (JDK 21+) | Admin UI, settings, sidecar lifecycle commands, audit. SQLite for state. |
+| **Control plane** | Quarkus 3.33 LTS on JDK 25 LTS | Admin UI, settings, sidecar lifecycle commands, audit. SQLite for state. |
 
 The **data plane is a dumb router** (Constitution Principle I): no payload
 parsing, no TLS termination, no local DNS resolution, no header inspection,

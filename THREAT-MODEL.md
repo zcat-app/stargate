@@ -3,7 +3,7 @@
 **Status**: Draft
 **Last updated**: 2026-05-17
 **Derives from**:
-- `.specify/memory/constitution.md` v1.1.0 (Principles III and V)
+- `.specify/memory/constitution.md` v1.0.0 (with the pre-release T091 amendment to Principle III bullet 3) (Principles III and V)
 - `specs/000-architecture/spec.md` (concrete ports, profiles, sidecars)
 
 ---
@@ -151,7 +151,14 @@ or backdoored binary.
 
 Each sidecar is in the **per-route privacy TCB**. Pinned-digest selection
 and the contract-test gate (Principle IV; architecture spec §7) are the
-mitigations, but neither eliminates the risk. See §5.7.
+mitigations, but neither eliminates the risk. For the Tor sidecar
+specifically, the build inputs are pinned to an immutable
+`snapshot.debian.org` run with explicit `=version` pins (T099), so a clean
+rebuild selects byte-identical packages and the resolved closure (incl.
+`libssl3`) is frozen and auditable — but this makes the binary *auditable*,
+not *trustworthy*: the closure still rides Debian's archive key, and a
+malicious-but-behaviourally-conforming library is undetected. See §5.7,
+§5.9, and `SECURITY-DECISIONS.md` §"Debian archive snapshot pin".
 
 ### 2.7 Malicious browser extension
 
@@ -174,6 +181,27 @@ browser profile.
 The extension hardening audit (architecture spec §14.5) detects foreign
 extensions outside the allowlist and warns the user. This is detection,
 not prevention; the user must remove the extension.
+
+**Foreign-extension inventory decision (T091 acceptance #5): retained for
+v1.** Enumerating other extensions requires the `management` permission
+(arch §14.2). The inventory runs against the actual Mullvad Browser
+profile in the release-cadence live-e2e test
+(`tests/live-e2e/mullvad-browser-hardening/`), not only a Node mock. A
+future release may drop the inventory (and the `management` permission)
+if the detection value is outweighed by the permission's attack surface;
+until then it is retained. **Cost of retaining `management`** (the
+fingerprint asymmetry — Stargate-as-observer, not just
+foreign-extension-as-observer): `management.get`/`getAll` exposes every
+other extension's ID, name, version, enabled state, and host permissions
+to the Stargate extension; if Stargate is compromised, that inventory is
+a fingerprint of the user's browser that a clean Stargate would not
+collect. The detection benefit (warn on a disallowed extension that
+could exfiltrate via legitimate browser channels — §2.7 above) is
+judged to outweigh this cost for v1; it is revisited if the inventory's
+detection value proves weak. The broader browser-hardening guarantee
+(DoH/DoT/HTTP-3 off) is an **externally verified precondition** on the
+profile, not an extension-API claim — see §5.3/§5.4/§5.5 (amended by T091;
+Constitution Principle III bullet 3, pre-release amendment).
 
 ### 2.8 OS-level attacker (**out of scope**)
 
@@ -211,6 +239,12 @@ is on the same machine.
 - Network-level adversaries (§2.1, §2.3) seeing *plaintext request
   metadata* for routed traffic — they see only the encrypted outer tunnel
   to the chosen anonymity network's first hop.
+- A compromised application plane (data or control) exfiltrating directly
+  to the public network, the Docker API, or the other plane's surfaces —
+  the Compose network split (T094b) seats both planes on `internal: true`
+  networks with no external connectivity and no shared network between
+  them; only Tor attaches to an egress-capable network, making Tor the
+  sole egress trusted computing base (see §5.8 "Network segmentation").
 
 **Does NOT protect against**:
 
@@ -498,6 +532,21 @@ six relays (three on each side) selected by Tor's path-selection algorithm
   circuits per onion service.
 - DNS resolution for `.onion` names is **always** Tor-internal — the
   proxy never resolves them locally (Principle III; SOCKS5h enforced).
+- **The safe `torrc` is baked into the Tor image at build time** (FR-011,
+  amended by T089 / sol-review B2). Compose starts the `tor` service
+  before `stargate-control`, so a control-plane-rendered `torrc` would
+  be a boot coupling Principle II forbids: Tor could start with the
+  Debian default config (no `IsolateSOCKSAuth`, no `SafeLogging 1`,
+  `UseBridges` unset) and route traffic before the CP renders the safe
+  config — a privacy failure, not just an availability issue. Baking
+  the byte-pinned `torrc` into the image (with explicit
+  `DataDirectory /var/lib/tor` because the entrypoint does not load
+  Debian's `torrc-defaults`) guarantees the privacy directives are
+  present at Tor's first boot regardless of CP availability or Compose
+  timing. A cold-volume regression test (T087) asserts Docker
+  `State.Health.Status == healthy` and the loaded config without
+  harness-seeded config. Dynamic (CP-rendered) `torrc` is future work
+  for a dynamic-config feature.
 - **Tor entry-guard state is persisted across `export`/`import` and
   wiped on `wipe`.** Tor's guard design relies on a small, slowly-
   rotating guard set so the statistical probability of touching a
@@ -742,21 +791,30 @@ public IP addresses via direct UDP outside the browser's HTTP proxy
 configuration. A page that loads a WebRTC peer connection can read the
 user's real IP even when all HTTP traffic is proxied.
 
-**Mitigation**: the Stargate browser extension sets
-`privacy.network.webRTCIPHandlingPolicy` to `disable_non_proxied_udp`
-or `proxy_only` (the strictest setting, in which only TURN-over-TCP
-through the proxy is allowed) and audits this on every startup
-(architecture spec §14.5). The setting and its values are documented at
+**Mitigation**: the Stargate browser extension reads
+`privacy.network.peerConnectionEnabled` via the stable WebExtensions API
+and refuses to route non-Direct traffic while it is not `false`
+(architecture spec §14.5 Part 2). WebRTC is the one hardening surface
+Firefox's stable WebExtensions API truthfully exposes (sol-review B4);
+the other hardening prefs (DoH/DoT/HTTP-3) are not extension-readable and
+are enforced as an externally verified profile precondition (§5.4, §5.5).
+The setting and its values are documented at
 [https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/privacy/network].
-The hardening audit displays a blocking dialog if WebRTC is enabled.
+The hardening audit displays a blocking dialog if WebRTC is enabled, and
+the externally verified profile (release-cadence live-e2e test
+`tests/live-e2e/mullvad-browser-hardening/`) additionally confirms
+`peerConnectionEnabled = false` in a test profile that models the target
+browser's hardened defaults.
 
 **Residual risk**: if the user grants WebRTC permission to a specific
 origin, or runs Firefox with a profile that overrides this preference
 out from under the extension, the leak returns. Stargate cannot defend
 against deliberate override.
 
-**Reference**: Constitution Principle III, "extension enforces browser
-hardening for non-Direct routes".
+**Reference**: Constitution Principle III bullet 3 (as amended by T091,
+pre-release) — "Non-Direct routes require a hardened target-browser
+configuration that is verified as a release-cadence precondition, not
+enforced via the WebExtension API."
 
 ### 5.4 DNS-over-HTTPS / DNS-over-TLS leaks
 
@@ -765,16 +823,30 @@ to Cloudflare) resolves hostnames over HTTPS *before* the proxy is
 consulted, leaking the lookup to the DoH provider — including for
 destinations that would otherwise be looked up inside Tor.
 
-**Mitigation**: the extension sets `network.trr.mode = 5` (TRR off,
-fall back to system resolver) and `webRequest` rules block known DoH
-endpoints. The hardening audit verifies the setting and blocks startup
-on mismatch (architecture spec §14.5).
+**Mitigation**: the DoH-off guarantee is an **externally verified
+precondition** on the target-browser profile, not an extension-API claim.
+Stable Firefox WebExtensions do not expose `network.trr.mode` (sol-review
+B4), so the extension does NOT claim to read or set it. The profile is
+verified out-of-band — `network.trr.mode = 5` (TRR off) is asserted by
+the release-cadence live-e2e test `tests/live-e2e/mullvad-browser-hardening/`
+against a test profile that models the target browser's hardened defaults
+(architecture spec §14.5 Part 1).
+As defense-in-depth, `webRequest` rules block *known* DoH endpoints; this
+is a secondary net, not the primary guarantee (a custom DoH endpoint not
+in the blocklist is caught by the profile precondition, not by the
+blocklist). The hardening gate blocks non-Direct routing until the profile
+is verified (FR-004).
 
-**Residual risk**: a custom DoH endpoint not in the blocklist could be
-configured by another extension or by the user; the audit detects
-foreign extensions but cannot enumerate every possible DoH endpoint.
+**Residual risk**: a custom DoH endpoint configured by another extension
+or by the user after the live-e2e verification is NOT caught at PR
+cadence — only at the next release-cadence live-e2e run or by a fresh
+`peerConnectionEnabled`-style runtime gate (which does not exist for DoH
+because the API is unavailable). This residue is accepted and documented
+here; it is the cost of Firefox not exposing the pref to extensions.
+Promoting it to a gated property requires a browser-in-CI, which is out
+of scope for v1.
 
-**Reference**: Constitution Principle III.
+**Reference**: Constitution Principle III bullet 3 (as amended by T091).
 
 ### 5.5 QUIC / HTTP/3 fallback
 
@@ -782,15 +854,25 @@ foreign extensions but cannot enumerate every possible DoH endpoint.
 configurations in some browsers. A browser that quietly upgrades to h3
 for a destination would leak the connection outside the proxy.
 
-**Mitigation**: the extension sets `network.http.http3.enable = false`
-and `network.http.http3.enable_kdtp = false` (Firefox / Mullvad Browser
-prefs) and audits this on startup. All routed traffic uses TCP and is
-captured by the SOCKS5/HTTP-CONNECT listeners.
+**Mitigation**: like DoH (§5.4), the HTTP/3-off guarantee is an
+**externally verified precondition** on the target-browser profile, not an
+extension-API claim. Stable Firefox WebExtensions do not expose
+`network.http.http3.enable` (sol-review B4), so the extension does NOT
+claim to read or set it. The profile is verified out-of-band —
+`network.http.http3.enable = false` is asserted by the release-cadence
+live-e2e test `tests/live-e2e/mullvad-browser-hardening/` against a test
+profile that models the target browser's hardened defaults (architecture
+spec §14.5 Part 1). With HTTP/3 off, all routed traffic uses TCP and is
+captured by the SOCKS5/HTTP-CONNECT listeners. (Other HTTP/3-related
+Firefox prefs such as `network.http.http3.enable_qlog` are not asserted by
+the test; if a future release needs them, it adds a grep then.)
 
 **Residual risk**: future browsers may add new transports (e.g., a
-WebTransport-over-QUIC variant); Stargate's hardening audit must be
-updated to cover them. This is a maintenance burden, not a one-time
-mitigation.
+WebTransport-over-QUIC variant) that the externally verified profile does
+not yet cover; Stargate's live-e2e hardening test must be updated to cover
+them at the next release-cadence run. This is a maintenance burden, not a
+one-time mitigation, and — like DoH — a post-verification profile change
+is not caught at PR cadence (no browser-in-CI in v1).
 
 **Reference**: Constitution Principle III.
 
@@ -862,14 +944,44 @@ network visibility for its route (§2.6).
   config volume.
 - **Per-sidecar Docker volumes**: cross-sidecar disk visibility is
   prevented by per-volume mounts.
+- **Network segmentation — Tor is the sole egress TCB** (T094b): the
+  local stack is split into three Compose networks so only Tor attaches
+  to an egress-capable network (`stargate-egress`); the data plane and
+  control plane sit on `internal: true` networks (`stargate-internal`,
+  `stargate-cp-tor`) with no external connectivity, and the two
+  application planes share no network with each other. Every service
+  additionally runs `read_only: true` with `cap_drop: [ALL]`,
+  `no-new-privileges`, and explicit memory/PID limits. A compromised
+  application plane therefore has no direct route to the public network,
+  the Docker API, or the other plane's surfaces — Tor is the only path
+  out, and it is the anonymity network's own first hop. Gated statically
+  by `tests/contract/compose/local_compose_test.sh` (M13) and at runtime
+  by `tests/contract/compose/network_hardening_test.go`.
 
 **Residual risk**: a backdoored sidecar that passes contract tests can
 still leak data through its anonymity-network channel. Docker isolation
 is not a sandbox in the security sense; a sufficiently malicious image
-with kernel-level exploit can break out. We accept this risk and rely on
-upstream maintainer trust plus reproducibility checks where the upstream
-publishes them. See `SECURITY-DECISIONS.md` (once authored) for the
-per-image trust rationale required by architecture spec §7.
+with kernel-level exploit can break out — the network split above does
+not change that (it constrains a compromised *application* plane, not a
+compromised *kernel*). A second, narrower residue: `tor` binds both
+`SocksPort` and `ControlPort` on `0.0.0.0` and is multi-homed across the
+three networks, so a compromised application plane can additionally
+TCP-reach Tor's *other* port — CP→`tor:9050` (the unauthenticated SOCKS
+surface, a Tor-transiting exfil channel that bypasses the data plane's
+routing authority and per-first-party stream isolation) and DP→`tor:9051`
+(inert without the auth cookie, which is volume-isolated to `tor` on
+`stargate-tor-state`). This is wider than the intended
+`DP→{tor:9050}; CP→{tor:9051}` matrix but does **not** breach "Tor is the
+sole egress TCB" (the exfil still transits Tor; there is no clearnet leak
+— `internal:true` removes the default route and Docker's embedded DNS
+returns SERVFAIL for external names on those nets, blocking DNS-tunnel
+side-channels). Closing the cross-plane tor-port residue requires
+per-interface port binds, a torrc byte-contract change owned by T087 and
+deferred; it is accepted v1 residue and pinned as expected-reachable in
+`tests/contract/compose/network_hardening_test.go`. We accept this risk
+and rely on upstream maintainer trust plus reproducibility checks where
+the upstream publishes them. See `SECURITY-DECISIONS.md` (once authored)
+for the per-image trust rationale required by architecture spec §7.
 
 ### 5.9 Update channel compromise
 
@@ -884,6 +996,10 @@ a malicious version of Stargate or a sidecar to all users.
   dashboard; no background auto-update.
 - Releases are reproducibly built (Principle VI); auditors can verify
   the published artefacts match the source.
+- The Tor sidecar's Debian build inputs are pinned to an immutable
+  `snapshot.debian.org` run with explicit `=version` pins (T099), so a
+  compromised mirror cannot drift the resolved package set between builds;
+  the trust + rotation procedure is in `SECURITY-DECISIONS.md`.
 - Release artefacts are signed (architecture spec §12.5 — signing tool
   NEEDS CLARIFICATION).
 
@@ -966,6 +1082,106 @@ cover-traffic schemes are network-level properties of mixnets (Nym), not
 endpoint hacks. The mitigation against timing-correlation is the
 mixnet's own cover, not Stargate's. We state this here to pre-empt
 "Stargate should add cover traffic" feature requests.
+
+### 5.13 Inter-plane channel authentication and certificate validity
+
+**Concern**: a process that successfully `connect(2)`s to one of the
+inter-plane UDS sockets (`/run/stargate/control.sock` or
+`/run/stargate/dp.sock`) but is NOT the legitimate peer plane could inject
+`ReloadTokens` generations, consume `WatchEvents` streams, or query
+`GetStatus` counters if the mode/group dial gate were the only protection.
+
+**Mitigations** (Constitution Principle II; arch §5.4;
+`specs/001-tor-route/contracts/wire-auth.md`):
+
+- **Mutual Ed25519 TLS-over-UDS** with self-signed certs derived in-memory
+  at plane startup from the on-disk `*.priv` keypairs. Private keys are
+  `0600`, owner-read-only; public keys are `0644`, shared via the
+  `stargate-ipc` GID.
+- **Peer public-key pinning** (not CA-chain, not hostname): the verifier
+  byte-equal-compares the peer cert's extracted public key against the
+  installed `/etc/stargate/keys/<peer>.pub`. A wrong-key peer is rejected
+  at the TLS handshake (`alert: unknown ca`) before any RPC dispatches.
+- **Schema-version interceptor**: every RPC carries `x-stargate-proto-major`
+  / `-minor` / `-capabilities` gRPC metadata; a server interceptor rejects
+  an unknown major with `FailedPrecondition` before invoking application
+  behaviour (arch §5.5 row 4).
+- **Mode/group dial gate** (`0660` + `stargate-ipc` GID) is the outer
+  defence that keeps the dial surface small in the local profile; the
+  mutual-pin is the load-bearing auth gate.
+
+**Residual risk (operator-visible, T095)**:
+
+- The in-memory cert validity window is `NotBefore = now − 5 min`,
+  `NotAfter = now + 30 days`. A plane that does not restart for >30 days
+  serves an expired cert; the next peer dial fails. An operator who
+  restarts the stack on a <30-day cadence never sees this. There is no
+  in-process expiry warning in v1; the cadence is operator-managed. See
+  `SECURITY-DECISIONS.md` (2026-07-12, T095) for the acceptance rationale.
+- **No automated key rotation in v1.** Replacing the on-disk
+  `cp.priv`/`cp.pub` / `dp.priv`/`dp.pub` keypairs is operator-manual
+  (write-tmp + rename + plane restart, ordered per `wire-auth.md` §6.2).
+  Automated rotation is a future feature with its own threat-model row.
+- **A same-host attacker who reads a plane's process memory obtains the
+  long-lived private key** (loaded from `*.priv` for handshake signing)
+  **and can impersonate the plane indefinitely until the operator manually
+  rotates the on-disk keypair.** The 30-day cert-validity window does NOT
+  bound this exposure: the attacker possesses the key, not just a derived
+  cert, and can mint fresh, currently-valid certs at will. A monthly
+  plane restart does NOT help — the same key is re-loaded on restart.
+  This is strictly worse than the transient-cert property and is the
+  binding residue; the operator's only incident-response lever is keypair
+  rotation. In the local profile this is no worse than the §3.1 assumption
+  (same-host code execution is game-over); under a future LAN/VPS profile
+  that introduces TCP transport for the inter-plane channel, this residue
+  MUST be re-reviewed.
+
+### 5.14 Bearer-token verifier key material — install-time pepper (T092)
+
+The bearer-token verifier is `HMAC-SHA-256(pepper, token)` over a 32-byte
+install-time pepper shared by the control plane and data plane
+(`specs/001-tor-route/data-model.md` §1.5; SECURITY-DECISIONS.md
+§"Bearer-token verifier: HMAC-SHA-256 + install-time pepper (T092)"). The
+pepper is a new long-lived secret introduced by T092; its residue is
+recorded here so it is not silently widened later.
+
+**Protects.** Per-request authentication with O(1) memory regardless of
+token-list size or concurrent flood size — retiring the Argon2id
+allocation-DoS path (sol-review B5). A `dp-snapshot.json` leak alone does
+NOT let an attacker verify guesses: the snapshot carries verifiers only,
+never the pepper, and the pepper never crosses the inter-plane RPC or any
+log.
+
+**Does NOT protect against (residue).**
+
+- **Pepper compromise + snapshot leak → offline candidate testing at HMAC
+  speed.** An attacker who obtains BOTH `/etc/stargate/keys/pepper.key` AND a
+  `dp-snapshot.json` can test candidate tokens offline as fast as they can
+  compute HMAC-SHA-256. Mitigation: the bearer token is a uniformly random
+  128-bit value, so batch brute-force of the 2^128 space is infeasible even
+  at billions of HMAC/sec — the slow-KDF defence Argon2id provided was
+  unnecessary for a random token (which is why it was retired). The
+  threat-model entry names the residue honestly rather than relying on
+  verifier speed for security.
+- **Pepper is long-lived.** Like the inter-plane ed25519 keypairs (§5.13),
+  the pepper is generated once at `init` and rotated only on explicit
+  operator action (re-pepper → re-HMAC every configured token → bump
+  generation). A same-host attacker who reads process memory obtains the
+  pepper; in the local profile this is no worse than the §3.1 / §2.8
+  assumption (same-host code execution is game-over).
+- **Pepper loss ≠ safety.** If the operator loses the pepper (no backup of
+  `stargate-keys`), every persisted verifier becomes uncomputable and all
+  stored tokens effectively revoke — the operator must re-issue tokens.
+  Documented in `quickstart.md`; the pepper MUST be in any operator backup.
+- **Constant-time comparison** over the verifier set is functionally tested
+  (T093); adversarial confirmation of the timing side-channel bound is a
+  `stargate-redteam` residue (functional tests do not fully capture timing).
+
+**Ownership / export / wipe.** `/etc/stargate/keys/pepper.key`, mode `0640`,
+owned by the reading plane's UID, group `stargate-ipc` (GID 5100) so both
+planes read it. `scripts/stargate export` includes it (warns the bundle
+carries a secret); `wipe` removes it alongside keys and state. T088 wires
+provisioning, export, wipe, and rotation.
 
 ---
 

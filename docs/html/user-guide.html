@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stargate — User guide</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="inner">
+    <span class="brand"><a href="index.html">⭐ Stargate</a></span>
+    <ul>
+      <li><a href="user-guide.html" class="current">User guide</a></li>
+      <li><a href="advanced-guide.html">Advanced</a></li>
+      <li><a href="admin.html">Admin</a></li>
+      <li><a href="tech.html">Technical</a></li>
+      <li><a href="developer.html">Developer</a></li>
+      <li><a href="diagrams.html">Diagrams</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container">
+
+<h1>User guide</h1>
+
+<div class="banner wip">
+  <p><strong>Status: not yet shipped.</strong> The Stargate proxy is still
+  in development (v1 vertical slice: <code>specs/001-tor-route/</code>).
+  There is no installable artefact yet. This page is the placeholder for the
+  stupid-proof end-user guide that will land alongside the v1 release. What
+  follows is the <em>outline</em> of what the page will cover, plus the
+  developer setup that works today if you want to run from source.</p>
+</div>
+
+<h2>What this page WILL cover (when v1 ships)</h2>
+
+<ol>
+  <li><strong>Install</strong> — one-line Docker Compose bring-up against
+  the digest-pinned release images. No manual <code>docker pull</code>;
+  Compose verifies the digests against <code>compose/env/local.env.example</code>.</li>
+  <li><strong>First-time setup</strong> — <code>scripts/stargate init
+  --profile local</code> generates the ed25519 plane keys, runs the
+  bounded healthcheck wait, and prints a status table with the
+  enrollment code you paste into the browser extension.</li>
+  <li><strong>Browser extension install</strong> — load the
+  <code>stargate-extension.zip</code> into Mullvad Browser (or
+  LibreWolf) as a temporary extension; enter the enrollment code; verify
+  the per-tab route indicator lights up.</li>
+  <li><strong>Start / stop / restart</strong> —
+    <ul>
+      <li><code>scripts/stargate start</code> — bring up the stack.</li>
+      <li><code>scripts/stargate stop</code> — graceful drain, then stop.</li>
+      <li><code>scripts/stargate restart</code> — stop + start, preserving
+      state (token generation, audit log).</li>
+    </ul>
+  </li>
+  <li><strong>Picking a route</strong> — clicking the extension icon per
+  tab, choosing Tor / I2P / Nym / Direct; the indicator confirms the
+  active route.</li>
+  <li><strong>Troubleshooting</strong> — the four exit codes from
+  <code>scripts/stargate</code> (10/20/30/40/50), what each means, what
+  to do.</li>
+</ol>
+
+<h2>What works today (developer setup)</h2>
+
+<p>If you want to look at the code or run partial pieces before v1 ships,
+the developer path is real today:</p>
+
+<pre><code># 1. clone
+git clone https://github.com/&lt;org&gt;/stargate.git
+cd stargate
+
+# 2. data plane (Go 1.26)
+cd data-plane &amp;&amp; go mod download &amp;&amp; go build ./... &amp;&amp; cd ..
+
+# 3. control plane (JDK 25 + Quarkus 3.33 LTS)
+cd control-plane &amp;&amp; ./mvnw -B verify -DskipTests &amp;&amp; cd ..
+
+# 4. verify the tree is green
+bash scripts/verify.sh</code></pre>
+
+<p>See <code>CONTRIBUTING.md §Development environment</code> for the full
+prerequisites list (Go version, JDK distribution, Docker, Mullvad Browser)
+and <a href="developer.html">the developer guide</a> for how the
+ticket-driven workflow operates.</p>
+
+<h2>What is NOT in this guide</h2>
+
+<ul>
+  <li><strong>Threat model</strong> — see <code>THREAT-MODEL.md</code> for
+  what Stargate does and does not protect against, per route and per
+  deployment profile. This guide covers <em>how to use</em>; the threat
+  model covers <em>what it gets you</em>.</li>
+  <li><strong>Admin operations</strong> — upgrade, observability,
+  backup/restore land in <a href="admin.html">the admin guide</a>.</li>
+  <li><strong>Advanced routing rules</strong> — per-site route policies,
+  custom SOCKS5 routing, etc. land in
+  <a href="advanced-guide.html">the advanced guide</a>.</li>
+</ul>
+
+<footer>
+  <p>Placeholder page. Last updated 2026-07-04. The install procedure
+  described above is the v1 target, not the current state. When v1 lands,
+  this banner is replaced with a verified-working procedure.</p>
+</footer>
+
+</div>
+</body>
+</html>

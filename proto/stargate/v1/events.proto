@@ -1,0 +1,61 @@
+// Copyright 2026 The Stargate Authors
+// SPDX-License-Identifier: Apache-2.0
+
+// Event stream hosted by the control plane on /run/stargate/control.sock.
+//
+// The data plane dials this socket and consumes a long-lived
+// server-streamed sequence of SidecarEvent values that are advisory
+// status/audit hints (Constitution Principle II; sol-review B3; T090).
+// A SidecarEvent MUST NOT gate admission, listening, authenticating,
+// dialing, or forwarding — the upstream dial result is the sole ground
+// truth. See specs/001-tor-route/data-model.md §2 for the rationale and
+// specs/001-tor-route/contracts/control-grpc.md §"WatchEvents" for the
+// per-RPC contract this proto mirrors.
+//
+// SidecarEvent.detail is intentionally `string` rather than `enum`:
+// the closed-vocabulary check is enforced at the test/consumer layer
+// (the contract test rejects any detail outside the documented set),
+// so the schema does not need a major-version bump every time a new
+// sidecar adds a vocabulary token — e.g., `config_render` is already
+// reserved in the closed set but introducing a real emitter for it
+// (in the bridges feature) is a behavior change, not a proto change.
+
+syntax = "proto3";
+
+package stargate.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb";
+
+service Events {
+  // CP -> DP (server-streamed): emit sidecar lifecycle events. The
+  // stream is long-lived; on disconnect the DP reconnects with
+  // exponential backoff (initial 1s, cap 30s, jitter ±20%) per
+  // contracts/control-grpc.md §"WatchEvents". During disconnect the
+  // DP keeps routing — SidecarEvents are advisory (Constitution
+  // Principle II; data-model.md §2; sol-review B3) and MUST NOT gate
+  // admission. The upstream dial is the ground truth on every
+  // reconnect, just as it is on cold start.
+  rpc WatchEvents(WatchEventsRequest) returns (stream SidecarEvent);
+}
+
+message WatchEventsRequest {}
+
+message SidecarEvent {
+  google.protobuf.Timestamp ts = 1;
+  string sidecar = 2;                 // "tor" for this feature
+  EventKind kind = 3;
+  string detail = 4;                  // fixed-vocabulary token
+}
+
+enum EventKind {
+  EVENT_KIND_UNSPECIFIED = 0;
+  EVENT_KIND_STARTED = 1;
+  EVENT_KIND_STOPPED = 2;
+  EVENT_KIND_HEALTHY = 3;
+  EVENT_KIND_UNHEALTHY = 4;
+  EVENT_KIND_RESTARTED = 5;
+  EVENT_KIND_CONFIG_RELOADED = 6;
+  EVENT_KIND_CRASHED = 7;
+}

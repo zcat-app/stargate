@@ -1,1 +1,51 @@
+# JetBrains
 .idea/
+
+# Go (data-plane/)
+*.exe
+*.test
+*.out
+vendor/
+data-plane/bin/
+
+# Java / Maven (control-plane/)
+target/
+*.class
+*.jar
+
+# Per-ticket run state (round counters, diff stats, captured review verdicts).
+# Lives under target/ which is already ignored; this comment is the contract.
+# scripts/run-task.sh reads/writes target/runs/<id>*.{round,diffstat,verdict}.
+
+# Session handoffs and per-ticket outlines — local working notes, never committed.
+# scripts/handoff.sh writes here; the absence from git is the point (handoffs
+# are snapshots of "now", re-verified on resume — see docs/process/workflow.md).
+specs/*/.handoffs/
+specs/.handoffs/
+
+# Browser extension build output
+extension/dist/
+
+# Universal
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+*.log
+
+# Per-deployment env overlays — examples committed, actuals are not
+compose/env/*.env
+!compose/env/*.env.example
+
+# Secrets / private key material — must NEVER be committed.
+# Stargate's ed25519 plane keys (cp.priv/dp.priv) live in a Docker volume,
+# not the repo; these patterns are a belt-and-suspenders net for any stray
+# key file an automated agent might generate. Public material (*.pub) is fine.
+*.priv
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+!*.pub

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Copyright The Stargate Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# Pre-push guard: refuse direct pushes to main.
+#
+# Why: development flows through PRs from feature branches into main — the
+# integration point is the open draft PR, not direct commits to trunk.
+# GitHub server-side branch protection isn't enforceable while the repo is a
+# free *private* one (rulesets need a paid plan or a public repo), so this
+# client-side hook is the stand-in until then. It keeps autonomous/agentic
+# pushes — the most likely source of an accidental trunk clobber — off main.
+#
+# Scope/limits: only protects pushes from a clone that ran
+# scripts/install-git-hooks.sh (which sets core.hooksPath). A runner that
+# never installed the hooks bypasses it — same caveat as the pre-commit
+# scanner. Deliberate override: `git push --no-verify`. Superseded by a
+# server-side ruleset once the repo goes public.
+
+protected_ref="refs/heads/main"
+
+# git feeds one line per ref being pushed on stdin:
+#   <local-ref> <local-sha> <remote-ref> <remote-sha>
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [ "$remote_ref" = "$protected_ref" ]; then
+    printf '\033[31m✗ Direct push to main is blocked.\033[0m\n' >&2
+    printf '  Open a PR from a feature branch instead.\n' >&2
+    printf '  (Deliberate override: git push --no-verify)\n' >&2
+    exit 1
+  fi
+done
+
+exit 0

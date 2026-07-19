@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stargate — Technical reference</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="top">
+  <div class="inner">
+    <span class="brand"><a href="index.html">⭐ Stargate</a></span>
+    <ul>
+      <li><a href="user-guide.html">User guide</a></li>
+      <li><a href="advanced-guide.html">Advanced</a></li>
+      <li><a href="admin.html">Admin</a></li>
+      <li><a href="tech.html" class="current">Technical</a></li>
+      <li><a href="developer.html">Developer</a></li>
+      <li><a href="diagrams.html">Diagrams</a></li>
+    </ul>
+  </div>
+</nav>
+
+<div class="container">
+
+<h1>Technical reference</h1>
+
+<div class="banner real">
+  <p><strong>Status: substantial.</strong> The architecture spec
+  (<code>specs/000-architecture/spec.md</code>) and the Constitution
+  (<code>.specify/memory/constitution.md</code>) are real and binding.
+  This page summarises; those files are the contract.</p>
+</div>
+
+<h2>Architecture at a glance</h2>
+
+<p>Two processes, distinct lifecycles, gRPC over Unix socket between
+them. See the <a href="diagrams.html#architecture">two-plane architecture
+diagram</a> for the visual layout.</p>
+
+<table>
+  <thead><tr><th>Plane</th><th>Language</th><th>Responsibility</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Data plane</strong></td><td>Go (<code>data-plane/</code>)</td>
+        <td>Network transport, sidecar coordination, per-port routing. The "dumb router". Privacy-critical hot path.</td></tr>
+    <tr><td><strong>Control plane</strong></td><td>Quarkus 3.33 LTS on JDK 25 LTS (<code>control-plane/</code>)</td>
+        <td>Admin UI, settings, sidecar lifecycle commands, audit. SQLite for state.</td></tr>
+    <tr><td><strong>Extension</strong></td><td>JS/TS (<code>extension/</code>)</td>
+        <td>Per-request route selection. First-class target: Mullvad Browser.</td></tr>
+  </tbody>
+</table>
+
+<h2>Constitution Principle I — the dumb router</h2>
+
+<p>The data plane is the privacy-critical hot path. It is <strong>actively
+forbidden</strong> from:</p>
+
+<ul>
+  <li>parsing request/response payloads</li>
+  <li>terminating TLS</li>
+  <li>resolving DNS names locally</li>
+  <li>inspecting headers</li>
+  <li>emitting per-request log lines</li>
+  <li>generating cover traffic</li>
+  <li>making outbound connections on its own behalf (only the user's
+  routed request reaches the network)</li>
+</ul>
+
+<p>Routing decisions are made by the browser extension; the data plane
+forwards bytes for the port it received them on. This is enforced in code
+(contract tests under <code>tests/contract/</code>) and in review (the
+<a href="developer.html">stargate-codereview reviewer</a> fails any
+diff that adds any of the above to the data plane).</p>
+
+<p>The data plane <strong>must keep routing if the control plane is
+unreachable</strong> (Principle II). The cold-start cache
+(<code>dp-snapshot.json</code>, data-model §1.4) holds the last-known-good
+token generation; the data plane bootstraps from it and serves requests
+even with the CP down. The control plane re-pushes a fresh generation on
+reconnect.</p>
+
+<h2>Inter-plane contract</h2>
+
+<p>Two Unix domain sockets, one per direction:</p>
+
+<table>
+  <thead><tr><th>Socket</th><th>Hosted by</th><th>Owner</th><th>Mode</th></tr></thead>
+  <tbody>
+    <tr><td><code>/run/stargate/control.sock</code></td>
+        <td>Control plane (CP is the server)</td>
+        <td><code>stargate-cp:stargate-ipc</code></td>
+        <td><code>0660</code></td></tr>
+    <tr><td><code>/run/stargate/dp.sock</code></td>
+        <td>Data plane (DP is the server)</td>
+        <td><code>stargate-dp:stargate-ipc</code></td>
+        <td><code>0660</code></td></tr>
+  </tbody>
+</table>
+
+<p>The shared supplementary group <code>stargate-ipc</code> (GID 5100)
+owns both sockets; both planes are members. Mode <code>0660</code> lets
+each plane <code>connect(2)</code> its dial-direction socket while
+keeping random unprivileged same-host processes outside the dial surface.
+Distinct hosting UIDs (<code>stargate-cp</code> 5101,
+<code>stargate-dp</code> 5102) are defense-in-depth: a compromise of one
+plane does not yield filesystem-write access to the other plane's state
+volume.</p>
+
+<p>The gRPC schema is at <code>proto/stargate/v1/{control,events}.proto</code>.
+Three RPCs in v1:</p>
+
+<ul>
+  <li><code>ReloadTokens</code> (CP → DP) — push a new token generation;
+  DP atomic-swaps and persists a fresh snapshot.</li>
+  <li><code>WatchEvents</code> (CP → DP, server-streaming) — sidecar
+  lifecycle events (<code>STARTED</code>, <code>HEALTHY</code>,
+  <code>UNHEALTHY</code>, <code>STOPPED</code>, <code>CRASHED</code>,
+  <code>RESTARTED</code>).</li>
+  <li><code>GetStatus</code> (test-only in v1) — aggregate counters.
+  Production caller deferred to the admin-UI feature; a grep regression
+  test (T022) blocks any production code from wiring it before that
+  feature lands.</li>
+</ul>
+
+<h2>Sidecar model</h2>
+
+<p>Each route has a sidecar: Tor, I2P, Nym, Direct (no sidecar). The
+sidecars run as compose services alongside the data plane; the data plane
+reaches each by its compose-internal DNS name
+(<code>tor:9050</code>, <code>i2pd:&lt;port&gt;</code>,
+<code>nym:&lt;port&gt;</code>).</p>
+
+<p>Every sidecar image is pinned by <code>sha256</code> digest per
+Constitution Principle IV. The Tor sidecar's apt-repo signing key is
+verified at build time against <code>sidecars/tor/apt-key.fingerprint</code>
+(ticket T014, FR-015). The control plane observes Tor lifecycle via Tor's
+cookie-authenticated ControlPort (tor:9051); no auxiliary container mounts
+<code>/var/run/docker.sock</code> (the docker-socket-proxy that previously
+did was removed by T094a — audit-trail at <code>SECURITY-DECISIONS.md</code>).</p>
+
+<h2>Privacy-critical surfaces (where reviewers focus)</h2>
+
+<p>The Constitution calls out five categories of code where tests must be
+written <em>first</em> (Principle VII, no AI exception) and where
+<code>stargate-redteam</code> hunts at every release:</p>
+
+<table>
+  <thead><tr><th>Surface</th><th>What bites</th><th>Test gates</th></tr></thead>
+  <tbody>
+    <tr><td>DNS resolution</td>
+        <td>Local resolver leaks the destination hostname.</td>
+        <td>T034 (DNS leak), T034a (SC-003 measurement), T034f (consensus egress)</td></tr>
+    <tr><td>Routing decisions</td>
+        <td>Wrong route selected; bytes leak to unintended network.</td>
+        <td>T022 (transport invariants), T025a (log allowlist)</td></tr>
+    <tr><td>Header handling</td>
+        <td>HTTP CONNECT target host logged or inspected.</td>
+        <td>T025a, T027 (AUTH_REQUIRED)</td></tr>
+    <tr><td>Authentication</td>
+        <td>Token comparison short-circuits; argon2id timing leak.</td>
+        <td>T025 (slot-invariance), T025c (counter side-channel)</td></tr>
+    <tr><td>Sidecar contracts</td>
+        <td>Rendered <code>torrc</code> drifts; sidecar exposes ports.</td>
+        <td>T019b (Tor port exposure), T019c (proxy lockdown),
+        T029–T032 (<code>torrc</code> byte-for-byte)</td></tr>
+  </tbody>
+</table>
+
+<h2>Technology choices</h2>
+
+<dl>
+  <dt>Go 1.26 (data plane)</dt>
+  <dd>Pinned via the <code>toolchain</code> directive in
+  <code>data-plane/go.mod</code>. Static analysis: <code>go vet</code>,
+  <code>staticcheck</code>, <code>gosec</code> — all wired into
+  <code>scripts/verify.sh</code>.</dd>
+
+  <dt>Quarkus 3.33 LTS on JDK 25 LTS (control plane)</dt>
+  <dd>Pinned via <code>&lt;maven.compiler.release&gt;25</code> and the
+  Quarkus platform BOM. LTS-to-LTS upgrades follow the same documented
+  process as sidecar image bumps (Constitution Principle IV). Native-image
+  is <em>not</em> in scope for v1 — the JVM build is what the v1 vertical
+  slice exercises; native lands with the first release tag.</dd>
+
+  <dt>SQLite (control-plane state)</dt>
+  <dd>File-based; no separate database process. Migrations via Flyway
+  (ticket T012). The audit log is row-level append-only.</dd>
+
+  <dt>JSpecify + Error Prone + NullAway (control plane, post-T081)</dt>
+  <dd>Compile-time nullness enforcement. <code>app.zcat.stargate</code>
+  packages are <code>@NonNull</code> by default; genuinely-nullable edge
+  types declare <code>@Nullable</code>. The build fails on a missing or
+  incorrect nullability contract. This is the machine-checked complement
+  to the "validate at edges, trust inside" doctrine (see ticket T081).</dd>
+
+  <dt>Docker Compose (deployment)</dt>
+  <dd>Three profiles: <code>local</code>, <code>lan</code>,
+  <code>vps</code>. Every external image is digest-pinned. See
+  <a href="advanced-guide.html">the advanced guide</a> for the per-profile
+  topologies.</dd>
+</dl>
+
+<h2>Build reproducibility</h2>
+
+<p>The data-plane binary is built byte-reproducibly:
+<code>-trimpath -buildvcs=false -ldflags="-buildid=" CGO_ENABLED=0</code>
+(ticket T004). The release-cadence reproducibility tests
+(<code>tests/reproducibility/</code>) build the binary, the JAR, and the
+extension zip twice in clean containers and <code>cmp</code> the outputs.
+A non-reproducible release tag fails the release.</p>
+
+<h2>Source-of-truth documents</h2>
+
+<p>This page summarises. When it conflicts with one of these, that file wins:</p>
+
+<ul>
+  <li><code>.specify/memory/constitution.md</code> — the 8 binding principles.</li>
+  <li><code>specs/000-architecture/spec.md</code> — the full architecture spec.</li>
+  <li><code>THREAT-MODEL.md</code> — per-route and per-profile threat models.</li>
+  <li><code>specs/001-tor-route/contracts/</code> — byte-level contracts
+  (<code>control-grpc.md</code>, <code>socks5-auth.md</code>,
+  <code>error-template.md</code>, <code>torrc.md</code>).</li>
+  <li><code>specs/001-tor-route/data-model.md</code> — schema, token
+  shape, snapshot format.</li>
+  <li><code>specs/001-tor-route/research.md</code> — the decision log
+  (Go version pin, Quarkus LTS, etc.).</li>
+</ul>
+
+<footer>
+  <p>Substantive — architecture spec is real and binding. Last updated
+  2026-07-04. Cross-check anything load-bearing against the source
+  documents above.</p>
+</footer>
+
+</div>
+</body>
+</html>

@@ -6,7 +6,7 @@
 
 **Created**: 2026-05-17
 
-**Derives from**: `.specify/memory/constitution.md` v1.1.0
+**Derives from**: `.specify/memory/constitution.md` v1.0.0 (with the pre-release T091 amendment to Principle III bullet 3)
 
 **Supersedes**: nothing (this is the foundational system-shape spec)
 
@@ -210,13 +210,22 @@ proxy and sidecar containers; none are mapped to the host.
 
 ### 4.3 Non-TCP endpoints
 
-- **Inter-plane gRPC socket**: `/run/stargate/control.sock`, mounted into
-  both the data-plane and control-plane containers via a named volume
-  (`stargate-ipc`). Mode `0600`, owner = `stargate` user (UID 10001, fixed
-  for reproducibility).
+- **Inter-plane gRPC sockets**: two unix-domain sockets in a named volume
+  (`stargate-ipc`), one per dial direction:
+  - `/run/stargate/control.sock` — listened on by CP, dialled by DP
+    (i.e. CP-hosted).
+  - `/run/stargate/dp.sock` — listened on by DP, dialled by CP
+    (i.e. DP-hosted).
+  Both files: mode `0660`, owned by per-plane UIDs sharing the
+  `stargate-ipc` GID. Numeric IDs fixed for reproducibility:
+  `stargate-cp` UID 5101, `stargate-dp` UID 5102, `stargate-ipc` GID 5100.
+  Per-feature byte-level invariants (which plane invokes which RPC, who
+  may dial, etc.) live in each feature's `contracts/control-grpc.md`.
 - **Inter-plane keys**: `/etc/stargate/keys/` mounted from a named volume
-  (`stargate-keys`), readable only by `stargate`. Generated at first
-  `stargate init`.
+  (`stargate-keys`). Generated at first `stargate init`. Each plane owns
+  its own private key (`cp.priv`, `dp.priv`) mode `0600`; both public
+  keys (`cp.pub`, `dp.pub`) mode `0644` so the mutual ed25519 handshake
+  can read the peer's.
 
 ### 4.4 Privacy notes on port topology
 
@@ -262,9 +271,14 @@ service Control {
 - `EnableProtocolRequest { Route route; }`  
   `ProtocolStatus { Route route; bool listening; uint32 bound_port; HealthState health; }`
 - `RestartSidecarRequest { string sidecar_name; bool drain_existing_streams; }`
-- `ReloadTokensRequest { repeated TokenHash tokens; uint64 generation; }`  
+- `ReloadTokensRequest { repeated TokenVerifier tokens; uint64 generation; }`  
   The data plane stores only the *current* generation; older generations
-  are dropped (Principle III — no per-user history).
+  are dropped (Principle III — no per-user history). **(T092 / sol-review
+  B5+M1)** the verifier is `HMAC-SHA-256(pepper, token)` (no per-token
+  salt); `ReloadTokensResponse` carries `current_generation` so a stale CP
+  reconciles and retries. The detailed contract lives in
+  `specs/001-tor-route/contracts/control-grpc.md` §"ReloadTokens" and the
+  pepper/verifier lifecycle in `specs/001-tor-route/data-model.md` §1.
 - `StatusResponse { repeated ProtocolStatus per_protocol; AggregateCounters counters; }`  
   `AggregateCounters` contains only `route × hour-bucket` counts — never
   per-destination or per-token (Principle III, ≥1 h resolution).
@@ -283,6 +297,16 @@ constitution-aligned increments; breaking changes require bumping to
 Contract** section). The data plane refuses to handshake if the control
 plane reports a higher major version than it understands.
 
+Version is carried at runtime as authenticated gRPC metadata on **every**
+RPC, not as a one-shot handshake RPC. The metadata keys
+(`x-stargate-proto-major`, `x-stargate-proto-minor`, `x-stargate-capabilities`),
+the rejection rule (unknown-major → `FailedPrecondition` before any application
+handler runs), the v1 closed capability set, and the interceptor placement
+are binding and live in `specs/001-tor-route/contracts/wire-auth.md` §5. T038
+(CP server + client) and T045 (DP server + client) install the interceptors;
+this §5.3 paragraph is the authoritative pointer and intentionally does not
+duplicate the wire shape so a future minor cannot drift the two locations.
+
 ### 5.4 Transport and authentication
 
 - Unix-domain socket at `/run/stargate/control.sock`. Permissions enforce
@@ -290,7 +314,18 @@ plane reports a higher major version than it understands.
 - Mutual auth: each plane has an ed25519 keypair generated at first
   `stargate init`, public keys cross-installed in `/etc/stargate/keys/`.
   Handshake uses gRPC's TLS-over-UDS with self-signed certs derived from
-  these keys; either side rejects an unrecognised peer cert.
+  these keys; either side rejects a peer whose pinned public key does not
+  match (pin-on-key, not pin-on-cert — see `contracts/wire-auth.md` §3).
+- The complete wire contract — X.509 certificate derivation (when, where,
+  field values, determinism), peer public-key pinning (byte-equal against
+  `/etc/stargate/keys/<peer>.pub`, not CA-chain, not hostname), certificate
+  validity policy (`NotBefore = now − 5 min`, `NotAfter = now + 30 days`,
+  re-derived on every plane restart, never persisted), UDS authority/SAN
+  handling (URI SAN `spiffe://stargate.local/<plane>`; pin is load-bearing,
+  SAN is defence-in-depth), and key ownership — is binding and lives in
+  `specs/001-tor-route/contracts/wire-auth.md`. This §5.4 paragraph is the
+  authoritative pointer; T038/T045/T050 consume that document verbatim and
+  add no wire-shape detail of their own.
 - A handshake failure is a startup error for the control plane and a
   non-fatal degraded-mode warning for the data plane (it MUST keep
   forwarding — Principle II).
@@ -304,9 +339,19 @@ plane reports a higher major version than it understands.
 | `ReloadTokens` RPC fails midway             | Atomic swap — old generation remains until success  |
 | Schema-version mismatch (peer is newer)     | Reject handshake, log to journal, exit non-zero     |
 
-The data plane caches the last successful `StatusResponse → token list +
-route enable/disable mask` on disk at `/var/lib/stargate/dp-snapshot.json`
-so cold-start without the control plane still serves the right ports.
+The data plane caches the last successful `StatusResponse → token list`
+on disk at `/var/lib/stargate/dp-snapshot.json` so cold-start without
+the control plane still serves the right ports. The snapshot is
+**token-list-only** — no route-admission state is persisted; cold start
+unconditionally attempts the fixed upstream on every admitted request and
+relies on the upstream dial/handshake result alone to decide success or
+the privacy-safe route error (Constitution Principle II; sol-review B3).
+Sidecar `SidecarEvent`s are advisory status/audit hints and MUST NOT be a
+mandatory precondition for listening, authenticating, dialing, or
+forwarding. See `specs/001-tor-route/data-model.md` §1.4 (snapshot
+schema) and §2 (the no-admission-gate rationale) — both are the canonical
+sources; this §5.5 paragraph intentionally does not duplicate them so
+future readers do not re-introduce a control-plane-driven admission gate.
 
 ---
 
@@ -317,20 +362,33 @@ Stored in the control-plane container under
 opened in **WAL mode** (constitution Tech Stack). Hibernate Panache entities
 back each table; Flyway manages migrations (`control-plane/persistence/src/main/resources/db/migration/`).
 
+### 6.1 `enrolled_devices` — devices enrolled via the dashboard (future)
+
 ```
--- 6.1 Devices that may use the proxy.
 CREATE TABLE enrolled_devices (
   id              INTEGER PRIMARY KEY,
   name            TEXT    NOT NULL UNIQUE,
   pubkey          BLOB    NOT NULL,             -- ed25519 device key
-  token_hash      BLOB    NOT NULL,             -- argon2id of bearer token
+  token_hash      BLOB    NOT NULL,             -- HMAC-SHA-256 verifier under the pepper (T092)
   created_at      INTEGER NOT NULL,             -- unix seconds
   last_seen_hour  INTEGER,                      -- rounded to hour-bucket
   revoked_at      INTEGER                       -- nullable
 );
 -- last_seen_hour is bucketed to satisfy Principle III (≥1h log resolution).
+```
 
--- 6.2 Admin login credentials (WebAuthn + ed25519 fallback).
+> **Amended by T092 / sol-review M1.** Both `pubkey` and `token_hash`
+> remain NOT NULL: this table is reserved for the future **dashboard-
+> enrollment** feature, the only path that has a device public key. The
+> **manual `tokens.yaml` path** (v1) persists to the dedicated
+> `configured_tokens` table (§6.6) — it does NOT touch this table, so no
+> manual insert requires a nonexistent device key. The `token_hash` column
+> holds an HMAC-SHA-256 verifier under the install-time pepper (the prior
+> Argon2id comment is superseded; see data-model.md §1.5).
+
+### 6.2 `admin_credentials` — admin login credentials (WebAuthn + ed25519 fallback)
+
+```
 CREATE TABLE admin_credentials (
   id                INTEGER PRIMARY KEY,
   kind              TEXT    NOT NULL CHECK (kind IN ('webauthn','ed25519')),
@@ -341,8 +399,11 @@ CREATE TABLE admin_credentials (
   created_at        INTEGER NOT NULL,
   revoked_at        INTEGER
 );
+```
 
--- 6.3 Tor bridges (toggleable per Constitution v1 Scope).
+### 6.3 `tor_bridges` — toggleable per Constitution v1 Scope
+
+```
 CREATE TABLE tor_bridges (
   id          INTEGER PRIMARY KEY,
   bridge_line TEXT    NOT NULL UNIQUE,          -- full "Bridge ..." torrc line
@@ -350,8 +411,11 @@ CREATE TABLE tor_bridges (
   enabled     INTEGER NOT NULL DEFAULT 0,
   added_at    INTEGER NOT NULL
 );
+```
 
--- 6.4 Aggregate routing counters at hour resolution.
+### 6.4 `aggregate_counters` — routing counters at hour resolution
+
+```
 CREATE TABLE aggregate_counters (
   route        TEXT    NOT NULL CHECK (route IN ('TOR','I2P','NYM','DIRECT')),
   hour_bucket  INTEGER NOT NULL,                -- unix-hour
@@ -360,18 +424,59 @@ CREATE TABLE aggregate_counters (
   PRIMARY KEY (route, hour_bucket)
 );
 -- No destination, no token id, no sub-hour granularity (Principle III).
+```
 
--- 6.5 Append-only admin action audit.
+### 6.5 `audit_log` — append-only admin action log
+
+```
 CREATE TABLE audit_log (
   id           INTEGER PRIMARY KEY,
   ts           INTEGER NOT NULL,                -- unix seconds (admin action time, not user request time)
   actor        TEXT    NOT NULL,                -- admin credential label
-  action       TEXT    NOT NULL,                -- enum: enrolled, revoked, sidecar_restart, bridge_toggle, export, import, wipe
+  action       TEXT    NOT NULL,                -- enum (v1 baseline; per-feature extensions land via lock-step amendments — see e.g. specs/001-tor-route/data-model.md §4): enrolled, revoked, config_error, sidecar_healthy, sidecar_unhealthy, bridge_toggle, export, import, wipe
   target       TEXT,                            -- entity affected (e.g. device name)
   detail_json  TEXT                             -- fixed-schema metadata; never request data
 );
 -- Inserts only; no UPDATE/DELETE in code paths. Verified by stargate-redteam.
 ```
+
+### 6.6 `configured_tokens` — manual `tokens.yaml` token records (T092)
+
+```
+CREATE TABLE configured_tokens (
+  label          TEXT    NOT NULL PRIMARY KEY,    -- from tokens.yaml (non-empty, §1.1); NOT NULL closes SQLite's TEXT-PK NULL quirk (T100)
+  verifier       BLOB    NOT NULL,                -- 32-byte HMAC-SHA-256 tag under the pepper
+  created_at     INTEGER NOT NULL,                -- unix seconds (audit 'enrolled')
+  last_seen_hour INTEGER,                         -- hour-bucket of last auth pass (Principle III; nullable until first use)
+  revoked_at     INTEGER                          -- nullable; set when label disappears from tokens.yaml (audit 'revoked')
+);
+```
+
+> Added by T092 / sol-review M1. Manual tokens carry `(label, verifier)`
+> only — no device public key — so they cannot live in `enrolled_devices`
+> (§6.1, both `pubkey` and `token_hash` NOT NULL). This table is the
+> manual-path home; `enrolled_devices` is reserved for the future
+> dashboard-enrollment feature that actually has a device key. Full
+> contract + the rejected alternative (nullable `enrolled_devices.pubkey`)
+> in `specs/001-tor-route/data-model.md` §1.9. `verifier` is an HMAC tag
+> under the install-time pepper, NOT an Argon2id hash (§1.5).
+
+### 6.7 `token_generation` — persisted monotonic generation counter (T092)
+
+```
+CREATE TABLE token_generation (
+  generation  INTEGER PRIMARY KEY   -- singleton row; the last-assigned generation
+);
+```
+
+> Added by T092 / sol-review M1. The source of truth for the monotonic
+> `ReloadTokens` generation, so a control-plane restart proposes `last + 1`
+> instead of restarting at 1 (which would be stale the moment the data
+> plane accepted any generation ≥ 1 and would silently revoke every
+> client). Read at CP start; bumped after a successful `tokens.yaml` parse.
+> If the row is absent (CP DB wiped) the CP reconciles against the data
+> plane's reported `current_generation` rather than guessing. Full
+> semantics in `specs/001-tor-route/data-model.md` §1.8.
 
 **What is deliberately NOT in this schema** (Principle III):
 
@@ -390,7 +495,7 @@ opens a PR with a newer digest and contract tests pass.
 
 | Sidecar     | Candidate image                                  | Digest pinning                                          |
 |-------------|--------------------------------------------------|---------------------------------------------------------|
-| Tor         | **`stargate/tor`** — Stargate-built image installing `tor` from `deb.torproject.org` (Tor Project's official Debian apt repository) on a pinned Debian-slim base. Dockerfile lives in `sidecars/tor/`. Tor Project signing key pinned by fingerprint and verified at build time. Resolved by `specs/001-tor-route/` §Clarifications 2026-05-17 Q1. | `NEEDS CLARIFICATION` — pin both the Debian-slim base and the final composed image at first release tag |
+| Tor         | **`stargate/tor`** — Stargate-built image installing `tor` from `deb.torproject.org` (Tor Project's official Debian apt repository) on a pinned Debian-slim base. Dockerfile lives in `sidecars/tor/`. Tor Project signing key pinned by fingerprint (`A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89`, in `sidecars/tor/apt-key.fingerprint`) and verified at build time. Resolved by `specs/001-tor-route/` §Clarifications 2026-05-17 Q1. | **Pinned by sha256 digest per FR-015**: the Debian-slim base (`debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df`) and the final composed image are both pinned in `compose/docker-compose.local.yml` / `compose/env/local.env.example` and cross-checked by `tests/contract/compose/` (T015) and `tests/contract/security-decisions/tor_entry_test.sh` (T017). The Debian build inputs (every `apt-get install` package incl. `tor`'s transitive closure) are pinned to an immutable `snapshot.debian.org` run with explicit `=version` pins and retained sha256 hashes (T099), cross-checked by `tests/contract/security-decisions/tor_build_inputs_test.sh` and verified stable across cold rebuilds by `tests/reproducibility/tor_sidecar_manifest_test.sh`. The trust rationale and rotation procedure are in `SECURITY-DECISIONS.md` (T017, T099). |
 | i2pd        | `purplei2p/i2pd` (upstream maintainer)           | `NEEDS CLARIFICATION` — pin at first release tag        |
 | Nym client  | `NEEDS CLARIFICATION: Nym's official Docker distribution status is not resolved in this spec; either pin an upstream image if maintained or build from a pinned `nymtech/nym` source tree.` | `NEEDS CLARIFICATION` |
 | WireGuard   | `linuxserver/wireguard`                          | `NEEDS CLARIFICATION` — pin at first release tag        |
@@ -401,11 +506,10 @@ flags that the maintainer must resolve, with an `SECURITY-DECISIONS.md`
 entry per sidecar covering: who maintains the image, how its provenance is
 verified, and what the contract test suite asserts about it.
 
-**Outstanding follow-up for the Tor row**: the trust-rationale narrative
-required by Principle IV must land in `SECURITY-DECISIONS.md` once that
-file is authored (constitution Sync Impact Report lists it as TODO).
-Until then, the rationale lives inline above (Tor Project as upstream
-package maintainer; their signing infrastructure as the trust root).
+**Trust rationale**: recorded in `SECURITY-DECISIONS.md` (T017 Tor
+entry — apt-key fingerprint, digest pins, transitive-dependency
+closure, residual risk). The inline narrative above is the historical
+pre-entry framing; the entry is the authoritative source.
 
 ---
 
@@ -477,6 +581,12 @@ destructive change.
      prompt for WireGuard peer configuration before any container is started.
 3. **Key generation**
    - Generate inter-plane ed25519 keypairs (data plane + control plane).
+   - Generate the 32-byte bearer-token pepper (`openssl rand -bytes 32`)
+     shared by CP and DP for HMAC-SHA-256 verifier computation (T092;
+     `specs/001-tor-route/data-model.md` §1.7). Written to
+     `/etc/stargate/keys/pepper.key` in the `stargate-keys` volume, mode `0640`,
+     group `stargate-ipc`, so both planes can read it. Never regenerated
+     unless the operator explicitly rotates.
    - Generate WebAuthn relying-party id and a one-time admin enrollment
      code (printed once, never stored).
    - Write into `stargate-keys` volume with `0600` perms.
@@ -539,14 +649,16 @@ an error-channel side channel.
 
 ### 10.1 Error codes (proxy-internal, also emitted as response header)
 
-| Code              | Meaning                                                    | HTTP status |
-|-------------------|------------------------------------------------------------|-------------|
-| `ROUTE_DISABLED`  | The port's route is administratively disabled              | 503         |
-| `ROUTE_DOWN`      | Sidecar is unreachable or unhealthy                        | 502         |
-| `ROUTE_TIMEOUT`   | Upstream did not respond within the configured timeout     | 504         |
-| `ROUTE_REFUSED`   | Sidecar accepted the SOCKS handshake but refused the target| 502         |
-| `AUTH_REQUIRED`   | Bearer token missing or invalid (introduced by `specs/001-tor-route/` FR-006) | 407 (CONNECT framing) / SOCKS5 auth-fail equivalent |
-| `BIND_REFUSED`    | Bind-safety check would publish on a non-tunnel interface  | 500 (only at start-up; never per-request) |
+| Code              | Meaning                                                    | HTTP status | SOCKS5 reply |
+|-------------------|------------------------------------------------------------|-------------|--------------|
+| `ROUTE_DISABLED`  | The port's route is administratively disabled              | 503         | REP `0x03` (Network unreachable; reuses `ROUTE_DOWN`'s reply path) |
+| `ROUTE_DOWN`      | Upstream sidecar unreachable (no TCP connection)            | 502         | REP `0x03` (Network unreachable) |
+| `ROUTE_TIMEOUT`   | Upstream did not respond within the configured timeout     | 504         | REP `0x06` (TTL expired) |
+| `ROUTE_REFUSED`   | Sidecar accepted the SOCKS handshake but refused the target| 502         | REP `0x04` (Host unreachable) |
+| `AUTH_REQUIRED`   | Bearer token missing or invalid (introduced by `specs/001-tor-route/` FR-006) | 407 (CONNECT framing) | sub-negotiation `0x01 0xFF` (RFC 1929 §2; not RFC 1928 §6) |
+| `BIND_REFUSED`    | Bind-safety check would publish on a non-tunnel interface  | 500 (only at start-up; never per-request) | n/a (start-up only) |
+
+Authoritative source for the post-auth `REP`-byte rows is `specs/001-tor-route/contracts/socks5-auth.md §"SOCKS5 request-phase failures (post-auth)"`; for `AUTH_REQUIRED`'s sub-negotiation form, `specs/001-tor-route/research.md §9`.
 
 ### 10.2 Response body template (HTML, for browser display)
 
@@ -577,8 +689,10 @@ record content, Tor circuit identifier, request method/path, byte counts.
 backend, captures the response, and asserts:
 
 1. Status code matches the table.
-2. Body matches the template byte-for-byte after substitution of the four
-   permitted fields.
+2. Body matches the template byte-for-byte after substitution of the three
+   permitted fields (`{ROUTE_LABEL}`, `{CODE}`, `{LOCAL_REFERENCE_ID}` per
+   §10.2 and `specs/001-tor-route/contracts/error-template.md` §"Response
+   body").
 3. Response headers contain only: `Content-Type`, `Content-Length`,
    `Cache-Control: no-store`, `X-Stargate-Error: <CODE>`. Any other
    header (`Server`, `Via`, `X-Forwarded-*`, etc.) fails the test.
@@ -677,6 +791,12 @@ X") before the user confirms.
   control plane. Both pinned by digest.
 - Built with `docker buildx build --provenance=true --sbom=true` so SBOM
   and provenance attestations ship with each release.
+- The Tor sidecar's Debian build inputs are pinned to an immutable
+  `snapshot.debian.org` run with explicit `=version` pins (T099), so a
+  clean rebuild selects a byte-stable package manifest (incl. `tor`'s
+  transitive closure); the final image digest is pinned at release-tag time
+  by T081, with any expected image-digest variance documented in
+  `BUILD-DIFFS.md` (Principle VI).
 
 ### 12.5 Release artefacts
 
@@ -786,8 +906,9 @@ the DB beforehand).
 | `proxy`                                 | Set per-request proxy via `proxy.onRequest` listener (core function)|
 | `<all_urls>` (host permission)          | The proxy listener must see all outbound URLs to apply mapping      |
 | `storage`                               | Persist per-domain route preferences and blocklist in `storage.local` |
-| `webRequest`, `webRequestBlocking`      | Block DoH/DoT requests pre-proxy and enforce hardening invariants   |
-| `privacy`                               | Read/write WebRTC, DNS-over-HTTPS, HTTP/3 prefs (hardening)         |
+| `webRequest`, `webRequestBlocking`      | Block known DoH/DoT endpoints pre-proxy (defense-in-depth; the primary DoH/DoT/HTTP-3 guarantee is the externally verified profile per §14.5, not this rule) |
+| `privacy`                               | Read WebRTC state via `privacy.network.peerConnectionEnabled` — the only hardening surface Firefox's stable WebExtensions API exposes (sol-review B4; §14.5) |
+| `management` (optional)                 | Enumerate foreign extensions for the §14.5 allowlist inventory. Retained for v1 per the foreign-extension decision (THREAT-MODEL §2.7); detection, not prevention. If a future release drops the inventory, this permission is removed. |
 | `notifications` (optional)              | Local desktop notifications only (Constitution Notifications scope) |
 
 No `tabs`, no `history`, no `bookmarks`, no `cookies`, no `identity` —
@@ -820,7 +941,7 @@ For each request:
 
 ```
 {
-  "schema": 1,
+  "schemaVersion": 1,
   "device": {
     "name": "alice-laptop",
     "tokenRef": "vault-managed key id, not the token itself"
@@ -846,26 +967,119 @@ For each request:
 
 Bearer tokens themselves SHOULD be stored in the browser's OS keyring via
 the WebExtensions password-storage path if available; otherwise in
-`storage.local` with a clear UX warning. `NEEDS CLARIFICATION`: which
-storage path Mullvad Browser exposes for credential-grade secrets.
+`storage.local` with a clear UX warning. **Resolved-for-v1 by FR-019 +
+`specs/001-tor-route/research.md` §6**: Firefox ESR (Mullvad Browser's
+engine) exposes no credential-grade storage API to extensions in the v1
+release window, so the token is persisted to `storage.local` with the
+canonical warning text pinned verbatim in
+`specs/001-tor-route/data-model.md` §5.1 (asserted byte-for-byte by
+T056's inline test). A future feature may revisit this if WebExtensions
+on Firefox ESR gain a credential-grade storage API; until then the
+residual filesystem-read risk is acknowledged under THREAT-MODEL §3.1
+(local profile assumes local code execution is already game-over).
 
-### 14.5 Install-time configuration audit
+### 14.5 Browser hardening — externally verified precondition
 
-On first run and on browser startup, the extension performs a hardening
-audit (read-only):
+**Enforcement boundary (amended by T091; Constitution Principle III bullet
+3 — pre-release amendment, no version bump).** Stable Firefox WebExtensions APIs do NOT expose the DoH
+(`network.trr.mode`), DoT (`network.dns.over_tls.*`), or HTTP/3
+(`network.http.http3.enable`) preferences. The pre-T091 wording asserted an
+extension guarantee that could not be implemented (sol-review finding B4),
+risking false assurance from a green mock over invented prefs or a
+fail-open implementation. The amended boundary has three parts.
 
-- WebRTC must be off (`privacy.network.webRTCIPHandlingPolicy =
-  disable_non_proxied_udp` or stricter).
-- DoH must be off (`network.trr.mode = 5`, Firefox).
-- HTTP/3 / QUIC must be off (`network.http.http3.enable = false`).
-- No foreign extensions other than allowlisted ones (Mullvad Browser
-  default uBlock Origin is allowlisted).
+**Part 1 — Hardened target-browser configuration is an externally verified
+precondition** for non-Direct routing, verified out-of-band against a test
+profile that models the target browser's hardened defaults (Mullvad Browser
+by default), NOT via the WebExtension API. The required profile state:
 
-On any failure, the extension displays a blocking dialog explaining the
-issue and offers a one-click remediation where the API permits it. Audit
-results are written to `storage.local.hardening.lastAuditResult` for the
-admin dashboard to surface (read via a future signed-export flow — out of
-scope for this spec).
+- DoH off (`network.trr.mode = 5`).
+- DoT off (no `network.dns.over_tls.*` family present, or all-false — a
+  defense-in-depth check against a future ESR adding DoT).
+- HTTP/3 / QUIC off (`network.http.http3.enable = false`).
+- WebRTC fully disabled. The Firefox pref verified out-of-band in
+  `prefs.js` is `media.peerconnection.enabled = false` (the older
+  `webRTCIPHandlingPolicy = disable_non_proxied_udp` is insufficient —
+  it blocks non-proxied UDP but leaves SDP/ICE candidate gathering
+  reachable over the proxy, leaking local-network info to the remote
+  peer). The extension's runtime gate (Part 2) reads the same state via
+  the stable WebExtensions API `browser.privacy.network.peerConnectionEnabled`,
+  which wraps this pref — the API path is NOT itself a `prefs.js` key.
+
+Verification is performed by the release-cadence live-e2e test
+`tests/live-e2e/mullvad-browser-hardening/` against a test profile that
+models the target browser's hardened defaults (transport-relevant; not
+hermetic — see `docs/process/workflow.md` §"Live end-to-end
+verification"). The test reads the profile's `prefs.js` `user_pref(...)`
+entries; note that hardened distributions sometimes enforce prefs via
+`lockPref`/`policies.json` (not written to `prefs.js` as `user_pref`), so
+the test profile must be one that writes these prefs as `user_pref` (or
+the test must be extended to read effective pref state via Marionette —
+deferred to Phase 5+). A green Node
+unit over invented prefs is explicitly NOT evidence for these four
+surfaces.
+
+**Part 2 — The extension gates only surfaces Firefox's stable API
+truthfully exposes:**
+
+- WebRTC: `browser.privacy.network.peerConnectionEnabled` (read at startup
+  and on browser restart; the extension refuses to route non-Direct if
+  this is not `false`).
+- SOCKS5h: `proxy.ProxyInfo` with `proxyDNS: true` and the SOCKS5
+  username/password set per FR-002/FR-003.
+
+The extension does NOT claim to read or write the DoH/DoT/HTTP-3 prefs.
+When T034b lands (step-17 refine, after this amendment is accepted), Node
+units will be retained only for logic over API values that truly exist
+(`peerConnectionEnabled`, `proxyDNS`, the SOCKS5 username/password
+computation) — not over invented pref shapes. No Node unit exists in the
+tree at the start-phase commit (verify.sh `extension-tests` gate SKIPs).
+
+**Part 3 — Foreign-extension inventory (decision, T091 acceptance #5):
+retained for v1.** Enumerating other extensions requires the `management`
+permission (§14.2). The inventory is **detection, not prevention** — the
+user must remove a disallowed extension; Stargate cannot stop it running
+in the same profile (THREAT-MODEL §2.7). The real-browser live-e2e test
+exercises the inventory against a profile with a known allowlisted
+extension (Mullvad Browser default uBlock Origin) and a known disallowed
+one. T051's manifest edit to request `management` lands at the step-17
+refine of the dependent tickets (T091 acceptance #6); until then T051
+remains `pending`, `blocked_by: [T091]`.
+
+**Failure UX.** The runtime gate is WebRTC only (the one surface the
+stable WebExtensions API exposes — Part 2). On `peerConnectionEnabled !=
+false` at runtime (browser startup and on restart), the extension:
+
+1. Displays a blocking dialog naming WebRTC as the runtime-blocked surface
+   and the remediation ("WebRTC is enabled — disable
+   `peerConnectionEnabled` in your Mullvad Browser profile"). The dialog
+   must NOT claim a runtime block on DoH/DoT/HTTP-3; it states those
+   surfaces are release-cadence-verified (Part 1) and names their drift as
+   accepted residue (THREAT-MODEL §5.4/§5.5).
+2. Sets `hardeningOk = false` — a **pure function of
+   `peerConnectionEnabled`** — that `router.js` (T054) checks before
+   returning a SOCKS descriptor from `proxy.onRequest` for non-Direct
+   routes (FR-004). Direct routes are unaffected. There is no per-session
+   "profile confirmed" signal: DoH/DoT/HTTP-3 are not runtime-gated.
+3. Writes the last failure to `storage.local.hardening.lastAuditResult`
+   for the admin dashboard to surface (read via a future signed-export
+   flow — out of scope for this spec).
+
+Non-Direct routing is **fail-closed at runtime against WebRTC**. The
+DoH/DoT/HTTP-3 surfaces are release-cadence-verified (Part 1) plus
+defense-in-depth `webRequest` blocklist (§14.2); their post-verification
+drift is accepted residue (THREAT-MODEL §5.4/§5.5) — there is no
+runtime signal that catches a pref flip between live-e2e runs, because
+the stable WebExtensions API does not expose those prefs (sol-review B4).
+
+**What changed from the pre-T091 wording.** The DoH/DoT/HTTP-3 prefs are
+no longer claimed as extension-readable; their guarantee moves to the
+externally verified profile (Part 1, release-cadence). WebRTC remains
+extension-gated (the API is real) and is the sole runtime fail-closed
+surface. The foreign-extension inventory is explicitly retained (with
+`management`), not silently assumed. The pre-T091 "confirmed for this
+session" runtime clause is removed — it asserted a per-session binding the
+mechanism cannot deliver (stargate-redteam M1, 2026-07-12).
 
 ### 14.6 Anti-pattern blocklist
 
@@ -893,7 +1107,9 @@ relies on it can be planned.
    remains open**: Nym's official Docker support status needs
    verification; either pin an upstream image if maintained, or build
    from a pinned `nymtech/nym` source tree. `SECURITY-DECISIONS.md`
-   rationale entries still owed for both once that file is authored.
+   rationale entry owed for **Nym only** (Tor entry authored under T017
+   — `SECURITY-DECISIONS.md` §"2026-07-04 — Tor sidecar trust rationale
+   (FR-015)"; file exists at repo root, verified at HEAD).
 2. **§7 Image digests** — Concrete sha256 digests for Tor, i2pd, Nym
    client, WireGuard, distroless base, and the Quarkus native builder
    image. To be pinned at first release tag.
@@ -904,25 +1120,85 @@ relies on it can be planned.
    standard?
 5. **§13.1 Backup encryption** — `age` (preferred) vs `gpg --symmetric`
    (more ecosystem familiarity)?
-6. **§14.1 Manifest version** — Confirm MV2 support on Mullvad Browser at
-   v1 release window; if MV2 is gone, redesign the proxy decision path
-   for MV3.
+6. **§14.1 Manifest version** — ~~Confirm MV2 support on Mullvad Browser
+   at v1 release window~~ **Resolved-for-v1** by `specs/001-tor-route/`
+   §Clarifications + `research.md` §2: implement the extension as Manifest
+   V2 with `proxy.onRequest` (Mozilla's stated policy is to maintain MV2
+   indefinitely for APIs that have no MV3 equivalent; no MV3 migration
+   path preserves per-request routing with per-request SOCKS5 username —
+   which is how stream isolation is driven). **Maintenance flag**: re-
+   verify MV2 support on each Mullvad Browser major-version bump; if a
+   bump drops MV2, redesign the proxy decision path for MV3 (out of scope
+   for v1; the redesign would force a Constitution-level review of the
+   stream-isolation guarantee).
 7. **§14.3 First-encounter behaviour** — Prompt the user on first
    encounter of a new domain, or apply the configured default silently?
    (UX-vs-security trade-off; surfaces a privacy decision to the user but
    adds friction.)
-8. **§14.4 Token storage** — Does Mullvad Browser expose a credential-grade
-   storage API for the device bearer token, or do we accept `storage.local`
-   with a documented residual risk?
+8. **§14.4 Token storage** — ~~Does Mullvad Browser expose a credential-
+   grade storage API for the device bearer token, or do we accept
+   `storage.local` with a documented residual risk?~~ **Resolved-for-v1**
+   by FR-019 + `research.md` §6: accept `storage.local` with the canonical
+   warning text pinned in `data-model.md` §5.1. §14.4 amended in lock-
+   step; see that section for the cross-reference.
 9. **§12.2 Quarkus / JDK / Mandrel compatibility matrix** — Confirm
     Quarkus 3.33 LTS officially targets JDK 25 as a runtime, and pin the
     matching Mandrel 25 builder image digest at first release tag. If
     Quarkus 3.33 LTS lags JDK 25 support, fall back to the highest Quarkus
     LTS that does and reopen the constitution amendment that introduced
-    these pins (constitution v1.1.0).
+    these pins (constitution v1.0.0 pre-release JDK-pin note; no version bump).
 
 None of these are deviations from the constitution; they are unresolved
 implementation choices within the space the constitution allows.
+
+---
+
+## 16. Auxiliary Infrastructure Containers
+
+Beyond the route sidecars enumerated in §7, the compose stack MAY run a
+small number of **auxiliary containers** that do not carry user traffic
+but support the proxy's operation (privilege isolation, future
+observability hooks, etc.). Each must be declared here so that any
+future profile (LAN, VPS) inherits a complete picture of the trusted
+component set.
+
+**Current state (T094a):** the local profile runs **no auxiliary
+containers**. The `docker-socket-proxy` auxiliary container that
+previously lived in this section — a digest-pinned
+`tecnativa/docker-socket-proxy` that bridged `/var/run/docker.sock` to a
+filtered HTTP API so the control plane could observe sidecar lifecycle
+(`EVENTS=1`, `CONTAINERS=1`, `POST=0`) — was **removed by T094a**. The
+control plane now observes Tor lifecycle through Tor's own **cookie-
+authenticated ControlPort** (`tor:9051`, enabled by
+`CookieAuthentication 1` + `CookieAuthFileGroupReadable 1`; see
+`specs/001-tor-route/contracts/torrc.md` invariants #3–#4) over the
+compose-internal network — a strictly narrower surface than a Docker
+Engine observer, and one that introduces no host-root-pivot path
+(Constitution Principle III). No service in
+`compose/docker-compose.local.yml` mounts `/var/run/docker.sock`
+(gated by `tests/contract/compose/local_compose_test.sh` M4). ControlPort
+is NEVER host-published (FR-012). The narrow cookie-read volume + GID
+alignment is finalised with the SidecarMonitor client (T039),
+constrained to avoid over-broad entry-guard read (THREAT-MODEL §4.2).
+
+The removal rationale — why T090's removal of control-plane route-
+admission gating made the proxy unnecessary for routing correctness,
+and why the cookie-auth control port is the narrower observation
+surface — is recorded in `SECURITY-DECISIONS.md` §"2026-07-16 —
+docker-socket-proxy mechanism removed (T094a)", which supersedes the
+2026-07-04 and 2026-07-06 docker-socket-proxy trust-rationale entries.
+Those entries' prose is retained verbatim (append-only discipline) with
+`Superseded by:` back-links.
+
+**LAN/VPS release-blocker (carried forward).** The cookie-auth
+ControlPort observation surface inherits the local-profile scoping of
+the mechanism it replaces (THREAT-MODEL §3.1: local code execution is
+already game-over). Any future LAN or VPS profile feature spec MUST
+revisit how the control plane observes sidecar lifecycle: a non-
+localhost profile changes the compromise-probability calculus for every
+observation surface (the data plane is the most concerning reacher since
+it faces internet-supplied input the CP does not), and the chosen
+surface must be re-evaluated before that profile's compose file ships.
 
 ---
 

@@ -1,0 +1,9 @@
+go 1.26
+
+use (
+	./data-plane
+	./proto
+	./tests/contract
+	./tests/internal/loginvariants
+	./tests/integration
+)
