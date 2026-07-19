@@ -1,9 +1,9 @@
 ---
 id: T034
 title: 'Integration test asserting no DNS query for any `*.onion` name appears'
-status: pending
+status: in-review
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-07-19
 source: tasks.md#T034
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
@@ -52,10 +52,13 @@ sections and the on-disk test infrastructure.
     under `go vet -tags docker live release` (Principle VII — test-first; the
     go-workspace gate compile-checks tagged files even when they are excluded
     from the hermetic test run, T076 §Acceptance #4).
-  - The test carries `//go:build docker` so it runs in the named Docker PR
-    job (where it has CAP_NET_RAW for `gopacket/afpacket` capture) and the
-    hermetic PR gate compile-checks it without executing it (T076 §"CADENCE
-    SEPARATION").
+  - The test carries `//go:build docker && linux` so it runs in the named
+    Docker PR job (where it has CAP_NET_RAW for `gopacket/afpacket` capture)
+    and the hermetic PR gate compile-checks it without executing it (T076
+    §"CADENCE SEPARATION"). The `linux` constraint is required because
+    `gopacket/afpacket` uses AF_PACKET sockets (Linux-only); without it,
+    `go vet -tags docker live release` on a non-Linux dev host would fail
+    to compile the afpacket import, breaking the cross-platform green gate.
   - The test self-skips until `data-plane/internal/forward/tor.go` (T047) and
     `data-plane/cmd/stargate-proxy/main.go` (T050) land — the test-first
     pattern from T033: the test is the target the implementation lands
@@ -97,13 +100,23 @@ sections and the on-disk test infrastructure.
   - `gopacket`'s DNS layer parser is trusted to identify `.onion`-bearing
     queries correctly. Out of scope to test the parser itself; correctness
     is upstream's responsibility.
+  - The `STARGATE_TEST_TOKEN_PLAINTEXT` + `STARGATE_TOR_SOCKS5` env-var
+    contract this test assumes is owned by T050 (shared with T079a).
+    T050 MUST land with these env vars honoured only under a test harness
+    (gated by a build tag, a `STARGATE_TEST_ONLY=1` sentinel, or compiled
+    out of release builds). Honouring them unconditionally in production
+    would let any attacker who controls DP env vars inject a known
+    plaintext token and bypass FR-006's HMAC-verifier-list auth — a
+    Principle III violation. This is a contract surface T050 must get
+    right; T034 inherits the assumption. Surfaced by stargate-redteam.
 
 ## Acceptance
 
 1. Named test `TestDNSLeak` exists in `tests/integration/dns_leak_test.go`
-   with a `//go:build docker` build tag (Principle VII test-first; tagged
-   for the named Docker PR job per T076 §Acceptance #4 — packet capture
-   needs CAP_NET_RAW).
+   with a `//go:build docker && linux` build tag (Principle VII test-first;
+   tagged for the named Docker PR job per T076 §Acceptance #4 — packet
+   capture needs CAP_NET_RAW; `linux` required because
+   `gopacket/afpacket` uses AF_PACKET sockets).
 2. `cd tests/integration && go vet -tags docker live release` exits 0 —
    the hermetic PR gate's compile-check passes (T076 §Acceptance #5).
 3. `cd tests/integration && go test -tags docker -run TestDNSLeak` self-skips

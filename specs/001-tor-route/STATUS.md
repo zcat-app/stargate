@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-07-18
+**Last updated:** 2026-07-19
 
 ---
 
@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 71 |
+| pending | 70 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 63 |
 | deferred | 1 |
@@ -29,7 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T034 | Integration test asserting no DNS query for any `*.onion` na | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034b | Unit test for `extension/background/hardening.js` (Principle | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034c | Unit test for `extension/popup/popup.js` per-tab indicator ( | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
@@ -92,7 +91,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T034 | Integration test asserting no DNS query for any `*.onion` na | in-review | ✓ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
 
 ---
 

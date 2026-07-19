@@ -8,3 +8,8 @@ go 1.26
 toolchain go1.26.3
 
 require golang.org/x/net v0.54.0
+
+require (
+	github.com/google/gopacket v1.1.19
+	golang.org/x/sys v0.44.0 // indirect
+)
