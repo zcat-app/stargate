@@ -26,6 +26,12 @@ specs/.handoffs/
 # Browser extension build output
 extension/dist/
 
+# Ad-hoc audit and analysis output — working notes, not a release artefact.
+# Findings that survive verification are promoted into redteam/findings/ and
+# specs/*/tickets/, which ARE versioned; .scratch/ holds the raw pass that
+# produced them. Never commit: audit drafts name unfixed weaknesses.
+.scratch/
+
 # Universal
 .DS_Store
 Thumbs.db

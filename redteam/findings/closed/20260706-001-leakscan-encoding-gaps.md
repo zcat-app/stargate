@@ -1,6 +1,6 @@
 ---
 id: 20260706-001-leakscan-encoding-gaps
-status: fixed
+status: closed
 severity: major
 principle: [III, VII]
 threat-model: n/a
@@ -9,6 +9,11 @@ first-seen-run: 20260706-b906efb
 first-seen-date: 2026-07-06
 fix-commit: same-run — fixed pre-merge, lands in T020's ticket commit (findSecretLeaks + leakscan_test.go negative controls)
 decision-ref: null
+closed-date: 2026-07-27
+closed-by: 2026-07-27 milestone audit — fix verified live at 8bc5f6a. All nine encodings
+  (raw, hex, HEX, 4x base64, decimal-slice, decimal-run) are implemented at
+  tests/internal/loginvariants/loginvariants.go:459-478, with negative controls at
+  loginvariants_test.go:401-406. Was misfiled under open/ despite status "fixed".
 ---
 
 # Leak scan misses realistic logger encodings — no-log contract under-pinned

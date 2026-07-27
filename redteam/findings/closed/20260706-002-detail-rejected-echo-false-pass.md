@@ -1,6 +1,6 @@
 ---
 id: 20260706-002-detail-rejected-echo-false-pass
-status: fixed-pre-merge
+status: closed
 severity: major
 principle: [III, VII]
 threat-model: n/a (test-only; log-leak class per Constitution Principle III)
@@ -9,6 +9,11 @@ first-seen-run: 2026-07-06 stargate-redteam pass on T021 (HEAD 417ca54)
 first-seen-date: 2026-07-06
 fix-commit: 417ca54
 decision-ref: null
+closed-date: 2026-07-27
+closed-by: 2026-07-27 milestone audit — fix verified live at 8bc5f6a. The FindSecretLeaks
+  assertion against the forbidden `detail` echo is present at
+  tests/contract/control-grpc/watch_events_test.go:359-360. Was misfiled under open/ despite
+  status "fixed-pre-merge".
 ---
 
 # Closed-vocabulary `detail` gate false-passes when DP echoes the offending value
