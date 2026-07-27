@@ -7,7 +7,7 @@ threat-model: n/a — supply-chain/CI surface; no THREAT-MODEL section covers CI
 location: .github/workflows/agent-task.yml:72 (job `gate`, step `parse`)
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: pending (lands in the audit-remediation commit on 001-tor-route)
+fix-commit: fccb47d
 decision-ref: null
 closed-date: 2026-07-27
 closed-by: fix applied and verified in the same run — see "Verification of the fix"

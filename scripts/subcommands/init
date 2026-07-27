@@ -91,6 +91,7 @@ esac
 
 # ---- tunables -------------------------------------------------------------
 : "${STARGATE_HEALTHCHECK_TIMEOUT:=60}"        # arch §9.1 step 4 (seconds)
+: "${STARGATE_PROBE_TIMEOUT:=5}"               # verify_tor TCP connect bound (seconds)
 
 # Services init waits on (mirrors compose/docker-compose.local.yml). The
 # health loop resolves each by `compose ps -q <service>` (B1: never guessed).
@@ -405,12 +406,53 @@ verify_tor() {
   # A TCP connect to 127.0.0.1:8881 succeeding proves the DP listener came up.
   # We do NOT drive a full SOCKS5 handshake here — that is the job of the
   # downstream runtime contract tests (T019b/T019c). Keep this probe cheap.
-  if (exec 3<>/dev/tcp/127.0.0.1/8881) 2>/dev/null; then
-    exec 3>&- 3<&-
-    note "Tor route reachable on 127.0.0.1:8881."
-    return 0
+  #
+  # The connect MUST be bounded. A bare `(exec 3<>/dev/tcp/...)` inherits the
+  # kernel's SYN-retry budget (~130s on Linux) whenever the SYN is DROPPED
+  # rather than refused — a firewall DROP rule, some Docker publish paths, or
+  # a container whose port is published but whose listener never accept()s.
+  # `stargate init` then reads as hung rather than reporting a diagnosis, and
+  # the T088 contract test calls init three times, paying it three times over.
+  # See redteam/findings/open/20260727-011-verify-tor-unbounded-connect.md.
+  local rc
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$STARGATE_PROBE_TIMEOUT" \
+      bash -c 'exec 3<>/dev/tcp/127.0.0.1/8881' 2>/dev/null
+    rc=$?
+  else
+    # No coreutils `timeout` (stock macOS/BSD — same gap `cleanup` handles for
+    # `shred`). Bound it with a bash-native watchdog rather than reverting to
+    # an unbounded connect, so the fix holds on every platform init supports.
+    ( exec 3<>/dev/tcp/127.0.0.1/8881 ) 2>/dev/null &
+    local probe=$! waited=0
+    while kill -0 "$probe" 2>/dev/null && [ "$waited" -lt "$STARGATE_PROBE_TIMEOUT" ]; do
+      sleep 1
+      waited=$(( waited + 1 ))
+    done
+    if kill -0 "$probe" 2>/dev/null; then
+      kill -TERM "$probe" 2>/dev/null
+      wait "$probe" 2>/dev/null
+      rc=124                      # match coreutils `timeout`'s timeout status
+    else
+      wait "$probe"; rc=$?
+    fi
   fi
-  note "127.0.0.1:8881 not reachable — data plane listener did not come up."
+
+  # Refused and timed-out are different diagnoses and must read differently:
+  # the first means the listener is down, the second means something is
+  # swallowing the SYN with the port published.
+  case "$rc" in
+    0)
+      note "Tor route reachable on 127.0.0.1:8881."
+      return 0
+      ;;
+    124)
+      note "127.0.0.1:8881 timed out after ${STARGATE_PROBE_TIMEOUT}s — port published but nothing accepting (inspect the stargate-dp container)."
+      ;;
+    *)
+      note "127.0.0.1:8881 refused — data plane listener did not come up."
+      ;;
+  esac
   return "$EXIT_VERIFY"
 }
 
