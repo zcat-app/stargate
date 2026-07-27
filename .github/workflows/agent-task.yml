@@ -20,6 +20,16 @@
 # comment author must have write access (enforced below); this is NOT an
 # arbitrary-issue-comment trigger that would let anyone burn CI minutes.
 #
+# SECURITY INVARIANT (do not reorder): the comment body is attacker-controlled
+# on any public repo, and reaches shell only via `env:`. Two rules hold this
+# workflow safe and both are easy to undo by accident:
+#   1. `auth` runs before `parse`. If parsing moves first, the collaborator
+#      check stops gating the untrusted body and any commenter reaches shell.
+#   2. No `${{ github.event.* }}` / `${{ inputs.* }}` inside a `run:` block.
+#      Expressions are substituted as literal text before bash parses the
+#      script, so `$(…)` in a comment body executes on the runner.
+# See redteam/findings/open/20260727-004-agent-task-comment-body-rce.md.
+#
 # Why this is its own workflow (not folded into verify.yml): the agent loop
 # is heavy (LLM calls, multi-minute runs) and triggered by humans, not by
 # every push. Keeping it separate lets the verify.yml gate stay fast and
@@ -42,62 +52,103 @@ on:
         type: string
         default: opencode
 
-permissions:
-  contents: write        # to push the branch
-  pull-requests: write   # to open the PR
+# Default-deny at workflow scope; each job re-grants only what it needs.
+# The `gate` job parses attacker-influenced text and must never hold a
+# write-capable token (redteam 20260727-004).
+permissions: {}
 
 jobs:
   gate:
-    # Authorize: only repo collaborators (write access) can trigger this.
-    # Costs are real (LLM tokens, multi-minute runs); do not expose to drive-by
-    # issue comments. (`if` based on pull_request_target is unsafe for secrets;
-    # issue_comment + collaborator check is the documented-safe pattern.)
-    if: |
-      (github.event_name == 'workflow_dispatch') ||
+    # Cheap pre-filter only. `author_association` is NOT an authorization
+    # decision — COLLABORATOR includes read-only collaborators — but it keeps
+    # drive-by comments from ever starting a job. The authoritative
+    # write-access check is the `auth` step below, which runs BEFORE anything
+    # parses the comment body.
+    #
+    # Note: this condition previously called `substring()`, which is not a
+    # GitHub Actions expression function (the set is contains/startsWith/
+    # endsWith/format/join/toJSON/fromJSON/hashFiles). `startsWith(…, '/agent T')`
+    # expresses the same intent with a real function.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issue_comment' &&
-       startsWith(github.event.comment.body, '/agent ') &&
-       contains(fromJSON('["T"]'), substring(github.event.comment.body, 7, 1)))
+       startsWith(github.event.comment.body, '/agent T') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+                github.event.comment.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     outputs:
       ticket: ${{ steps.parse.outputs.ticket }}
       authorized: ${{ steps.auth.outputs.authorized }}
     steps:
-      - id: parse
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "ticket=${{ inputs.ticket }}" >> "$GITHUB_OUTPUT"
-          else
-            # Strip leading "/agent " and capture the first token as the ticket id.
-            body="${{ toJSON(github.event.comment.body) }}"
-            ticket=$(printf '%s' "$body" | python3 -c 'import json,sys; print(json.load(sys.stdin).split()[1])')
-            # Validate shape: T-NNN or T-NNN<letter>.
-            echo "$ticket" | grep -Eq '^T-?[0-9]+[a-z]?$' || { echo "bad ticket id: $ticket"; exit 1; }
-            echo "ticket=$ticket" >> "$GITHUB_OUTPUT"
-          fi
+      # AUTHORIZATION RUNS FIRST. Ordering is load-bearing: when this step ran
+      # after `parse`, the collaborator check did not gate the comment body,
+      # making the injection below pre-authorization.
       - id: auth
-        # Collaborator check — only write-access users proceed.
+        # Collaborator check — only write-access users proceed. Fails closed:
+        # a non-collaborator yields a 404 from `gh api`, grep matches nothing,
+        # authorized=false.
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
             echo "authorized=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          user="${{ github.event.comment.user.login }}"
-          if gh api "repos/${{ github.repository }}/collaborators/$user/permission" \
-               --jq '.permission' | grep -Eq 'admin|write|maintain'; then
+          if gh api "repos/$REPO/collaborators/$COMMENT_USER/permission" \
+               --jq '.permission' | grep -Eq '^(admin|write|maintain)$'; then
             echo "authorized=true" >> "$GITHUB_OUTPUT"
           else
             echo "authorized=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::User $user lacks write access; /agent trigger ignored."
+            echo "::notice::User lacks write access; /agent trigger ignored."
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          COMMENT_USER: ${{ github.event.comment.user.login }}
+
+      - id: parse
+        if: steps.auth.outputs.authorized == 'true'
+        # Untrusted text reaches this script ONLY through env vars. Never
+        # interpolate `github.event.*` or `inputs.*` into a `run:` block:
+        # Actions substitutes `${{ }}` as literal text before bash runs, and
+        # bash evaluates `$(…)`, backticks and `${…}` inside double quotes —
+        # so a comment body of `/agent T001 $(curl …|bash)` would execute on
+        # the runner. `toJSON()` does not help; it escapes quotes, not command
+        # substitution. Env vars are not re-parsed as workflow expressions.
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BODY: ${{ github.event.comment.body }}
+          INPUT_TICKET: ${{ inputs.ticket }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            ticket="$INPUT_TICKET"
+          else
+            # First line only: a multi-line body would otherwise yield one
+            # token per line and inject extra lines into $GITHUB_OUTPUT.
+            ticket=$(printf '%s' "$BODY" | head -n 1 | awk '{print $2}')
+          fi
+          # Validate the WHOLE string. `[[ =~ ]]` anchors ^…$ at string bounds,
+          # so an embedded newline cannot smuggle a second output line through.
+          # Both trigger paths are validated — the dispatch input was previously
+          # unchecked.
+          if [[ ! "$ticket" =~ ^T-?[0-9]+[a-z]?$ ]]; then
+            echo "::error::bad ticket id (expected T-NNN or TNNN[a-z])"
+            exit 1
+          fi
+          echo "ticket=$ticket" >> "$GITHUB_OUTPUT"
 
   run:
     needs: gate
     if: needs.gate.outputs.authorized == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60   # hard cap; agent loop can stall on a bright-line stop
+    # The write-capable token lives here and only here — this job runs after
+    # authorization and consumes only the validated ticket id from `gate`.
+    permissions:
+      contents: write        # to push the branch
+      pull-requests: write   # to open the PR
     env:
       TICKET: ${{ needs.gate.outputs.ticket }}
       AGENT_BRANCH: agent/${{ needs.gate.outputs.ticket }}
