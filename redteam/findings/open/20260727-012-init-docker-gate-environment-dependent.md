@@ -85,8 +85,26 @@ actually accepts a connection **before** `init` is invoked, so a fixture regress
 "fixture broken" rather than "data plane did not come up" — the current message misattributes
 a harness failure to the product.
 
+## Update 2026-07-28 — diagnosis corroborated by the 011 fix
+
+Closing `20260727-011` (`f2b5988`) bounded the probe and split the failure into two distinct
+diagnoses. This gate now reports:
+
+```
+stargate init: 127.0.0.1:8881 timed out after 5s — port published but nothing accepting
+               (inspect the stargate-dp container).
+```
+
+— not "refused". That distinction is independent confirmation of this finding's core claim:
+the port **is** published and reachable at the Docker layer, and the fixture's busybox `nc`
+stand-in is what fails to complete the handshake. The listener is not simply down.
+
+The gate still FAILs (3/3 inits exit 50) but now in **27 seconds** rather than 6+ minutes,
+so iterating on this finding is no longer expensive. Item 3 of the suggested fix
+(apply 011's timeout) is therefore already done; items 1, 2 and 4 remain.
+
 ## Related
 
 - Found during the 2026-07-27 milestone audit (`.scratch/audit.md`, finding R2).
-- 20260727-011 (unbounded connect) makes each failure take minutes.
+- 20260727-011 (unbounded connect) made each failure take minutes; now closed (`f2b5988`).
 - Same green-gate-integrity class as 20260727-007 and 20260727-008.

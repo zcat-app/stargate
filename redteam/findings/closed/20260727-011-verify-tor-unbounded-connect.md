@@ -1,14 +1,21 @@
 ---
 id: 20260727-011-verify-tor-unbounded-connect
-status: open
+status: closed
 severity: major
 principle: [VI]
 threat-model: n/a — availability / operator-experience defect
 location: scripts/subcommands/init:408 (`verify_tor`)
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
+fix-commit: f2b5988
 decision-ref: null
+closed-date: 2026-07-28
+closed-by: 2026-07-28 — probe bounded by STARGATE_PROBE_TIMEOUT (default 5s), preferring
+  coreutils `timeout` with a bash-native watchdog fallback so the bound also holds where
+  `timeout` is absent (stock macOS/BSD). Refused vs timed-out are now distinct diagnoses.
+  Measured against a fixture-identical container - before, still blocked at 20s when the
+  harness cut it off (headed for ~130s); after, returns at 5.003s with rc=124. End to end,
+  tests/contract/stargate-cli/init_docker_test.sh went from 6+ minutes to 27s.
 ---
 
 # `verify_tor()` performs an unbounded TCP connect — `stargate init` hangs for minutes instead of failing fast
