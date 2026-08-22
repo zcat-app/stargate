@@ -52,26 +52,66 @@ class and was flagged out-of-scope for T017.
 
 ## Analysis
 
-*(Required — `privacy_critical: true`.)*
+*(Required — `privacy_critical: true`. Grounded 2026-08-22; all anchors
+verified on disk.)*
+
+**Grounded facts** (what T089/T094/T099 actually deliver, per
+`compose/docker-compose.local.yml`, `sidecars/tor/Dockerfile`,
+`SECURITY-DECISIONS.md`:664, constitution V/VI):
+
+- Networks: three-way split — `stargate-egress` (non-internal, Tor only),
+  `stargate-internal` (internal:true, DP↔tor), `stargate-cp-tor`
+  (internal:true, CP↔tor); planes share no network.
+- All services `read_only: true`, `cap_drop: [ALL]`; no service mounts
+  `/var/run/docker.sock` (T094a dropped the docker-socket-proxy; M4 gates it).
+- Pinning: base image digest-pinned (both stages); Debian package inputs
+  pinned to immutable snapshot run `20260714T082229Z` with explicit
+  `=version` pins (T099); `tor` installed from `deb.torproject.org` with
+  build-time signing-key fingerprint verification (`PUB_COUNT==1`,
+  fingerprint `A3C4…DD89`). Final composed image digests are NOT yet pinned
+  (T081 pending) — must not be claimed as pinned.
+- **Honesty constraint:** open finding
+  `redteam/findings/open/20260727-002-tor-deb-hash-never-verified.md`
+  (status: open): the recorded tor `.deb` sha256 is verified by no build
+  step. The §8.6 rewrite must NOT claim content-hash enforcement of the
+  tor package — only claims that actually hold (digest-pinned base,
+  snapshot-pinned Debian inputs, key-fingerprint-verified signed repo,
+  version pin), with same-version-replacement attributed to maintainer
+  trust until that finding closes.
+
+Property map:
 
 - **Must hold (M1):** §8.6's prose is rewritten so it no longer says
   "unresolved trust decision at the time of writing" or "we must choose a
   community maintainer." It records that the decision IS resolved (build
-  in-house from `deb.torproject.org`, fingerprint-verified at build time),
-  points to `SECURITY-DECISIONS.md` §"2026-07-04 — Tor sidecar trust
-  rationale (FR-015)" as the authoritative rationale, and preserves the
-  §5.8/§5.9 residual framing (sidecar-in-TCB + update-channel-compromise).
-- **Must hold (M2):** The pre-existing internal cross-ref typo at
-  THREAT-MODEL.md:154 ("See §5.7" inside §2.6) is corrected to "See §5.8".
+  in-house from `deb.torproject.org` on a digest-pinned base), states the
+  pinning/key-verification topology that actually holds (per grounded facts
+  above — including final-image digests not yet pinned), points to
+  `SECURITY-DECISIONS.md` §"2026-07-04 — Tor sidecar trust rationale
+  (FR-015)" as the authoritative rationale, and preserves the §5.8/§5.9
+  residual framing (sidecar-in-TCB + update-channel-compromise).
+- **Must hold (M2):** The pre-existing internal cross-ref typo in §2.6
+  (THREAT-MODEL.md:160, "See §5.7" — §5.7 is Browser fingerprinting; the
+  sidecar-residual section is §5.8) is corrected to "See §5.8".
 - **Must hold (M3):** No other THREAT-MODEL content is perturbed (surgical
-  edit; §8.6 + the §2.6 internal pointer only).
+  edits: §8.6 rewrite; §2.6 pointer; the two stale-authorship statements —
+  §5.8:983 "(once authored)" and §9:1425 "(not yet authored…)"; §9 rewritten
+  to the concrete GitHub Security Advisory route that CONTRIBUTING.md:49
+  now provides).
 - **Gated:** a contract test under `tests/contract/threat-model/` (new in
-  this ticket) asserts §8.6 no longer contains the "unresolved"/"choose a
-  community maintainer" phrasing AND references SECURITY-DECISIONS.md; and
-  that §2.6's internal pointer cites §5.8 (not §5.7).
+  this ticket) asserts structurally: §8.6 contains neither obsolete
+  phrasing ("unresolved trust decision", "choose a community maintainer")
+  nor a claim that final image digests are already pinned, and cites the
+  SECURITY-DECISIONS entry title; §2.6's sidecar paragraph cites §5.8 (not
+  §5.7); zero "(once authored)"/"not yet authored" strings remain; §9
+  references the private GitHub Security Advisory channel. Focused,
+  load-bearing assertions only — no broad prose regexes freezing incidental
+  wording (acceptance #5).
 - **Residue:** the soundness of the §8.6 rewrite prose is review-gated
   (redteam not mandatory — this is a doc sync of an already-redteam'd
   decision; the redteam on T017 already gated the underlying rationale).
+  The tor `.deb` hash-verification gap remains tracked by finding
+  20260727-002, out of scope here (T082 must not paper over it).
 
 ## Acceptance
 
