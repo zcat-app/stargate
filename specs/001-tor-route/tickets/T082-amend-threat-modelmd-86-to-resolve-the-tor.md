@@ -1,9 +1,9 @@
 ---
 id: T082
 title: 'Reconcile the threat model with the local stack'
-status: in-review
+status: done
 created: 2026-07-04
-last_updated: 2026-08-22
+last_updated: 2026-08-23
 source: review/sol-review.md#M8
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
@@ -23,7 +23,7 @@ decision_refs:
 constitution_refs:
   - "V: Honest Threat Model"
   - "VI: Open and Auditable"
-reviews: {}
+reviews: { round: 1, date: 2026-08-23, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

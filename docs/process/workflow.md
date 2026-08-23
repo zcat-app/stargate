@@ -134,17 +134,23 @@ feature branch squash-merges to `main` at milestone close.**
    to in-review.
 5. **Review** (the run-task `in-review` phase) — emit a handoff that asks
    the caller to spawn `stargate-codereview` (fresh context, blind to your
-   rationale). Give it ONLY: the diff (`git diff main`, after `git add -N`),
-   the ticket file, the verify output, and on round ≥2 the prior round's
-   diff stats (run-task captures these automatically). The caller writes the
-   verdict block to `target/runs/<id>.verdict`; re-invoking run-task.sh
-   parses it and acts (APPROVE → done; REWORK → bump round; ESCALATE →
-   surface the menu). Verdict: `APPROVE | REWORK | ESCALATE`.
+   rationale). Give it ONLY: the diff (`git diff <base-sha>`), the ticket
+   file, and the MECHANICAL REPORT run-task precomputes into the handoff
+   (base SHA, diffstat, files-vs-budget, verify freshness, §Out-of-scope,
+   prior-round verdict on round ≥ 2). **The reviewer writes its own verdict
+   block to `target/runs/<id>.verdict`** (its single writable path) before
+   replying; the caller never transcribes it. Re-invoking run-task.sh
+   parses it and acts (APPROVE → done; APPROVE-WITH-FIXES → APPLY-FIXES
+   handoff: caller applies the comment-only FIX ITEMS, re-verifies, touches
+   `target/runs/<id>.awf-applied`, and the driver commits without a new
+   round; REWORK → bump round; ESCALATE → surface the menu). Verdict:
+   `APPROVE | APPROVE-WITH-FIXES | REWORK | ESCALATE`.
 6. **Resolve:**
 
    | Verdict | Action |
    |---|---|
    | `APPROVE` | Commit (step 7). |
+   | `APPROVE-WITH-FIXES` | Apply ONLY its comment/doc-only FIX ITEMS; re-`verify`; touch `.awf-applied`; commit (step 7) — no new review round. |
    | `REWORK` (round 1) | Address only the named items; re-`verify`; re-review. |
    | `REWORK` (round 2 = cap) / `ESCALATE` | STOP. Surface the menu (below). **You** decide. |
 
@@ -155,7 +161,7 @@ feature branch squash-merges to `main` at milestone close.**
 7. **Commit** — `run-task.sh` creates the focused commit on the feature
    branch at APPROVE (one commit per ticket: `Implement <feature>: T-NNN:
    <imperative summary ≤72 chars>` + the §Context paragraph + a
-   `Reviewed-by: stargate-codereview (VERDICT: APPROVE; round <r>)` trailer).
+   `Reviewed-by: stargate-codereview (VERDICT: APPROVE|APPROVE-WITH-FIXES; round <r>)` trailer).
    It commits ONLY paths the developer staged during IMPLEMENT — never
    `git add -A` — and refuses to flip `done` if nothing is staged. Flip
    `status: done`.

@@ -36,7 +36,9 @@
 #   - verify.sh not green after a rework round, or not fresh-green at APPROVE
 #   - review round cap hit (default 2; 3 if round_cap: 3)
 #   - codereview verdict ESCALATE
-#   - redteam FINDINGS on a privacy_critical ticket (wired at APPROVE since T096)
+#   - (retired) per-ticket redteam FINDINGS — security is now the codereview's
+#     SECURITY-CHECK on every ticket; stargate-redteam runs as the milestone
+#     sweep (T078), not a driver gate.
 #
 # The script NEVER pushes. The script NEVER spawns a developer-subagent
 # (there is no portable way to do that from shell; the caller does it).
@@ -159,12 +161,13 @@ RUN_DIR="target/runs"
 mkdir -p "$RUN_DIR"
 ROUND_FILE="$RUN_DIR/$TICKET_ID.round"
 DIFFSTAT_FILE="$RUN_DIR/$TICKET_ID-r$([ -f "$ROUND_FILE" ] && cat "$ROUND_FILE" || echo 1).diffstat"
-VERDICT_FILE="$RUN_DIR/$TICKET_ID.verdict"      # codereview verdict (APPROVE|REWORK|ESCALATE)
-REDTEAM_FILE="$RUN_DIR/$TICKET_ID.redteam"      # stargate-redteam verdict (CLEAN|FINDINGS)
+VERDICT_FILE="$RUN_DIR/$TICKET_ID.verdict"      # codereview verdict (APPROVE|APPROVE-WITH-FIXES|REWORK|ESCALATE)
+REDTEAM_FILE="$RUN_DIR/$TICKET_ID.redteam"      # legacy per-ticket redteam verdict (retired: security is codereview's SECURITY-CHECK; redteam = milestone sweep T078)
+AWF_FILE="$RUN_DIR/$TICKET_ID.awf-applied"      # sentinel: APPROVE-WITH-FIXES items applied (reviewer-prompt.md)
 PROMPT_FILE="$RUN_DIR/$TICKET_ID.prompt"
 
 if [ "$RESET_ROUND" = "1" ]; then
-  rm -f "$ROUND_FILE" "$VERDICT_FILE" "$DIFFSTAT_FILE" "$REDTEAM_FILE"
+  rm -f "$ROUND_FILE" "$VERDICT_FILE" "$DIFFSTAT_FILE" "$REDTEAM_FILE" "$AWF_FILE"
   echo "run-task: reset round state for $TICKET_ID"
   exit 0
 fi
@@ -353,6 +356,10 @@ EOF
     # #2). Dirty tree refusal happens inside ensure_feature_branch.
     ensure_feature_branch
     rm -f "target/runs/$TICKET_ID.grounded"
+    # Pin the review baseline: everything this ticket changes (mid-ticket
+    # grounding commits included) diffs against this SHA, and the REVIEW
+    # mechanical report derives its counts from it.
+    git rev-parse HEAD > "$RUN_DIR/$TICKET_ID.start-sha" 2>/dev/null || true
     update_ticket_status "in-progress"
     echo "run-task: $TICKET_ID ready to implement on '$FEATURE_BRANCH'. Re-invoke to advance."
     exit 0
@@ -392,8 +399,12 @@ EOF
     fi
     rm -f "target/runs/$TICKET_ID.verified"
 
-    # Capture diff stat for must-shrink on later rounds.
-    git diff main --stat > "$DIFFSTAT_FILE" 2>/dev/null || true
+    # Capture diff stat for must-shrink on later rounds. Scoped to the
+    # ticket's base SHA (branch-wide `git diff main` would count every
+    # sibling ticket's work too).
+    BASE_SHA="$(cat "$RUN_DIR/$TICKET_ID.start-sha" 2>/dev/null || true)"
+    [ -n "$BASE_SHA" ] || BASE_SHA="$(git rev-parse HEAD)"
+    git diff "$BASE_SHA" --stat > "$DIFFSTAT_FILE" 2>/dev/null || true
     # Also run verify.sh directly as the safety re-check (workflow.md step 3).
     echo "run-task: re-running scripts/verify.sh as the pre-review gate…"
     if bash scripts/verify.sh >> target/verify.log 2>&1; then
@@ -410,21 +421,57 @@ EOF
   in-review)
     # Phase: emit codereview handoff OR act on the verdict the caller wrote.
     if [ ! -f "$VERDICT_FILE" ]; then
+      # Mechanical report (reviewer-prompt.md §Inputs): script-computed facts
+      # the reviewer must trust over its own counting. Contents are data, not
+      # templates — interpolating them is safe; nothing here is re-evaluated.
+      BASE_SHA="$(cat "$RUN_DIR/$TICKET_ID.start-sha" 2>/dev/null || git rev-parse HEAD)"
+      # Every probe below is best-effort: under `set -euo pipefail` a failing
+      # command substitution would abort the whole driver silently, so each
+      # pipeline ends in an explicit fallback.
+      STAT_LINE="$( (git diff "$BASE_SHA" --stat 2>/dev/null | tail -1) || echo 'unknown')"
+      FILES_TOUCHED="$(printf '%s' "$STAT_LINE" | grep -oE '[0-9]+ files? changed' | grep -oE '[0-9]+' || true)"
+      BUDGET="$(extract_fm files_budget)"
+      BUDGET_VERDICT="within budget"
+      if [ -n "$FILES_TOUCHED" ] && [ -n "$BUDGET" ] && [ "$FILES_TOUCHED" -gt "$BUDGET" ]; then
+        BUDGET_VERDICT="OVER BUDGET (bright-line: STOP)"
+      fi
+      VERIFY_FRESH="$( (stat -c '%y' target/verify.log 2>/dev/null | cut -d. -f1) || true)"
+      VERIFY_RESULT="$( (grep '^RESULT:' target/verify.log 2>/dev/null | tail -1) || true)"
+      OOS_BLOCK="$( (sed -n '/^## Out-of-scope/,/^## /p' "$TICKET_PATH" | sed '1d;$d' | sed '/^$/d' | head -12) || true)"
+      PRIOR_BLOCK=""
+      if [ "$ROUND" -ge 2 ] && [ -f "$RUN_DIR/$TICKET_ID-r$((ROUND-1)).verdict" ]; then
+        PRIOR_BLOCK="$(cat "$RUN_DIR/$TICKET_ID-r$((ROUND-1)).verdict"
+
+--- end of prior verdict — you MUST run the round-disposition protocol over every item above)"
+      fi
+      REPORT_BLOCK="diff base:     $BASE_SHA   (git diff <base> is the review scope)
+diffstat:      ${STAT_LINE:-unknown}
+files touched: ${FILES_TOUCHED:-unknown} of files_budget=${BUDGET:-?} → $BUDGET_VERDICT
+verify.log:    last written ${VERIFY_FRESH:-unknown} — ${VERIFY_RESULT:-no RESULT line yet}
+out-of-scope (ticket §Out-of-scope, abridged):
+$(printf '%s' "$OOS_BLOCK" | sed 's/^/  /')"
+      [ -n "$PRIOR_BLOCK" ] && REPORT_BLOCK="$REPORT_BLOCK
+prior round verdict (items + EVALUATED-AS probes):
+$(printf '%s' "$PRIOR_BLOCK" | sed 's/^/  /')"
       cat <<EOF | emit_prompt REVIEW
 Spawn \`stargate-codereview\` against $TICKET_ID (workflow.md §"The flow" step 4).
 
 The reviewer runs FRESH CONTEXT, blind to your rationale. Hand it ONLY:
-  - The diff:    \`git diff main\`  (run \`git add -N\` first if there are new files)
+  - The diff:    \`git diff $BASE_SHA\`
   - The ticket:  \`$TICKET_PATH\`
-  - Verify log:  \`target/verify.log\`
-$([ "$ROUND" -ge 2 ] && echo "  - Prior round diffstat: \`$RUN_DIR/$TICKET_ID-r$((ROUND-1)).diffstat\` (for the must-shrink check)")
 
-The reviewer returns a structured VERDICT block (APPROVE | REWORK | ESCALATE).
-Write the verdict block verbatim to:
+MECHANICAL REPORT (script-computed — the reviewer trusts these numbers over
+its own counting and flags any mismatch as suspect input, not a finding):
+$REPORT_BLOCK
+
+The reviewer WRITES ITS OWN VERDICT (Write tool) to:
   $VERDICT_FILE
-
-Then re-invoke: scripts/run-task.sh $TICKET_ID
-$([ "$PRIVACY" = "true" ] && printf '%s\n' "" "NOTE: privacy_critical=true — after codereview APPROVE, the driver will" "require a stargate-redteam CLEAN verdict before creating the commit.")
+…BEFORE its reply; its chat reply is only a short stub (verdict + finding
+count). You do NOT transcribe, edit, or reformat the verdict. When the file
+exists, just re-invoke: scripts/run-task.sh $TICKET_ID
+If the reviewer finished without writing the file, that is a failed review —
+re-spawn it; do not write the verdict yourself.
+$([ "$PRIVACY" = "true" ] && printf '%s\n' "" "NOTE: privacy_critical=true — the reviewer applies its SECURITY-CHECK lens at full strength; the driver commits directly on APPROVE." )
 
 EOF
       echo "run-task: $TICKET_ID emitted REVIEW handoff. Spawn codereview, write verdict, re-invoke."
@@ -433,13 +480,44 @@ EOF
 
     # Verdict is in — act on it.
     VERDICT_BODY="$(cat "$VERDICT_FILE")"
+    # Archive per round: the NEXT round's reviewer needs this round's
+    # FINDINGS + EVALUATED-AS probes to run the disposition protocol
+    # (reviewer-prompt.md §"Round disposition"). Diffstats alone can't
+    # carry rework items.
+    cp "$VERDICT_FILE" "$RUN_DIR/$TICKET_ID-r${ROUND}.verdict" 2>/dev/null || true
+    # APPROVE-WITH-FIXES (reviewer-prompt.md §Verdict): comment/doc-only FIX
+    # ITEMS applied without burning a review round. Fail-closed via sentinel:
+    # first sight emits APPLY-FIXES; only after the caller applies exactly the
+    # listed items, re-verifies GREEN, and touches $AWF_FILE does this fall
+    # through to the normal APPROVE path below — freshness re-verify and
+    # focused commit still apply unchanged.
+    if echo "$VERDICT_BODY" | grep -qE '^VERDICT:\s*APPROVE-WITH-FIXES'; then
+      if [ ! -f "$AWF_FILE" ]; then
+        cat <<EOF | emit_prompt APPLY-FIXES
+$TICKET_ID verdict is APPROVE-WITH-FIXES. Apply ONLY the FIX ITEMS listed in
+$VERDICT_FILE — verbatim, nothing else:
+  - Comment/doc lines only, inside files already changed by this ticket's diff.
+  - Zero executable-line changes. An item that needs one was mis-tiered by the
+    reviewer: STOP and surface; do not apply it and do not edit the verdict.
+Then:
+  bash scripts/verify.sh                    # must be GREEN
+  touch target/runs/$TICKET_ID.awf-applied  # signal fixes applied
+  scripts/run-task.sh $TICKET_ID            # driver re-verifies, then commits
+
+EOF
+        echo "run-task: $TICKET_ID emitted APPLY-FIXES handoff. Apply fix items, re-invoke."
+        exit 0
+      fi
+    fi
     if echo "$VERDICT_BODY" | grep -qE '^VERDICT:\s*APPROVE'; then
       # --- T096 §Acceptance #3: APPROVE is fail-closed. The driver may not
       # flip `done` until (a) verify is fresh-green, (b) codereview APPROVE is
-      # present (the file we're holding), (c) for privacy_critical tickets a
-      # red-team CLEAN verdict is present, and (d) a focused commit with the
+      # present (the file we're holding), and (c) a focused commit with the
       # required Reviewed-by trailer exists. The driver creates the commit
-      # itself so the invariant holds by construction.
+      # itself so the invariant holds by construction. Security review is the
+      # codereview's SECURITY-CHECK lens on every ticket (reviewer-prompt.md);
+      # stargate-redteam remains the milestone-wide adversarial sweep
+      # (specs/001-tor-route/tickets/T078), not a per-ticket gate.
       echo "run-task: APPROVE received. Re-running verify.sh as the freshness gate…"
       if ! bash scripts/verify.sh >> target/verify.log 2>&1; then
         echo "run-task: verify.sh NOT GREEN at APPROVE. Tree changed post-review. Re-implement." >&2
@@ -447,48 +525,12 @@ EOF
         exit 1
       fi
 
-      # Privacy-critical red-team gate (Constitution Principle VIII; was
-      # informational before T096 — sol-review M6). Fail closed on a missing
-      # or FINDINGS verdict.
-      if [ "$PRIVACY" = "true" ]; then
-        if [ ! -f "$REDTEAM_FILE" ]; then
-          cat <<EOF | emit_prompt REDTEAM
-Privacy-critical red-team gate REQUIRED for $TICKET_ID (privacy_critical: true,
-Constitution Principle VIII; sol-review M6). Spawn \`stargate-redteam\` (fresh
-context, blind to rationale) against the cumulative diff. Hand it ONLY:
-  - The cumulative diff:  \`git diff main\`
-  - The threat model:     \`THREAT-MODEL.md\`
-  - The Constitution:     \`.specify/memory/constitution.md\`
-
-Write the verdict block to:
-  $REDTEAM_FILE
-
-It must contain one of:
-  VERDICT: CLEAN
-  VERDICT: FINDINGS
-
-Then re-invoke: scripts/run-task.sh $TICKET_ID
-
-EOF
-          echo "run-task: $TICKET_ID emitted REDTEAM handoff. Spawn redteam, write verdict, re-invoke."
-          # Keep the codereview verdict + round state so re-invocation resumes
-          # from this point (caller writes only the redteam file).
-          exit 0
-        fi
-        if grep -qE '^VERDICT:\s*FINDINGS' "$REDTEAM_FILE"; then
-          echo "run-task: REDTEAM FINDINGS on $TICKET_ID. Cannot set done (Constitution VIII)." >&2
-          echo "  Resolve findings, then: scripts/run-task.sh $TICKET_ID --reset && scripts/run-task.sh $TICKET_ID" >&2
-          cat "$REDTEAM_FILE" >&2
-          exit 1
-        fi
-        # CLEAN (or any non-FINDINGS verdict) — proceed.
-      fi
-
       # Create the focused commit on the feature branch with the required
       # Reviewed-by trailer. The caller staged paths during IMPLEMENT; we
       # commit only those. If nothing is staged, surface a COMMIT handoff
       # rather than flipping done (the commit invariant is the gate).
-      REVIEW_LINE="Reviewed-by: stargate-codereview (VERDICT: APPROVE; round $ROUND)"
+      VERDICT_KIND="$(printf '%s\n' "$VERDICT_BODY" | grep -m1 '^VERDICT:' | sed 's/^VERDICT:[[:space:]]*//' | cut -c1-40)"
+      REVIEW_LINE="Reviewed-by: stargate-codereview (VERDICT: $VERDICT_KIND; round $ROUND)"
       if ! make_focused_commit "$REVIEW_LINE"; then
         cat <<EOF | emit_prompt COMMIT
 $TICKET_ID was APPROVED but no changes are staged for the focused commit
@@ -518,7 +560,7 @@ txt = re.sub(r'^reviews:\s*\{[^}]*\}\s*$', new, txt, count=1, flags=re.MULTILINE
 open(path, 'w').write(txt)
 PY
       update_ticket_status "done"
-      rm -f "$VERDICT_FILE" "$REDTEAM_FILE"
+      rm -f "$VERDICT_FILE" "$REDTEAM_FILE" "$AWF_FILE"
       echo "run-task: $TICKET_ID done (committed on '$FEATURE_BRANCH')."
       echo "  Push is your call: git push origin $FEATURE_BRANCH"
       echo "  Milestone squash-merge to main: scripts/run-task.sh $TICKET_ID --merge"

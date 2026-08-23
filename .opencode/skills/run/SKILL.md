@@ -70,9 +70,9 @@ These mirror `scripts/run-task.sh`'s exit-1 conditions and
 3. **Build** — `scripts/verify.sh` not green after addressing a rework round.
 4. **Review** — REWORK round cap hit (default 2; 3 if `round_cap: 3`), or
    `ESCALATE` verdict.
-5. **Redteam** — `FINDINGS` from `stargate-redteam` (only fires when
-   `privacy_critical: true`; not yet wired into run-task.sh's main loop, so
-   /run performs the redteam gate explicitly — see step 5 below).
+5. **(Retired)** — the per-ticket redteam gate was removed: security is now
+   the codereview's SECURITY-CHECK on every ticket (reviewer-prompt.md);
+   `stargate-redteam` survives only as the milestone-wide sweep (T078).
 6. **Must-shrink** — a rework round grew files+added+removed simultaneously
    without a citable mandate.
 
@@ -104,9 +104,16 @@ re-invokes. Pseudocode:
                     Bash("touch target/runs/<id>.verified")
                     If files_budget about to be exceeded → STOP (bright-line 2).
       - REVIEW    → spawn stargate-codereview (Task tool, subagent) with the
-                    diff + ticket + verify log + (round ≥2) prior diffstat;
-                    write the verdict block to target/runs/<id>.verdict
-                    (Bash: heredoc-redirect or Write tool).
+                    diff + ticket + the MECHANICAL REPORT from the run-task
+                    handoff (round ≥2: it embeds the prior round's verdict).
+                    The REVIEWER writes its own verdict to
+                    target/runs/<id>.verdict (its single writable path) and
+                    replies with a stub; the orchestrator must NOT
+                    transcribe, edit, or reformat the verdict. If the
+                    reviewer finished without writing the file, re-spawn —
+                    do not write it yourself. Also update redteam gate note:
+                    per-ticket redteam is RETIRED (security is the reviewer's
+                    SECURITY-CHECK); step 3 below no longer fires.
                     If verdict APPROVE → loop continues (run-task transitions
                     to done).
                     If verdict REWORK and round ≤ cap → loop continues
@@ -131,12 +138,8 @@ re-invokes. Pseudocode:
                     autopilot's call — the user drives that explicitly at
                     milestone end.
     d. Continue the loop.
-3. Privacy-critical redteam gate (only fires when ticket.privacy_critical is
-   true AND the ticket has reached status: done):
-   a. Spawn stargate-redteam (Task tool, subagent) against the cumulative diff.
-   b. CLEAN → proceed to the MERGE step (commit + push).
-   c. FINDINGS → STOP (bright-line 5). Surface the per-severity summary and
-      the recommended `scripts/run-task.sh <id> --reset` + manual review path.
+3. (Retired) per-ticket redteam gate — see bright-line 5; proceed straight
+   to MERGE when run-task reaches it.
 4. Final report: print the phase-by-phase summary (clarity verdict · files/
    +/- · review verdict+round · redteam verdict if fired · final status ·
    commit sha pushed). End with the pushed commit sha and the feature

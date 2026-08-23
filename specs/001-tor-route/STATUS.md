@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-08-22
+**Last updated:** 2026-08-23
 
 ---
 
@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 69 |
+| pending | 68 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 64 |
+| done | 66 |
 | deferred | 1 |
 | **total** | **135** |
 
@@ -80,7 +80,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T078 | Run the `stargate-redteam` agent against the completed featu | 6: Polish & Cross-Cutting Concerns |  |  |
 | T079 | Run the `stargate-perf` agent against the data plane (Princi | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T080 | Sweep with `scripts/check-license-headers.sh` (from T006); v | 6: Polish & Cross-Cutting Concerns | ✓ |  |
-| T083 | Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_resta | 2: Foundational (Blocking Prerequisites) |  |  |
 | T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
@@ -90,9 +89,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T082 | Reconcile the threat model with the local stack | in-review | ✓ | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -106,7 +103,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_64 ticket(s) done._
+_66 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -152,6 +149,8 @@ _64 ticket(s) done._
 - T033 — Integration test for the full vertical: bring up `compose/docker-compo
 - T034 — Integration test asserting no DNS query for any `*.onion` name appears
 - T076 — Run every test module in the single green gate
+- T082 — Reconcile the threat model with the local stack
+- T083 — Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_restart
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
 - T087 — Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOINT)
 - T088 — Repair local init and Compose provisioning

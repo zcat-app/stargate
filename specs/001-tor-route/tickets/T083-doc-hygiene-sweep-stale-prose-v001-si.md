@@ -1,7 +1,7 @@
 ---
 id: T083
 title: 'Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_restart'
-status: in-review
+status: done
 created: 2026-07-05
 last_updated: 2026-08-23
 source: derived-from-T018-redteam  # not in tasks.md; filed from T018's redteam r3 INFO-1 + codereview F1
@@ -21,7 +21,7 @@ decision_refs:
   - SECURITY-DECISIONS.md §"2026-07-04 — Tor sidecar trust rationale (FR-015)" (T017 entry — exists, not TODO)
 constitution_refs:
   - "V: Honest Threat Model"
-reviews: {}
+reviews: { round: 1, date: 2026-08-23, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

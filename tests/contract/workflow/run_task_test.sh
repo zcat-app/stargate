@@ -158,6 +158,24 @@ assert '[ "$rt_rc" -eq 0 ]' "S1: start exits 0 (got $rt_rc)"
 assert '[ "$(git rev-parse --abbrev-ref HEAD)" = 001-testfeat ]' "S1: caller landed on feature branch"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T300-fixture.md status)" = in-progress ]' "S1: status -> in-progress"
 assert 'git show-ref --verify --quiet refs/heads/001-testfeat' "S1: feature branch ref exists"
+assert '[ -s target/runs/T300.start-sha ]' "S1: review base SHA recorded at start"
+
+# ===========================================================================
+# Scenario 1b: in-review REVIEW handoff — mechanical report + verdict self-write
+# ===========================================================================
+setup_sandbox s1b
+write_ticket T321 "mechanical report handoff" false in-review >/dev/null
+commit_all "add T321 ticket"
+git checkout -q -b 001-testfeat main
+printf 'x\n' > a.txt; printf 'y\n' > b.txt
+git add a.txt b.txt specs/001-testfeat/tickets/T321-fixture.md
+mkdir -p target/runs
+run_task T321   # no verdict file -> emits REVIEW handoff
+assert '[ "$rt_rc" -eq 0 ]' "S1b: REVIEW handoff exits 0 (got $rt_rc)"
+echo "$rt_out" | grep -qi "MECHANICAL REPORT" || bail "S1b: handoff should contain the mechanical report"
+echo "$rt_out" | grep -q "files touched: 2 of files_budget=" || bail "S1b: files-vs-budget line missing or miscounted"
+echo "$rt_out" | grep -qi "writes its own verdict\|WRITES ITS OWN VERDICT" || bail "S1b: handoff should say the reviewer writes its own verdict"
+echo "$rt_out" | grep -q "out-of-scope" || bail "S1b: out-of-scope block missing"
 
 # ===========================================================================
 # Scenario 2: pending START — ambiguous ticket match refused
@@ -224,32 +242,28 @@ echo "$rt_out" | grep -qi "COMMIT" || bail "S5: handoff should mention COMMIT"
 assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S5: no commit created on feature branch"
 
 # ===========================================================================
-# Scenario 6: APPROVE — privacy_critical red-team gate (missing -> refuse)
+# Scenario 6: APPROVE — privacy_critical commits directly (per-ticket redteam
+# gate RETIRED: security is the codereview's SECURITY-CHECK on every ticket;
+# stargate-redteam survives only as the milestone sweep, ticket T078).
 # ===========================================================================
 setup_sandbox s6
-write_ticket T305 "privacy needs redteam" true in-review >/dev/null
+write_ticket T305 "privacy approves without per-ticket redteam" true in-review >/dev/null
 commit_all "add T305 ticket"
 git checkout -q -b 001-testfeat main
 printf 'impl\n' > p.txt; git add p.txt specs/001-testfeat/tickets/T305-fixture.md
 mkdir -p target/runs
 printf 'VERDICT: APPROVE\nround 1\n' > target/runs/T305.verdict
 run_task T305
-assert '[ "$rt_rc" -eq 0 ]' "S6: missing redteam emits REDTEAM handoff, exits 0 (got $rt_rc)"
-assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = in-review ]' \
-  "S6: status stays in-review (done refused without redteam)"
-echo "$rt_out" | grep -qi "redteam\|REDTEAM" || bail "S6: handoff should mention REDTEAM"
-# Supply CLEAN -> proceeds to commit + done.
-printf 'VERDICT: CLEAN\n' > target/runs/T305.redteam
-run_task T305
-assert '[ "$rt_rc" -eq 0 ]' "S6b: CLEAN redteam proceeds, exits 0 (got $rt_rc)"
+assert '[ "$rt_rc" -eq 0 ]' "S6: privacy APPROVE with NO redteam file exits 0 (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = done ]' \
-  "S6b: status -> done with CLEAN redteam"
+  "S6: privacy ticket -> done without any redteam verdict"
 
 # ===========================================================================
-# Scenario 7: APPROVE — privacy_critical redteam FINDINGS -> hard stop
+# Scenario 7: APPROVE — a stale legacy .redteam file must NOT block the
+# commit path (the driver no longer consults it).
 # ===========================================================================
 setup_sandbox s7
-write_ticket T306 "privacy redteam findings" true in-review >/dev/null
+write_ticket T306 "legacy redteam file ignored" true in-review >/dev/null
 commit_all "add T306 ticket"
 git checkout -q -b 001-testfeat main
 printf 'impl\n' > p.txt; git add p.txt specs/001-testfeat/tickets/T306-fixture.md
@@ -257,9 +271,9 @@ mkdir -p target/runs
 printf 'VERDICT: APPROVE\nround 1\n' > target/runs/T306.verdict
 printf 'VERDICT: FINDINGS\nBlocker: DNS leak in path X\n' > target/runs/T306.redteam
 run_task T306
-assert '[ "$rt_rc" -ne 0 ]' "S7: FINDINGS redteam exits non-zero (got $rt_rc)"
-assert '[ "$(fm_field specs/001-testfeat/tickets/T306-fixture.md status)" = in-review ]' \
-  "S7: status stays in-review on FINDINGS"
+assert '[ "$rt_rc" -eq 0 ]' "S7: legacy FINDINGS file does not block (got $rt_rc)"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T306-fixture.md status)" = done ]' \
+  "S7: privacy ticket -> done despite legacy redteam file"
 
 # ===========================================================================
 # Scenario 8: MERGE — milestone squash-merge of feature branch into main
@@ -333,6 +347,35 @@ assert '[ "$rt_rc" -eq 0 ]' "S10b: REWORK r1 exits 0 (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T319-fixture.md status)" = in-progress ]' \
   "S10b: status -> in-progress after REWORK r1"
 assert '[ "$(cat target/runs/T319.round)" = 2 ]' "S10b: round bumped to 2"
+
+# ===========================================================================
+# Scenario 10c: APPROVE-WITH-FIXES — two-step, fail-closed
+# Step 1 (no sentinel): emits APPLY-FIXES handoff, exits 0, NO commit.
+# Step 2 (sentinel): falls through to the normal APPROVE path and commits
+# with the AWF Reviewed-by trailer. Mirrors S4's sandbox shape.
+# ===========================================================================
+setup_sandbox s10c
+write_ticket T320 "approve with fixes commits after sentinel" false in-review >/dev/null
+commit_all "add T320 ticket"
+git checkout -q -b 001-testfeat main
+printf 'real impl\n' > src.txt
+git add src.txt specs/001-testfeat/tickets/T320-fixture.md
+mkdir -p target/runs
+printf 'VERDICT: APPROVE-WITH-FIXES\nFIX ITEMS:\n  - fix a comment\n' > target/runs/T320.verdict
+run_task T320   # step 1: no sentinel yet
+assert '[ "$rt_rc" -eq 0 ]' "S10c-1: first sight exits 0 (got $rt_rc)"
+echo "$rt_out" | grep -qi "APPLY-FIXES" || bail "S10c-1: handoff should mention APPLY-FIXES"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T320-fixture.md status)" = in-review ]' \
+  "S10c-1: status stays in-review before fixes applied"
+assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S10c-1: no commit created"
+touch target/runs/T320.awf-applied                # caller signals fixes applied
+run_task T320   # step 2: sentinel present -> commit path
+assert '[ "$rt_rc" -eq 0 ]' "S10c-2: post-sentinel exits 0 (got $rt_rc)"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T320-fixture.md status)" = done ]' \
+  "S10c-2: status -> done"
+assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-codereview (VERDICT: APPROVE-WITH-FIXES"' \
+  "S10c-2: trailer carries the AWF verdict kind"
+assert '[ ! -e target/runs/T320.awf-applied ]' "S10c-2: awf sentinel cleaned up at done"
 
 # ===========================================================================
 # Scenario 11: lint — rejects privacy-critical impl runnable before its test
