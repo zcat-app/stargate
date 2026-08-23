@@ -157,7 +157,7 @@ specifically, the build inputs are pinned to an immutable
 rebuild selects byte-identical packages and the resolved closure (incl.
 `libssl3`) is frozen and auditable — but this makes the binary *auditable*,
 not *trustworthy*: the closure still rides Debian's archive key, and a
-malicious-but-behaviourally-conforming library is undetected. See §5.7,
+malicious-but-behaviourally-conforming library is undetected. See §5.8,
 §5.9, and `SECURITY-DECISIONS.md` §"Debian archive snapshot pin".
 
 ### 2.7 Malicious browser extension
@@ -980,8 +980,9 @@ per-interface port binds, a torrc byte-contract change owned by T087 and
 deferred; it is accepted v1 residue and pinned as expected-reachable in
 `tests/contract/compose/network_hardening_test.go`. We accept this risk
 and rely on upstream maintainer trust plus reproducibility checks where
-the upstream publishes them. See `SECURITY-DECISIONS.md` (once authored)
-for the per-image trust rationale required by architecture spec §7.
+the upstream publishes them. See `SECURITY-DECISIONS.md`
+§"2026-07-04 — Tor sidecar trust rationale (FR-015)" for the per-image
+trust rationale required by architecture spec §7.
 
 ### 5.9 Update channel compromise
 
@@ -1383,12 +1384,32 @@ is silent connectivity loss. Stargate v1 has init-time healthchecks
 
 ### 8.6 Sidecar maintainer trust
 
-Each sidecar's upstream maintainer is in the privacy TCB (§5.8). The
-Tor image specifically is not published by the Tor Project itself; we
-must choose a community maintainer and document the trust rationale
-in `SECURITY-DECISIONS.md` (architecture spec §7
-`NEEDS CLARIFICATION`). This is an unresolved trust decision at the
-time of writing.
+Each sidecar's upstream maintainer is in the privacy TCB (§5.8). The Tor
+Project publishes no official container image, so Stargate builds its own
+Tor sidecar (`sidecars/tor/Dockerfile`) rather than trusting a third-party
+image maintainer: a digest-pinned `debian:12-slim` base, Debian package
+inputs pinned to an immutable `snapshot.debian.org` run with explicit
+`=version` pins (T099), and the `tor` package itself from the Tor
+Project's own apt repository (`deb.torproject.org`), bound to the pinned
+Tor Project signing key by fingerprint and verified on every build. The
+decision is resolved and recorded — `SECURITY-DECISIONS.md`
+§"2026-07-04 — Tor sidecar trust rationale (FR-015)" is the authoritative
+rationale, rotation policy, and residual-risk record.
+
+Two residues stay honestly open here:
+
+- The final composed image digests are not yet pinned; that lands at
+  release-tag time with the release workflow (T081). Until then the
+  supply chain is base-pinned + snapshot-pinned + key-verified, not
+  fully image-pinned.
+- The recorded sha256 of the `tor` `.deb` is enforced by no independent
+  build step — apt verifies it only against the repository's own signed
+  index, so a same-version replacement by a compromised
+  `deb.torproject.org` remains maintainer-trust residue. This is tracked
+  as open redteam finding 20260727-002 and is not claimed as mitigated.
+
+Update-channel compromise of a sidecar is §5.9; the wider sidecar-in-TCB
+residuals are §5.8.
 
 ### 8.7 Bridge-distribution arms race
 
@@ -1422,22 +1443,19 @@ update is residual risk for users.
 
 ## 9. Reporting vulnerabilities
 
-`CONTRIBUTING.md` (not yet authored — TODO referenced in the
-Constitution Sync Impact Report) will carry the canonical security
-contact and PGP key once the project has a security disclosure inbox.
+**Do not open a public GitHub issue for security bugs.**
 
-Until that file exists:
+For anything you would not be comfortable making public immediately —
+suspected privacy leaks, sidecar compromise, key disclosure — report
+privately via **GitHub Security Advisories**:
 
-- For non-sensitive issues, open a GitHub issue against the Stargate
-  repository.
-- For sensitive issues (suspected privacy leaks, sidecar compromise,
-  key disclosure, anything you would not be comfortable making public
-  immediately), **do not file a public issue**. Wait for
-  `CONTRIBUTING.md` to be authored, or contact the maintainer through
-  the channel listed in the README at the time of disclosure.
-- We will commit to a documented coordinated-disclosure window in
-  `CONTRIBUTING.md`. Until that document exists, please use private
-  channels for sensitive reports.
+> `https://github.com/zcat-app/stargate/security/advisories/new`
+
+Non-sensitive issues go through the normal GitHub issue tracker. The
+coordinated-disclosure window is documented in `CONTRIBUTING.md`
+("Reporting security issues"); if a report shows that a guarantee claimed
+in `THREAT-MODEL.md` does not hold, it is handled through the same private
+channel, not the public tracker.
 
 Honest note: a project at this stage of development is **not** an
 appropriate target for users with state-level threat models. Stargate
@@ -1459,9 +1477,10 @@ in subsequent revisions of this file.
    operator; rotating gives a different set of trade-offs. §4.5
    currently states this neutrally; once policy is decided, this
    document should state which one and why.
-2. **Security contact channel** (§9). Once `CONTRIBUTING.md` lands,
-   replace the placeholder language here with a concrete channel and
-   PGP / age key fingerprint.
+2. **Security contact channel** (§9). The private reporting route is
+   GitHub Security Advisories; a PGP / age key fingerprint for
+   out-of-band contact is still open. When booked, add the key
+   fingerprint to §9 so users can authenticate the channel.
 3. **External security reviewer identity** (Constitution Principle
    VIII). When booked, name the reviewer in §9 so users can verify the
    review's provenance at the time of disclosure.

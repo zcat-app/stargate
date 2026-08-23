@@ -1,9 +1,9 @@
 ---
 id: T082
 title: 'Reconcile the threat model with the local stack'
-status: pending
+status: in-review
 created: 2026-07-04
-last_updated: 2026-07-11
+last_updated: 2026-08-22
 source: review/sol-review.md#M8
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
