@@ -226,7 +226,8 @@ stored secret faces (THREAT-MODEL §2.8 OS-level attacker — out of scope).
   not signalled work on this and Stargate cannot wait.
 
 **Follow-up**: update arch §14.4 to mark this resolved-for-v1, with
-SECURITY-DECISIONS.md to carry the rationale once that file is authored.
+SECURITY-DECISIONS.md carrying the rationale — see the existing
+§"2026-07-04 — Tor sidecar trust rationale (FR-015)" entry (T017).
 
 ---
 

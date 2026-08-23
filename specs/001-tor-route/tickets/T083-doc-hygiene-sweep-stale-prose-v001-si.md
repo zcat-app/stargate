@@ -1,9 +1,9 @@
 ---
 id: T083
 title: 'Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_restart'
-status: pending
+status: in-review
 created: 2026-07-05
-last_updated: 2026-07-05
+last_updated: 2026-08-23
 source: derived-from-T018-redteam  # not in tasks.md; filed from T018's redteam r3 INFO-1 + codereview F1
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
@@ -120,6 +120,13 @@ T083 is a documentation-only sweep. Named tests:
 3. **EXISTING: `tests/contract/arch/docker_socket_proxy_section_test.sh`**
    (T018) MUST remain GREEN — T083 does not touch `specs/000-architecture/spec.md`.
 
+   > Acceptance-ledger note (T083 r1 codereview, finding 1): items #2/#3
+   > named `tests/contract/security-decisions/docker_socket_proxy_entry_test.sh`
+   > and `tests/contract/arch/docker_socket_proxy_section_test.sh`, both
+   > deleted with the docker-socket-proxy component by T094a (commit
+   > aaca22d) before T083 landed — vacuously satisfied; nothing left to
+   > keep green.
+
 ### Behavioral assertions (PR-time verification at `/start`)
 
 - `specs/001-tor-route/checklists/requirements.md`: the "Remaining owed"
@@ -137,6 +144,10 @@ T083 is a documentation-only sweep. Named tests:
 - Whole-`specs/` grep for `once that file is authored|outstanding
   follow-up|owed for both` returns zero matches after T083 lands
   (regression guard; T018 already enforced this for spec.md).
+  Evaluated form (T083 r1 codereview, finding 2):
+  `grep -rnE 'once that file is authored|outstanding follow-up|owed for both' specs/ docs/ --exclude-dir=tickets --exclude-dir=.handoffs`
+  → zero matches; remaining raw-grep hits are ticket transcripts quoting
+  the pattern as evidence.
 
 ### Runnable command
 

@@ -91,8 +91,6 @@
   1. §7 — Tor row rewritten with the resolved image strategy.
   2. §10.1 — `AUTH_REQUIRED` added to the error-code table.
   3. §15 #1 — Tor portion marked resolved; Nym portion remains open.
-- Remaining owed (not blocking `/speckit-plan`):
-  - `SECURITY-DECISIONS.md` trust-rationale entry for the Tor sidecar
-    image, once that file is authored (constitution Sync Impact Report
-    lists it as TODO). The rationale lives inline in architecture spec
-    §7 until then.
+- The Tor sidecar trust rationale is recorded in `SECURITY-DECISIONS.md`
+  §"2026-07-04 — Tor sidecar trust rationale (FR-015)" (T017); its
+  existence is gated by `tests/contract/security-decisions/tor_entry_test.sh`.

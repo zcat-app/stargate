@@ -67,7 +67,7 @@ CREATE TABLE audit_log (
   id           INTEGER PRIMARY KEY,
   ts           INTEGER NOT NULL,                -- unix seconds (admin action time, not user request time)
   actor        TEXT    NOT NULL,                -- admin credential label
-  action       TEXT    NOT NULL,                -- enum (v1 baseline; per-feature extensions land via lock-step amendments — see e.g. specs/001-tor-route/data-model.md §4): enrolled, revoked, config_error, sidecar_healthy, sidecar_unhealthy, sidecar_restart, bridge_toggle, export, import, wipe
+  action       TEXT    NOT NULL,                -- enum (v1 baseline; per-feature extensions land via lock-step amendments — see e.g. specs/001-tor-route/data-model.md §4): enrolled, revoked, config_error, sidecar_healthy, sidecar_unhealthy, bridge_toggle, export, import, wipe
   target       TEXT,                            -- entity affected (e.g. device name)
   detail_json  TEXT                             -- fixed-schema metadata; never request data
 );
