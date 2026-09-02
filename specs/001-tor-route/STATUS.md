@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 68 |
+| pending | 70 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 72 |
+| done | 73 |
 | deferred | 1 |
-| **total** | **141** |
+| **total** | **144** |
 
 ---
 
@@ -80,11 +80,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T079 | Run the `stargate-perf` agent against the data plane (Princi | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T080 | Sweep with `scripts/check-license-headers.sh` (from T006); v | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T081 | Author `release.yml` workflow: GHCR push + image digest pin  | 6: Polish & Cross-Cutting Concerns | ✓ |  |
-| T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
+| T104a | Onboard core and persistence test sources to NullAway | 0: Bootstrap (tooling) |  |  |
+| T104b | Add the nullness-contract rule to CONTRIBUTING.md code style | 0: Bootstrap (tooling) |  | ✓ |
 | T108 | verify.sh must record repro-test SKIP as SKIP, not PASS | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T110 | Hermetic digest-agreement assertion for alpine:3.20 pins | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T111 | BUILD-DIFFS: document extension zip binary as build input | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T112 | Wire the stale-prose regression guard as a contract test | 6: Polish & Cross-Cutting Concerns |  | ✓ |
+| T113 | Drop the inert PostConstruct token from ExcludedFieldAnnotat | 0: Bootstrap (tooling) |  | ✓ |
 
 ---
 
@@ -104,7 +106,7 @@ _(nothing in flight)_
 
 ## Done
 
-_72 ticket(s) done._
+_73 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -175,6 +177,7 @@ _72 ticket(s) done._
 - T101 — Consolidate the privacy log-invariant scanner
 - T102 — Scan for Stargate bearer-token secrets
 - T103 — Add a scoped shell quality gate
+- T104 — Wire Error Prone + NullAway into the control-plane Maven reactor
 - T105 — Stabilize the flaky run_task_test.sh S8 milestone-merge assertion
 - T106 — Make the init count-probe failure path fail-closed (no key clobber)
 - T107 — Digest-pin alpine:3.20 in stargate-cli contract tests

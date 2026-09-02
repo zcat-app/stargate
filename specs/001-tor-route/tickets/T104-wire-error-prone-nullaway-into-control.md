@@ -1,7 +1,7 @@
 ---
 id: T104
 title: 'Wire Error Prone + NullAway into the control-plane Maven reactor'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-02
 source: hand-authored   # Not in tasks.md; raised after the (1)+(2) tooling
@@ -57,7 +57,7 @@ decision_refs:
   - "infochat docs/plan/m1/tickets/M1-164* (the per-module onboarding
      sequence — one subticket per module)"
 
-reviews: {}
+reviews: { round: 1, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
