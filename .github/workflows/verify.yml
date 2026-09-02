@@ -36,7 +36,7 @@ jobs:
         with:
           fetch-depth: 1   # shallow is enough; verify.sh doesn't need history
 
-      - name: Set up toolchain (Go + JDK 25 + Python 3)
+      - name: Set up toolchain (Go + JDK 25 + Python 3 + Node 20)
         uses: ./.github/actions/setup-toolchain
 
       - name: verify.sh

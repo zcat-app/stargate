@@ -1,7 +1,7 @@
 ---
 id: T034b
 title: 'Unit test for `extension/background/hardening.js` (Principle VII; FR-0'
-status: pending
+status: in-review
 created: 2026-07-04
 last_updated: 2026-09-02
 source: tasks.md#T034b
@@ -9,7 +9,9 @@ phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MV
 story: 'US1'
 blocked_by: [T009, T091]
 parallel: true
-files_budget: 4
+files_budget: 6   # raw-diff-path counting (run-task.sh): 4 code files + this
+                  # ticket + STATUS.md regen; ticket-template.md excludes
+                  # specs/ paths from the budget
 privacy_critical: true
 complexity: low
 risk: low
@@ -126,15 +128,19 @@ the restart mechanism). It exposes exactly two globals:
   its side effects are observable, so tests await determinism.
 
 Failure side effects (observed through the mock, shapes pinned only to
-what arch §14.5 names): one `browser.notifications.create(<payload>)` whose
+what arch §14.5 names): each failing audit surfaces exactly one
+`browser.notifications.create(<payload>)` whose
 `message` names WebRTC and the remediation (`peerConnectionEnabled`) and
-which carries `requireInteraction: true`; one
+which carries `requireInteraction: true`, plus one
 `browser.storage.local.set({ hardening: { lastAuditResult: … } })` whose
-serialized value identifies the blocked surface. Success: no notification,
-no storage write. The audit never throws synchronously and never rejects —
-an API read that returns `undefined` (pref reachable but unset) or rejects
-(permission/unavailable) fails **closed** (`hardeningOk === false`), never
-open.
+serialized value identifies the blocked surface. Because the script also
+audits at load, content cases assert `>= 1` over the context lifetime
+while the exact per-audit count is pinned by the no-explicit-call and
+0→1-transition cases. Success: no notification,
+no storage write. The audit never throws synchronously and never
+rejects — an API read that returns `undefined` (pref reachable but unset)
+or rejects (permission/unavailable) fails **closed** (`hardeningOk ===
+false`), never open.
 
 - **Must hold:**
   - **Fail-closed against WebRTC (FR-004(b), Constitution III):**
@@ -248,7 +254,13 @@ step in `.github/actions/setup-toolchain/action.yml`. Runnable command:
 
 - **`extension/background/hardening.js` itself** — T055's named artifact.
   THIS ticket must not create it; the suite self-skips until T055 lands
-  it, then gates T055's verify.
+  it, then gates T055's verify. **T055 must NOT edit
+  `hardening.test.js` or `run-tests.sh`**: the mock and the pinned
+  surface in §Analysis are this ticket's contract. If the pinned surface
+  genuinely cannot host T055's design, that is a **refine** escalation
+  against THIS ticket (rewrite §Analysis's pinned-surface paragraph), not
+  a test edit — "fix the code, never the test" applies, and this
+  paragraph is the explicit authorization boundary.
 - **`extension/background/router.js` and its `proxyDNS` / SOCKS5-username
   logic** — T054's surface; its unit test is the future second JS test
   research §10 anticipates. `test_for: [T055]` pins the pairing; T054 is
@@ -282,3 +294,16 @@ tasks.md §"Notes" (binding): "never bundle a test and its corresponding
 implementation into one commit (the failing-test signal is part of the
 audit trail)" — under the T068a precedent the signal is the loud skip in
 this commit, lifting to assertions inside T055's commit.
+
+**Falsification record (2026-09-02, implement phase).** The suite was
+exercised in a throwaway copy against a conforming reference stub and
+four drift mutations: 8/8 pass on the stub; each mutation trips the named
+case — dialog claiming DoH → `failureDialogNeverClaimsDohDotHttp3…`;
+fail-open flag semantics → `…FailsClosed` + startup + reaudit cases;
+`browser.proxy.settings` touch → `extensionTouchesOnlyRealPrivacyApi…`;
+`let`-declared (non-global) flag → conformance hard-fail on every case,
+never a silent skip. First falsification round caught a real suite bug
+(absolute notification counts double-counted the load-time audit alongside
+the explicit call) — fixed by pinning exact counts only where they are
+unambiguous (no-explicit-call case, 0→1 transition case) and `>= 1` +
+per-payload assertions in the content cases.

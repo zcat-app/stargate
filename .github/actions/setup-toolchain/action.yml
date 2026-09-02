@@ -1,15 +1,15 @@
 # Copyright 2026 The Stargate Authors
 # SPDX-License-Identifier: Apache-2.0
 #
-# Composite action: install the stargate toolchain (Go, JDK 25, Python 3)
-# for use by CI workflows. Deduped from verify.yml + agent-task.yml so the
-# two stay in sync.
+# Composite action: install the stargate toolchain (Go, JDK 25, Python 3,
+# Node 20) for use by CI workflows. Deduped from verify.yml + agent-task.yml
+# so the two stay in sync.
 #
 # Mirrors what scripts/verify.sh self-detects at runtime; here we install
 # every tool upfront so the gates exercise for real rather than SKIP.
 
 name: Set up stargate toolchain
-description: Install Go (from data-plane/go.mod), JDK 25 (Temurin), and Python 3.
+description: Install Go (from data-plane/go.mod), JDK 25 (Temurin), Python 3, and Node 20.
 
 runs:
   using: composite
@@ -31,3 +31,10 @@ runs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.x'
+
+    # Node 20 LTS is the CI pin for the extension JS unit tests
+    # (extension/run-tests.sh, verify.sh Gate 2b) — research.md §10.
+    - name: Set up Node 20
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
