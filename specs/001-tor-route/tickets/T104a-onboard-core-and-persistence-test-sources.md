@@ -1,7 +1,7 @@
 ---
 id: T104a
 title: 'Onboard core and persistence test sources to NullAway'
-status: pending
+status: in-progress
 created: 2026-09-02
 last_updated: 2026-09-02
 source: T104 §Notes "Related tickets to file after this one lands" (the
