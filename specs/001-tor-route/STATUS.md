@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 63 |
+| pending | 65 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 72 |
 | deferred | 1 |
-| **total** | **136** |
+| **total** | **138** |
 
 ---
 
@@ -81,6 +81,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T080 | Sweep with `scripts/check-license-headers.sh` (from T006); v | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T081 | Author `release.yml` workflow: GHCR push + image digest pin  | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
+| T108 | verify.sh must record repro-test SKIP as SKIP, not PASS | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 
 ---
 
