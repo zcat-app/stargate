@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 64 |
+| pending | 63 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 79 |
+| done | 80 |
 | deferred | 1 |
 | **total** | **144** |
 
@@ -30,7 +30,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T034b | Unit test for `extension/background/hardening.js` (Principle | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034c | Unit test for `extension/popup/popup.js` per-tab indicator ( | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034d | Unit test for `extension/lib/firstparty.js` (Principle VII | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T034e | Unit test for the canonical `storage.local` warning text (Pr | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
@@ -52,6 +51,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T051 | Author `extension/manifest.json` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T052 | Author `extension/lib/storage.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T053 | Author `extension/lib/firstparty.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
+| T055 | Author `extension/background/hardening.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T057 | Author `extension/popup/popup.html` and `extension/popup/pop | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T058 | Contract test in `tests/contract/torrc/isolate_socks_auth_ef | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T058a | Contract test pinning Tor''s behaviour under `IsolateSOCKSAu | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
@@ -103,7 +103,7 @@ _(nothing in flight)_
 
 ## Done
 
-_79 ticket(s) done._
+_80 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -148,6 +148,7 @@ _79 ticket(s) done._
 - T032 — Contract test spinning up the live Tor sidecar with the rendered confi
 - T033 — Integration test for the full vertical: bring up `compose/docker-compo
 - T034 — Integration test asserting no DNS query for any `*.onion` name appears
+- T034b — Unit test for `extension/background/hardening.js` (Principle VII; FR-0
 - T035a — Unit test for `TokenLoader.java` (T035) diff logic and validation
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T075b — Author `tests/reproducibility/extension_test.sh`

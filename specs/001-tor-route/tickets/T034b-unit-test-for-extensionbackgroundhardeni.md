@@ -1,7 +1,7 @@
 ---
 id: T034b
 title: 'Unit test for `extension/background/hardening.js` (Principle VII; FR-0'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-02
 source: tasks.md#T034b
@@ -32,7 +32,7 @@ decision_refs:
   - "specs/001-tor-route/review/sol-review.md#B4 (originating finding: stable WebExtensions APIs do not expose DoH/DoT/HTTP-3 prefs)"
   - "specs/001-tor-route/tickets/T068a-contract-test-for-the-response-header-in.md (round-1 APPROVE precedent: a tests-first ticket lands GREEN via self-skips that gate on the impl's surface and lift when it exists)"
   - "specs/001-tor-route/tickets/T035a-unit-test-for-tokenloaderjava-t035-diff.md (most recent application of that precedent; the Java analog of this ticket's refine-vs-stale-body handling)"
-reviews: {}
+reviews: { round: 1, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
