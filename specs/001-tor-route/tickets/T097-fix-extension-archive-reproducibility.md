@@ -1,7 +1,7 @@
 ---
 id: T097
 title: 'Fix extension archive reproducibility'
-status: in-progress
+status: done
 created: 2026-07-11
 last_updated: 2026-09-02
 source: review/sol-review.md#M7
@@ -21,7 +21,7 @@ spec_refs:
   - specs/001-tor-route/plan.md §"Constitution Check"
 decision_refs: []
 remediates: T005
-reviews: {}
+reviews: { round: 1, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
