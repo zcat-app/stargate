@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 65 |
+| pending | 68 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 72 |
 | deferred | 1 |
-| **total** | **138** |
+| **total** | **141** |
 
 ---
 
@@ -82,6 +82,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T081 | Author `release.yml` workflow: GHCR push + image digest pin  | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 | T108 | verify.sh must record repro-test SKIP as SKIP, not PASS | 2: Foundational (Blocking Prerequisites) |  | ✓ |
+| T110 | Hermetic digest-agreement assertion for alpine:3.20 pins | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
+| T111 | BUILD-DIFFS: document extension zip binary as build input | 6: Polish & Cross-Cutting Concerns |  | ✓ |
+| T112 | Wire the stale-prose regression guard as a contract test | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 
 ---
 
