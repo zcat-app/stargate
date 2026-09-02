@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 69 |
+| pending | 68 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 74 |
+| done | 75 |
 | deferred | 1 |
 | **total** | **144** |
 
@@ -85,7 +85,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T110 | Hermetic digest-agreement assertion for alpine:3.20 pins | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T111 | BUILD-DIFFS: document extension zip binary as build input | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T112 | Wire the stale-prose regression guard as a contract test | 6: Polish & Cross-Cutting Concerns |  | ✓ |
-| T113 | Drop the inert PostConstruct token from ExcludedFieldAnnotat | 0: Bootstrap (tooling) |  | ✓ |
 
 ---
 
@@ -105,7 +104,7 @@ _(nothing in flight)_
 
 ## Done
 
-_74 ticket(s) done._
+_75 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -181,3 +180,4 @@ _74 ticket(s) done._
 - T105 — Stabilize the flaky run_task_test.sh S8 milestone-merge assertion
 - T106 — Make the init count-probe failure path fail-closed (no key clobber)
 - T107 — Digest-pin alpine:3.20 in stargate-cli contract tests
+- T113 — Drop the inert PostConstruct token from ExcludedFieldAnnotations

@@ -1,7 +1,7 @@
 ---
 id: T113
 title: 'Drop the inert PostConstruct token from ExcludedFieldAnnotations'
-status: in-progress
+status: done
 created: 2026-09-02
 last_updated: 2026-09-02
 source: T104 review round 1 (APPROVE-WITH-FIXES) RECOMMENDED-FOLLOW-UP #1
@@ -10,7 +10,10 @@ phase: "0: Bootstrap (tooling)"
 story: '-'
 blocked_by: []
 parallel: true
-files_budget: 2
+files_budget: 4            # 1 real file (control-plane/pom.xml) + the ticket
+                           # file + STATUS.md, which the driver's diffstat
+                           # counts (T104 precedent: 8 = 6 scope + 2). The
+                           # initial 2 under-counted the bookkeeping files.
 files_scope:
   - control-plane/pom.xml
 out_of_scope:
@@ -31,7 +34,7 @@ spec_refs:
 decision_refs:
   - "target/runs/T104.verdict (archived in T104's review record) — finding 1"
 
-reviews: {}
+reviews: { round: 1, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
