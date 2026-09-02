@@ -1,7 +1,7 @@
 ---
 id: T035a
 title: 'Unit test for `TokenLoader.java` (T035) diff logic and validation'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-02
 source: tasks.md#T035a
@@ -29,7 +29,7 @@ decision_refs:
   - "specs/001-tor-route/tickets/T093-test-token-verifier-lifecycle.md (the landed oracle suite this ticket extends; its Javadoc explicitly defers 'the detailed unit tests against the real loader with repository/audit fakes' to T035a)"
   - "SECURITY-DECISIONS.md §Bearer-token verifier: HMAC-SHA-256 + install-time pepper (T092)"
   - "specs/001-tor-route/tickets/T068a-contract-test-for-the-response-header-in.md (round-1 APPROVE precedent this ticket follows: a tests-first ticket lands GREEN via self-skips that gate on the impl's surface and lift when it exists)"
-reviews: {}
+reviews: { round: 2, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
