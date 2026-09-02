@@ -44,4 +44,24 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <!-- T104: main sources inherit the parent's Error Prone + NullAway
+         compiler config via pluginManagement; this stanza clears compilerArgs
+         on default-testCompile so tests stay ungated until this module
+         onboards them (T104a pattern). -->
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <compilerArgs combine.self="override"/>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

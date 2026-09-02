@@ -43,9 +43,19 @@
         <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
 
         <!-- Pinned plugin versions for byte-reproducibility (arch §12.2) -->
-        <compiler-plugin.version>3.13.0</compiler-plugin.version>
+        <compiler-plugin.version>3.15.0</compiler-plugin.version>
         <surefire-plugin.version>3.5.3</surefire-plugin.version>
         <failsafe-plugin.version>3.5.3</failsafe-plugin.version>
+
+        <!-- Static nullness enforcement (T104; ported from infochat decision
+             D48). Pinned to specific versions — never RELEASE/LATEST. Checked
+             against Maven Central metadata at wiring time (2026-09-02):
+             error_prone_core 2.42.0→2.50.0, nullaway 0.10.25→0.14.1,
+             jspecify 1.0.0 unchanged; compiler-plugin 3.13.0→3.15.0 (latest
+             stable 3.x; 4.x is beta). -->
+        <error-prone.version>2.50.0</error-prone.version>
+        <nullaway.version>0.14.1</nullaway.version>
+        <jspecify.version>1.0.0</jspecify.version>
 
         <!-- Reproducible JVM build (Constitution Principle VI, arch §12.2,
              T098). Pinned epoch matches the extension zip's canonical
@@ -74,6 +84,18 @@
         </dependencies>
     </dependencyManagement>
 
+    <!-- Inherited by every reactor module, version-less (BOM-managed-versions
+         invariant). provided scope: compile-time annotations only, never on
+         the runtime classpath (T104). -->
+    <dependencies>
+        <dependency>
+            <groupId>org.jspecify</groupId>
+            <artifactId>jspecify</artifactId>
+            <version>${jspecify.version}</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
     <build>
         <pluginManagement>
             <plugins>
@@ -87,6 +109,71 @@
                     <version>${compiler-plugin.version}</version>
                     <configuration>
                         <release>${maven.compiler.release}</release>
+                        <!-- Error Prone + NullAway (T104; infochat D48).
+                             NullAway treats app.zcat.stargate as
+                             @NonNull-by-default (AnnotatedPackages);
+                             genuinely-nullable parameters, returns, and fields
+                             carry @Nullable (JSpecify). @NonNull is never
+                             written — non-null is the default.
+                             Tests are exempted per module via the
+                             default-testCompile stanza (main sources only
+                             until T104a onboards them). -->
+                        <!-- Error Prone needs deep reflective access into the
+                             javac internals; fork runs javac in a child JVM so
+                             the JVM add-exports / add-opens args passed via
+                             -J below reach the compiler rather than this
+                             Maven JVM. -->
+                        <fork>true</fork>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>com.google.errorprone</groupId>
+                                <artifactId>error_prone_core</artifactId>
+                                <version>${error-prone.version}</version>
+                            </path>
+                            <path>
+                                <groupId>com.uber.nullaway</groupId>
+                                <artifactId>nullaway</artifactId>
+                                <version>${nullaway.version}</version>
+                            </path>
+                        </annotationProcessorPaths>
+                        <compilerArgs>
+                            <arg>-XDcompilePolicy=simple</arg>
+                            <arg>--should-stop=ifError=FLOW</arg>
+                            <!-- The EP + NullAway flags MUST share ONE <arg>
+                                 element: split across elements, javac receives
+                                 them as separate arguments and the ErrorProne
+                                 plugin never sees the -XepOpt/-Xep flags —
+                                 NullAway silently does not run
+                                 (green-but-not-enforced; infochat got bitten).
+                                 ExcludedFieldAnnotations exempts
+                                 framework-initialized fields from the
+                                 field-init check: @Inject (CDI) and
+                                 @ConfigProperty (MicroProfile Config) are
+                                 field-level so the exemption matches directly.
+                                 The list also carries
+                                 jakarta.annotation.PostConstruct —
+                                 deliberately inert: it is a method-level
+                                 annotation and can never annotate a field, so
+                                 it never matches. A field initialized inside a
+                                 @PostConstruct method is therefore NOT
+                                 exempted — those fields carry
+                                 @SuppressWarnings("NullAway.Init") at the
+                                 declaration instead (suppresses only the init
+                                 check, keeping the @NonNull dereference
+                                 contract). -XepExcludedPaths drops generated
+                                 sources (quarkus-grpc stubs) from analysis. -->
+                            <arg>-Xplugin:ErrorProne -XepOpt:NullAway:AnnotatedPackages=app.zcat.stargate -XepOpt:NullAway:ExcludedFieldAnnotations=jakarta.inject.Inject,jakarta.annotation.PostConstruct,org.eclipse.microprofile.config.inject.ConfigProperty -XepExcludedPaths:.*/target/generated-sources/.* -Xep:NullAway:ERROR -Xep:MissingOverride:ERROR -Xep:ReferenceEquality:ERROR -Xep:FallThrough:ERROR -Xep:MissingCasesInEnumSwitch:ERROR -Xep:DefaultCharset:ERROR -Xep:JdkObsolete:ERROR -Xep:FutureReturnValueIgnored:ERROR</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
+                            <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
+                            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
+                            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
+                        </compilerArgs>
                     </configuration>
                 </plugin>
                 <plugin>

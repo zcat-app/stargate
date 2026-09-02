@@ -1,9 +1,9 @@
 ---
 id: T104
 title: 'Wire Error Prone + NullAway into the control-plane Maven reactor'
-status: pending
+status: in-review
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-09-02
 source: hand-authored   # Not in tasks.md; raised after the (1)+(2) tooling
                           # batch landed. See docs/process/workflow.md §"Pure-doc
                           # commits" — this is a code change, so it's a ticket,

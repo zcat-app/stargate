@@ -23,4 +23,24 @@
         in a later feature spec; this pom exists only to satisfy the
         multi-module reactor declared in the parent pom.
     </description>
+
+    <!-- T104: no sources in v1, but the stanza keeps this module consistent
+         with the reactor: main sources inherit the parent's Error Prone +
+         NullAway compiler config; default-testCompile clears compilerArgs so
+         tests stay ungated until onboarded (T104a pattern). -->
+    <build>
+        <plugins>
+            <plugin>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>default-testCompile</id>
+                        <configuration>
+                            <compilerArgs combine.self="override"/>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
