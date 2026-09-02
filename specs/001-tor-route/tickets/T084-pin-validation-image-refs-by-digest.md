@@ -1,9 +1,9 @@
 ---
 id: T084
 title: 'Pin validation-image refs by digest across ticket prose'
-status: in-review
+status: done
 created: 2026-07-05
-last_updated: 2026-08-23
+last_updated: 2026-09-02
 source: derived-from-T019b-redteam-r2  # not in tasks.md; filed from T019b redteam r2 Minor-1
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'

@@ -15,9 +15,9 @@
 |---|---|
 | pending | 68 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 66 |
+| done | 67 |
 | deferred | 1 |
 | **total** | **136** |
 
@@ -89,9 +89,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T084 | Pin validation-image refs by digest across ticket prose | in-review |  | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -105,7 +103,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_66 ticket(s) done._
+_67 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -153,6 +151,7 @@ _66 ticket(s) done._
 - T076 — Run every test module in the single green gate
 - T082 — Reconcile the threat model with the local stack
 - T083 — Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_restart
+- T084 — Pin validation-image refs by digest across ticket prose
 - T086 — Clean up torrc contract: Source-space typo + test prose drift
 - T087 — Fix tor sidecar DataDirectory mismatch (HEALTHCHECK+ENTRYPOINT)
 - T088 — Repair local init and Compose provisioning
