@@ -1,7 +1,7 @@
 ---
 id: T075b
 title: 'Author `tests/reproducibility/extension_test.sh`'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-02
 source: review/sol-review.md#M7
@@ -18,7 +18,7 @@ spec_refs:
   - specs/000-architecture/spec.md §12.3
   - .specify/memory/constitution.md §VI
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
