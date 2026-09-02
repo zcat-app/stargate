@@ -7,18 +7,31 @@
 #
 # Two invocations of this script over the same source tree MUST yield
 # the same zip bytes regardless of build host, build directory, build
-# time, file system inode order, locale, or umask. The mechanisms:
+# time, source mtimes/modes, file system inode order, locale, or umask.
 #
-#   SOURCE_DATE_EPOCH=0   fixed timestamp (1970-01-01 UTC) for every
-#                         archive member. Info-ZIP zip >= 3.0 honors
-#                         this env var (reproducible-builds.org).
-#   LC_ALL=C sort         locale-independent lexicographic ordering of
-#                         the file list so inode order / locale never
-#                         affects archive-member order.
-#   zip -X                strip extra file attributes (uid/gid, atime,
-#                         ctime, file-system-specific metadata).
-#   zip -9                fixed maximum compression level; same input
-#                         + same level = same compressed bytes.
+# Why staging: upstream Info-ZIP 3.0 ignores SOURCE_DATE_EPOCH for
+# stored member timestamps and stores each file's on-disk mode verbatim
+# (T075b) — both leak the build host into the archive. So instead of
+# trusting the archiver, sources are copied into a throwaway staging
+# tree and normalized there:
+#
+#   touch -d @0               every staged member gets the canonical
+#                             timestamp; zip encodes epoch 0 as DOS
+#                             1980-01-01 00:00:00 (the unique
+#                             lossless-in-DOS epoch-0 encoding)
+#   chmod 0644                every member mode is normalized; no host
+#                             umask or working-tree mode bit reaches
+#                             external_attr
+#   LC_ALL=C sort             locale-independent lexicographic ordering
+#                             of the member list so inode order / locale
+#                             never affects archive-member order
+#   zip -X                    strip extra fields (uid/gid, UT atime/
+#                             ctime, host-specific extended attributes)
+#   zip -9                    fixed maximum compression level
+#
+# SOURCE_DATE_EPOCH stays exported for zip builds that do honor it; it
+# converges on the same canonical encoding, so the output is identical
+# either way.
 #
 # Output: extension/dist/stargate-extension.zip
 #
@@ -26,8 +39,8 @@
 # script, the dist/ output directory, and `.keep` placeholders (which
 # are git-tracking artefacts, not extension content).
 #
-# Exit non-zero on any error; verified by the extension-side
-# reproducibility test that lands with the rest of US3.
+# Exit non-zero on any error; gated byte-for-byte by
+# tests/reproducibility/extension_test.sh (Principle VI).
 
 set -euo pipefail
 
@@ -36,7 +49,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 OUT_DIR="dist"
-OUT_FILE="$OUT_DIR/stargate-extension.zip"
+OUT_FILE="$PWD/$OUT_DIR/stargate-extension.zip"
 
 mkdir -p "$OUT_DIR"
 rm -f "$OUT_FILE"
@@ -65,10 +78,21 @@ if [ "${#FILES[@]}" -eq 0 ]; then
   exit 1
 fi
 
-# Strip extra file attributes (-X), max + deterministic compression
-# (-9), quiet (-q). Archive members are added in the order given,
-# which is our pre-sorted list — so on-disk order in the zip matches
-# lexicographic order.
-zip -X -q -9 "$OUT_FILE" "${FILES[@]}"
+# Normalize timestamp + mode in a staging copy rather than in the
+# working tree: packaging must not mutate the sources it archives.
+STAGE="$(mktemp -d)"
+trap 'rm -rf "$STAGE"' EXIT
 
-echo "package.sh: wrote $OUT_FILE ($(stat --format='%s bytes, %y' "$OUT_FILE"))"
+for f in "${FILES[@]}"; do
+  rel="${f#./}"
+  mkdir -p "$STAGE/$(dirname "$rel")"
+  cp "$f" "$STAGE/$rel"
+  touch -d @0 "$STAGE/$rel"
+  chmod 0644 "$STAGE/$rel"
+done
+
+# Archive members are added in the order given, which is our pre-sorted
+# list — so on-disk order in the zip matches lexicographic order.
+( cd "$STAGE" && zip -X -q -9 "$OUT_FILE" "${FILES[@]#./}" )
+
+echo "package.sh: wrote $OUT_FILE ($(stat --format='%s bytes' "$OUT_FILE"))"

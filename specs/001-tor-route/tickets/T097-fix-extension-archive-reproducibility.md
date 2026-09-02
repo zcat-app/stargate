@@ -1,9 +1,9 @@
 ---
 id: T097
 title: 'Fix extension archive reproducibility'
-status: pending
+status: in-progress
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-09-02
 source: review/sol-review.md#M7
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'

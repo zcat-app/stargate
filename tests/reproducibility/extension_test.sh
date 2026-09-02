@@ -16,11 +16,9 @@
 # same mtimes would reconfirm package.sh instead of testing
 # reproducibility, so the perturbation is the point of the test.
 #
-# KNOWN-FAIL until T097: upstream Info-ZIP 3.0 ignores SOURCE_DATE_EPOCH
-# for stored member timestamps, so extension/package.sh (T005) still
-# packages each file's own mtime and the byte-identity assertion fails.
-# That failure is the demonstration T075b acceptance #3 asks for — it is
-# the gate T097 implements against, not a test bug.
+# T097 closed the known-fail gap: extension/package.sh stages sources at
+# touch -d @0 + chmod 0644 before archiving, so upstream Info-ZIP 3.0's
+# ignoring of SOURCE_DATE_EPOCH no longer leaks host mtimes/modes.
 #
 # Canonical archive properties asserted per build (arch §12.3):
 #   - member set == the extension sources (package.sh's filter: everything
@@ -54,8 +52,6 @@ fail() {
   shift
   local line
   for line in "$@"; do echo "  $line" >&2; done
-  echo "  Known-fail until T097 fixes extension/package.sh: upstream" >&2
-  echo "  Info-ZIP 3.0 ignores SOURCE_DATE_EPOCH for member timestamps." >&2
   exit 1
 }
 
