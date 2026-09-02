@@ -1,7 +1,7 @@
 ---
 id: T107
 title: 'Digest-pin alpine:3.20 in stargate-cli contract tests'
-status: in-progress
+status: done
 created: 2026-08-23
 last_updated: 2026-09-02
 source: T084 review round 1 (post-refine) Major-1  # carve-out tracking artifact
@@ -19,7 +19,7 @@ decision_refs:
   - SECURITY-DECISIONS.md (digest-pinning rotation policy)
 constitution_refs:
   - "IV: Every external component digest-pinned"
-reviews: {}
+reviews: { round: 1, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

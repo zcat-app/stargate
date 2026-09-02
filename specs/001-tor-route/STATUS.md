@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 66 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 68 |
+| done | 69 |
 | deferred | 1 |
 | **total** | **136** |
 
@@ -87,9 +87,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T107 | Digest-pin alpine:3.20 in stargate-cli contract tests | in-progress | ✓ | 6: Polish & Cross-Cutting Concerns |
+_(nothing in flight)_
 
 ---
 
@@ -103,7 +101,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_68 ticket(s) done._
+_69 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -173,3 +171,4 @@ _68 ticket(s) done._
 - T103 — Add a scoped shell quality gate
 - T105 — Stabilize the flaky run_task_test.sh S8 milestone-merge assertion
 - T106 — Make the init count-probe failure path fail-closed (no key clobber)
+- T107 — Digest-pin alpine:3.20 in stargate-cli contract tests
