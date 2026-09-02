@@ -1,7 +1,7 @@
 ---
 id: T104b
 title: 'Add the nullness-contract rule to CONTRIBUTING.md code style'
-status: in-review
+status: done
 created: 2026-09-02
 last_updated: 2026-09-02
 source: T104 §Notes "Related tickets to file after this one lands" — the
@@ -37,7 +37,7 @@ decision_refs:
   - "infochat decision D48 (docs/process/engineering-rules-verbatim.md §7a —
      the rule text this ticket ports to stargate)"
 
-reviews: {}
+reviews: { round: 1, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
