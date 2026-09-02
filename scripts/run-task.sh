@@ -441,8 +441,7 @@ EOF
       PRIOR_BLOCK=""
       if [ "$ROUND" -ge 2 ] && [ -f "$RUN_DIR/$TICKET_ID-r$((ROUND-1)).verdict" ]; then
         PRIOR_BLOCK="$(cat "$RUN_DIR/$TICKET_ID-r$((ROUND-1)).verdict"
-
---- end of prior verdict — you MUST run the round-disposition protocol over every item above)"
+printf '%s\n' "--- end of prior verdict — you MUST run the round-disposition protocol over every item above")"
       fi
       REPORT_BLOCK="diff base:     $BASE_SHA   (git diff <base> is the review scope)
 diffstat:      ${STAT_LINE:-unknown}
