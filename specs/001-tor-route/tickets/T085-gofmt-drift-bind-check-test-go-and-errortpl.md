@@ -1,9 +1,9 @@
 ---
 id: T085
 title: 'Fix gofmt drift in bind/check_test.go + reconcile errortpl filename'
-status: pending
+status: in-progress
 created: 2026-07-05
-last_updated: 2026-07-05
+last_updated: 2026-09-02
 source: derived-from-T019-codereview  # not in tasks.md; filed from T019 codereview r1 F2 + T019 implementation-time gofmt-check discovery
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
@@ -74,6 +74,11 @@ onboarding contexts.
   in the contract doc; T085 carries the amendment.
 - Both fixes are paperwork-class. Codereview should be 1 round
   (APPROVE), redteam skips (`privacy_critical: false`).
+- Run note (2026-09-02): acceptance 1 (gofmt fix) already landed as
+  commit 2625f93 during the T019c run, after a Go toolchain install
+  flipped the gofmt gate from SKIP to RED. Verified on this run's tree:
+  `gofmt -l data-plane/` is clean. This ticket's diff therefore carries
+  only acceptance 2 (the contract-doc amendment).
 
 ## Pre-flight self-check
 

@@ -92,7 +92,9 @@ The body MUST be byte-for-byte the literal template above, with the three
 permitted fields substituted. No whitespace variation, no additional
 elements, no inline CSS or JS. Line endings are `\n` (single LF), not
 CRLF — this matches the template literal stored as a Go string in
-`data-plane/internal/errortpl/render.go`.
+`data-plane/internal/errortpl/template.go`. (The renderer that
+substitutes the fields will live in the sibling `render.go` —
+T048 / T071.)
 
 ---
 
