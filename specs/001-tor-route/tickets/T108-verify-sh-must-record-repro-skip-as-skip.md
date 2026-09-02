@@ -1,7 +1,7 @@
 ---
 id: T108
 title: 'verify.sh must record repro-test SKIP as SKIP, not PASS'
-status: in-progress
+status: done
 created: 2026-09-02
 last_updated: 2026-09-02
 source: T098 review round 2 (APPROVE) RECOMMENDED-FOLLOW-UP #1
@@ -19,7 +19,7 @@ spec_refs:
 decision_refs: []
 constitution_refs:
   - "VI: Open and auditable"
-reviews: {}
+reviews: { round: 1, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
