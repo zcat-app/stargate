@@ -1,7 +1,7 @@
 ---
 id: T098
 title: 'Make the JVM build reproducible and verify Maven'
-status: in-review
+status: done
 created: 2026-07-11
 last_updated: 2026-09-02
 source: review/sol-review.md#M7
@@ -21,7 +21,7 @@ spec_refs:
   - specs/000-architecture/spec.md §12.2
 decision_refs: []
 remediates: T003
-reviews: {}
+reviews: { round: 2, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

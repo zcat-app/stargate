@@ -15,9 +15,9 @@
 |---|---|
 | pending | 63 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 71 |
+| done | 72 |
 | deferred | 1 |
 | **total** | **136** |
 
@@ -79,15 +79,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T078 | Run the `stargate-redteam` agent against the completed featu | 6: Polish & Cross-Cutting Concerns |  |  |
 | T079 | Run the `stargate-perf` agent against the data plane (Princi | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T080 | Sweep with `scripts/check-license-headers.sh` (from T006); v | 6: Polish & Cross-Cutting Concerns | ✓ |  |
+| T081 | Author `release.yml` workflow: GHCR push + image digest pin  | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T098 | Make the JVM build reproducible and verify Maven | in-review |  | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -101,7 +100,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_71 ticket(s) done._
+_72 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -166,6 +165,7 @@ _71 ticket(s) done._
 - T095 — Complete the inter-plane wire contract
 - T096 — Enforce the canonical ticket workflow
 - T097 — Fix extension archive reproducibility
+- T098 — Make the JVM build reproducible and verify Maven
 - T099 — Pin immutable Tor build inputs
 - T100 — Strengthen persistence contract tests
 - T101 — Consolidate the privacy log-invariant scanner
