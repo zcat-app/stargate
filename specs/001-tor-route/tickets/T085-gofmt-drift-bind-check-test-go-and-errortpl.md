@@ -1,7 +1,7 @@
 ---
 id: T085
 title: 'Fix gofmt drift in bind/check_test.go + reconcile errortpl filename'
-status: in-progress
+status: done
 created: 2026-07-05
 last_updated: 2026-09-02
 source: derived-from-T019-codereview  # not in tasks.md; filed from T019 codereview r1 F2 + T019 implementation-time gofmt-check discovery
@@ -17,7 +17,7 @@ round_cap: 2
 spec_refs:
   - specs/001-tor-route/contracts/error-template.md §"Response body"
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
