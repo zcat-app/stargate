@@ -1,7 +1,7 @@
 ---
 id: T104a
 title: 'Onboard core and persistence test sources to NullAway'
-status: in-progress
+status: done
 created: 2026-09-02
 last_updated: 2026-09-02
 source: T104 §Notes "Related tickets to file after this one lands" (the
@@ -41,7 +41,7 @@ decision_refs:
   - "infochat docs/plan/m1/tickets/M1-164* (per-module test-source
      onboarding sequence)"
 
-reviews: {}
+reviews: { round: 1, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
