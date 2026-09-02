@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 67 |
-| in-progress | 0 |
+| pending | 66 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 68 |
@@ -82,13 +82,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T080 | Sweep with `scripts/check-license-headers.sh` (from T006); v | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
-| T107 | Digest-pin alpine:3.20 in stargate-cli contract tests | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T107 | Digest-pin alpine:3.20 in stargate-cli contract tests | in-progress | ✓ | 6: Polish & Cross-Cutting Concerns |
 
 ---
 

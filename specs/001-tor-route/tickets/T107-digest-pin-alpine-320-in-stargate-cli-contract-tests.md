@@ -1,9 +1,9 @@
 ---
 id: T107
 title: 'Digest-pin alpine:3.20 in stargate-cli contract tests'
-status: pending
+status: in-progress
 created: 2026-08-23
-last_updated: 2026-08-23
+last_updated: 2026-09-02
 source: T084 review round 1 (post-refine) Major-1  # carve-out tracking artifact
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
@@ -97,3 +97,30 @@ Privacy property map (ticket is privacy_critical: true):
   acceptance-#2 grep gate excludes these two files explicitly.
 - Standalone docs/ticket commit convention (T105/T106 precedent);
   NOT chargeable to T084's files_budget.
+- Run note (2026-09-02): digest resolved registry-direct (Docker Hub
+  v2 API `docker-content-digest` on the multi-arch OCI index — same
+  resolution `docker buildx imagetools inspect` performs; buildx
+  plugin unavailable on this host) as
+  `sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc`,
+  cross-checked (child manifest `c64c687c…` confirmed inside the
+  fetched index) and verified by pulling the pinned ref. Validation
+  (docker-gated): `init_docker_test.sh` ran end-to-end against the
+  pinned refs with a live daemon — OK (no SKIP; env-file ·
+  project-scoped volumes · key+pepper ownership · volume-root init ·
+  health via ps -q · idempotence · two-project isolation) — and
+  `docker compose config` renders all three fixture services to the
+  identical pinned ref from the single `x-alpine` anchor. Acceptance
+  #2 single-source check: only the `STAT_IMAGE` const carries the
+  literal; all five `docker run`/`create` uses flow from it.
+  Acceptance #5 grep (`alpine:[0-9][^@]`, T084 exclusions applied):
+  zero actionable tag-only refs in executable code — the two pinned
+  sites still pattern-match (the `.` in `3.20` precedes `@`) but are
+  canonical pins (T084's exclusion of them lapses); residual hits are
+  the pre-existing excluded classes (SECURITY-DECISIONS illustrative
+  TCB prose at line 543, port_exposure_test.go rotation-procedure
+  comment, SECURITY-DECISIONS/T107 entry + STATUS ticket-title prose).
+  Before-state falsification (Principle VII baseline): the same grep
+  pre-change showed exactly 4 actionable tag-only pulls (script const
+  + 3 fixture services). `scripts/verify.sh` GREEN (PASS=17, SKIP=2,
+  FAIL=0) with `contract:init_docker_test.sh` passing inside the
+  suite.

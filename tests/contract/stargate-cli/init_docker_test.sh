@@ -37,7 +37,13 @@ REPO="$(git rev-parse --show-toplevel)"
 LIB="$REPO/scripts/lib/compose.sh"
 FIXTURE="$REPO/tests/contract/stargate-cli/fixtures/fixture-compose.yml"
 DISPATCHER="$REPO/scripts/stargate"
-STAT_IMAGE="alpine:3.20"
+# Principle IV (every external component digest-pinned): pull by the
+# multi-arch OCI index digest, never the mutable tag — on a daemon host the
+# tag would otherwise resolve at pull time with no integrity anchor (T107).
+# Rotation is a manual promotion: resolve the new digest, update this const,
+# the fixture anchor, and SECURITY-DECISIONS.md in one PR (new superseding
+# entry there — dated bodies are immutable), then re-run this suite.
+STAT_IMAGE="alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc"
 
 errs=()
 bail() { errs+=("$*"); }

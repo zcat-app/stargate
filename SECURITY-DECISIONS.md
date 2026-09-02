@@ -41,6 +41,67 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-09-02 — `alpine:3.20` contract-test image digest pin (T107)
+
+**Decision.** The two stargate-cli contract-test artifacts pull their
+helper image by digest, never by mutable tag (Principle IV — every
+external component digest-pinned; T084's review round 1 carved this out
+as the last committed-executable-code tag pulls):
+
+- `tests/contract/stargate-cli/init_docker_test.sh` — `STAT_IMAGE`
+  const (all five `docker run` / `docker create` uses flow from it):
+  `alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc`
+- `tests/contract/stargate-cli/fixtures/fixture-compose.yml` — a
+  top-level `x-alpine` YAML anchor aliased into all three services, so
+  the digest appears exactly once in the file.
+
+**The pin.** `sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc`
+is the multi-arch OCI index digest of `alpine:3.20` (16 child
+platform manifests), resolved **registry-direct** (Docker Hub v2 API
+`docker-content-digest` header, the same resolution
+`docker buildx imagetools inspect alpine:3.20` performs — not from a
+local cache) and verified end-to-end by pulling the pinned ref.
+
+**Scope honesty.** This is test-only surface: the images run volume
+`stat`/`sha256sum` helpers and trivial fixture services on development
+hosts, not any shipped profile. It was still a live Principle IV
+deviation in executable code — on any host with a Docker daemon the
+mutable tag resolved at pull time with no integrity anchor, and these
+helpers reach the mounted repo volume and (in the daemon-backed
+assertions) daemon-created containers. The pin closes that.
+
+**Rotation policy.** Manual promotion, review-driven, one PR: resolve
+the new digest registry-direct, update the `STAT_IMAGE` const AND the
+fixture `x-alpine` anchor AND land a NEW dated superseding entry here
+carrying the new digest (dated entry bodies are immutable once
+committed — the preamble's supersede-only discipline governs; the
+superseding entry adds the `Superseded by:` back-link to this one),
+then re-run `tests/contract/stargate-cli/init_docker_test.sh` with a
+daemon reachable. Alpinelinux publishes point releases under the same
+`3.20` tag, so the tag's digest moves without any Stargate-side action
+— the pin holds the tested bytes until this promotion runs.
+
+**Enforcement cross-reference.** No dedicated cross-file contract test
+for this pin (T107's files_budget covers only the two test artifacts).
+The two refs are held to the same digest by construction — the fixture
+services alias the single `x-alpine` anchor, and the script's five
+image uses all dereference the single `STAT_IMAGE` const — plus the
+review-time whole-tree grep (`alpine:[0-9][^@]`, T084 acceptance-#2
+taxonomy), which is what surfaces any divergence or new tag-only
+literal. **The daemon-gated suite itself does NOT detect divergence
+between the two refs**: it exercises only that each ref is pullable
+and functional (services come up on the anchor's ref, assertions stat
+with the const's ref), so a partial rotation updating one ref and
+forgetting the other would still pass end-to-end. A cheap hermetic
+cross-file grep assertion closing that gap is deferred to a follow-up
+ticket. The grep now classifies these two files as canonical pins
+(T084's acceptance-#2 exclusion of them lapses); its residual hits are
+T084's pre-existing excluded classes (SECURITY-DECISIONS illustrative
+TCB prose, the `port_exposure_test.go` rotation-procedure comment,
+ticket/STATUS prose).
+
+---
+
 ## 2026-07-16 — docker-socket-proxy mechanism removed (T094a)
 
 **Supersedes** §"2026-07-06 — docker-socket-proxy `CONTAINERS=1` read

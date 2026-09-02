@@ -18,11 +18,18 @@
 # STARGATE_COMPOSE_FILE to this file + STARGATE_PROJECT to a disposable
 # name, runs init, then asserts the post-conditions on the volumes.
 
+# Principle IV (digest-pinned, T107): the image ref is defined ONCE here and
+# aliased into every service, so the digest appears exactly one time in this
+# file. Rotation is a manual promotion: resolve the new digest, update this
+# anchor, the init_docker_test.sh STAT_IMAGE const, and SECURITY-DECISIONS.md
+# in one PR (new superseding entry there — dated bodies are immutable).
+x-alpine: &alpine "alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc"
+
 services:
   # Mirrors the real stargate-dp: publishes 127.0.0.1:8881 and listens so
   # init's verify_tor (TCP connect to 127.0.0.1:8881) succeeds.
   stargate-dp:
-    image: alpine:3.20
+    image: *alpine
     command: ["sh", "-c", "while true; do nc -l -p 8881 </dev/null >/dev/null 2>&1 || sleep 0.2; done"]
     ports:
       - "127.0.0.1:8881:8881/tcp"
@@ -42,7 +49,7 @@ services:
   # declared in the volumes set below for 7-volume parity; init does not
   # initialise it (operator-authored, :ro).
   stargate-control:
-    image: alpine:3.20
+    image: *alpine
     command: ["sleep", "3600"]
     volumes:
       - stargate-ipc:/run/stargate
@@ -53,7 +60,7 @@ services:
 
   # Mirrors the real tor sidecar: just needs to be RUNNING.
   tor:
-    image: alpine:3.20
+    image: *alpine
     command: ["sleep", "3600"]
     volumes:
       - stargate-tor-state:/var/lib/tor
