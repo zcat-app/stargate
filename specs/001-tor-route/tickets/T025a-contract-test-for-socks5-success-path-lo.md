@@ -400,7 +400,7 @@ explicit and re-usable.
   first 15 lines, and exposes exactly the API in (1).
 - `tests/internal/loginvariants/loginvariants_test.go` compiles and
   passes under `go test -race -count=1 ./...` from the package dir
-  in a `golang:1.26.3-bookworm` container.
+  in a `golang:1.26.3-bookworm@sha256:252599aeb51ad60b83e4d8821802068127c528c707cb7dd7afd93be057c6011c` container.
 - `tests/contract/socks5/no_per_request_logs_test.go` compiles,
   lints clean (gofmt + go vet), and **self-skips** under the
   content gates on the current tree (T042/T044/T045/T046/T047/T050
@@ -419,7 +419,7 @@ explicit and re-usable.
 
 ```
 # Validate in a throwaway container (host has no Go toolchain — T019b precedent):
-docker run --rm -v "$PWD":/src -w /src golang:1.26.3-bookworm \
+docker run --rm -v "$PWD":/src -w /src golang:1.26.3-bookworm@sha256:252599aeb51ad60b83e4d8821802068127c528c707cb7dd7afd93be057c6011c \
   sh -c '
     (cd tests/internal/loginvariants && gofmt -l . && go vet ./... && go test -race -count=1 ./...) &&
     (cd tests/contract && gofmt -l . && go vet ./... && go test -race -count=1 ./socks5/...)

@@ -40,15 +40,17 @@ docs, or tasks.md:
    (a) Tooling: containerized protoc, NOT buf. Task text explicitly
        names protoc + protoc-gen-go + protoc-gen-go-grpc.
    (b) Toolbox image at tools/protoc/Dockerfile based on
-       golang:1.26.3-bookworm: `apt install protobuf-compiler`
+       golang:1.26.3-bookworm@sha256:252599aeb51ad60b83e4d8821802068127c528c707cb7dd7afd93be057c6011c: `apt install protobuf-compiler`
        for protoc, then `go install` for the two plugins.
        Pin versions:
          - protoc-gen-go @ v1.36.11 (matches data-plane go.mod's
            google.golang.org/protobuf v1.36.11)
          - protoc-gen-go-grpc @ v1.5.1 (compatible with grpc
            v1.81.1)
-       Tag-pinned not digest-pinned. Digest pinning is a
-       deferred loose end alongside the Mandrel digest one.
+       Base image digest-pinned (same sha256 as
+       data-plane/Dockerfile; swept by T084). The pins above are
+       Go module versions for the two plugins, not image refs —
+       no digests apply to them.
    (c) Regen script at scripts/regen-proto.sh (top-level, not
        data-plane/scripts/ — proto module is no longer scoped
        to data-plane post-D). Builds image, runs codegen,

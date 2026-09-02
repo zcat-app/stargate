@@ -129,7 +129,7 @@ T067, T067a/b, T079a).
   `tests/integration/` — verify gate 2 does NOT cover it.** T076
   later wires `tests/integration/` into CI as a separate workflow;
   until then, the fake is hand-validated in a throwaway
-  `golang:1.26.3-bookworm` container at `/start` (gofmt + go vet +
+  `golang:1.26.3-bookworm@sha256:252599aeb51ad60b83e4d8821802068127c528c707cb7dd7afd93be057c6011c` container at `/start` (gofmt + go vet +
   go test -race against the self-test). The self-test
   (`fake_socks5_tor_test.go`) is the regression gate.
 - Self-test pass: `tests/integration/fake_socks5_tor_test.go`
@@ -261,7 +261,7 @@ T019a ships library code + a self-test. No contract test in
 
 ```
 # Validate in a throwaway container (no Go toolchain on host):
-docker run --rm -v "$PWD":/src -w /src golang:1.26.3-bookworm \
+docker run --rm -v "$PWD":/src -w /src golang:1.26.3-bookworm@sha256:252599aeb51ad60b83e4d8821802068127c528c707cb7dd7afd93be057c6011c \
   sh -c 'cd tests/integration && go test -race -v ./...'
 
 # Repo gate:

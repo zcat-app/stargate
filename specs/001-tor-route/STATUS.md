@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-08-23
+**Last updated:** 2026-09-02
 
 ---
 
@@ -15,11 +15,11 @@
 |---|---|
 | pending | 68 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 66 |
 | deferred | 1 |
-| **total** | **135** |
+| **total** | **136** |
 
 ---
 
@@ -80,16 +80,18 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T078 | Run the `stargate-redteam` agent against the completed featu | 6: Polish & Cross-Cutting Concerns |  |  |
 | T079 | Run the `stargate-perf` agent against the data plane (Princi | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T080 | Sweep with `scripts/check-license-headers.sh` (from T006); v | 6: Polish & Cross-Cutting Concerns | ✓ |  |
-| T084 | Pin validation-image refs by digest across ticket prose | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T085 | Fix gofmt drift in bind/check_test.go + reconcile errortpl f | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T098 | Make the JVM build reproducible and verify Maven | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T104 | Wire Error Prone + NullAway into the control-plane Maven rea | 0: Bootstrap (tooling) |  |  |
+| T107 | Digest-pin alpine:3.20 in stargate-cli contract tests | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T084 | Pin validation-image refs by digest across ticket prose | in-review |  | 2: Foundational (Blocking Prerequisites) |
 
 ---
 
