@@ -19,7 +19,18 @@
 #
 # Exit status: 0 if every gate is PASS or SKIP; 1 if any gate FAILs.
 # Full command output is appended to target/verify.log (a fixed path the
-# review/commit steps can read; see .specify/memory/review-loop.md).
+# review/commit steps can read; see .specify/memory/review-loop.md);
+# STARGATE_VERIFY_LOG redirects it (the T108 contract probe sets it so a
+# nested verify run cannot clobber the outer run's log).
+#
+# Gate self-skip convention (T108): a gate that exits 0 but printed a line
+# starting "SKIP:" self-reported a skip — run_cmd records SKIP, counted
+# separately, never in the PASS count. tests/reproducibility/*.sh emit it
+# when their build tool is absent: a repro gate that compared zero bytes
+# must not summarize as PASS. A nonzero exit is FAIL even when the output
+# carries "SKIP:" — the sentinel can only downgrade a pass, never mask a
+# fail (an exit-code convention was rejected: bash exits 2 on script
+# syntax errors, which would record a broken test as SKIP).
 #
 # Opt-outs (for fast inner loops): STARGATE_SKIP_CP=1 skips the Maven gate
 # (slow, network); STARGATE_VERIFY_REPRO=1 opts INTO the release-cadence
@@ -45,7 +56,7 @@ command -v go >/dev/null 2>&1 || PATH="$PATH:/usr/local/go/bin"
 export PATH
 
 mkdir -p target
-LOG="target/verify.log"
+LOG="${STARGATE_VERIFY_LOG:-target/verify.log}"
 : > "$LOG"
 
 # --- result tracking ------------------------------------------------------
@@ -62,12 +73,24 @@ record() {
   say "  [$2] $1 ${3:+— $3}"
 }
 
-# run <name> <note-on-skip-not-used> -- <cmd...> ; PASS if cmd exits 0.
+# run <name> -- <cmd...>
+# PASS on exit 0 — unless the output carries the self-skip sentinel (a line
+# starting "SKIP:", see the header): then SKIP, annotated with the sentinel
+# text. Nonzero exit is always FAIL, sentinel or not (T108).
 run_cmd() {
-  local name="$1"; shift
+  local name="$1" out rc=0
+  shift
   [ "${1:-}" = "--" ] && shift   # tolerate an explicit -- separator at call sites
   say ">>> $name"
-  if "$@" >>"$LOG" 2>&1; then record "$name" PASS; else record "$name" FAIL "see target/verify.log"; fi
+  out="$("$@" 2>&1)" || rc=$?
+  printf '%s\n' "$out" >>"$LOG"
+  if [ "$rc" -ne 0 ]; then
+    record "$name" FAIL "see target/verify.log"
+  elif printf '%s\n' "$out" | grep -q '^SKIP:'; then
+    record "$name" SKIP "$(printf '%s\n' "$out" | grep -m1 '^SKIP:' | sed 's/^SKIP:[[:space:]]*//')"
+  else
+    record "$name" PASS
+  fi
 }
 
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -225,11 +248,11 @@ pass=0; skip=0; fail=0
 for i in "${!G_NAME[@]}"; do
   case "${G_STATE[$i]}" in PASS) pass=$((pass+1));; SKIP) skip=$((skip+1));; FAIL) fail=$((fail+1));; esac
 done
-say "  PASS=$pass  SKIP=$skip  FAIL=$fail   (full log: target/verify.log)"
+say "  PASS=$pass  SKIP=$skip  FAIL=$fail   (full log: $LOG)"
 hr
 if [ "$FAILED" -ne 0 ]; then
   say "RESULT: RED — $fail gate(s) failed."
   exit 1
 fi
-say "RESULT: GREEN — nothing failed ($skip gate(s) not yet applicable)."
+say "RESULT: GREEN — nothing failed ($skip gate(s) skipped)."
 exit 0

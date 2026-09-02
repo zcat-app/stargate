@@ -1,7 +1,7 @@
 ---
 id: T108
 title: 'verify.sh must record repro-test SKIP as SKIP, not PASS'
-status: pending
+status: in-progress
 created: 2026-09-02
 last_updated: 2026-09-02
 source: T098 review round 2 (APPROVE) RECOMMENDED-FOLLOW-UP #1
