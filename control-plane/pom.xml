@@ -46,6 +46,15 @@
         <compiler-plugin.version>3.13.0</compiler-plugin.version>
         <surefire-plugin.version>3.5.3</surefire-plugin.version>
         <failsafe-plugin.version>3.5.3</failsafe-plugin.version>
+
+        <!-- Reproducible JVM build (Constitution Principle VI, arch §12.2,
+             T098). Pinned epoch matches the extension zip's canonical
+             SOURCE_DATE_EPOCH=0 form (1980-01-01, the DOS-time floor) so
+             every Stargate artefact carries the same build date.
+             maven-archiver keys off this property: fixed entry timestamps,
+             sorted entries, canonical file modes. Gated by
+             tests/reproducibility/jvm_test.sh. -->
+        <project.build.outputTimestamp>1980-01-01T00:00:00Z</project.build.outputTimestamp>
     </properties>
 
     <dependencyManagement>
@@ -88,7 +97,33 @@
                     <artifactId>maven-failsafe-plugin</artifactId>
                     <version>${failsafe-plugin.version}</version>
                 </plugin>
+                <plugin>
+                    <groupId>io.github.zlika</groupId>
+                    <artifactId>reproducible-build-maven-plugin</artifactId>
+                    <version>0.17</version>
+                </plugin>
             </plugins>
         </pluginManagement>
+        <plugins>
+            <!-- Re-writes built jars deterministically (strips pom.properties
+                 timestamps, normalises manifest) — belt and suspenders on top
+                 of maven-archiver's outputTimestamp mode; mandated by
+                 arch §12.2 for JVM bytecode reproducibility. strip-jar needs
+                 an explicit execution to bind (no default lifecycle
+                 mapping); it defaults to the package phase, after jar:jar. -->
+            <plugin>
+                <groupId>io.github.zlika</groupId>
+                <artifactId>reproducible-build-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>strip-jar-modules</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>strip-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
     </build>
 </project>

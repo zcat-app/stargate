@@ -1,9 +1,9 @@
 ---
 id: T098
 title: 'Make the JVM build reproducible and verify Maven'
-status: pending
+status: in-review
 created: 2026-07-11
-last_updated: 2026-07-11
+last_updated: 2026-09-02
 source: review/sol-review.md#M7
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'

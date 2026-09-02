@@ -6,6 +6,36 @@
 > variations. An auditor comparing two builds of the same source commit
 > should treat entries here as known-acceptable and focus on anything else.
 
+## JVM control plane (`control-plane/`)
+
+**Gated property — byte-identical.** Two clean `mvnw clean package` builds
+of the same source bytes produce byte-identical build outputs — every jar
+(module jars, the Quarkus runner jar, the fast-jar layout), every `.class`
+file, gRPC stubs included — even when source mtimes are deliberately
+perturbed per-file. Asserted by `tests/reproducibility/jvm_test.sh`
+(release cadence, `STARGATE_VERIFY_REPRO=1`). The mechanism:
+`project.build.outputTimestamp` pinned to `1980-01-01T00:00:00Z` in the
+parent POM (maven-archiver's reproducible mode: fixed entry timestamps,
+sorted entries, canonical file modes) plus
+`io.github.zlika:reproducible-build-maven-plugin` at the parent reactor,
+both per arch §12.2 and Constitution Principle VI. Any difference between
+two JVM builds of the same commit is a defect, not expected variance.
+
+**Expected variance — build-bookkeeping scratch, not artefacts.** An
+auditor diffing raw `target/` trees will see two files vary per build:
+
+- `api/target/quarkus-grpc<random>.sh` — protoc invocation scratch left in
+  the module target root by quarkus-grpc codegen. Random per-build name,
+  embeds host paths (JVM home, local `~/.m2`), and is never packaged into
+  any jar. Excluded from `jvm_test.sh`'s comparison for exactly this
+  reason.
+- `*/target/maven-status/` — compiler input-file bookkeeping; not shipped.
+
+**Native image (`-Pnative`)** is Constitution Principle VI's best-effort
+tier and is outside `jvm_test.sh`. When native builds land, their expected
+variations (build IDs, embedded timestamp metadata) are documented here
+per that tier; JVM bytecode itself must always compare equal.
+
 ## Tor sidecar image (`stargate/tor`)
 
 **Gated property — stable.** A clean rebuild (`docker build --no-cache`)
