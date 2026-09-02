@@ -279,7 +279,9 @@ every change, large or small — they are what keep autonomous runs honest.
   can't be null, no try/catch around things that can't throw. Make the contract
   explicit (typed nullability, schema) so the paranoia is unnecessary, and let
   the build enforce it. This is Principle I's "dumb router" generalised to a
-  coding standard for both planes.
+  coding standard for both planes. On the control plane the enforcement is
+  mechanical: Error Prone + NullAway gate the nullness contract at compile
+  time (§"Code style / Java" — Nullness contract).
 
 The per-task review loop these feed into — the fresh-context
 `stargate-codereview` gate, the round cap, and the escalation menu — is
@@ -333,6 +335,18 @@ documented at `.specify/memory/review-loop.md`. The single green gate every
 
 ### Java / Quarkus (control plane)
 
+- **Nullness contract (build-enforced since T104).** Every
+  `app.zcat.stargate` package is @NonNull-by-default (NullAway
+  `AnnotatedPackages`): a bare reference type means "never null". A
+  genuinely-nullable parameter, return, or field carries `@Nullable` from
+  `org.jspecify.annotations` (JSpecify — type-use semantics, e.g.
+  `List<@Nullable String>`; never JetBrains or JSR-305). **Never write
+  `@NonNull` by hand** — non-null is the default. A missing or incorrect
+  contract fails `./mvnw verify` (Error Prone + NullAway). Exceptions, not
+  norms: `@SuppressWarnings("NullAway.Init")` on fields initialized in
+  `@PostConstruct` methods (suppresses only the init check); if a check
+  produces ≥3 false positives, drop the check rather than suppress around
+  it (workflow.md deletion-over-addition).
 - Formatter: Spotless (or the Quarkus-default formatter) applied via
   `./mvnw spotless:apply`.
 - Standard Java naming (`UpperCamelCase` types, `lowerCamelCase` methods).

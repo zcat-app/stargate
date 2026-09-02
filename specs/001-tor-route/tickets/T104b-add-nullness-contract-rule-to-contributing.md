@@ -1,7 +1,7 @@
 ---
 id: T104b
 title: 'Add the nullness-contract rule to CONTRIBUTING.md code style'
-status: pending
+status: in-review
 created: 2026-09-02
 last_updated: 2026-09-02
 source: T104 §Notes "Related tickets to file after this one lands" — the
@@ -11,7 +11,10 @@ phase: "0: Bootstrap (tooling)"
 story: '-'
 blocked_by: [T104]
 parallel: true
-files_budget: 2
+files_budget: 3            # CONTRIBUTING.md + the ticket file + STATUS.md,
+                           # which the driver's diffstat counts (T113
+                           # precedent). The initial 2 under-counted the
+                           # bookkeeping files.
 files_scope:
   - CONTRIBUTING.md
 out_of_scope:
