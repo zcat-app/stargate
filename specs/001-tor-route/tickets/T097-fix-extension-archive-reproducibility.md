@@ -49,3 +49,18 @@ current package script does not satisfy Principle VI.
 ## Out-of-scope
 
 Extension runtime behavior and browser-hardening design (T091).
+
+## Notes
+
+From the T075b round-1 review (2026-09-02; verdict archived at
+`target/runs/T075b-r1.verdict`, gitignored — recorded here so it survives):
+
+- The byte-identity gate fails on MODES alone (upstream Info-ZIP 3.0 stores
+  source modes verbatim; the test perturbs one tree to 0664) even with a
+  SOURCE_DATE-EPOCH-honoring zip — the package.sh rewrite must normalize
+  member modes to 0644 in addition to pinning member timestamps to the
+  epoch-0 encoding. Staging at `touch -d @0` + `zip -X` yields exactly the
+  canonical form the test asserts (verified against upstream zip 3.0).
+- Absorb the T075b test's "Known-fail until T097" boilerplate in its
+  `fail()` once this gap closes — post-T097 it would misattribute a real
+  reproducibility regression to the closed gap.
