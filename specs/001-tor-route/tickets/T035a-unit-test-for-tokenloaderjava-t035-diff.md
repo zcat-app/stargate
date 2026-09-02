@@ -1,7 +1,7 @@
 ---
 id: T035a
 title: 'Unit test for `TokenLoader.java` (T035) diff logic and validation'
-status: pending
+status: in-review
 created: 2026-07-04
 last_updated: 2026-09-02
 source: tasks.md#T035a
@@ -135,18 +135,26 @@ wiring reads the FR-017 fixed path and the §1.7 pepper file.
     the N upserts, generation store proposes `0 + 1`, ONE push carrying
     verifiers == `HMAC-SHA-256(pepper, tokenUtf8)` per token (§1.5
     verifier construction under the pepper — amendment note (a)).
-  - **Unchanged load (body (b)):** same label set → zero diff rows, no
-    upsert/delete, generation still bumps, one push (§1.8: every
-    successful parse writes verifiers + bumps + pushes).
+  - **Unchanged load (body (b)), §1.7-faithful:** same label set →
+    zero diff rows, but the store is still rewritten with the fresh
+    verifier set (§1.7 "writes the new verifiers" — same-label
+    rewrites are what a pepper rotation §1.7 relies on), the
+    generation still bumps, one push (§1.8: every successful parse
+    writes verifiers + bumps + pushes).
   - **Remove (c) / add (d) / mixed (e):** exactly one `revoked` row +
-    one delete; exactly one `enrolled` row + one upsert; mixed → the
-    shared journal shows `begin` before every mutation and diff-audit
-    write, `commit` after them (atomicity — no interleaved partial
-    state), push last (after commit and the generation write).
+    one delete; exactly one `enrolled` row (the store write is the
+    FULL current set — retained labels are rewritten too, §1.7);
+    mixed → the shared journal shows `begin` before every mutation and
+    diff-audit write, `commit` after them (atomicity — no interleaved
+    partial state), push last (after commit and the generation write).
   - **Validation partial failure (body (f), §1.1):** wrong-length and
-    non-hex entries → one `config_error` row each, `kind="validation"`,
-    `label` set, line unpinned; the offending record is skipped and the
-    valid records still enroll/upsert/push.
+    non-hex entries → one `config_error` row each in the §4 literal
+    shape — target = the file constant `tokens.yaml`, `kind="validation"`,
+    detail keys ⊆ {kind, line}; the offending LABEL is a §1.1
+    warning-log surface (T041's layer), never an audit detail key
+    (round-1 review: the pre-amendment body's label-in-detail wording
+    is retired with the rest of it). The offending record is skipped
+    and the valid records still enroll/upsert/push.
   - **Unparseable YAML (body (g)):** one `config_error`, `kind="parse"`,
     `line` present and ≥ 1 (parser context); no store mutations, no
     generation write, NO push, loader does not throw.
@@ -230,10 +238,12 @@ fast inner loop: `cd control-plane && ./mvnw -B -q -pl core test`.
    citing the governing data-model.md § for each — zero behavior, so
    the impl ticket T035 owns all loader logic.
 2. Oracle layer passes TODAY (no skip): `auditRowVocabularyIsPinned`
-   (§4 fixed vocabulary: actions `enrolled`/`revoked`/`config_error`;
-   config_error `detail_json` kinds `parse`/`validation`/`io`; token
-   diff rows carry `{"source":"tokens.yaml","generation":N}` — asserted
-   as parsed maps against literal golden JSON) and
+   (§4 fixed detail_json vocabulary as parsed-map golden shapes —
+   token diff rows `{"source":"tokens.yaml","generation":N}`;
+   config_error kinds `parse`/`validation`/`io` with key sets per §4 —
+   the action literals themselves are exercised by the loader-driving
+   layer, which self-skips until T035, because a literal-vs-literal
+   enum assertion would be tautological; round-1 review Minor #2) and
    `diffOracleComputesEnrolledAndRevokedSets` (symmetric-difference
    algebra: added/removed/unchanged/mixed fixtures).
 3. Loader-driving cases — each a separate `@Test`, self-skipping until
