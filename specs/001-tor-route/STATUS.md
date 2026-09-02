@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 66 |
+| pending | 65 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 77 |
+| done | 78 |
 | deferred | 1 |
 | **total** | **144** |
 
@@ -46,6 +46,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T045 | Implement `data-plane/internal/controlclient/` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T046 | Implement `data-plane/internal/controlclient/snapshot.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
 | T047 | Implement `data-plane/internal/forward/tor.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T048 | Implement `data-plane/internal/errortpl/render.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T049 | Implement `data-plane/internal/audit/counters.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T050 | Implement `data-plane/cmd/stargate-proxy/main.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T051 | Author `extension/manifest.json` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
@@ -66,7 +67,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T067a | Contract test for SOCKS5 request-phase failure replies (FR-0 | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T067b | Contract test for the auth-pass + route-failure counter-incr | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T068 | Contract test `tests/contract/error-template/body_byte_match | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T068a | Contract test for the **response-header invariants** of the  | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T069 | Contract tests `tests/contract/error-template/reference_id_u | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T070 | Integration test `tests/integration/error_template_test.go` | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T070a | Integration test for mid-request Tor circuit drop (Principle | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
@@ -103,7 +103,7 @@ _(nothing in flight)_
 
 ## Done
 
-_77 ticket(s) done._
+_78 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -148,6 +148,7 @@ _77 ticket(s) done._
 - T032 — Contract test spinning up the live Tor sidecar with the rendered confi
 - T033 — Integration test for the full vertical: bring up `compose/docker-compo
 - T034 — Integration test asserting no DNS query for any `*.onion` name appears
+- T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T075b — Author `tests/reproducibility/extension_test.sh`
 - T076 — Run every test module in the single green gate
 - T082 — Reconcile the threat model with the local stack

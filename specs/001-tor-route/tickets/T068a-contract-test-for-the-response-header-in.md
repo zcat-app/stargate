@@ -1,7 +1,7 @@
 ---
 id: T068a
 title: 'Contract test for the **response-header invariants** of the privacy-sa'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-02
 source: tasks.md#T068a
@@ -27,7 +27,7 @@ decision_refs:
   - specs/001-tor-route/tickets/T065-contract-test-testscontracterror-templat.md, T066, T067 (the per-code route-failure setups the task body cites; all three are pending, so T068a mirrors them inline to stay parallel-safe)
   - specs/001-tor-route/tickets/T026-contract-test-for-http-connect-auth-succ.md (WithUpstream + fake-upstream wiring; admission/dial NOT gated on a SidecarEvent — no HEALTHY pushed, T090 / sol-review B3)
   - specs/001-tor-route/tickets/T048-implement-data-planeinternalerrortplrend.md, T071, T072 (the gated renderer and route-mapping surfaces; T071/T072 EXTEND files that already exist once T048/T047 land, so those skips gate on content markers, not file existence)
-reviews: {}
+reviews: { round: 1, date: 2026-09-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
