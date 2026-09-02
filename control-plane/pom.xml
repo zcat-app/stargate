@@ -149,20 +149,17 @@
                                  framework-initialized fields from the
                                  field-init check: @Inject (CDI) and
                                  @ConfigProperty (MicroProfile Config) are
-                                 field-level so the exemption matches directly.
-                                 The list also carries
-                                 jakarta.annotation.PostConstruct —
-                                 deliberately inert: it is a method-level
-                                 annotation and can never annotate a field, so
-                                 it never matches. A field initialized inside a
-                                 @PostConstruct method is therefore NOT
-                                 exempted — those fields carry
+                                 field-level so the exemption matches
+                                 directly. A field initialized inside a
+                                 @PostConstruct method is NOT exempted (it is
+                                 a method annotation, never a field one) —
+                                 those fields carry
                                  @SuppressWarnings("NullAway.Init") at the
                                  declaration instead (suppresses only the init
                                  check, keeping the @NonNull dereference
                                  contract). -XepExcludedPaths drops generated
                                  sources (quarkus-grpc stubs) from analysis. -->
-                            <arg>-Xplugin:ErrorProne -XepOpt:NullAway:AnnotatedPackages=app.zcat.stargate -XepOpt:NullAway:ExcludedFieldAnnotations=jakarta.inject.Inject,jakarta.annotation.PostConstruct,org.eclipse.microprofile.config.inject.ConfigProperty -XepExcludedPaths:.*/target/generated-sources/.* -Xep:NullAway:ERROR -Xep:MissingOverride:ERROR -Xep:ReferenceEquality:ERROR -Xep:FallThrough:ERROR -Xep:MissingCasesInEnumSwitch:ERROR -Xep:DefaultCharset:ERROR -Xep:JdkObsolete:ERROR -Xep:FutureReturnValueIgnored:ERROR</arg>
+                            <arg>-Xplugin:ErrorProne -XepOpt:NullAway:AnnotatedPackages=app.zcat.stargate -XepOpt:NullAway:ExcludedFieldAnnotations=jakarta.inject.Inject,org.eclipse.microprofile.config.inject.ConfigProperty -XepExcludedPaths:.*/target/generated-sources/.* -Xep:NullAway:ERROR -Xep:MissingOverride:ERROR -Xep:ReferenceEquality:ERROR -Xep:FallThrough:ERROR -Xep:MissingCasesInEnumSwitch:ERROR -Xep:DefaultCharset:ERROR -Xep:JdkObsolete:ERROR -Xep:FutureReturnValueIgnored:ERROR</arg>
                             <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
                             <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
                             <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>

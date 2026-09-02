@@ -1,7 +1,7 @@
 ---
 id: T113
 title: 'Drop the inert PostConstruct token from ExcludedFieldAnnotations'
-status: pending
+status: in-progress
 created: 2026-09-02
 last_updated: 2026-09-02
 source: T104 review round 1 (APPROVE-WITH-FIXES) RECOMMENDED-FOLLOW-UP #1
