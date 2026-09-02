@@ -1,7 +1,7 @@
 ---
 id: T068a
 title: 'Contract test for the **response-header invariants** of the privacy-sa'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-02
 source: tasks.md#T068a
