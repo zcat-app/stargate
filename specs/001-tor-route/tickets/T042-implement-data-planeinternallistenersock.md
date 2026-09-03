@@ -1,7 +1,7 @@
 ---
 id: T042
 title: 'Implement `data-plane/internal/listener/socks5.go`'
-status: pending
+status: in-review
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T042
@@ -153,9 +153,13 @@ true` per `docs/process/analysis.md`).
   - CMD≠CONNECT → `0x07`, unknown ATYP → `0x08`, and post-auth framing
     garbage → silent close are RFC-correct choices NOT pinned by any
     contract test (T067a pins only ROUTE_DOWN/REFUSED/TIMEOUT). Promoted
-    partially: the in-package unit test pins them; a contract-level pin
-    belongs with T067a's suite — follow-up note for that ticket, not a
-    new ticket.
+    partially: the in-package unit test pins the `0x07` and
+    ATYP=0x09→`0x08` rows only. The post-auth framing-garbage
+    silent-close row has no automated pin — production behaviour was
+    verified by reading (readRequestTarget returns the silent-close
+    branch) and awaits T067a's contract-level pin (or an 8-line
+    in-package silent-close case there if T067a lands late). Follow-up
+    note for that ticket, not a new ticket.
   - "The reply is flushed before close on every failure path" is
     kernel-buffered (write-then-close delivers data+FIN) and is covered
     by the unit test's EOF-after-reply assertions on net.Pipe; a TCP-
