@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 56 |
+| pending | 55 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 90 |
+| done | 91 |
 | deferred | 1 |
 | **total** | **147** |
 
@@ -29,7 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T020a | Contract test for cold-start snapshot restore (Principle II  | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T035 | Implement `control-plane/core/src/main/java/.../TokenLoader. | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
@@ -98,7 +97,7 @@ _(nothing in flight)_
 
 ## Done
 
-_90 ticket(s) done._
+_91 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -127,6 +126,7 @@ _90 ticket(s) done._
 - T019b — Contract test for FR-012 Tor port-exposure invariant
 - T019c — Contract test for the `docker-socket-proxy` lockdown invariants
 - T020 — Contract test for `ReloadTokens` (happy / stale / invalid / snapshot-p
+- T020a — Contract test for cold-start snapshot restore (Principle II survival; 
 - T021 — Contract test for `WatchEvents` happy path (`STARTED` → `HEALTHY` for 
 - T022 — Contract test for inter-plane transport invariants in `tests/contract/
 - T023 — Contract test for SOCKS5 first-byte demultiplex (`0x05` → SOCKS5, `''C

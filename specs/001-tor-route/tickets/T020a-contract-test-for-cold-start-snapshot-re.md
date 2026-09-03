@@ -1,7 +1,7 @@
 ---
 id: T020a
 title: 'Contract test for cold-start snapshot restore (Principle II survival; '
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T020a
@@ -25,7 +25,7 @@ spec_refs:
   - specs/000-architecture/spec.md §5.5 (control plane down at startup)
 decision_refs:
   - SECURITY-DECISIONS.md §"Bearer-token verifier: HMAC-SHA-256 + install-time pepper (T092)"
-reviews: {}
+reviews: { round: 1, date: 2026-09-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -176,6 +176,29 @@ T050 (harness boot gate) — skips self-lift, per package precedent.
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+**Done record (2026-09-03).** Round-1 `stargate-codereview`: **APPROVE**
+(1 Minor — recorded below, not blocking). All six §Acceptance sub-tests
+verified against the already-implemented units (snapshot.go, server.go,
+client.go, token.go, socks5.go, tls.go), each with a named non-vacuity
+mutation the test would catch. Suite compiles and self-skips on the
+T050/T047 content gates per the acceptance's own design.
+- **r1 Minor (determinism; T050-lifetime):** the two T047-gated route
+  sub-tests (`ForwardsWithoutHealthyEvent`,
+  `RouteDownByteExactWhenUpstreamUnreachable`) should call
+  `t020aWaitRestored` after boot before their first auth probe, matching
+  sub-tests 1/3/6. Cannot produce a wrong pass and cannot manifest until
+  T050 lifts the gate; apply alongside the T050-lift reconciliation
+  (a code change, so not an APPLY-FIXES item — recorded, not self-applied
+  post-APPROVE).
+- **Follow-ups surfaced (outside this diff — file as tickets):**
+  (a) the harness `reload` dial (dpharness_test.go) carries no §5.3
+  `x-stargate-proto-*` metadata, so the implemented server interceptor
+  rejects every harness ReloadTokens call once T050 lifts — fold into
+  T022/T050; (b) sibling T020/T021 fixtures authenticate non-hex
+  plaintexts the implemented FR-017 format gate rejects — those suites
+  fail on first real run; this ticket's 32-hex fixtures are the fix
+  pattern.
 
 **T092 amendment (2026-07-15).** The snapshot shape this test must assert
 changed: `dp-snapshot.json` is now `schemaVersion: 2` carrying
