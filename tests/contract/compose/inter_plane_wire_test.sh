@@ -108,6 +108,8 @@ if [ "$runtime_gate_files_present" = "1" ] || [ "$runtime_content_detected" = "1
 fi
 if [ "$runtime_gate_present" = "0" ]; then
   echo "RUNTIME tier SKIP: T038/T045/T050 impl absent — self-lifts when all land (FAIL-forcing; see T095 §Notes)." >&2
+elif [ "$(grep -cE '^# LIFT-MARKER: R[0-9]+$' "$0" 2>/dev/null || true)" -ge 9 ]; then
+  echo "RUNTIME tier LIFTED: R1-R9 authored (T045 lift); rows run against a live stargate init stack, SKIP otherwise." >&2
 else
   echo "RUNTIME tier GATE-LIFT REQUIRED: impl present; R1-R9 assertions must be authored in this file (see T095 §Notes)." >&2
 fi
@@ -392,6 +394,231 @@ else
   done < <(grep -nE '^# LIFT-MARKER: R[0-9]+$' "$0" 2>/dev/null | cut -d: -f1)
   if [ "$paired_markers" -lt 9 ]; then
     bail "RUNTIME tier GATE-LIFT REQUIRED: T038/T045/T050 impl present but only $paired_markers/9 LIFT-MARKER rows WITH PAIRED ASSERTION CODE authored in this file — author R1-R9 assertions per T095 §Notes (each assertion needs a '# LIFT-MARKER: R<n>' comment followed within 3 lines by a non-comment assertion line; the paired count is the forcing function)"
+  fi
+
+  # === R1-R9 runtime rows (authored by the T045 lift) ======================
+
+  # R4-static (wire-auth.md §4, the paragraph T038/T045 must cite): every
+  # InsecureSkipVerify=true literal in the DP impl source must be
+  # co-located with a custom-verifier ASSIGNMENT — ISV=true with no
+  # VerifyPeerCertificate/VerifyConnection assigned nearby is the §4
+  # silent-auth-bypass contract violation. Static, so it runs on every
+  # state-B pass. Hardened per T045 review round 1: the window match
+  # ignores COMMENT lines (the §4 citation prose names the identifiers —
+  # a comment must never satisfy the check) and requires the struct-
+  # literal assignment form (`VerifyPeerCertificate:` key), so deleting
+  # the assignment while keeping the comment bails.
+  for go_file in data-plane/internal/controlclient/*.go; do
+    [ -f "$go_file" ] || continue
+    while IFS= read -r line_num; do
+      [ -z "$line_num" ] && continue
+      window_end=$((line_num + 5))
+      window_start=$((line_num - 5))
+      [ "$window_start" -lt 1 ] && window_start=1
+      if ! sed -n "${window_start},${window_end}p" "$go_file" \
+           | grep -v '^[[:space:]]*//' \
+           | grep -qE 'VerifyPeerCertificate:[[:space:]]|VerifyConnection:[[:space:]]'; then
+        bail "R4-static: $go_file:$line_num sets InsecureSkipVerify with no VerifyPeerCertificate/VerifyConnection assignment within 5 lines (comments do not count) — wire-auth.md §4 contract violation (silent auth bypass)"
+      fi
+    done < <(grep -nE 'InsecureSkipVerify:[[:space:]]*true' "$go_file" | cut -d: -f1)
+  done
+  # Row semantics (see the T045 LIFT note above): each row SKIPs loudly
+  # until a `stargate init` compose stack is up, and FAILs (bail) when the
+  # stack IS up and the property breaks. R8/R9 additionally require
+  # STARGATE_WIRE_RUNTIME_MUTATE=1 — they restart/rotate a live stack.
+
+  GOIMG="golang:1.26.3-bookworm@sha256:252599aeb51ad60b83e4d8821802068127c528c707cb7dd7afd93be057c6011c"
+  IPC_VOL=""
+  KEYS_VOL=""
+  if command -v docker >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    IPC_VOL="$(docker compose -f "$COMPOSE" --env-file "$ENV_FILE" config --format json 2>/dev/null | jq -r '.volumes["stargate-ipc"].name // ""')"
+    KEYS_VOL="$(docker compose -f "$COMPOSE" --env-file "$ENV_FILE" config --format json 2>/dev/null | jq -r '.volumes["stargate-keys"].name // ""')"
+  fi
+
+  # svc_running <service>: true iff the compose service has a running container.
+  svc_running() {
+    docker compose -f "$COMPOSE" --env-file "$ENV_FILE" ps --status running --services 2>/dev/null | grep -qx "$1"
+  }
+  # ipc_run <uid:gid> <cmd...>: cmd in the pinned golang image with the IPC
+  # volume at /run/stargate, as the given uid:gid.
+  ipc_run() {
+    docker run --rm --user "$1" -v "$IPC_VOL:/run/stargate" "$GOIMG" "${@:2}"
+  }
+  # need_stack <row>: SKIP-guard — both planes running and both sockets
+  # present (the properties under test need the real UDS topology).
+  need_stack() {
+    if [ -z "$IPC_VOL" ] || [ -z "$KEYS_VOL" ]; then
+      echo "$1: SKIP (compose volumes not renderable — docker/jq absent or stack never inited)" >&2
+      return 1
+    fi
+    if ! svc_running stargate-dp || ! svc_running stargate-control; then
+      echo "$1: SKIP (stargate init stack not running — bring it up to exercise the runtime rows)" >&2
+      return 1
+    fi
+    if ! ipc_run 0:0 test -S /run/stargate/dp.sock || ! ipc_run 0:0 test -S /run/stargate/control.sock; then
+      echo "$1: SKIP (stack running but sockets not present yet — boot still in progress?)" >&2
+      return 1
+    fi
+    return 0
+  }
+  # need_mutate <row>: R8/R9 mutate a live stack (CP restart / keypair
+  # rotation); they run only on explicit opt-in so a plain verify run can
+  # never disturb a dev stack brought up for other purposes.
+  need_mutate() {
+    if [ "${STARGATE_WIRE_RUNTIME_MUTATE:-0}" != "1" ]; then
+      echo "$1: SKIP (would mutate a live stack; set STARGATE_WIRE_RUNTIME_MUTATE=1)" >&2
+      return 1
+    fi
+  }
+  # probe_run <mode> [args...]: build wireprobe once per run in the pinned
+  # image, then execute it as the CP identity (uid 5101:5100) with the keys
+  # volume and the repo mounted. --network host lets the proxy mode reach
+  # the loopback-published 8881.
+  PROBE_BIN="target/stargate-wireprobe"
+  probe_run() {
+    local mode="$1"; shift
+    if [ ! -x "$PROBE_BIN" ]; then
+      local modcache=()
+      [ -d "${HOME:-/root}/go/pkg/mod" ] && modcache=(-v "${HOME:-/root}/go/pkg/mod:/go/pkg/mod")
+      docker run --rm -v "$PWD":/src -w /src ${modcache[@]+"${modcache[@]}"} "$GOIMG" \
+        go build -buildvcs=false -o "/src/$PROBE_BIN" ./tests/contract/compose/wireprobe || return 1
+      chmod 0755 "$PROBE_BIN"
+    fi
+    docker run --rm --user 5101:5100 \
+      -v "$IPC_VOL:/run/stargate" \
+      -v "$KEYS_VOL:/etc/stargate/keys" \
+      -v "$PWD":/src -w /src --network host \
+      "$GOIMG" "/src/$PROBE_BIN" "$mode" "$@"
+  }
+  compose_restart_wait() {
+    local svc="$1"
+    docker compose -f "$COMPOSE" --env-file "$ENV_FILE" restart "$svc" || return 1
+    local i=0
+    while [ "$i" -lt 60 ]; do
+      svc_running "$svc" && return 0
+      sleep 1
+      i=$((i + 1))
+    done
+    return 1
+  }
+
+# LIFT-MARKER: R1
+  if need_stack "R1"; then # socket mode 0660, owner stargate-{cp,dp}:stargate-ipc (control-grpc.md §"Socket topology"; wire-auth.md §6.1)
+    dp_stat="$(ipc_run 0:0 stat -c '%a %u %g' /run/stargate/dp.sock)" || bail "R1: cannot stat dp.sock in the stargate-ipc volume"
+    [ "$dp_stat" = "660 5102 5100" ] || bail "R1: dp.sock is '$dp_stat', want '660 5102 5100' (mode 0660, stargate-dp:stargate-ipc)"
+    cp_stat="$(ipc_run 0:0 stat -c '%a %u %g' /run/stargate/control.sock)" || bail "R1: cannot stat control.sock in the stargate-ipc volume"
+    [ "$cp_stat" = "660 5101 5100" ] || bail "R1: control.sock is '$cp_stat', want '660 5101 5100' (mode 0660, stargate-cp:stargate-ipc)"
+    echo "R1: PASS (sockets 0660, owned stargate-{dp,cp}:stargate-ipc)" >&2
+  fi
+
+# LIFT-MARKER: R2
+  if need_stack "R2"; then # peer-plane UID connect(2) succeeds on its dial-direction socket (control-grpc.md invariant row 5)
+    if ! ipc_run 5102:5100 timeout 2 bash -c 'exec 3<>/run/stargate/control.sock' 2>/dev/null; then
+      bail "R2: DP uid (5102) cannot connect(2) control.sock — mode regressed below peer-dialable (0600-class), inter-plane comms silently broken"
+    fi
+    if ! ipc_run 5101:5100 timeout 2 bash -c 'exec 3<>/run/stargate/dp.sock' 2>/dev/null; then
+      bail "R2: CP uid (5101) cannot connect(2) dp.sock — mode regressed below peer-dialable (0600-class), inter-plane comms silently broken"
+    fi
+    echo "R2: PASS (peer-plane UIDs connect their dial-direction sockets)" >&2
+  fi
+
+# LIFT-MARKER: R3
+  if need_stack "R3"; then # non-group UID connect(2) fails with EACCES on both sockets (control-grpc.md invariant row 6)
+    for sock in dp.sock control.sock; do
+      if ipc_run 1234:1234 timeout 2 bash -c "exec 3<>/run/stargate/$sock" 2>/dev/null; then
+        bail "R3: out-of-group uid 1234 connected $sock — the mode/group scheme must narrow the dial surface (not 0666-equivalent)"
+      fi
+    done
+    echo "R3: PASS (out-of-group UID gets EACCES on both sockets)" >&2
+  fi
+
+# LIFT-MARKER: R4
+  if need_stack "R4"; then # wrong-key peer rejected at the TLS handshake (wire-auth.md §3.3; read-only probe)
+    if probe_run wrongkey -socket /run/stargate/dp.sock; then
+      echo "R4: PASS (rogue client key rejected at the dp.sock TLS handshake)" >&2
+    else
+      bail "R4: the DP did NOT abort a handshake from a key it does not pin — wire-auth.md §3.3 violated (silent auth bypass class)"
+    fi
+  fi
+
+# LIFT-MARKER: R5
+  if need_stack "R5"; then # unknown x-stargate-proto-major rejected before app handler (wire-auth.md §5.2; arch §5.5 row 4)
+    for bad_major in 0 2 99; do
+      if probe_run major -socket /run/stargate/dp.sock -major "$bad_major"; then
+        bail "R5: proto major $bad_major was ACCEPTED by dp.sock — §5.2 unknown-major rejection broken"
+      fi
+    done
+    if ! probe_run major -socket /run/stargate/dp.sock -major 1; then
+      bail "R5: proto major 1 (the compiled-in stargate.v1) was rejected — §5.2 equal-major accept broken"
+    fi
+    if ! probe_run nomajor -socket /run/stargate/dp.sock; then
+      bail "R5: GetStatus without x-stargate-proto-major did not fail with FailedPrecondition — §5.2 missing-metadata rule broken"
+    fi
+    echo "R5: PASS (major 1 accepted; 0/2/99 and metadata-less rejected with FailedPrecondition)" >&2
+  fi
+
+# LIFT-MARKER: R6
+  if need_stack "R6"; then # additive minor accepted (minor compatibility; wire-auth.md §5.2; arch §5.3)
+    for good_minor in 0 1 7 999; do
+      if ! probe_run minor -socket /run/stargate/dp.sock -minor "$good_minor"; then
+        bail "R6: additive minor $good_minor rejected — equal major must accept any minor (§5.2)"
+      fi
+    done
+    echo "R6: PASS (additive minors accepted at equal major)" >&2
+  fi
+
+# LIFT-MARKER: R7
+  if need_stack "R7"; then # no TCP LISTEN beyond the proxy port (control-grpc.md invariant row 1; wire-auth.md §4)
+    dp_cid="$(docker compose -f "$COMPOSE" --env-file "$ENV_FILE" ps -q stargate-dp)"
+    dp_pid="$(docker inspect -f '{{.State.Pid}}' "$dp_cid" 2>/dev/null)"
+    [ -n "$dp_pid" ] && [ "$dp_pid" != "0" ] || bail "R7: cannot resolve the stargate-dp container PID"
+    # /proc/<pid>/net/tcp{,6} of the containerized process reflects the
+    # container netns (the host-side view transport_test.go's row 1 uses
+    # for the local-process tier). LISTEN state is 0A; the port is the hex
+    # field after the final ':' of local_address. Hex→dec conversion is
+    # shell printf (POSIX), not awk strtonum — a gawk extension absent
+    # from mawk/busybox awk (T045 review round-1 follow-up).
+    ports_hex="$(awk '$4=="0A" { split($2, a, ":"); print a[2] }' "/proc/$dp_pid/net/tcp" "/proc/$dp_pid/net/tcp6" 2>/dev/null)"
+    [ -n "$ports_hex" ] || bail "R7: no TCP LISTEN entries visible — sanity failure (proxy listener on 8881 must be present)"
+    ports="$(printf '%s\n' $ports_hex | while IFS= read -r hex; do printf '%d\n' "0x$hex"; done | sort -u)"
+    [ -n "$ports" ] || bail "R7: no TCP LISTEN entries visible — sanity failure (proxy listener on 8881 must be present)"
+    bad_ports="$(printf '%s\n' "$ports" | grep -vx 8881 || true)"
+    [ -z "$bad_ports" ] || bail "R7: DP listens on non-proxy TCP port(s): $(printf '%s ' $bad_ports)— no TCP gRPC transport permitted (wire-auth.md §4)"
+    printf '%s\n' "$ports" | grep -qx 8881 || bail "R7: proxy port 8881 not among the DP's TCP LISTEN entries — sanity failure"
+    echo "R7: PASS (only TCP LISTEN is the proxy port 8881; gRPC is UDS-only)" >&2
+  fi
+
+# LIFT-MARKER: R8
+  if need_stack "R8" && need_mutate "R8"; then # DP keeps routing port 8881 across a CP restart (control-grpc.md invariant row 9; arch §5.5; Principle II)
+    if ! probe_run proxy; then
+      bail "R8: pre-restart proxy probe failed — the 8881 listener/auth surface is not answering; nothing to survive with"
+    fi
+    compose_restart_wait stargate-control || bail "R8: stargate-control did not come back up within 60s of restart"
+    if ! probe_run proxy; then
+      bail "R8: proxy probe failed after the CP restart — the DP gated forwarding on the control plane (Principle II violation)"
+    fi
+    echo "R8: PASS (port 8881 answered before and after a CP restart)" >&2
+  fi
+
+# LIFT-MARKER: R9
+  if need_stack "R9" && need_mutate "R9"; then # per-handshake pin re-read: rotate cp.* + restart CP; the running DP accepts the new identity on its next dial (wire-auth.md §3.1 step 3; §6.2)
+    probe_run status -socket /run/stargate/dp.sock || bail "R9: pre-rotation status probe failed — fix that before testing rotation"
+    # §6.2 rotation order: the rotated plane (CP) must be DOWN during the
+    # keyfile rename.
+    docker compose -f "$COMPOSE" --env-file "$ENV_FILE" stop stargate-control >/dev/null 2>&1 || bail "R9: could not stop stargate-control for the rotation window"
+    docker run --rm --user 5101:5100 -v "$KEYS_VOL:/etc/stargate/keys" -v "$PWD":/src -w /src "$GOIMG" \
+      "/src/$PROBE_BIN" rotate || bail "R9: key rotation in the keys volume failed"
+    # Enforce §6.1 ownership/mode on the rotated keyfiles (the renaming
+    # process's umask does not own the numerics).
+    docker run --rm --user 0:0 -v "$KEYS_VOL:/etc/stargate/keys" "$GOIMG" bash -c \
+      'chown 5101:5100 /etc/stargate/keys/cp.priv /etc/stargate/keys/cp.pub && chmod 600 /etc/stargate/keys/cp.priv && chmod 644 /etc/stargate/keys/cp.pub' \
+      || bail "R9: could not enforce §6.1 ownership/mode on the rotated keyfiles"
+    compose_restart_wait stargate-control || bail "R9: stargate-control did not come back after the rotation"
+    if probe_run status -socket /run/stargate/dp.sock; then
+      echo "R9: PASS (running DP accepted the rotated CP identity on the next dial — pin re-read per handshake)" >&2
+    else
+      bail "R9: DP still pins the OLD cp.pub after rotation — §3.1 step 3 (fresh per-handshake re-read) violated; rotation would need a peer restart"
+    fi
   fi
 fi
 

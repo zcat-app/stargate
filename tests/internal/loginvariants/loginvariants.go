@@ -22,9 +22,10 @@
 // FR-008 / arch §6.4 prohibit the data plane from emitting any
 // per-request metadata (destination hostname, URL, header, body
 // byte, sub-hour timestamp). The allowlist is the positive form of
-// that invariant — every journal line MUST match one of the five
+// that invariant — every journal line MUST match one of the six
 // reserved line classes (startup, shutdown, SidecarEvent
-// consumption, ReloadTokens apply, snapshot-write events).
+// consumption + closed-vocabulary violation, ReloadTokens apply,
+// snapshot-write events, control-channel lifecycle).
 // AssertNoSecrets and AssertNoSubHourTimestamp are the targeted
 // negative forms; together they form the layered defense a single
 // gate alone could not cover (corpus scan catches specific leaks
@@ -139,19 +140,22 @@ func msgFieldAlts(values ...string) string {
 // T025 leak); a new line class is a Constitution-level change that
 // amends this list AND every contract that references it.
 //
-// Five classes per FR-008 / arch §6.4 + the T025a task body:
+// Six classes per FR-008 / arch §6.4 + the T025a task body; the sixth
+// (control_channel) is the T045 amendment the package doc mandates — the
+// wire contract REQUIRES the DP to journal the degraded-mode transition
+// (wire-auth.md §4; arch §5.4) and no existing class covered it:
 //
 //  1. startup             — boot lines before the listener accepts
 //  2. shutdown            — graceful-teardown lines on SIGINT
 //  3. reload_tokens_apply — ReloadTokens generation swap (T020)
 //  4. snapshot_write      — dp-snapshot.json persist (T020/T046)
 //  5. sidecar_event       — WatchEvents push consumption (T021);
-//     includes the closed-vocabulary violation marker (T021's
-//     journalHasDetailViolation in
-//     tests/contract/control-grpc/watch_events_test.go:310) because
-//     the violation is emitted from the same WatchEvents consumer
-//     and is not a separate line class from the contract's
-//     standpoint.
+//     includes the closed-vocabulary violation line (T045's pinned
+//     `sidecar event rejected` phrasing; the violation is emitted
+//     from the same WatchEvents consumer and is not a separate line
+//     class from the contract's standpoint — see the class comment).
+//  6. control_channel     — degraded-mode / recovery lifecycle lines
+//     (T045; wire-auth.md §4 + arch §5.4 require the journal line).
 //
 // Patterns are constructed eagerly at init (MustCompile panics on a
 // bad pattern — a regression caught at first test run, not deferred
@@ -195,33 +199,47 @@ var AllowedLineClasses = []AllowedLineClass{
 		Pattern: regexp.MustCompile(
 			// The event-received log line (slog msg= field) the
 			// WatchEvents consumer emits when it processes a
-			// pushed SidecarEvent (T021's contract). Matches the
-			// happy-path event-receipt shape only — the closed-
-			// vocabulary detail-violation journal line T021's
-			// journalHasDetailViolation greps for is NOT matched
-			// here; that line's msg= phrasing is unspecified
-			// (T021 uses substring tolerance) and including any
-			// marker-based alternation created a per-request
-			// false-pass vector (stargate-redteam round-1 finding:
-			// `msg="request rejected" dst=…` would match a
-			// bare-word marker alternation; tightening to
-			// markers-inside-msg= still let
-			// `msg="request rejected"` through). When T070a
-			// lands and pins the actual violation-msg= phrasing
-			// the DP emits, this class extends with that exact
-			// value; until then T070a's future delta-scoped
-			// journal check (snapshot around the violation push)
-			// plus the corpus scan is the established pattern
-			// for handling violation journal output without
-			// broadening the allowlist.
+			// pushed SidecarEvent (T021's contract), PLUS the
+			// closed-vocabulary violation line T045 emits when a
+			// pushed event's detail falls outside the contract's
+			// fixed vocabulary (contracts/control-grpc.md
+			// §"WatchEvents"; the violation is emitted from the same
+			// consumer and is not a separate line class from the
+			// contract's standpoint). The exact phrasings below are
+			// what data-plane/internal/controlclient/client.go emits
+			// — pinned here per this file's deferral note (the
+			// stargate-redteam round-1 finding): exact quoted msg=
+			// values only, never marker substrings, so a per-request
+			// line carrying "rejected"/"violation" as free text
+			// cannot false-pass. T070a's delta-scoped journal check
+			// rides on these pinned values.
 			`(?im)^.*\b(?:` +
 				msgFieldAlts(
 					"sidecar event", "sidecar_event",
 					"event received", "event_received",
 					"watchevents event", "watchevents_event",
+					"sidecar event rejected",
 				) +
 				`).*$`),
-		AllowedFields: []string{"sidecar", "kind", "detail"},
+		AllowedFields: []string{"sidecar", "kind", "detail", "err"},
+	},
+	{
+		// control_channel — the T045 amendment: the wire contract's
+		// degraded-mode surface. `msg="control channel degraded"` fires
+		// ONCE on the transition into degraded mode (CP unreachable /
+		// handshake failure — wire-auth.md §4; arch §5.4; Principle II:
+		// the DP keeps routing, the journal says why), and
+		// `msg="control channel recovered"` once on the first event
+		// after it. Both are channel-lifecycle lines, never
+		// per-request: the field allowlist keeps them to transport
+		// error text (err), which is socket/TLS detail, never event or
+		// token content.
+		Name: "control_channel",
+		Pattern: regexp.MustCompile(
+			`(?im)^.*\b(?:` + msgFieldAlts(
+				"control channel degraded", "control channel recovered",
+			) + `).*$`),
+		AllowedFields: []string{"err"},
 	},
 }
 

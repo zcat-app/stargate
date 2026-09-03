@@ -41,13 +41,17 @@ var leakScanSecret = []byte{
 }
 
 // cleanJournalFixture is the realistic secret-free journal from T020's
-// leakscan_test.go:60 extended with the two remaining classes the
-// allowlist reserves (SidecarEvent consumption, shutdown). Every line
-// matches exactly one AllowedLineClass; a regression that flags any
-// line here is an allowlist false-positive.
+// leakscan_test.go:60 extended with the remaining classes the
+// allowlist reserves (SidecarEvent consumption + its T045
+// closed-vocabulary violation line, control-channel lifecycle,
+// shutdown). Every line matches exactly one AllowedLineClass; a
+// regression that flags any line here is an allowlist false-positive.
 const cleanJournalFixture = `level=info msg=startup listener=127.0.0.1:8881
 level=info msg="tokens applied" generation=2 count=1
 level=info msg="sidecar event" sidecar=tor kind=EVENT_KIND_HEALTHY detail=healthcheck_pass
+level=error msg="sidecar event rejected" kind=EVENT_KIND_STARTED err="detail outside closed vocabulary"
+level=warn msg="control channel degraded" err="connection refused"
+level=info msg="control channel recovered"
 level=warn msg="snapshot write failed" err="open /var/lib/stargate/.tmp: read-only file system"
 level=info msg=shutdown reason="received SIGINT"`
 
@@ -222,6 +226,8 @@ func TestAllowedLineClasses_RejectsForbiddenExtraFields(t *testing.T) {
 		{"shutdown with destination", "level=info msg=shutdown dst=t025a-dest-042-example.onion"},
 		{"tokens applied with destination", `level=info msg="tokens applied" generation=2 count=1 dst=t025a-dest-042-example.onion`},
 		{"sidecar event with bytes", `level=info msg="sidecar event" sidecar=tor kind=EVENT_KIND_HEALTHY bytes=1234`},
+		{"sidecar event rejected with destination", `level=error msg="sidecar event rejected" kind=EVENT_KIND_STARTED err="detail outside closed vocabulary" dst=t025a-dest-042-example.onion`},
+		{"control channel degraded with destination", `level=warn msg="control channel degraded" err="connection refused" dst=t025a-dest-042-example.onion`},
 		{"snapshot with destination", `level=warn msg="snapshot write failed" err="read-only" dst=t025a-dest-042-example.onion`},
 	}
 	for _, c := range cases {

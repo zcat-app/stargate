@@ -1,9 +1,9 @@
 ---
 id: T045
 title: 'Implement `data-plane/internal/controlclient/`'
-status: pending
+status: in-review
 created: 2026-07-04
-last_updated: 2026-07-12
+last_updated: 2026-09-03
 source: tasks.md#T045
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
@@ -83,7 +83,11 @@ of its own (T095 §Acceptance #5).
   - `tests/contract/compose/inter_plane_wire_test.sh` (T095) lifts its
     runtime tier (R1-R8) when T038 + T045 + T050 all land. R5 (unknown
     major rejected) and R6 (additive minor accepted) pin the §5
-    interceptor behaviour.
+    interceptor behaviour. *(Amended 2026-09-03: the tier's FAIL-forcing
+    content probe fires on construction call-sites alone, so T045's diff
+    alone flipped it — the lift was authored by T045 per T095 §Residue;
+    see §Notes. The rows still exercise fully only once T038/T050 bring
+    up both planes.)*
   - T020 (cold-start no-CP auth) and T021 (reconnect after stream close)
     gate the plane-down survival and `WatchEvents` advisory properties.
   - T022's local-process tier gates the no-TCP-transport and
@@ -155,3 +159,41 @@ of its own (T095 §Acceptance #5).
   restated here.
 - Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04. §Analysis +
   §Acceptance refined 2026-07-12 against T095's `contracts/wire-auth.md`.
+- **Implementation note (2026-09-03) — the T095 FAIL-forcing gate fired on
+  this diff, as designed.** Landing `server.go`/`client.go` (with the
+  `RegisterControlServer(`/`NewEventsClient(` construction call-sites)
+  flipped the content probe in
+  `tests/contract/compose/inter_plane_wire_test.sh`, so the R1-R9 runtime
+  lift was authored in the SAME PR per T095 §Residue ("the lift is authored
+  by the first impl ticket whose diff turns the gate red"). The lift adds:
+  the nine `# LIFT-MARKER` rows (SKIP until a `stargate init` stack is up;
+  R8/R9 additionally gated behind `STARGATE_WIRE_RUNTIME_MUTATE=1` since
+  they restart/rotate a live stack), the black-box probe
+  `tests/contract/compose/wireprobe/` (an independent outside view — the
+  Go internal-package rule forbids importing `data-plane/internal`, which
+  is exactly right for a contract prober), the §4 static
+  InsecureSkipVerify↔custom-verifier co-location check, and a state-aware
+  amendment of `inter_plane_wire_gate_test.sh` (T115's substrate) whose
+  fixture-B assertions can no longer demand rc=1 once the lift exists.
+- **Files budget note.** `files_budget: 8` (a bootstrap TODO) — the final
+  diff touches 14 files: 12 code/gate files (7 in `data-plane/`:
+  protoversion.go, tls.go, server.go, client.go + 2 test files + the go.mod
+  proto-module require/replace; 3 T095-forced lift files: wire test,
+  wireprobe, gate substrate; 2 review-round-1-mandated allowlist files:
+  tests/internal/loginvariants/{loginvariants.go,loginvariants_test.go})
+  plus 2 driver-bookkeeping artifacts (ticket frontmatter + STATUS.md regen).
+  The overrun is the forced lift + the review mandate, not scope creep; no
+  files_budget amendment ticket filed (the budget itself is marked
+  TODO-tighten).
+- **Review round 1 rework (2026-09-03).** Three findings addressed: (Major)
+  the three new journal lines (`control channel degraded`/`recovered`,
+  `sidecar event rejected`) matched zero loginvariants classes — the
+  canonical allowlist was amended per its own package-doc mechanism (new
+  `control_channel` class; `sidecar_event` extended with the pinned exact
+  violation phrasing + `err` field), with the self-test fixture extended
+  and the real matcher verified against the emitted lines; (Minor)
+  `probe_run` now builds with `-buildvcs=false` (reproduced failure without
+  it); (Minor) the R4-static co-location check now strips comment lines and
+  requires the struct-literal assignment form — mutation-tested to bail on
+  the exact §4 silent-auth-bypass mutation. Follow-up applied: R7's port
+  conversion is POSIX shell printf, not gawk `strtonum`.

@@ -17,15 +17,28 @@
 #
 #   Fixture B1 (server registration call-site):
 #     a non-comment `grpcpb.RegisterControlServer(gs, s)` line — the probe
-#     MUST fire (gate FAILs on 0/9 LIFT-MARKERs; forcing function intact,
-#     NOT softened into always-skip).
+#     MUST fire while the runtime lift is UNAUTHORED (gate FAILs on
+#     <9 paired LIFT-MARKERs; forcing function intact, NOT softened into
+#     always-skip).
 #
 #   Fixture B2 (client construction call-site):
 #     a non-comment `grpcpb.NewEventsClient(conn)` line — same MUST fire,
 #     independently of B1 (either alternative suffices, as before).
 #
-# Plus: the gate still carries a `runtime_content_detected` probe and the
-# bare-word probe is gone (T115 §Acceptance #3).
+# T045 LIFT STATE (2026-09-03): T045's real server.go/client.go call-sites
+# flipped the probe, so the FAIL-forcing state fired and the lift was
+# AUTHORED in the gate (9 paired LIFT-MARKER rows, R1-R9). This substrate
+# is therefore STATE-AWARE:
+#
+#   - unlifted gate (<9 paired markers): fixtures A/B1/B2 assert the
+#     original T115 semantics (A stays SKIP; B1/B2 force FAIL).
+#   - lifted gate (≥9 markers): the forcing function has fired and
+#     completed — fixtures B1/B2 can no longer be fault conditions (the
+#     marker count already satisfies the gate), so they assert the gate
+#     STAYS GREEN with the fixture present and that the runtime rows
+#     actually RUN (an "R<n>:" line in the output), which is what keeps
+#     the lift live rather than a pile of dead markers. Fixture A still
+#     asserts the prose-immunity regression.
 #
 # MECHANICS: fixtures are created INSIDE the real data-plane/internal/ tree
 # (the gate greps a fixed relative path) in a directory whose name starts
@@ -41,6 +54,14 @@ GATE="$REPO_ROOT/tests/contract/compose/inter_plane_wire_test.sh"
 [ -f "$GATE" ] || { echo "FAIL: $GATE missing" >&2; exit 1; }
 [ -d "$REPO_ROOT/data-plane/internal" ] || {
   echo "FAIL: data-plane/internal/ missing — the gate's probe tree" >&2; exit 1; }
+
+# Gate state: LIFTED iff the gate carries the full set of LIFT-MARKER rows
+# (the T045 lift; a partially-authored gate is still unlifted for these
+# purposes — the FAIL-forcing state must persist until 9 exist).
+LIFTED=0
+if [ "$(grep -cE '^# LIFT-MARKER: R[0-9]+$' "$GATE" 2>/dev/null || true)" -ge 9 ]; then
+  LIFTED=1
+fi
 
 FIXDIR="$(mktemp -d "$REPO_ROOT/data-plane/internal/_wire-gate-fixture-XXXXXX")"
 cleanup() { rm -rf "$FIXDIR"; }
@@ -71,42 +92,65 @@ run_gate
 if [ "$GATE_RC" -eq 0 ]; then :; else
   bail "A-exit-0: comment-only fixture made the gate exit $GATE_RC (probe fired on prose — the T115 false-positive class)"
 fi
-assert_grep 'RUNTIME tier SKIP:' "A-stays-skip" "$GATE_OUT"
-assert_nogrep 'GATE-LIFT REQUIRED' "A-no-lift" "$GATE_OUT"
+if [ "$LIFTED" -eq 1 ]; then
+  # Lifted: the gate is green with the runtime rows live.
+  assert_grep 'RUNTIME tier LIFTED' "A-lifted-banner" "$GATE_OUT"
+  assert_grep 'R1: ' "A-rows-run" "$GATE_OUT"
+  assert_nogrep 'GATE-LIFT REQUIRED' "A-no-lift-blame" "$GATE_OUT"
+else
+  assert_grep 'RUNTIME tier SKIP:' "A-stays-skip" "$GATE_OUT"
+  assert_nogrep 'GATE-LIFT REQUIRED' "A-no-lift" "$GATE_OUT"
+fi
 assert_grep 'structural tier green' "A-structural-still-green" "$GATE_OUT"
 rm -f "$FIXDIR/reload_doc.go"
 
-# --- Fixture B1: server registration call-site — MUST fire ------------------
-cat > "$FIXDIR/server_reg.go" <<'EOF'
-// Wire-gate substrate fixture B1 (T115) — detection-POSITIVE, server side.
-// Never compiled: the enclosing _-prefixed directory is ignored by the go
-// tool. The non-comment line below is the fixture.
+# --- Fixtures B1/B2: construction call-sites --------------------------------
+# Unlifted: each fixture MUST force the gate FAIL (forcing function).
+# Lifted: the gate MUST stay green (the forcing function fired and the
+# lift was authored; markers, not call-sites, now decide).
+mk_fixture() { # mk_fixture <file> <line>
+  cat > "$FIXDIR/$1" <<EOF
+// Wire-gate substrate fixture ($1) — detection-POSITIVE, never compiled:
+// the enclosing _-prefixed directory is ignored by the go tool.
 package fixture
 
-grpcpb.RegisterControlServer(gs, s)
+$2
 EOF
-run_gate
-if [ "$GATE_RC" -eq 1 ]; then :; else
-  bail "B1-exit-1: registration call-site did NOT force the gate FAIL (rc=$GATE_RC) — forcing function broken"
-fi
-assert_grep 'RUNTIME tier GATE-LIFT REQUIRED' "B1-lift-required" "$GATE_OUT"
-assert_grep 'LIFT-MARKER' "B1-blames-markers" "$GATE_OUT"
-assert_grep 'FAIL: T095 inter-plane wire contract test' "B1-gate-fails" "$GATE_OUT"
-rm -f "$FIXDIR/server_reg.go"
+}
 
-# --- Fixture B2: client construction call-site — MUST fire, independently ---
-cat > "$FIXDIR/client_ctor.go" <<'EOF'
-// Wire-gate substrate fixture B2 (T115) — detection-POSITIVE, client side.
-package fixture
+if [ "$LIFTED" -eq 1 ]; then
+  mk_fixture server_reg.go 'grpcpb.RegisterControlServer(gs, s)'
+  run_gate
+  if [ "$GATE_RC" -eq 0 ]; then :; else
+    bail "B1-lifted-green: registration call-site made the LIFTED gate exit $GATE_RC — the lift must hold with real call-sites present"
+  fi
+  rm -f "$FIXDIR/server_reg.go"
 
-grpcpb.NewEventsClient(conn)
-EOF
-run_gate
-if [ "$GATE_RC" -eq 1 ]; then :; else
-  bail "B2-exit-1: client-construction call-site did NOT force the gate FAIL (rc=$GATE_RC) — forcing function broken"
+  mk_fixture client_ctor.go 'grpcpb.NewEventsClient(conn)'
+  run_gate
+  if [ "$GATE_RC" -eq 0 ]; then :; else
+    bail "B2-lifted-green: client-construction call-site made the LIFTED gate exit $GATE_RC — the lift must hold with real call-sites present"
+  fi
+  rm -f "$FIXDIR/client_ctor.go"
+else
+  mk_fixture server_reg.go 'grpcpb.RegisterControlServer(gs, s)'
+  run_gate
+  if [ "$GATE_RC" -eq 1 ]; then :; else
+    bail "B1-exit-1: registration call-site did NOT force the gate FAIL (rc=$GATE_RC) — forcing function broken"
+  fi
+  assert_grep 'RUNTIME tier GATE-LIFT REQUIRED' "B1-lift-required" "$GATE_OUT"
+  assert_grep 'LIFT-MARKER' "B1-blames-markers" "$GATE_OUT"
+  assert_grep 'FAIL: T095 inter-plane wire contract test' "B1-gate-fails" "$GATE_OUT"
+  rm -f "$FIXDIR/server_reg.go"
+
+  mk_fixture client_ctor.go 'grpcpb.NewEventsClient(conn)'
+  run_gate
+  if [ "$GATE_RC" -eq 1 ]; then :; else
+    bail "B2-exit-1: client-construction call-site did NOT force the gate FAIL (rc=$GATE_RC) — forcing function broken"
+  fi
+  assert_grep 'RUNTIME tier GATE-LIFT REQUIRED' "B2-lift-required" "$GATE_OUT"
+  rm -f "$FIXDIR/client_ctor.go"
 fi
-assert_grep 'RUNTIME tier GATE-LIFT REQUIRED' "B2-lift-required" "$GATE_OUT"
-rm -f "$FIXDIR/client_ctor.go"
 
 # --- Probe mechanism pins (T115 §Acceptance #3) -----------------------------
 # The content probe still exists under its contract name...
@@ -131,5 +175,9 @@ if [ "${#errs[@]}" -gt 0 ]; then
   exit 1
 fi
 
-echo "PASS: inter_plane_wire_gate_test.sh — comment-only no-detect + symbol-call detection (server, client) + probe mechanism pins hold."
+if [ "$LIFTED" -eq 1 ]; then
+  echo "PASS: inter_plane_wire_gate_test.sh — LIFTED state: prose-immune detection + green-with-call-sites + runtime rows live."
+else
+  echo "PASS: inter_plane_wire_gate_test.sh — comment-only no-detect + symbol-call detection (server, client) + probe mechanism pins hold."
+fi
 exit 0
