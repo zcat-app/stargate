@@ -144,6 +144,16 @@ property map):
    scripts/ docs/process/analysis.md` now reflects reality — the gate
    wires them (or analysis.md §"Gated" is amended to match whatever this
    ticket actually lands). The T043-era overclaim class must not reappear.
+5. **`-race` in the gate's test command (amended 2026-09-03, T044
+   round-2 routing)**: `scripts/go-workspace-gate.py`'s per-module
+   `go test` invocation carries `-race` (today: `go test -json -count=1`,
+   no race detector), so a data race in any workspace module fails
+   verify.sh. If a module's suite cannot carry `-race` (runtime cost or
+   an incompatibility), that module is recorded in §Analysis with the
+   reason — the flag must not be silently absent. Provenance: T044
+   acceptance 3 initially claimed the gate ran `-race`; the reviewer
+   falsified the claim (go-workspace-gate.py:364) and routed the
+   gate-infrastructure fix here so T044's diff stayed surgical.
 
 ### Runnable command
 
@@ -170,3 +180,7 @@ zero outstanding findings.
 Provenance: T043 round-1 codereview, APPROVE-WITH-FIXES,
 RECOMMENDED-FOLLOW-UP + FIX ITEMS residue (2026-09-03). Hand-authored per
 docs/process/ticket-template.md; T104 is the structural precedent.
+Amended 2026-09-03: acceptance 5 added, routing the `-race` gate flag from
+T044's round-2 review (APPROVE-WITH-FIXES; the reviewer's
+RECOMMENDED-FOLLOW-UP offered "fold into T114" vs expanding T044's diff —
+this is the fold).
