@@ -3,17 +3,19 @@ id: T057
 title: 'Author `extension/popup/popup.html` and `extension/popup/popup.js`'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-09-03
 source: tasks.md#T057
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009, T034c]   # T034c added 2026-09-03 per T096/M6 (T034e precedent):
+                            # the Principle-VII test gates this impl
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true
 complexity: low   # TODO: set per task
 risk: low
 round_cap: 2
+tests_first: [T034c]   # the popup.test.js suite that self-skips until this ticket lands
 spec_refs: []   # TODO: cite spec.md § at /start
 decision_refs: []
 reviews: {}
