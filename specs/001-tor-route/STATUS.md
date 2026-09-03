@@ -17,9 +17,9 @@
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 87 |
+| done | 88 |
 | deferred | 1 |
-| **total** | **146** |
+| **total** | **147** |
 
 ---
 
@@ -99,7 +99,7 @@ _(nothing in flight)_
 
 ## Done
 
-_87 ticket(s) done._
+_88 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -188,3 +188,4 @@ _87 ticket(s) done._
 - T107 — Digest-pin alpine:3.20 in stargate-cli contract tests
 - T108 — verify.sh must record repro-test SKIP as SKIP, not PASS
 - T113 — Drop the inert PostConstruct token from ExcludedFieldAnnotations
+- T115 — Fix the wire gate's comment-sensitive impl-detection probe

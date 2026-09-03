@@ -1,7 +1,7 @@
 ---
 id: T115
 title: 'Fix the wire gate's comment-sensitive impl-detection probe'
-status: in-review
+status: done
 created: 2026-09-03
 last_updated: 2026-09-03
 source: hand-authored   # Raised during T044's implementation (2026-09-03):
@@ -60,7 +60,7 @@ decision_refs:
      (structural precedent: hand-authored gate-accuracy ticket raised by
      another ticket's round)"
 
-reviews: {}
+reviews: { round: 1, date: 2026-09-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
