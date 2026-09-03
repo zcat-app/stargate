@@ -1,7 +1,7 @@
 ---
 id: T034c
 title: 'Unit test for `extension/popup/popup.js` per-tab indicator (Principle '
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T034c
@@ -31,7 +31,7 @@ decision_refs:
   - "specs/001-tor-route/tickets/T034b-unit-test-for-extensionbackgroundhardeni.md (the direct extension-plane precedent: access-recording mock, self-skip-then-bite, apiReadFailureFailsClosedWithoutThrowing; round-1 APPROVE)"
   - "specs/001-tor-route/tickets/T034d-unit-test-for-extensionlibfirstpartyjs-pure.md (pinned-surface conformance-gate precedent: present-but-nonconforming is a hard FAIL, never a silent re-skip; round-1 APPROVE + T034g exclusivity follow-up)"
   - "specs/001-tor-route/tickets/T034e-unit-test-for-the-canonical-storagelocal.md (the M6 structural-dep precedent this ticket copies onto T057: tests_first + blocked_by, 'removed inverted dep — the test must NOT wait on its impl'; round-1 APPROVE)"
-reviews: {}
+reviews: { round: 1, date: 2026-09-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 61 |
+| pending | 60 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 83 |
+| done | 84 |
 | deferred | 1 |
 | **total** | **145** |
 
@@ -30,7 +30,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T034c | Unit test for `extension/popup/popup.js` per-tab indicator ( | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T035 | Implement `control-plane/core/src/main/java/.../TokenLoader. | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T036 | Implement `control-plane/persistence/src/main/java/.../entit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
@@ -102,7 +101,7 @@ _(nothing in flight)_
 
 ## Done
 
-_83 ticket(s) done._
+_84 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -148,6 +147,7 @@ _83 ticket(s) done._
 - T033 — Integration test for the full vertical: bring up `compose/docker-compo
 - T034 — Integration test asserting no DNS query for any `*.onion` name appears
 - T034b — Unit test for `extension/background/hardening.js` (Principle VII; FR-0
+- T034c — Unit test for `extension/popup/popup.js` per-tab indicator (Principle 
 - T034d — Unit test for `extension/lib/firstparty.js` (Principle VII
 - T034e — Unit test for the canonical `storage.local` warning text (Principle VI
 - T034g — T034d follow-up: assert surface exclusivity in `firstparty.tes
