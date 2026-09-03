@@ -1,7 +1,7 @@
 ---
 id: T043
 title: 'Implement `data-plane/internal/listener/connect.go`'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T043
@@ -24,7 +24,7 @@ spec_refs:
   - "specs/001-tor-route/contracts/error-template.md §\"Wire format\" (status-line table; exactly four headers in declared order; body = Template literal with the three substitutions; forbidden set)"
   - "THREAT-MODEL.md §3.1 Local profile (same-host unprivileged processes must not proxy without the token)"
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
