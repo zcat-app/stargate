@@ -1,7 +1,7 @@
 ---
 id: T034e
 title: 'Unit test for the canonical `storage.local` warning text (Principle VI'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T034e
@@ -31,7 +31,7 @@ decision_refs:
   - "specs/001-tor-route/tickets/T068a-contract-test-for-the-response-header-in.md (round-1 APPROVE precedent: a tests-first ticket lands GREEN via self-skips that gate on the impl's surface and lift when it exists)"
   - "specs/001-tor-route/tickets/T034b-unit-test-for-extensionbackgroundhardeni.md (the direct extension-plane precedent: same discovery runner, same self-skip-then-bite shape, same falsification protocol; round-1 APPROVE)"
   - "specs/001-tor-route/tickets/T035a-unit-test-for-tokenloaderjava-t035-diff.md (most recent application of the precedent; the stale-body-refine method this ticket's §Analysis follows)"
-reviews: {}
+reviews: { round: 1, date: 2026-09-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
