@@ -1,7 +1,7 @@
 ---
 id: T034c
 title: 'Unit test for `extension/popup/popup.js` per-tab indicator (Principle '
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T034c
@@ -110,9 +110,11 @@ items; method per T035a/T034b/T034e §Analysis):**
   anchor — the id is that anchor, and the id-coupling residue is
   promoted to a gate (see Residue → `popupHtmlProvidesPinnedIndicatorElement`).
 - browser surfaces touched: `tabs.query`, `tabs.onUpdated.addListener`,
-  `runtime.sendMessage` — nothing else. The popup originates no network
-  I/O and no storage/notifications/proxy/privacy access (display-only;
-  routing authority is the background).
+  `runtime.sendMessage` — nothing else. `tabs.query` must select the
+  active tab of the current window (options carrying `active: true` and
+  `currentWindow: true`) — that is the per-tab binding made concrete. The
+  popup originates no network I/O and no storage/notifications/proxy/
+  privacy access (display-only; routing authority is the background).
 - Canonical labels, byte-exact: `Route: Tor` and
   `Route: Direct (unrouted)`. Their only normative source is the
   tasks.md T057/T034c pair itself (no data-model § pins them — unlike
@@ -219,8 +221,10 @@ with the implementation).
    exactly `Route: Direct (unrouted)` — no unhandled rejection, never
    `Route: Tor`.
 8. **`backgroundTabUpdateNeverRerendersActiveIndicator`** (per-tab
-   binding): `tabs.onUpdated` for a non-active tabId → no message sent,
-   label unchanged (cross-tab bleed guard).
+   binding): `tabs.onUpdated` for a non-active tabId → the active tab's
+   label is unchanged (cross-tab bleed guard). The contract is the
+   rendered label, not the ask strategy: filtering events by tabId and
+   re-asking on every event are both conforming.
 9. **`popupTouchesOnlyPinnedBrowserSurfaces`** (display-only surface):
    across every flow above, recorded browser touches ⊆
    {`tabs.query`, `tabs.onUpdated.addListener`, `runtime.sendMessage`},
