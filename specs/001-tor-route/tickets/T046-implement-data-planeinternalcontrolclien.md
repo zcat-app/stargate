@@ -1,7 +1,7 @@
 ---
 id: T046
 title: 'Implement `data-plane/internal/controlclient/snapshot.go`'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T046
@@ -20,7 +20,7 @@ spec_refs:
   - specs/001-tor-route/contracts/control-grpc.md §"ReloadTokens" (persist-before-OK row 4)
   - specs/000-architecture/spec.md §5.5 (control plane down at startup)
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -70,15 +70,25 @@ all sibling auth-plane tickets T043/T044/T045 carry the flag).
 
 ## Acceptance
 
-- `TestWriteSnapshotAtomicAndShaped` (in-package): write → file at
+*(Test names aligned to the landed suite per the round-1 review Minor —
+the named behaviors are unchanged.)*
+
+- `TestWriteSnapshotShapeAndFidelity` + `TestWriteSnapshotReplacesPrevious`
+  + `TestWriteSnapshotEmptyVerifiersIsArray` (in-package): write → file at
   `<dir>/dp-snapshot.json` with `schemaVersion: 2`, base64 verifiers
-  byte-faithful, no temp files left behind; a failing write (read-only
-  dir) leaves the previous content intact and returns an error.
-- `TestRestoreSnapshot` (in-package): v2 snapshot → generation restored;
-  missing file → empty generation, no error; v1 snapshot → ignored with
-  a journal warning; corrupt JSON / unknown version / wrong-length
-  verifier → ignored, store stays empty; restored verifier authenticates
-  via `auth.TokenVerifier` (round-trip with the pepper, never persisted).
+  byte-faithful, revoke-all landing as a `"verifiers":[]` array (not
+  null), no temp files left behind.
+- `TestWriteSnapshotFailureKeepsPreviousIntact` (in-package): a failing
+  write (read-only dir) leaves the previous content intact, leaves no
+  temp debris, and returns an error free of verifier material.
+- `TestRestoreSnapshot*` (in-package): v2 snapshot → generation restored
+  (authenticates via `auth.TokenVerifier`, round-trip with the pepper);
+  missing file → empty generation, silent; v1 snapshot → ignored with a
+  journal warning; corrupt JSON / unknown version / unparsable loadedAt /
+  wrong-length or non-base64 verifier → ignored, store stays empty (no
+  partial trust); empty verifier set → restored as a revoke-all
+  generation. `TestSnapshotWriterSeamConformsToServerContract` pins the
+  `SnapshotFunc` wiring + success journal line.
 - `scripts/verify.sh` green from repo root.
 
 ## Out-of-scope

@@ -15,9 +15,9 @@
 |---|---|
 | pending | 56 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 89 |
+| done | 90 |
 | deferred | 1 |
 | **total** | **147** |
 
@@ -29,6 +29,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
+| T020a | Contract test for cold-start snapshot restore (Principle II  | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T035 | Implement `control-plane/core/src/main/java/.../TokenLoader. | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
@@ -83,9 +84,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T046 | Implement `data-plane/internal/controlclient/snapshot.go` | in-review | ✓ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
+_(nothing in flight)_
 
 ---
 
@@ -99,7 +98,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_89 ticket(s) done._
+_90 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -154,6 +153,7 @@ _89 ticket(s) done._
 - T043 — Implement `data-plane/internal/listener/connect.go`
 - T044 — Implement `data-plane/internal/auth/token.go`
 - T045 — Implement `data-plane/internal/controlclient/`
+- T046 — Implement `data-plane/internal/controlclient/snapshot.go`
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T075b — Author `tests/reproducibility/extension_test.sh`
 - T076 — Run every test module in the single green gate
