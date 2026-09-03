@@ -1,7 +1,7 @@
 ---
 id: T047
 title: 'Implement `data-plane/internal/forward/tor.go`'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T047
@@ -21,7 +21,7 @@ spec_refs:
   - specs/001-tor-route/contracts/socks5-auth.md §"Deadlines" (30 s dial+handshake only; none post-handshake)
   - .specify/memory/constitution.md Principle I (dumb router; fixed startup binding)
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
