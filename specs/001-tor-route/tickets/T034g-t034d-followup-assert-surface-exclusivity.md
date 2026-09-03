@@ -1,7 +1,7 @@
 ---
 id: T034g
 title: 'T034d follow-up: assert surface exclusivity in `firstparty.tes'
-status: pending
+status: in-progress
 created: 2026-09-03
 last_updated: 2026-09-03
 source: specs/001-tor-route/tickets/T034d-unit-test-for-extensionlibfirstpartyjs-p.md (T034d round-1 review RECOMMENDED-FOLLOW-UP; not a tasks.md line)
@@ -102,3 +102,53 @@ Filed 2026-09-03 from T034d's round-1 verdict (APPROVE, 1 Minor,
 RECOMMENDED-FOLLOW-UP) per the follow-up-don't-expand doctrine
 (CONTRIBUTING.md). Lands before T053 so T053 is gated by the exclusivity
 assertion from its first verify run.
+
+**Property map (grounding-verified 2026-09-03; required —
+`privacy_critical: true` per `docs/process/analysis.md`).**
+
+- **Must hold:** the conformance gate pins the full §Analysis surface —
+  presence (`firstPartyDomain` is a function) AND exclusivity
+  (`Object.keys(sandbox)` minus the three seeded globals deep-equals
+  exactly `['firstPartyDomain']`, order-insensitive), hard-FAILing with
+  expected-vs-actual named in the existing conformance register. The
+  eight cases keep flowing through `requireConformance()`, so the
+  assertion lifts with the existing skip mechanics.
+- **Gated:** verify.sh Gate 2b executes the suite via
+  `extension/run-tests.sh` (fail-closed on non-zero exit); the
+  exclusivity mechanics are proven to bite by the M6 probe below.
+  `scripts/check-license-headers.sh` gates the SPDX header;
+  `scripts/lint-ticket.py` gates ticket well-formedness.
+- **Residue** (documented, not silently dropped): top-level `let`/`const`
+  create lexical bindings, not global-object properties, so they escape
+  an `Object.keys`-based exclusivity check — but cross-script collisions
+  among them are a loud `SyntaxError`, not a silent overwrite, so they
+  are a different (auditable) hazard class than the `var` collision the
+  finding names. Non-enumerable `Object.defineProperty(globalThis, …)`
+  also escapes — deliberate concealment, outside the accidental-collision
+  threat model. Both documented for the redteam pass, not gated here.
+
+**Falsification record (2026-09-03, implement phase).** The edited suite
+was exercised in a throwaway copy (`/tmp/t034g-probe`, repo untouched)
+against a conforming reference stub and the T034d-recorded mutations.
+8/8 pass on the stub (exit 0); appending
+`var helperGlobal = function () { return 1; };` (verdict mutation M6)
+flips EVERY case to failure via the new exclusivity assertion, which
+names expected-vs-actual: "expected exactly one new context global,
+['firstPartyDomain']; got [firstPartyDomain, helperGlobal]". Each
+recorded mutation keeps tripping its named case: surface renamed
+(`firstParty`) → conformance presence hard-fail on all 8, never a silent
+skip; onion host collapsed to the public-suffix label →
+`onionTopLevelNavigation…` + `onionSubresourceBinds…` +
+`distinctOnionsYieldDistinct…`; address truncated (drops `.onion`) → the
+two onion-identity cases; subresource misbound to the request URL →
+`onionSubresourceBindsToParentDocumentOnion` (+ (g)); empty
+`documentUrl` silently treated as missing →
+`malformedDocumentUrlThrowsSentinelNeverSilentFallback`; generic
+`TypeError` instead of the sentinel → same (g) case; guarded
+`browser.storage` read → `firstPartyModuleNeverTouchesBrowserApis`. The
+naive "apply eTLD+1 to the onion host too" variant remains
+identity-preserving on a flat v3 host (8/8 pass) — the VACUOUS tooling
+note T034d's record already documents: the suite pins the verbatim
+return value, not the algorithm. Pre-T053 state re-verified in-repo
+after the edit: `extension/run-tests.sh` reports the eight firstparty
+cases skipped with the T053 marker, exit 0 — no skip-logic change.

@@ -96,6 +96,24 @@ function requireConformance(sandbox) {
       '`firstPartyDomain(requestDetails)` (T034d §Analysis; FR-002; ' +
       'arch §14.3 step 1). Got: ' + typeof sandbox.firstPartyDomain
   );
+  // Surface exclusivity (T034d §Analysis "exactly one new global";
+  // T034d round-1 verdict FINDINGS[1]): lib/firstparty.js,
+  // background/router.js, background/hardening.js and lib/storage.js
+  // all load as classic scripts into ONE background-page global scope,
+  // so an extra top-level `var` is a namespace-collision surface the
+  // pin promises to gate.
+  const extraGlobals = Object.keys(sandbox).filter(
+    (name) => name !== 'browser' && name !== 'URL' && name !== 'console'
+  );
+  assert.deepStrictEqual(
+    extraGlobals.sort(),
+    ['firstPartyDomain'],
+    'pinned surface violated: expected exactly one new context global, ' +
+      "['firstPartyDomain']; got [" + extraGlobals.join(', ') + '] ' +
+      '(T034d §Analysis "Pinned surface"; FR-002; MV2 classic scripts ' +
+      'share one background-page global scope — an extra top-level ' +
+      'global is a namespace-collision surface)'
+  );
 }
 
 const skip = () => (!implPresent() ? IMPL_ABSENT : false);
