@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 58 |
+| pending | 59 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 86 |
 | deferred | 1 |
-| **total** | **145** |
+| **total** | **146** |
 
 ---
 
@@ -80,6 +80,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T110 | Hermetic digest-agreement assertion for alpine:3.20 pins | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T111 | BUILD-DIFFS: document extension zip binary as build input | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T112 | Wire the stale-prose regression guard as a contract test | 6: Polish & Cross-Cutting Concerns |  | ✓ |
+| T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 
 ---
 
