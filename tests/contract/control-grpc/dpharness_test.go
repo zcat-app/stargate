@@ -115,6 +115,16 @@ func startDPWith(t *testing.T, beforeBoot func(ipcDir string)) *dpHarness {
 // admission-invariance sub-test can prove forwarding succeeds without a
 // SidecarEvent (Principle II; sol-review B3).
 func startDPWithUpstream(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir string)) *dpHarness {
+	return startDPWithSeed(t, upstreamAddr, beforeBoot, nil)
+}
+
+// startDPWithSeed is the extension point for tests that must place state
+// in the DP's state or keys dir BEFORE the process boots — T020a
+// pre-populates the cold-start dp-snapshot.json and seeds the inter-plane
+// key material. seed runs after the pepper is written and before
+// cmd.Start(), with both resolved dirs; nil is the no-op (the
+// startDPWithUpstream shape).
+func startDPWithSeed(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir string), seed func(stateDir, keysDir string)) *dpHarness {
 	t.Helper()
 	repoRoot := findRepoRoot(t)
 
@@ -163,6 +173,9 @@ func startDPWithUpstream(t *testing.T, upstreamAddr string, beforeBoot func(ipcD
 	// (T044) and mintToken agree on the verifier key (data-model.md
 	// §1.7; T093 tests-first contract surface).
 	dpharness.WritePepper(t, keysDir)
+	if seed != nil {
+		seed(stateDir, keysDir)
+	}
 
 	proxyAddr := freeLoopbackAddr(t)
 	journal := &lockedBuffer{}

@@ -1,9 +1,9 @@
 ---
 id: T020a
 title: 'Contract test for cold-start snapshot restore (Principle II survival; '
-status: pending
+status: in-progress
 created: 2026-07-04
-last_updated: 2026-07-11
+last_updated: 2026-09-03
 source: tasks.md#T020a
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
