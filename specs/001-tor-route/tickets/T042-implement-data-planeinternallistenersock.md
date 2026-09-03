@@ -1,7 +1,7 @@
 ---
 id: T042
 title: 'Implement `data-plane/internal/listener/socks5.go`'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T042
@@ -23,7 +23,7 @@ spec_refs:
   - "THREAT-MODEL.md §3.1 Local profile (same-host unprivileged processes must not proxy without the token)"
   - "specs/001-tor-route/research.md §9 (SOCKS5 failure is the 2-byte reply only — never the HTML template)"
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
