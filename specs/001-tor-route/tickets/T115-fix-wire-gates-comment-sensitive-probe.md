@@ -1,6 +1,6 @@
 ---
 id: T115
-title: 'Fix the inter-plane wire gate''s comment-sensitive impl-detection probe'
+title: 'Fix the wire gate's comment-sensitive impl-detection probe'
 status: pending
 created: 2026-09-03
 last_updated: 2026-09-03
