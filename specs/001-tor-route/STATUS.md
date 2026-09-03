@@ -17,9 +17,9 @@
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 81 |
+| done | 82 |
 | deferred | 1 |
-| **total** | **144** |
+| **total** | **145** |
 
 ---
 
@@ -31,8 +31,8 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034c | Unit test for `extension/popup/popup.js` per-tab indicator ( | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T034d | Unit test for `extension/lib/firstparty.js` (Principle VII | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T034g | T034d follow-up: assert surface exclusivity in `firstparty.t | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T035 | Implement `control-plane/core/src/main/java/.../TokenLoader. | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T036 | Implement `control-plane/persistence/src/main/java/.../entit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T038 | In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcS | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
@@ -103,7 +103,7 @@ _(nothing in flight)_
 
 ## Done
 
-_81 ticket(s) done._
+_82 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -149,6 +149,7 @@ _81 ticket(s) done._
 - T033 — Integration test for the full vertical: bring up `compose/docker-compo
 - T034 — Integration test asserting no DNS query for any `*.onion` name appears
 - T034b — Unit test for `extension/background/hardening.js` (Principle VII; FR-0
+- T034d — Unit test for `extension/lib/firstparty.js` (Principle VII
 - T034e — Unit test for the canonical `storage.local` warning text (Principle VI
 - T035a — Unit test for `TokenLoader.java` (T035) diff logic and validation
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
