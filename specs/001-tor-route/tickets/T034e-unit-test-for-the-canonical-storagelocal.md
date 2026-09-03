@@ -1,7 +1,7 @@
 ---
 id: T034e
 title: 'Unit test for the canonical `storage.local` warning text (Principle VI'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T034e
@@ -154,6 +154,13 @@ text **rendered** in options.html").
     invisible by design** — re-wrapping is a rendering no-op under the
     soft-wrap join; character-level drift (wording, punctuation, case)
     trips the equality.
+  - **Exclusivity is unpinned (falsification finding, 2026-09-03):** the
+    case asserts *presence* of the exact string; a page carrying both the
+    exact string and a drifted duplicate passes. Count-pinning would
+    over-constrain the markup this ticket deliberately leaves open (the
+    options page has exactly one warning by design, T056); a hidden
+    exact-text decoy is likewise outside the no-DOM model and falls under
+    the DOM-shape residue above.
   - **A future move of the warning into a JS-injected node** would fail
     the static-text gate. That failure is correct under today's contract
     ("rendered in `extension/options/options.html`"); changing it is a
@@ -228,3 +235,21 @@ artifact of `bootstrap-tickets.sh`; the tasks.md body is authoritative:
 T034b's falsification protocol is reused verbatim (throwaway copy,
 conforming stub, named mutations); any round that catches a real suite
 bug gets recorded there like T034b's §Notes does.
+
+**Falsification record (2026-09-03, implement phase).** Throwaway copy at
+`/tmp/t034e-falsify` (extension tree + the two spec sources). Canonical
+string extracted from §5.1 by the same soft-wrap join the test uses — no
+hand-typed copy. Results: (i) conforming stub (hard-wrapped, indented,
+`&#39;`-encoded) → case 3 passes; (ii) replica-(a) mutations each trip
+case 3 — paraphrase ("stored on disk"), dropped comma after
+`storage.local`, string confined to an HTML comment, string confined to
+a `<script>`, case drift, suffix truncation; (iii) quickstart quote edit
+→ case 2 fails, resync → passes; (iv) §5.1 heading renamed → case 1
+fails loudly (no silent pass), restore → passes. Round 1 caught two
+*falsification-harness* bugs (both no-op mutations: my sed targeted
+"directory, inside" — a substring the canonical string does not contain
+— and the case-drift file still carried an unmutated exact copy, so
+presence was genuinely satisfied); the suite itself held in every round,
+so no suite bug surfaced and no test line changed. The round-1
+duplicate-copy observation is recorded as the exclusivity residue in
+§Analysis.
