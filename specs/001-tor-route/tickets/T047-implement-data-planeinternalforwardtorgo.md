@@ -1,7 +1,7 @@
 ---
 id: T047
 title: 'Implement `data-plane/internal/forward/tor.go`'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T047
