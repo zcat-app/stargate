@@ -1,7 +1,7 @@
 ---
 id: T044
 title: 'Implement `data-plane/internal/auth/token.go`'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T044
@@ -25,7 +25,7 @@ spec_refs:
   - "specs/001-tor-route/spec.md FR-006 (authenticate every inbound request; failures indistinguishable)"
   - "THREAT-MODEL.md §5.14 (snapshot leak does not expose the pepper; HMAC-speed residue accepted)"
 decision_refs: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
