@@ -44,10 +44,14 @@ var leakScanSecret = []byte{
 // leakscan_test.go:60 extended with the remaining classes the
 // allowlist reserves (SidecarEvent consumption + its T045
 // closed-vocabulary violation line, control-channel lifecycle,
-// shutdown). Every line matches exactly one AllowedLineClass; a
-// regression that flags any line here is an allowlist false-positive.
+// snapshot persist + T046 cold-start restore outcomes, shutdown).
+// Every line matches exactly one AllowedLineClass; a regression that
+// flags any line here is an allowlist false-positive.
 const cleanJournalFixture = `level=info msg=startup listener=127.0.0.1:8881
 level=info msg="tokens applied" generation=2 count=1
+level=info msg="snapshot written"
+level=info msg="snapshot restored" generation=7
+level=warn msg="snapshot restore ignored" reason="schemaVersion 1"
 level=info msg="sidecar event" sidecar=tor kind=EVENT_KIND_HEALTHY detail=healthcheck_pass
 level=error msg="sidecar event rejected" kind=EVENT_KIND_STARTED err="detail outside closed vocabulary"
 level=warn msg="control channel degraded" err="connection refused"
@@ -229,6 +233,9 @@ func TestAllowedLineClasses_RejectsForbiddenExtraFields(t *testing.T) {
 		{"sidecar event rejected with destination", `level=error msg="sidecar event rejected" kind=EVENT_KIND_STARTED err="detail outside closed vocabulary" dst=t025a-dest-042-example.onion`},
 		{"control channel degraded with destination", `level=warn msg="control channel degraded" err="connection refused" dst=t025a-dest-042-example.onion`},
 		{"snapshot with destination", `level=warn msg="snapshot write failed" err="read-only" dst=t025a-dest-042-example.onion`},
+		{"snapshot restored with destination", `level=info msg="snapshot restored" generation=7 dst=t025a-dest-042-example.onion`},
+		{"snapshot restore ignored with destination", `level=warn msg="snapshot restore ignored" reason="schemaVersion 1" dst=t025a-dest-042-example.onion`},
+		{"snapshot restored with bytes", `level=info msg="snapshot restored" generation=7 bytes=1234`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

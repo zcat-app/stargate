@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 57 |
+| pending | 56 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 89 |
 | deferred | 1 |
@@ -36,7 +36,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T038 | In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcS | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T039 | Implement `control-plane/core/src/main/java/.../SidecarMonit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
-| T046 | Implement `data-plane/internal/controlclient/snapshot.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
 | T047 | Implement `data-plane/internal/forward/tor.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T048 | Implement `data-plane/internal/errortpl/render.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T049 | Implement `data-plane/internal/audit/counters.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
@@ -84,7 +83,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T046 | Implement `data-plane/internal/controlclient/snapshot.go` | in-review | ✓ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
 
 ---
 

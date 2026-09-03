@@ -1,7 +1,7 @@
 ---
 id: T046
 title: 'Implement `data-plane/internal/controlclient/snapshot.go`'
-status: pending
+status: in-review
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T046

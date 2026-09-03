@@ -148,7 +148,8 @@ func msgFieldAlts(values ...string) string {
 //  1. startup             — boot lines before the listener accepts
 //  2. shutdown            — graceful-teardown lines on SIGINT
 //  3. reload_tokens_apply — ReloadTokens generation swap (T020)
-//  4. snapshot_write      — dp-snapshot.json persist (T020/T046)
+//  4. snapshot_write      — dp-snapshot.json persist + cold-start
+//     restore (T020/T046/T020a)
 //  5. sidecar_event       — WatchEvents push consumption (T021);
 //     includes the closed-vocabulary violation line (T045's pinned
 //     `sidecar event rejected` phrasing; the violation is emitted
@@ -185,14 +186,23 @@ var AllowedLineClasses = []AllowedLineClass{
 	{
 		Name: "snapshot_write",
 		Pattern: regexp.MustCompile(
-			// Both success (msg="snapshot written") and failure
+			// Persist: success (msg="snapshot written") and failure
 			// (msg="snapshot write failed") variants per T020's
 			// reload_tokens_test.go:206 and leakscan_test.go:63.
+			// Restore: T046 snapshot.go journals the cold-start outcome
+			// (§1.4 mandates the ignore-warning; "snapshot restored"
+			// carries the §1.3 restart generation) — same class because
+			// it is the same file's lifecycle, not a new vocabulary.
 			`(?im)^.*\b(?:` + msgFieldAlts(
 				"snapshot written", "snapshot write failed",
 				"snapshot_persisted", "snapshot_persist_failed",
+				"snapshot restored", "snapshot restore ignored",
 			) + `).*$`),
-		AllowedFields: []string{"err"},
+		// reason/err carry schema versions, byte counts, and fs/path
+		// text only — never verifier bytes (§1.6); generation is the
+		// restored counter (§1.3's restart-journal use of loadedAt —
+		// the timestamp itself stays out of the journal, SubHourTimestamp).
+		AllowedFields: []string{"err", "reason", "generation"},
 	},
 	{
 		Name: "sidecar_event",
