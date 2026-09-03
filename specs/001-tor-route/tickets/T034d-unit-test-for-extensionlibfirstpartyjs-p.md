@@ -1,7 +1,7 @@
 ---
 id: T034d
 title: 'Unit test for `extension/lib/firstparty.js` (Principle VII'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T034d
@@ -278,3 +278,25 @@ tasks.md §"Notes" (binding): "never bundle a test and its corresponding
 implementation into one commit (the failing-test signal is part of the
 audit trail)" — under the T068a precedent the signal is the loud skip in
 this ticket's commit, lifting to assertions inside T053's commit.
+
+**Falsification record (2026-09-03, implement phase).** The suite was
+exercised in a throwaway copy against a conforming reference stub and
+seven drift mutations. 8/8 pass on the stub; each mutation trips its
+named case — onion identity collapsed to the TLD →
+`onionTopLevelNavigation…` + `onionSubresourceBinds…` +
+`distinctOnionsYieldDistinct…`; address truncated (drops `.onion`) →
+the two onion-identity cases; subresource misbound to the request URL →
+`onionSubresourceBindsToParentDocumentOnion` (+ (g)); empty
+`documentUrl` silently treated as missing →
+`malformedDocumentUrlThrowsSentinelNeverSilentFallback`; generic
+`TypeError` instead of the sentinel → same (g) case; surface renamed
+(`firstParty`) → conformance hard-fail on all 8 cases, never a silent
+skip; `browser.storage` read → `firstPartyModuleNeverTouchesBrowserApis`.
+Two tooling notes from the exercise: an onion-host "eTLD reduction"
+mutation was VACUOUS (a v3 onion host is single-label, so a
+last-two-labels reduction is identity-preserving — the suite correctly
+pins the verbatim return value, not the algorithm), and the first round
+caught a real suite bug: the sentinel validator originally used a
+host-realm `instanceof Error`, which rejects the vm-context's own Error
+realm — replaced with a duck-typed `name` check (assert.throws already
+guarantees something was thrown).
