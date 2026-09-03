@@ -1,7 +1,7 @@
 ---
 id: T034g
 title: 'T034d follow-up: assert surface exclusivity in `firstparty.tes'
-status: in-progress
+status: done
 created: 2026-09-03
 last_updated: 2026-09-03
 source: specs/001-tor-route/tickets/T034d-unit-test-for-extensionlibfirstpartyjs-p.md (T034d round-1 review RECOMMENDED-FOLLOW-UP; not a tasks.md line)
@@ -27,7 +27,7 @@ spec_refs:
   - "specs/001-tor-route/spec.md §FR-002 (the surface the gate protects)"
 decision_refs:
   - "target/runs/T034d.verdict (T034d round-1 APPROVE; FINDINGS[1] Minor — the pin-vs-mechanics gap this ticket closes; RECOMMENDED-FOLLOW-UP names the probe)"
-reviews: {}
+reviews: { round: 1, date: 2026-09-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 61 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 82 |
+| done | 83 |
 | deferred | 1 |
 | **total** | **145** |
 
@@ -88,9 +88,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T034g | T034d follow-up: assert surface exclusivity in `firstparty.t | in-progress | ✓ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
+_(nothing in flight)_
 
 ---
 
@@ -104,7 +102,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_82 ticket(s) done._
+_83 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -152,6 +150,7 @@ _82 ticket(s) done._
 - T034b — Unit test for `extension/background/hardening.js` (Principle VII; FR-0
 - T034d — Unit test for `extension/lib/firstparty.js` (Principle VII
 - T034e — Unit test for the canonical `storage.local` warning text (Principle VI
+- T034g — T034d follow-up: assert surface exclusivity in `firstparty.tes
 - T035a — Unit test for `TokenLoader.java` (T035) diff logic and validation
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T075b — Author `tests/reproducibility/extension_test.sh`
