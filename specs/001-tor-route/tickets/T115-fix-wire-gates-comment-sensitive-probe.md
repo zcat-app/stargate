@@ -1,7 +1,7 @@
 ---
 id: T115
 title: 'Fix the wire gate's comment-sensitive impl-detection probe'
-status: pending
+status: in-review
 created: 2026-09-03
 last_updated: 2026-09-03
 source: hand-authored   # Raised during T044's implementation (2026-09-03):
@@ -17,6 +17,14 @@ parallel: true          # Single test-harness file; no other open ticket
 files_budget: 4
 files_scope:
   - tests/contract/compose/inter_plane_wire_test.sh
+  - tests/contract/compose/inter_plane_wire_gate_test.sh
+                          # + §Acceptance 1: the gate's fixture/substrate test
+                          # (comment-only no-detect; server/client symbol
+                          # detection; bare-probe pin).
+  - data-plane/internal/auth/token.go
+                          # + §Acceptance 4 only: restore the workaround
+                          # comments to name the RPCs verbatim — no code
+                          # change (the out_of_scope note authorizes this).
 out_of_scope:
   - data-plane/**        # T044's comments were reworded as the in-round
                          # workaround ("token-reload handler"); this ticket

@@ -37,7 +37,7 @@ const DefaultKeysDir = "/etc/stargate/keys"
 // (data-model.md §1.3).
 type Generation struct {
 	// Generation is the monotonic counter the control plane assigns
-	// (§1.8); T045's token-reload handler rejects stale proposals
+	// (§1.8); T045's ReloadTokens handler rejects stale proposals
 	// against it (APPLY_STATUS_STALE_GENERATION).
 	Generation uint64
 	// Verifiers is the complete current set — each entry a 32-byte
@@ -51,7 +51,7 @@ type Generation struct {
 
 // TokenStore holds the single current generation under one atomic pointer
 // (data-model.md §1.3): readers load the pointer per request; writers
-// (T045's token-reload handler, T046's snapshot restore, T050's boot)
+// (T045's ReloadTokens handler, T046's snapshot restore, T050's boot)
 // swap it. In-flight requests complete against the generation they
 // loaded; the replaced one is garbage once the last reader drops it.
 type TokenStore struct {

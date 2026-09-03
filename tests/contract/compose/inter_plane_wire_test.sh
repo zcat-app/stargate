@@ -52,9 +52,14 @@ bail() { errs+=("$*"); }
 # server + client), T050 (DP main). Two detection mechanisms so a path
 # rename or package refactor cannot silently keep the gate dark:
 #   (a) file-existence probe at the expected paths (primary)
-#   (b) content-based probe: grep the impl tree for ReloadTokens server
-#       registration and WatchEvents client construction (secondary; catches
-#       a refactor that moves the impl to a different path)
+#   (b) content-based probe: grep the impl tree for gRPC construction
+#       call-sites — the generated stubs' registration/client entry points,
+#       `Register...Server(` / `New...Client(` (secondary; catches a
+#       refactor that moves the impl to a different path). T115: the probe
+#       matches CONSTRUCTION SYMBOLS AT CALL-SITES, never bare RPC names —
+#       the original bare-word alternation matched COMMENT text (T044's doc
+#       comments name the RPCs) and flipped verify.sh RED on an impl-absent
+#       tree. Substrate: inter_plane_wire_gate_test.sh.
 # When ALL are present the runtime tier MUST be lifted (see T095 §Notes
 # R1-R9); until then it SKIPs. The structural tier (S1-S9 below) runs
 # unconditionally — it needs only grep, not docker.
@@ -71,16 +76,30 @@ for f in "${RUNTIME_GATE_FILES[@]}"; do
     break
   fi
 done
-# Secondary content-based gate: if the impl moved to a different path but
-# the ReloadTokens server registration or WatchEvents client construction
-# exists anywhere under the DP source tree, the gate fires too.
-# This catches a package refactor that would leave runtime_gate_files_present=0
-# forever (redteam Minor: path-rename bypass). The DP-side check is the
-# cross-tree proxy — a DP gRPC server necessarily imports ReloadTokens +
-# WatchEvents, so detecting either is sufficient to know impl landed.
+# Secondary content-based gate: if the impl moved to a different path but a
+# gRPC server registration or client CONSTRUCTION call-site exists anywhere
+# under the DP source tree, the gate fires too. This catches a package
+# refactor that would leave runtime_gate_files_present=0 forever (redteam
+# Minor: path-rename bypass). The DP-side check is the cross-tree proxy — a
+# DP gRPC server necessarily calls the generated stubs' registration/client
+# entry points (control.proto `service Control` → RegisterControlServer;
+# events.proto `service Events` → NewEventsClient), so detecting either is
+# sufficient to know impl landed.
+#
+# Why call-site symbols and not RPC names (T115): a bare-word probe matches
+# comment text — T044's doc comments name ReloadTokens/WatchEvents while
+# describing the token store, which flipped verify.sh RED with the impl
+# absent. Requiring the symbol shape plus the call's open paren restricts
+# matches to code-shaped text. Accepted residues (fail-closed direction): a
+# comment quoting a construction call verbatim still trips the gate, and the
+# pattern is not gRPC-specific — a non-gRPC constructor named `New...Client(`
+# or `Register...Server(` in data-plane/internal/ would force the lift on an
+# impl-absent tree; if one ever lands, tighten the pattern via a gate-accuracy
+# follow-up ticket (T114 is the structural precedent). --include narrows the
+# sweep to Go sources.
 runtime_content_detected=0
-if grep -rqE 'ReloadTokens' data-plane/internal/ 2>/dev/null || \
-   grep -rqE 'WatchEvents' data-plane/internal/ 2>/dev/null; then
+if grep -qrE 'Register[A-Za-z0-9_]+Server\(|New[A-Za-z0-9_]+Client\(' \
+   --include='*.go' data-plane/internal/ 2>/dev/null; then
   runtime_content_detected=1
 fi
 runtime_gate_present=0
