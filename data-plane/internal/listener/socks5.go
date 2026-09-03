@@ -63,11 +63,13 @@ const (
 
 // Verifier is the auth seam (implemented by data-plane/internal/auth,
 // T044). The candidate arrives as the raw RFC 1929 PASSWD bytes — this
-// package applies NO format gate (research.md §9: malformed candidates
-// funnel through hash+compare to the same failure so the response
-// cannot distinguish them); the implementation verifies constant-time
-// across the whole verifier list (data-model.md §1.5) and MUST NOT log
-// the candidate.
+// package applies NO format gate and does no hashing (Principle I:
+// framing only); the auth seam rejects malformed candidates before any
+// hash work and verifies constant-time across the whole verifier list
+// (data-model.md §1.5; the T093 contract in hmac_verifier_test.go).
+// Every auth failure — missing, malformed, or mismatched — yields the
+// byte-identical `01 FF` reply (research.md §9), so the response cannot
+// distinguish them, and nothing about the candidate is logged (FR-008).
 type Verifier interface {
 	VerifyPassword(candidate []byte) bool
 }

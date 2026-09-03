@@ -5,30 +5,18 @@ package auth
 
 import "testing"
 
-// TestArgon2idParamsMatchSpec pins each Argon2id constant to its value from
-// specs/001-tor-route/data-model.md §1.5. Drift on either plane surfaces as
-// a test failure here; the cross-plane mirror test lives in the control
-// plane at Argon2idParamsTest. Constitution Principle VII: the auth
-// parameter path is privacy-critical, so the test lands before / alongside
-// the constants.
-func TestArgon2idParamsMatchSpec(t *testing.T) {
-	tests := []struct {
-		name string
-		got  any
-		want any
-	}{
-		{"time (iterations)", Argon2idTime, uint32(3)},
-		{"memory (KiB) — 64 MiB", Argon2idMemoryKiB, uint32(64 * 1024)},
-		{"memory (KiB) — literal 65536", Argon2idMemoryKiB, uint32(65536)},
-		{"parallelism (lanes)", Argon2idParallelism, uint8(4)},
-		{"hash length (bytes)", Argon2idHashLen, uint32(32)},
-		{"salt length (bytes)", Argon2idSaltLen, uint32(16)},
+// TestSharedVerifierConstantsMatchSpec pins the shared verifier-construction
+// constants to specs/001-tor-route/data-model.md §1.5/§1.7 (amended by T092:
+// HMAC-SHA-256 over the install-time pepper — the retired slow-KDF parameter
+// set is gone). Both planes MUST agree on these values; the CP-side mirror
+// lands with T035's TokenLoader path, and a mismatch is surfaced as "all
+// auth fails" (§1.5). Constitution Principle VII: the auth parameter path is
+// privacy-critical, so the test lands before / alongside the constants.
+func TestSharedVerifierConstantsMatchSpec(t *testing.T) {
+	if PepperLen != 32 {
+		t.Errorf("PepperLen = %d, want 32 (data-model.md §1.5/§1.7: 32 random bytes, openssl rand -bytes 32)", PepperLen)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.got != tt.want {
-				t.Fatalf("%s: got %v, want %v (data-model.md §1.5)", tt.name, tt.got, tt.want)
-			}
-		})
+	if VerifierAlgo != "HMAC-SHA-256" {
+		t.Errorf("VerifierAlgo = %q, want %q (data-model.md §1.5)", VerifierAlgo, "HMAC-SHA-256")
 	}
 }

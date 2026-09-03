@@ -1,7 +1,7 @@
 ---
 id: T044
 title: 'Implement `data-plane/internal/auth/token.go`'
-status: pending
+status: in-review
 created: 2026-07-04
 last_updated: 2026-09-03
 source: tasks.md#T044
@@ -143,9 +143,10 @@ true` per `docs/process/analysis.md`).
   - This ticket's API-level tests (`token_test.go`) pin the concrete
     implementation to those properties: slot-invariance at first/last
     slot of N=8, allocation-count N-independence (O(1)) and zero
-    allocations on the malformed path, store swap semantics, pepper
-    loader shape errors, and swap-under-verify race-cleanliness under
-    `-race`.
+    allocations on the malformed path (both gate halves: wrong length,
+    wrong charset), store swap semantics, pepper loader shape errors, and
+    swap-under-verify race-cleanliness (`go test -race ./internal/auth/`
+    standalone — see acceptance 3 for the gate-gap routing to T114).
   - `scripts/go-workspace-gate.py` (compile + vet) and the license-header
     check gate the mechanical surface; end-to-end wiring is gated by the
     T024/T025/T027/T028 contract tests, which self-lift when T045/T050
@@ -181,11 +182,14 @@ true` per `docs/process/analysis.md`).
    allocations are O(1): `testing.AllocsPerRun` counts are equal for N=1
    and N=64, and the malformed-candidate path allocates 0 (format gate
    precedes any hash work — the API-level pin of T093's must-hold).
-   — `TestVerifyPasswordAllocsIndependentOfN` in `token_test.go`.
+   — `TestVerifyPasswordAllocsO1` in `token_test.go`.
 3. `auth.TokenStore` swaps generations atomically; the zero store is the
    empty (revoke-all) state; swap-under-concurrent-verify is race-clean.
-   — `TestTokenStore*`, `TestSwapUnderVerifyRace` in `token_test.go`
-   (verify.sh's go test runs with `-race`).
+   — `TestTokenStore*`, `TestSwapUnderVerifyRace` in `token_test.go`;
+   runnable: `cd data-plane && go test -race ./internal/auth/ -count=1`
+   (the standalone channel — the green gate's go test does NOT carry
+   `-race`; wiring the flag into `scripts/go-workspace-gate.py` is gate
+   infrastructure routed to T114, not this ticket's diff).
 4. `auth.LoadPepper` reads exactly `PepperLen` bytes from
    `<keysDir>/pepper.key`; missing / short / long files error with
    messages carrying path and length only, never file bytes.
