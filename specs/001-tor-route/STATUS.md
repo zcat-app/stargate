@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 51 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 94 |
+| done | 95 |
 | deferred | 1 |
 | **total** | **147** |
 
@@ -81,9 +81,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T025d | Contract test for **positive** counter increments on the aut | in-progress | ✓ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
+_(nothing in flight)_
 
 ---
 
@@ -97,7 +95,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_94 ticket(s) done._
+_95 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -135,6 +133,7 @@ _94 ticket(s) done._
 - T025a — Contract test for SOCKS5 success-path log invariants
 - T025b — Contract test for long-lived bidirectional CONNECT (Principle I byte-p
 - T025c — Contract test for auth-failure counter side-channel resistance (FR-006
+- T025d — Contract test for **positive** counter increments on the auth-passed f
 - T026 — Contract test for HTTP CONNECT auth success
 - T027 — Contract test for `AUTH_REQUIRED` on CONNECT path in `tests/contract/e
 - T028 — Contract test for `AUTH_REQUIRED` on SOCKS5 path

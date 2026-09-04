@@ -1,7 +1,7 @@
 ---
 id: T025d
 title: 'Contract test for **positive** counter increments on the auth-passed f'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-04
 source: tasks.md#T025d
@@ -23,7 +23,7 @@ spec_refs:
 decision_refs:
   - specs/001-tor-route/research.md §11 (v1 `GetStatus` caller is the contract-test harness only)
   - specs/001-tor-route/plan.md §"Plan-level tensions surfaced for review" #10 (`GetStatus` ships in v1 proto rationale)
-reviews: {}
+reviews: { round: 1, date: 2026-09-04, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -163,10 +163,13 @@ exactly 2B (control-grpc.md Tests row 2).
      (b) completeness side-channel);
    - `HourBucket_WallClock` — every row has route `'TOR'` and
      hour ∈ {h0, h0+1} (assertion (c), two-adjacent-rows allowance);
-   - `Journal_T025aAllowlist` — delta passes
+   - `Journal_AllowlistOnly` / `Journal_NoSubHourTimestamp` /
+     `Journal_NoCorpusItem` — the assertion (d) layer as three
+     independent sub-tests (r1 Minor alignment: three signals instead
+     of one `Journal_T025aAllowlist` label): delta passes
      `loginvariants.AssertOnlyAllowedLines` +
      `AssertNoSubHourTimestamp` + corpus scan over per-iteration
-     dest / UNAME / payload prefix / token plaintext (assertion (d)).
+     dest / UNAME / payload prefix / token plaintext.
 3. **Runnable command**: `go test ./socks5/ -run
    TestAuthPassedCounterIncrements -v` from `tests/contract/` (SKIPs
    until T050; FAIL, not SKIP, once lifted and the positive-counter
@@ -195,3 +198,44 @@ exactly 2B (control-grpc.md Tests row 2).
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+Round-1 review (2026-09-04, APPROVE — 2 Minor, no round cost; verdict at
+`target/runs/T025d.verdict` round 1). Reviewer falsification passes
+additionally verified: non-vacuity with concrete catchable mutations
+(drop the auth-pass increment → delta-100 fails; count one direction
+only in the counting conn → delta-819,200 fails; relabel route "tor" →
+hour/route sub-test fails; add a per-request counter log line →
+allowlist sub-test fails); the 2B premise against the landed DP
+(forward/tor.go counting conn wraps post-handshake, counts read+written,
+flushes once at close via sync.Once → exactly B+B per connection);
+silence-probe false-negative dropped (no reachable path writes tunnel
+bytes >100 ms after the last relay byte); uint64 delta underflow dropped
+(counters are monotonic in-process); torn journal line at the snapshot
+boundary fails safe (allowlist false-positive, never silent pass).
+
+- **r1 Minor (subtest-name drift):** ticket §Acceptance named one
+  `Journal_T025aAllowlist` sub-test; the diff implements assertion (d)
+  as three independently-failing sub-tests (`Journal_AllowlistOnly`,
+  `Journal_NoSubHourTimestamp`, `Journal_NoCorpusItem`) — substance
+  met, label drifted. Fixed in the TICKET text (this edit), not the
+  test: the three-way split is mechanically stronger (three failure
+  signals).
+- **r1 Minor (capture-completeness overclaim):** the file header
+  claimed "every byte the test reads off the tunnel surface is
+  captured", but the HTTP CONNECT response header block (read inside
+  the shared `openHTTPConnectTunnel`) and the SOCKS5 method-selection
+  reply (read inside `doMethodNegotiation`) are byte-asserted but not
+  captured. No live injection path exists (connect.go writes a fixed
+  18-byte literal), so this is a coverage/claim gap, not a production
+  bug — recorded as accepted residue. Follow-up if T029/T048 ever
+  parameterise the success-response renderer: extend the capture to
+  the header block (or scope the comment then).
+
+Standing residue (unchanged): the gate runs as SKIP until T050 lands
+`cmd/stargate-proxy/main.go` (shared dpharness boot gate), then fails
+closed; the precondition rides the shared `dpharness.ReloadErr` whose
+§5.3 metadata gap is owned by T022/T050 (T020a Notes) and fails loudly,
+not silently, if unfixed at first real run; probes ride T025c's
+`dpharness.Status` seam. Concurrent-tunnel counter accounting is
+T079a's; route-failure increments are T067b's (the third angle of the
+FR-008 counter contract).
