@@ -1,7 +1,7 @@
 ---
 id: T048
 title: 'Implement `data-plane/internal/errortpl/render.go`'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-04
 source: tasks.md#T048
@@ -20,7 +20,7 @@ spec_refs:
   - specs/000-architecture/spec.md §10 (10.1 codes, 10.2 body template, 10.3 test pattern)
   - specs/001-tor-route/spec.md FR-006, FR-009
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-04, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -187,3 +187,18 @@ driving `Renderer.WriteFailure` into a `bytes.Buffer`:
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+Round-1 review (2026-09-04, APPROVE-WITH-FIXES — 2 Minor, no round cost;
+verdict at `target/runs/T048.verdict`). Byte-level contract conformance
+verified by the reviewer (status line / four headers / Content-Length
+byte-length / three substitutions / lowercase-hex crypto/rand ref-ID);
+six falsification attempts dropped incl. import-cycle and
+Content-Length-rune-count concerns. Both Minors were ticket-text drift
+(overstated process-level lift command; drafted test name
+`TestWriteFailureNoRequestDataInOutut` landed as
+`TestWriteFailureRefIDIsOnlyVariableBytes`) — fixed doc-only in
+§Acceptance/§Analysis per the FIX ITEMS, EVALUATED-AS probes re-run
+green, verify re-run GREEN. Key window recorded for downstream
+tickets: T027/T068a stay SKIP until T050's boot minimum lands; the
+route-code renderer rows stay dark until T071 (silent close on CONNECT
+route failures in that window — §Analysis residue).

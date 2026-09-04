@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 51 |
+| pending | 50 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 95 |
+| done | 96 |
 | deferred | 1 |
 | **total** | **147** |
 
@@ -36,7 +36,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T038 | In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcS | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T039 | Implement `control-plane/core/src/main/java/.../SidecarMonit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
-| T048 | Implement `data-plane/internal/errortpl/render.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T050 | Implement `data-plane/cmd/stargate-proxy/main.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T051 | Author `extension/manifest.json` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T052 | Author `extension/lib/storage.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
@@ -95,7 +94,7 @@ _(nothing in flight)_
 
 ## Done
 
-_95 ticket(s) done._
+_96 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -155,6 +154,7 @@ _95 ticket(s) done._
 - T045 — Implement `data-plane/internal/controlclient/`
 - T046 — Implement `data-plane/internal/controlclient/snapshot.go`
 - T047 — Implement `data-plane/internal/forward/tor.go`
+- T048 — Implement `data-plane/internal/errortpl/render.go`
 - T049 — Implement `data-plane/internal/audit/counters.go`
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T075b — Author `tests/reproducibility/extension_test.sh`
