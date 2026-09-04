@@ -1,7 +1,7 @@
 ---
 id: T049
 title: 'Implement `data-plane/internal/audit/counters.go`'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-04
 source: tasks.md#T049
@@ -22,7 +22,7 @@ spec_refs:
 decision_refs:
   - research.md §11 (minimum-subset GetStatus in v1 proto; test-harness-only caller in v1)
   - plan.md §"Plan-level tensions surfaced for review" #10 (same rationale, plan side)
-reviews: {}
+reviews: { round: 1, date: 2026-09-04, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -171,3 +171,26 @@ boundary), with the flush landing **at request close** per data-model.md §3.
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+Round-1 review (2026-09-04, APPROVE — 2 Minor, recorded here per the
+T020a convention, not blocking):
+
+- **r1 Minor (fail-closed pin; fold into T050):** the §Gated block promised
+  a `StatusFunc` compile-time assert alongside the `listener.Audit` one;
+  the diff pins `listener.Audit` + `forward.ByteCounter` only. `Snapshot`'s
+  conformance to `controlclient.StatusFunc` currently re-establishes at
+  T050's wiring compile. Fold
+  `var _ controlclient.StatusFunc = (*Counters).Snapshot` (no import cycle)
+  into T050, or add it next time counters.go is touched.
+- **r1 Minor (teardown undercount; accepted residue):** `countingConn`
+  flushes at FIRST pump completion's close while the other pump may have
+  one in-flight op (~32 KB io.Copy buffer) — an abrupt half-close teardown
+  can undercount byte_count by up to one op. Orderly closes (the T025d
+  contract path) are exact; no privacy impact (aggregate undercount only).
+  Pre-existing T047 bridge semantics; revisit only if a future test
+  asserts exact totals across half-close teardowns.
+- Wording nit for a future bootstrap pass: acceptance 7's parenthetical
+  should read "no *request_count* increment API other than
+  `AuthPassedRequest()`" (AddForwardedBytes feeds byte_count only).
+- Deferred to stargate-perf (milestone run): countingConn adds two atomic
+  adds per relay syscall + one 48 B alloc per request on the hot path.
