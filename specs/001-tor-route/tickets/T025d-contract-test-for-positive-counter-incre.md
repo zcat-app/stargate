@@ -1,7 +1,7 @@
 ---
 id: T025d
 title: 'Contract test for **positive** counter increments on the auth-passed f'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-04
 source: tasks.md#T025d
