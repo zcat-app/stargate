@@ -1,7 +1,7 @@
 ---
 id: T048
 title: 'Implement `data-plane/internal/errortpl/render.go`'
-status: pending
+status: in-review
 created: 2026-07-04
 last_updated: 2026-09-04
 source: tasks.md#T048
@@ -102,9 +102,11 @@ closing the connection stays with `HandleConn`'s defer (the contract's
     no-framing precedent as the SOCKS5 framing-garbage row. → Residue,
     below.
 - **Gated (verify.sh catches fail-closed once this file lands)**
-  - Every byte-shape property above: T027 + T068a self-lift from SKIP to
-    FAIL-forcing (process-level, through the real DP binary via
-    dpharness).
+  - Every byte-shape property above: the unit suite gates it
+    FAIL-forcing in this round; T027 + T068a converge on the same
+    properties at process level but their boot-minimum gate keeps them
+    SKIP until T050's `cmd/stargate-proxy/main.go` lands (staged lift —
+    see §Acceptance's process-level note).
   - Compile-time seam conformance: `var _ listener.ErrorRenderer =
     (*Renderer)(nil)` shape-asserted in render.go.
   - gofmt / go vet / staticcheck / gosec / race under the data-plane
@@ -146,18 +148,28 @@ driving `Renderer.WriteFailure` into a `bytes.Buffer`:
   the 16-char slot parses as lowercase hex, and the slot values differ
   between two renders of the same request shape (freshness;
   distribution/uniqueness-at-volume stays with T069).
-- `TestWriteFailureNoRequestDataInOutut` — rendering with a code value
-  only: the output bytes contain no caller-suppliable field (the API
-  shape itself is the gate — there is no parameter that could carry the
-  destination or token), and the ref-ID slot is the only
-  render-to-render variable.
+- `TestWriteFailureRefIDIsOnlyVariableBytes` (§Acceptance as drafted
+  named it `TestWriteFailureNoRequestDataInOutut`; it landed under this
+  name — drops the drafted typo and asserts only the runtime-assertable
+  half: masking the 16-byte slot makes renders byte-identical. The "no
+  caller-suppliable field" half is an API-shape property pinned by the
+  `WriteFailure(w io.Writer, code ErrorCode)` signature taking no
+  request-derived parameter plus the compile-time seam assertion in
+  render.go) — rendering with a code value only: the ref-ID slot is the
+  only render-to-render variable, so no destination/token byte can be
+  present (r1 review Finding 2).
 - `TestWriteFailureRouteCodesWriteNothing` — `ROUTE_DOWN`,
   `ROUTE_REFUSED`, `ROUTE_TIMEOUT`: zero bytes written, non-nil error
   (T071's lift point pinned as deliberate, not forgotten).
-- `scripts/verify.sh` green from repo root; the process-level lift is
-  `go test ./tests/contract/error-template/ -run
-  'TestAUTHRequiredConnectPath|TestHeaderSet/AUTH_REQUIRED'` (from
-  `tests/contract`, the self-lifted T027 + T068a sub-tests) PASS.
+- `scripts/verify.sh` green from repo root. Process-level note (r1
+  review Finding 1): landing render.go removes one of the three
+  T027/T068a skip gates, but their boot-minimum gate (the dpharness
+  `RequireFile` on `data-plane/cmd/stargate-proxy/main.go`) keeps both
+  suites SKIP until T050 lands — `render_test.go` is the active
+  FAIL-forcing gate for this ticket's round. The corrected T050-window
+  lift command, run from `tests/contract`, targets the actual test
+  name: `go test ./tests/contract/error-template/ -run
+  '^TestAUTHRequired$|^TestHeaderSet$/^AUTH_REQUIRED$'`.
 
 ## Out-of-scope
 
