@@ -1,7 +1,7 @@
 ---
 id: T025c
 title: 'Contract test for auth-failure counter side-channel resistance (FR-006'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-04
 source: tasks.md#T025c
@@ -24,7 +24,7 @@ spec_refs:
 decision_refs:
   - specs/001-tor-route/research.md §11 (v1 GetStatus caller is the contract-test harness only)
   - specs/001-tor-route/plan.md §"Plan-level tensions surfaced for review" #10 (GetStatus ships in v1 proto rationale)
-reviews: {}
+reviews: { round: 2, date: 2026-09-04, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -182,3 +182,41 @@ precedent), because a metadata-less GetStatus is pinned to reject
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+Round-1 review (2026-09-04, REWORK — 1 Major, 1 Minor; both fixed same day):
+
+- **r1 Major (burst over-driven 4×):** the burst loop nested both framing
+  drivers inside `for mode := range` per outer iteration → 800 attempts
+  (400 per framing) against the contract-pinned 200 (100 per framing,
+  25 per mode — tasks.md, ticket §Acceptance 1/3, control-grpc.md
+  §"GetStatus (minimum subset)" Tests row 1). Fixed: single 100-iteration
+  loop with `mode := i % len(candidates)` — exactly one SOCKS5 + one HTTP
+  attempt per iteration. The property was over-exercised, not under:
+  the delta assertions were unaffected.
+- **r1 Minor (dead EOF guard):** `!errors.Is(err, io.EOF)` after
+  `io.ReadAll` is always true (ReadAll maps clean EOF to nil). Fixed to
+  `err != nil` with the stdlib contract stated in the comment; behavior
+  identical (timeout-classified errors surface, clean close silent).
+
+Round-2 review (2026-09-04, APPROVE — 0 findings; both r1 dispositions
+SATISFIED). Reviewer falsification passes additionally verified: the
+proto.Equal sandwich cannot flake on hour rollover (rows are born only on
+post-auth increments, so the store stays empty at any hour); HTTP
+MissingPassword reaches the 407 path (nil token fails the 32-byte format
+gate before dereference); the §5.3 capabilities mirror is byte-identical
+to protoversion and advisory in v1.
+
+- **Test-fixture constant vs gitleaks (post-APPROVE):** the pre-commit
+  scanner flagged the original loaded-token constant (entropy 3.82,
+  generic-api-key). Replaced with the low-entropy alternating-nibble
+  placeholder `0f0f…` (FR-017-valid, distinct from every candidate and
+  sibling constant) rather than a `.gitleaks.toml` allowlist entry —
+  same outcome as T034's allowlisted fixture, no shared-config growth.
+  The token is a test-only placeholder; contract role unchanged (any
+  32-hex value the burst never offers works).
+- **Standing residue (unchanged):** the gate runs as SKIP until T050
+  lands `cmd/stargate-proxy/main.go`; the precondition rides the shared
+  `dpharness.ReloadErr` whose §5.3 metadata gap is owned by T022/T050
+  (T020a Notes) and fails loudly, not silently, if unfixed at first real
+  run. The new `dpharness.Status` probe attaches the metadata correctly
+  and is the seam T025d/T067b probe through.

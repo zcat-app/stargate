@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 53 |
+| pending | 52 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 93 |
+| done | 94 |
 | deferred | 1 |
 | **total** | **147** |
 
@@ -29,7 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T025c | Contract test for auth-failure counter side-channel resistan | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T025d | Contract test for **positive** counter increments on the aut | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
@@ -97,7 +96,7 @@ _(nothing in flight)_
 
 ## Done
 
-_93 ticket(s) done._
+_94 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -134,6 +133,7 @@ _93 ticket(s) done._
 - T025 — Contract test for SOCKS5 leak invariants in `tests/contract/socks5/lea
 - T025a — Contract test for SOCKS5 success-path log invariants
 - T025b — Contract test for long-lived bidirectional CONNECT (Principle I byte-p
+- T025c — Contract test for auth-failure counter side-channel resistance (FR-006
 - T026 — Contract test for HTTP CONNECT auth success
 - T027 — Contract test for `AUTH_REQUIRED` on CONNECT path in `tests/contract/e
 - T028 — Contract test for `AUTH_REQUIRED` on SOCKS5 path
