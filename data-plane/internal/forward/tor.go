@@ -22,6 +22,8 @@ import (
 	"net"
 	"os"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/net/proxy"
@@ -52,20 +54,32 @@ const (
 // III; the failure replies in listener keep the same rule).
 var successReply = [...]byte{0x05, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 
+// ByteCounter is the aggregate-counter seam (implemented by
+// data-plane/internal/audit, T049): one AddForwardedBytes call per request
+// at close, carrying the total bytes the tunnel moved in both directions —
+// the byte_count increment of data-model.md §3. The constructor requires
+// it (T050 wires the boot's Counters); there is no nil path inside the
+// trust boundary (CONTRIBUTING doctrine).
+type ByteCounter interface {
+	AddForwardedBytes(n uint64)
+}
+
 // Tor is the outbound hop: one sidecar address, pinned at construction
 // (startup wiring, T050) — there is no per-request route or upstream
 // selection (Principle I; FR-005's port-8881→Tor binding).
 type Tor struct {
 	upstream string
+	counts   ByteCounter
 
 	// dialTimeout is upstreamDialTimeout except in tests, which shorten
 	// it to keep the ROUTE_TIMEOUT classification observable.
 	dialTimeout time.Duration
 }
 
-// New pins the upstream sidecar address for the process lifetime.
-func New(upstream string) *Tor {
-	return &Tor{upstream: upstream, dialTimeout: upstreamDialTimeout}
+// New pins the upstream sidecar address and the counter for the process
+// lifetime.
+func New(upstream string, counts ByteCounter) *Tor {
+	return &Tor{upstream: upstream, counts: counts, dialTimeout: upstreamDialTimeout}
 }
 
 // Compile-time seam conformance with the landed inbound surfaces
@@ -169,7 +183,47 @@ func (t *Tor) dialUpstream(uname []byte, target string) (net.Conn, error) {
 	// DialContext cleared the conn deadline on return (x/net defers
 	// SetDeadline(zero) after the handshake) — post-handshake the tunnel
 	// is deadline-free per contract row 2.
-	return up, nil
+	// Counting wraps HERE, post-handshake: everything before this point is
+	// upstream SOCKS5 protocol, not forwarded payload, so byte_count sees
+	// only client↔upstream tunnel bytes (data-model.md §3). The synthesised
+	// reply bytes the listeners emit live on the client conn and never
+	// cross this one.
+	return &countingConn{Conn: up, counts: t.counts}, nil
+}
+
+// countingConn tallies the bytes the tunnel moves and hands the total to
+// the counter exactly once, at close — the "at request close" increment of
+// data-model.md §3. Reads are upstream→client, Writes client→upstream;
+// their sum is the request's byte_count delta. The tallies are atomic
+// because bridge pumps the two directions from different goroutines.
+type countingConn struct {
+	net.Conn
+	counts        ByteCounter
+	read, written atomic.Uint64
+	flush         sync.Once
+}
+
+func (c *countingConn) Read(p []byte) (int, error) {
+	n, err := c.Conn.Read(p)
+	c.read.Add(uint64(n))
+	return n, err
+}
+
+func (c *countingConn) Write(p []byte) (int, error) {
+	n, err := c.Conn.Write(p)
+	c.written.Add(uint64(n))
+	return n, err
+}
+
+// Close flushes before the underlying close. bridge closes the upstream
+// from both pump goroutines, so the once-guard is what keeps the count
+// from doubling; every Forward/Pipe path closes this conn (the ownership
+// contract this package's seams state), so the flush cannot be skipped.
+func (c *countingConn) Close() error {
+	c.flush.Do(func() {
+		c.counts.AddForwardedBytes(c.read.Load() + c.written.Load())
+	})
+	return c.Conn.Close()
 }
 
 // Forward implements listener.Forwarder (SOCKS5 inbound path): dial the

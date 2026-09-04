@@ -1,7 +1,7 @@
 ---
 id: T049
 title: 'Implement `data-plane/internal/audit/counters.go`'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-04
 source: tasks.md#T049

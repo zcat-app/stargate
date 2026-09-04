@@ -249,7 +249,7 @@ func roundTrip(t *testing.T, cli net.Conn) {
 
 func TestForwardWritesZeroedSuccessReplyAndBridges(t *testing.T) {
 	s := newStub(t, 0x00, false)
-	f := New(s.addr())
+	f := New(s.addr(), &stubCounter{})
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "unresolvable.invalid:443")
 
 	cli, err := net.Dial("tcp", addr)
@@ -276,7 +276,7 @@ func TestForwardWritesZeroedSuccessReplyAndBridges(t *testing.T) {
 
 func TestForwardPassesUNAMEVerbatimAsUpstreamUsername(t *testing.T) {
 	s := newStub(t, 0x00, false)
-	f := New(s.addr())
+	f := New(s.addr(), &stubCounter{})
 	const uname = "firstparty.example"
 	addr, errc := forwardOn(t, f, []byte(uname), "unresolvable.invalid:443")
 
@@ -315,7 +315,7 @@ func TestForwardPassesUNAMEVerbatimAsUpstreamUsername(t *testing.T) {
 
 func TestForwardSendsDomainTargetUnresolved(t *testing.T) {
 	s := newStub(t, 0x00, false)
-	f := New(s.addr())
+	f := New(s.addr(), &stubCounter{})
 	const target = "unresolvable.invalid:443" // RFC 6761: cannot resolve
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), target)
 
@@ -349,7 +349,7 @@ func TestForwardUnreachableUpstreamIsRouteDown(t *testing.T) {
 	closedAddr := ln.Addr().String()
 	ln.Close() // a port that deterministically refuses
 
-	f := New(closedAddr)
+	f := New(closedAddr, &stubCounter{})
 	c1, c2 := net.Pipe()
 	t.Cleanup(func() { c1.Close(); c2.Close() })
 
@@ -368,7 +368,7 @@ func TestForwardUnreachableUpstreamIsRouteDown(t *testing.T) {
 
 func TestForwardUpstreamRefusalIsRouteRefused(t *testing.T) {
 	s := newStub(t, 0x05, false) // alive sidecar, BND REP=5 host-unreachable
-	f := New(s.addr())
+	f := New(s.addr(), &stubCounter{})
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "deadmeta.onion:443")
 
 	cli, err := net.Dial("tcp", addr)
@@ -396,7 +396,7 @@ func TestForwardUpstreamRefusalIsRouteRefused(t *testing.T) {
 
 func TestForwardDialDeadlineIsRouteTimeout(t *testing.T) {
 	s := newStub(t, 0x00, true) // accepts TCP, never speaks
-	f := New(s.addr())
+	f := New(s.addr(), &stubCounter{})
 	f.dialTimeout = 250 * time.Millisecond // injected short deadline
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "slow.onion:443")
 
@@ -425,7 +425,7 @@ func TestForwardDialDeadlineIsRouteTimeout(t *testing.T) {
 
 func TestDialNoUsernameOffersNoAuthAndBridges(t *testing.T) {
 	s := newStub(t, 0x00, false)
-	f := New(s.addr())
+	f := New(s.addr(), &stubCounter{})
 
 	up, err := f.Dial("example.org:80")
 	if err != nil {
@@ -500,7 +500,109 @@ func TestProductionDialDeadlineIsThirtySeconds(t *testing.T) {
 	if upstreamDialTimeout != 30*time.Second {
 		t.Fatalf("upstreamDialTimeout = %v, want 30s", upstreamDialTimeout)
 	}
-	if f := New("tor:9050"); f.dialTimeout != upstreamDialTimeout {
+	if f := New("tor:9050", &stubCounter{}); f.dialTimeout != upstreamDialTimeout {
 		t.Fatalf("New().dialTimeout = %v, want the production constant", f.dialTimeout)
+	}
+}
+
+// stubCounter records what the byte-count seam flushed. The production
+// implementer is T049's audit.Counters; this suite stays audit-agnostic
+// (the seam consumer is defined in THIS package), so a local stand-in
+// pins the contract from the forward side.
+type stubCounter struct {
+	mu sync.Mutex
+	n  uint64
+}
+
+func (s *stubCounter) AddForwardedBytes(n uint64) {
+	s.mu.Lock()
+	s.n += n
+	s.mu.Unlock()
+}
+
+func (s *stubCounter) total() uint64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.n
+}
+
+func TestByteFlushAtCloseBothDirections(t *testing.T) {
+	s := newStub(t, 0x00, false)
+	counts := &stubCounter{}
+	f := New(s.addr(), counts)
+	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "unresolvable.invalid:443")
+
+	cli, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("client dial: %v", err)
+	}
+	t.Cleanup(func() { cli.Close() })
+	roundTrip(t, cli) // 11+12 bytes each way = 46 tunnel bytes
+
+	// data-model.md §3: byte_count increments AT REQUEST CLOSE, not per
+	// operation. The tunnel is open and quiescent, so nothing has landed
+	// yet — even though all 46 bytes have crossed it in both directions.
+	if got := counts.total(); got != 0 {
+		t.Fatalf("counter = %d while tunnel open, want 0 (flush is at close)", got)
+	}
+
+	if err := cli.Close(); err != nil {
+		t.Fatalf("client close: %v", err)
+	}
+	if err := <-errc; err != nil {
+		t.Fatalf("Forward: %v", err)
+	}
+	// bridge closes the upstream from BOTH pump goroutines; a flush per
+	// close would double the count to 92. Exactly 46 pins flush-once.
+	if got := counts.total(); got != 46 {
+		t.Fatalf("counter = %d after close, want exactly 46 (2×23 forwarded bytes, flushed once)", got)
+	}
+}
+
+func TestUpstreamRelayCountsTunnelBytesExactly(t *testing.T) {
+	s := newStub(t, 0x00, false)
+	counts := &stubCounter{}
+	f := New(s.addr(), counts)
+	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "unresolvable.invalid:443")
+
+	cli, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("client dial: %v", err)
+	}
+	t.Cleanup(func() { cli.Close() })
+
+	// Success reply first, byte-exact — and NOT counted (the listener's
+	// synthesised bytes never cross the upstream conn).
+	rep := make([]byte, 10)
+	if _, err := io.ReadFull(cli, rep); err != nil {
+		t.Fatalf("read BND reply: %v", err)
+	}
+
+	const B = 1000
+	payload := bytes.Repeat([]byte{0xA5}, B)
+	if _, err := cli.Write(payload); err != nil {
+		t.Fatalf("client write: %v", err)
+	}
+	got := make([]byte, B)
+	if _, err := io.ReadFull(cli, got); err != nil {
+		t.Fatalf("client read (echo): %v", err)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatal("echo payload mismatch")
+	}
+
+	if err := cli.Close(); err != nil {
+		t.Fatalf("client close: %v", err)
+	}
+	if err := <-errc; err != nil {
+		t.Fatalf("Forward: %v", err)
+	}
+
+	// Exactly 2B: the SOCKS5 handshake bytes on either side (greeting,
+	// method choice, sub-negotiation, request, BND) are upstream protocol
+	// and excluded by the post-handshake wrap point (data-model.md §3 —
+	// only client↔upstream forwarded bytes contribute).
+	if total := counts.total(); total != 2*B {
+		t.Fatalf("counter = %d, want exactly %d (B each direction, handshake bytes excluded)", total, 2*B)
 	}
 }
