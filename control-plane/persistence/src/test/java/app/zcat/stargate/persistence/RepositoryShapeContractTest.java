@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -125,6 +126,11 @@ class RepositoryShapeContractTest {
                 ps.executeUpdate();
             }
         });
+        // getMessage() is @Nullable (NullAway, T104a-gated test source);
+        // assertNotNull both fails fast on a message-less exception and
+        // refines the contract for the deref below (same pattern as
+        // AuditLogAppendOnlyTest).
+        assertNotNull(ex.getMessage(), "enrolled_devices insert must raise with a message");
         assertTrue(ex.getMessage().toLowerCase().contains("not null"),
                    "enrolled_devices insert without pubkey must fail NOT NULL; got: " + ex.getMessage());
     }

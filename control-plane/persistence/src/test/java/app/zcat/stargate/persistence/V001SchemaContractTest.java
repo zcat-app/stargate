@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import org.flywaydb.core.Flyway;
@@ -67,20 +68,20 @@ class V001SchemaContractTest {
         Map<String, Col> cols = columns("enrolled_devices");
         assertColumns(cols, "id", "name", "pubkey", "token_hash",
                       "created_at", "last_seen_hour", "revoked_at");
-        assertEquals("INTEGER", cols.get("id").type);
-        assertTrue(cols.get("id").pk, "id is PRIMARY KEY");
-        assertEquals("TEXT", cols.get("name").type);
-        assertTrue(cols.get("name").notNull);
-        assertEquals("BLOB", cols.get("pubkey").type);
-        assertTrue(cols.get("pubkey").notNull, "pubkey NOT NULL (device key)");
-        assertEquals("BLOB", cols.get("token_hash").type);
-        assertTrue(cols.get("token_hash").notNull, "token_hash NOT NULL (HMAC verifier)");
-        assertEquals("INTEGER", cols.get("created_at").type);
-        assertTrue(cols.get("created_at").notNull);
-        assertEquals("INTEGER", cols.get("last_seen_hour").type);
-        assertFalse(cols.get("last_seen_hour").notNull, "last_seen_hour nullable (Principle III)");
-        assertEquals("INTEGER", cols.get("revoked_at").type);
-        assertFalse(cols.get("revoked_at").notNull, "revoked_at nullable");
+        assertEquals("INTEGER", col(cols, "id").type);
+        assertTrue(col(cols, "id").pk, "id is PRIMARY KEY");
+        assertEquals("TEXT", col(cols, "name").type);
+        assertTrue(col(cols, "name").notNull);
+        assertEquals("BLOB", col(cols, "pubkey").type);
+        assertTrue(col(cols, "pubkey").notNull, "pubkey NOT NULL (device key)");
+        assertEquals("BLOB", col(cols, "token_hash").type);
+        assertTrue(col(cols, "token_hash").notNull, "token_hash NOT NULL (HMAC verifier)");
+        assertEquals("INTEGER", col(cols, "created_at").type);
+        assertTrue(col(cols, "created_at").notNull);
+        assertEquals("INTEGER", col(cols, "last_seen_hour").type);
+        assertFalse(col(cols, "last_seen_hour").notNull, "last_seen_hour nullable (Principle III)");
+        assertEquals("INTEGER", col(cols, "revoked_at").type);
+        assertFalse(col(cols, "revoked_at").notNull, "revoked_at nullable");
         // name is UNIQUE (unique device name).
         assertTrue(uniqueColumns("enrolled_devices").contains("name"),
                    "enrolled_devices.name UNIQUE");
@@ -93,18 +94,18 @@ class V001SchemaContractTest {
         Map<String, Col> cols = columns("admin_credentials");
         assertColumns(cols, "id", "kind", "credential_id", "public_key_cose",
                       "ssh_pubkey_line", "label", "created_at", "revoked_at");
-        assertTrue(cols.get("id").pk);
-        assertEquals("TEXT", cols.get("kind").type);
-        assertTrue(cols.get("kind").notNull);
-        assertEquals("BLOB", cols.get("credential_id").type);
-        assertTrue(cols.get("credential_id").notNull);
+        assertTrue(col(cols, "id").pk);
+        assertEquals("TEXT", col(cols, "kind").type);
+        assertTrue(col(cols, "kind").notNull);
+        assertEquals("BLOB", col(cols, "credential_id").type);
+        assertTrue(col(cols, "credential_id").notNull);
         assertTrue(uniqueColumns("admin_credentials").contains("credential_id"),
                    "admin_credentials.credential_id UNIQUE");
-        assertFalse(cols.get("public_key_cose").notNull, "public_key_cose WebAuthn-only");
-        assertFalse(cols.get("ssh_pubkey_line").notNull, "ssh_pubkey_line ed25519-only");
-        assertFalse(cols.get("label").notNull);
-        assertTrue(cols.get("created_at").notNull);
-        assertFalse(cols.get("revoked_at").notNull);
+        assertFalse(col(cols, "public_key_cose").notNull, "public_key_cose WebAuthn-only");
+        assertFalse(col(cols, "ssh_pubkey_line").notNull, "ssh_pubkey_line ed25519-only");
+        assertFalse(col(cols, "label").notNull);
+        assertTrue(col(cols, "created_at").notNull);
+        assertFalse(col(cols, "revoked_at").notNull);
         // CHECK (kind IN ('webauthn','ed25519')) — declared in the table DDL.
         assertTrue(ddl("admin_credentials").contains("CHECK") && ddl("admin_credentials").contains("webauthn"),
                    "kind CHECK constraint missing");
@@ -116,18 +117,18 @@ class V001SchemaContractTest {
     void torBridgesContract() throws SQLException {
         Map<String, Col> cols = columns("tor_bridges");
         assertColumns(cols, "id", "bridge_line", "transport", "enabled", "added_at");
-        assertTrue(cols.get("id").pk);
-        assertEquals("TEXT", cols.get("bridge_line").type);
-        assertTrue(cols.get("bridge_line").notNull);
+        assertTrue(col(cols, "id").pk);
+        assertEquals("TEXT", col(cols, "bridge_line").type);
+        assertTrue(col(cols, "bridge_line").notNull);
         assertTrue(uniqueColumns("tor_bridges").contains("bridge_line"),
                    "tor_bridges.bridge_line UNIQUE");
-        assertEquals("TEXT", cols.get("transport").type);
-        assertTrue(cols.get("transport").notNull);
-        assertEquals("INTEGER", cols.get("enabled").type);
-        assertTrue(cols.get("enabled").notNull);
-        assertEquals("0", cols.get("enabled").dflt, "enabled DEFAULT 0");
-        assertEquals("INTEGER", cols.get("added_at").type);
-        assertTrue(cols.get("added_at").notNull);
+        assertEquals("TEXT", col(cols, "transport").type);
+        assertTrue(col(cols, "transport").notNull);
+        assertEquals("INTEGER", col(cols, "enabled").type);
+        assertTrue(col(cols, "enabled").notNull);
+        assertEquals("0", col(cols, "enabled").dflt, "enabled DEFAULT 0");
+        assertEquals("INTEGER", col(cols, "added_at").type);
+        assertTrue(col(cols, "added_at").notNull);
     }
 
     // --- aggregate_counters (arch §6.4) -----------------------------------
@@ -137,18 +138,18 @@ class V001SchemaContractTest {
         Map<String, Col> cols = columns("aggregate_counters");
         // Privacy invariant (Principle III): NO destination / token / url column.
         assertColumns(cols, "route", "hour_bucket", "request_count", "byte_count");
-        assertEquals("TEXT", cols.get("route").type);
-        assertTrue(cols.get("route").pk, "route part of composite PK");
-        assertTrue(cols.get("route").notNull);
-        assertEquals("INTEGER", cols.get("hour_bucket").type);
-        assertTrue(cols.get("hour_bucket").pk, "hour_bucket part of composite PK");
-        assertTrue(cols.get("hour_bucket").notNull);
-        assertEquals("INTEGER", cols.get("request_count").type);
-        assertTrue(cols.get("request_count").notNull);
-        assertEquals("0", cols.get("request_count").dflt, "request_count DEFAULT 0");
-        assertEquals("INTEGER", cols.get("byte_count").type);
-        assertTrue(cols.get("byte_count").notNull);
-        assertEquals("0", cols.get("byte_count").dflt, "byte_count DEFAULT 0");
+        assertEquals("TEXT", col(cols, "route").type);
+        assertTrue(col(cols, "route").pk, "route part of composite PK");
+        assertTrue(col(cols, "route").notNull);
+        assertEquals("INTEGER", col(cols, "hour_bucket").type);
+        assertTrue(col(cols, "hour_bucket").pk, "hour_bucket part of composite PK");
+        assertTrue(col(cols, "hour_bucket").notNull);
+        assertEquals("INTEGER", col(cols, "request_count").type);
+        assertTrue(col(cols, "request_count").notNull);
+        assertEquals("0", col(cols, "request_count").dflt, "request_count DEFAULT 0");
+        assertEquals("INTEGER", col(cols, "byte_count").type);
+        assertTrue(col(cols, "byte_count").notNull);
+        assertEquals("0", col(cols, "byte_count").dflt, "byte_count DEFAULT 0");
         // CHECK (route IN ('TOR','I2P','NYM','DIRECT')) — declared in DDL.
         String ddl = ddl("aggregate_counters");
         assertTrue(ddl.contains("CHECK") && ddl.contains("'TOR'") && ddl.contains("'DIRECT'"),
@@ -161,23 +162,23 @@ class V001SchemaContractTest {
     void auditLogContract() throws SQLException {
         Map<String, Col> cols = columns("audit_log");
         assertColumns(cols, "id", "ts", "actor", "action", "target", "detail_json");
-        assertTrue(cols.get("id").pk);
-        assertEquals("INTEGER", cols.get("ts").type);
-        assertTrue(cols.get("ts").notNull);
-        assertEquals("TEXT", cols.get("actor").type);
-        assertTrue(cols.get("actor").notNull);
-        assertEquals("TEXT", cols.get("action").type);
-        assertTrue(cols.get("action").notNull);
+        assertTrue(col(cols, "id").pk);
+        assertEquals("INTEGER", col(cols, "ts").type);
+        assertTrue(col(cols, "ts").notNull);
+        assertEquals("TEXT", col(cols, "actor").type);
+        assertTrue(col(cols, "actor").notNull);
+        assertEquals("TEXT", col(cols, "action").type);
+        assertTrue(col(cols, "action").notNull);
         // action is intentionally a free TEXT column with NO DB CHECK: it is a
         // fixed-vocabulary APPLICATION-layer enum that grows by lock-step
         // amendment per feature (data-model.md §4). Asserting "no check" pins
         // that decision so a future CHECK is a deliberate review event.
         assertFalse(ddl("audit_log").toLowerCase().contains("action") && ddl("audit_log").contains("CHECK"),
                     "action has no DB CHECK (intentionally application-enforced)");
-        assertEquals("TEXT", cols.get("target").type);
-        assertFalse(cols.get("target").notNull, "target nullable");
-        assertEquals("TEXT", cols.get("detail_json").type);
-        assertFalse(cols.get("detail_json").notNull, "detail_json nullable");
+        assertEquals("TEXT", col(cols, "target").type);
+        assertFalse(col(cols, "target").notNull, "target nullable");
+        assertEquals("TEXT", col(cols, "detail_json").type);
+        assertFalse(col(cols, "detail_json").notNull, "detail_json nullable");
     }
 
     // --- configured_tokens (§6.6 / data-model.md §1.9) -------------------
@@ -187,17 +188,17 @@ class V001SchemaContractTest {
         Map<String, Col> cols = columns("configured_tokens");
         assertColumns(cols, "label", "verifier", "created_at", "last_seen_hour", "revoked_at");
         // label is the PRIMARY KEY (audit-log key); it is NOT an autoincrement id.
-        assertTrue(cols.get("label").pk, "configured_tokens.label PRIMARY KEY");
-        assertEquals("TEXT", cols.get("label").type);
-        assertTrue(cols.get("label").notNull);
-        assertEquals("BLOB", cols.get("verifier").type);
-        assertTrue(cols.get("verifier").notNull, "verifier (HMAC tag) NOT NULL");
-        assertEquals("INTEGER", cols.get("created_at").type);
-        assertTrue(cols.get("created_at").notNull);
-        assertEquals("INTEGER", cols.get("last_seen_hour").type);
-        assertFalse(cols.get("last_seen_hour").notNull);
-        assertEquals("INTEGER", cols.get("revoked_at").type);
-        assertFalse(cols.get("revoked_at").notNull);
+        assertTrue(col(cols, "label").pk, "configured_tokens.label PRIMARY KEY");
+        assertEquals("TEXT", col(cols, "label").type);
+        assertTrue(col(cols, "label").notNull);
+        assertEquals("BLOB", col(cols, "verifier").type);
+        assertTrue(col(cols, "verifier").notNull, "verifier (HMAC tag) NOT NULL");
+        assertEquals("INTEGER", col(cols, "created_at").type);
+        assertTrue(col(cols, "created_at").notNull);
+        assertEquals("INTEGER", col(cols, "last_seen_hour").type);
+        assertFalse(col(cols, "last_seen_hour").notNull);
+        assertEquals("INTEGER", col(cols, "revoked_at").type);
+        assertFalse(col(cols, "revoked_at").notNull);
     }
 
     // --- token_generation (§6.7 / data-model.md §1.8) --------------------
@@ -206,8 +207,8 @@ class V001SchemaContractTest {
     void tokenGenerationContract() throws SQLException {
         Map<String, Col> cols = columns("token_generation");
         assertColumns(cols, "generation");
-        assertTrue(cols.get("generation").pk, "token_generation.generation PRIMARY KEY");
-        assertEquals("INTEGER", cols.get("generation").type);
+        assertTrue(col(cols, "generation").pk, "token_generation.generation PRIMARY KEY");
+        assertEquals("INTEGER", col(cols, "generation").type);
         // NOTE: SQLite's PRAGMA reports notnull=0 for `INTEGER PRIMARY KEY` (a
         // long-standing quirk) even though it is the rowid alias and is
         // behaviorally non-null. We assert pk membership, not the pragma's
@@ -215,6 +216,18 @@ class V001SchemaContractTest {
     }
 
     // --- helpers ----------------------------------------------------------
+
+    /**
+     * {@code cols.get(name)} with an explicit non-null contract. Test sources
+     * are NullAway-gated since T104a; these call sites predate that gate and
+     * only surfaced when T036's new test forced the module's first
+     * post-T104a recompile (the stale {@code target/test-classes} had been
+     * masking them). {@code requireNonNull} names the missing column instead
+     * of failing with an anonymous NPE at the deref site.
+     */
+    private static Col col(Map<String, Col> cols, String name) {
+        return Objects.requireNonNull(cols.get(name), "column missing: " + name);
+    }
 
     private record Col(String name, String type, boolean notNull, String dflt, boolean pk) {}
 

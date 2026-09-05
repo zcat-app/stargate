@@ -26,6 +26,15 @@
     </description>
 
     <dependencies>
+        <!-- T036: AuditLogService implements core's TokenLoaderContract.AuditSink
+             seam (T035a), so the tokens.yaml loader binds this production
+             adapter directly. Direction is ports-in-core / adapters-in-
+             persistence; core has no reverse dependency (no cycle). -->
+        <dependency>
+            <groupId>app.zcat.stargate</groupId>
+            <artifactId>core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-hibernate-orm-panache</artifactId>

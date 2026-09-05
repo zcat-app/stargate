@@ -1,7 +1,7 @@
 ---
 id: T036
 title: 'Implement `control-plane/persistence/src/main/java/.../entity/AuditLog'
-status: pending
+status: in-review
 created: 2026-07-04
 last_updated: 2026-09-05
 source: tasks.md#T036
@@ -120,6 +120,26 @@ runtime boot will rely on.
     sites.
   - "No token bytes in `detail_json`" is unenforceable in the service
     (it never sees plaintext); rests on T035's tests and review.
+
+**Implementation finding (2026-09-05) — forced lift, T104a debt.** The
+first post-T104a recompile of this module's test sources surfaced 74
+latent NullAway violations in T100's `V001SchemaContractTest` (72) and
+`RepositoryShapeContractTest` (2): T104a removed the
+`default-testCompile` exemption stanza and recorded a green verify, but
+the module's stale `target/test-classes` made maven-compiler skip
+recompiling those files entirely — the exact "green-but-not-enforced"
+failure mode T104's pom notes warn about. Falsified at HEAD: stash +
+`test-compile` reproduces all 74 without any T036 change. Lifted
+mechanically within T104a's own landed doctrine (test sources are
+NullAway-gated; fix by making the nullness contract explicit): a
+`col(cols, name)` `Objects.requireNonNull` helper for the PRAGMA map
+accesses, and `assertNotNull` refinement for `getMessage()` derefs —
+zero behavioral change; all four T100 suites re-ran green on the same
+assertions. Budget disposition (9 files vs 6, incl. driver-regenerated
+STATUS.md): entity, service, pom edit, test config, test class, ticket
+= acceptance; the two T100 test files = this documented forced lift
+(T050 precedent). T104a's acceptance-#2/4 evidence should be
+re-verified by its owner; flagged in the session report.
 
 ## Acceptance
 
