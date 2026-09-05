@@ -1,7 +1,7 @@
 ---
 id: T035
 title: 'Implement `control-plane/core/src/main/java/.../TokenLoader.java`'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-05
 source: tasks.md#T035
