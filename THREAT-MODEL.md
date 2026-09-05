@@ -969,8 +969,19 @@ three networks, so a compromised application plane can additionally
 TCP-reach Tor's *other* port — CP→`tor:9050` (the unauthenticated SOCKS
 surface, a Tor-transiting exfil channel that bypasses the data plane's
 routing authority and per-first-party stream isolation) and DP→`tor:9051`
-(inert without the auth cookie, which is volume-isolated to `tor` on
-`stargate-tor-state`). This is wider than the intended
+(inert without the auth cookie: the cookie file on `stargate-tor-state`
+is mounted read-only into the control plane ONLY as a single-file volume
+subpath — `control_auth_cookie`, GID-aligned to the tor image's GID 5103,
+T039 — while the data plane holds neither the mount nor the group).
+Control-authority note: Tor's control protocol has no per-command ACL —
+whoever holds the cookie commands the full surface (state queries,
+reconfiguration, stream events). The control plane's `SidecarMonitor` is
+constrained in code to a three-command read-only allowlist
+(`AUTHENTICATE`/`GETINFO status/bootstrap-phase`/`QUIT`, T039), but that
+constraint is CP-side policy, not protocol enforcement; a compromised CP
+holding the cookie is not otherwise bounded. This residue is tracked in
+`redteam/findings/open/20260727-001-tor-controlport-unbounded-cp-authority.md`.
+This is wider than the intended
 `DP→{tor:9050}; CP→{tor:9051}` matrix but does **not** breach "Tor is the
 sole egress TCB" (the exfil still transits Tor; there is no clearnet leak
 — `internal:true` removes the default route and Docker's embedded DNS

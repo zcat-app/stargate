@@ -175,7 +175,15 @@ RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources \
 # fall back to $HOME/.tor = /var/lib/tor/.tor and land the control cookie
 # at the wrong path); we pre-create /var/lib/tor owned by tor so the
 # cookie file lands in the right place.
-RUN useradd --system --home /var/lib/tor --shell /usr/sbin/nologin tor \
+#
+# UID/GID 5103 (T039): numeric pin following the 5100–5102 plane scheme.
+# CookieAuthFileGroupReadable 1 (torrc invariant #4) creates the cookie
+# 0640 tor:tor, so the control plane's SidecarMonitor reads it by holding
+# GID 5103 as a supplementary group (compose group_add, cross-checked by
+# local_compose_test.sh M14). A dynamic GID would make that alignment
+# impossible to express in compose. The DP gets neither mount nor group.
+RUN groupadd --system --gid 5103 tor \
+ && useradd --system --uid 5103 --gid 5103 --home /var/lib/tor --shell /usr/sbin/nologin tor \
  && install -d -o tor -g tor -m 0700 /var/lib/tor
 
 # Image-baked torrc (T087 / FR-011 amended by T089): the safe torrc is

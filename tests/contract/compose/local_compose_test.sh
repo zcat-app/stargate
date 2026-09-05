@@ -198,6 +198,54 @@ for svc in stargate-dp stargate-control; do
     || bail "M13: service '$svc' must NOT be attached to stargate-egress (only Tor has egress); got type: '$on_egress'"
 done
 
+# --- M14: narrow Tor-cookie read (T039; T094a grounding must-hold #2) -------
+# The CP observes Tor via the cookie-auth ControlPort (tor:9051, T094a).
+# The CP's ONLY view of stargate-tor-state is the control cookie itself —
+# a read-only single-file volume subpath — so Tor's entry-guard state
+# (THREAT-MODEL §4.2) never crosses into the CP (mounting the volume whole
+# was explicitly rejected by T094a). The cookie is 0640 tor:tor
+# (CookieAuthFileGroupReadable 1, torrc invariant #4), so the CP carries
+# the tor image's pinned GID 5103 as its sole additional supplementary
+# group; tor mounts the volume whole; no other service mounts it at all.
+CP_TORSTATE_MOUNTS="$(q '[.services["stargate-control"].volumes[] | select(.source == "stargate-tor-state")] | length | tostring')"
+[ "$CP_TORSTATE_MOUNTS" = "1" ] \
+  || bail "M14: stargate-control must mount stargate-tor-state exactly once (the cookie subpath); got: $CP_TORSTATE_MOUNTS"
+CP_COOKIE_SUBPATH="$(q '[.services["stargate-control"].volumes[] | select(.source == "stargate-tor-state") | .volume.subpath // ""] | join(",")')"
+[ "$CP_COOKIE_SUBPATH" = "control_auth_cookie" ] \
+  || bail "M14: stargate-control's stargate-tor-state mount must be the single-file subpath 'control_auth_cookie' (no entry-guard read, THREAT-MODEL §4.2); got: '$CP_COOKIE_SUBPATH'"
+CP_COOKIE_TARGETS="$(q '[.services["stargate-control"].volumes[] | select(.source == "stargate-tor-state") | .target] | join(",")')"
+[ "$CP_COOKIE_TARGETS" = "/run/tor/control_auth_cookie" ] \
+  || bail "M14: the cookie subpath must be mounted at /run/tor/control_auth_cookie (SidecarMonitor's default path); got: '$CP_COOKIE_TARGETS'"
+CP_COOKIE_RO="$(q '[.services["stargate-control"].volumes[] | select(.source == "stargate-tor-state") | .read_only] | join(",")')"
+[ "$CP_COOKIE_RO" = "true" ] \
+  || bail "M14: the cookie subpath mount must be read_only; got: '$CP_COOKIE_RO'"
+TOR_STATE_TARGETS="$(q '[.services["tor"].volumes[] | select(.source == "stargate-tor-state") | .target] | join(",")')"
+[ "$TOR_STATE_TARGETS" = "/var/lib/tor" ] \
+  || bail "M14: tor must mount stargate-tor-state whole at /var/lib/tor (DataDirectory, torrc invariant #11); got: '$TOR_STATE_TARGETS'"
+# GID alignment: the compose group_add literal must equal the tor image's
+# pinned GID. Static cross-file guard in the M6 style (redteam m2): a
+# Dockerfile or compose drift would silently break the 0640 group-read.
+CP_GROUP_ADD="$(q '.services["stargate-control"].group_add // [] | join(",")')"
+[ "$CP_GROUP_ADD" = "5103" ] \
+  || bail "M14: stargate-control.group_add must be exactly [5103] (the tor image GID — cookie 0640 group-read, torrc invariant #4); got: '$CP_GROUP_ADD'"
+[ -f sidecars/tor/Dockerfile ] \
+  || bail "M14: sidecars/tor/Dockerfile missing — cannot cross-check the tor GID pin"
+grep -qE -- '--gid 5103 tor' sidecars/tor/Dockerfile \
+  || bail "M14: sidecars/tor/Dockerfile no longer pins GID 5103 for tor — compose group_add:$CP_GROUP_ADD and the image have drifted (cookie group-read breaks)"
+grep -qE -- '--uid 5103 ' sidecars/tor/Dockerfile \
+  || bail "M14: sidecars/tor/Dockerfile no longer pins UID 5103 for tor — drifted from the T039 GID-alignment scheme"
+# Start ordering: the single-file subpath must exist at CP container
+# create; tor's healthcheck AUTHENTICATEs with the cookie, so
+# service_healthy proves cookie presence before the CP starts.
+CP_DEPS_CONDITION="$(q '.services["stargate-control"].depends_on.tor.condition // ""')"
+[ "$CP_DEPS_CONDITION" = "service_healthy" ] \
+  || bail "M14: stargate-control must depend_on tor with condition service_healthy (cookie subpath must exist at CP start); got: '$CP_DEPS_CONDITION'"
+# No service other than tor (whole) and stargate-control (cookie subpath)
+# may mount stargate-tor-state.
+TORSTATE_MOUNTED_BY="$(q '[.services | to_entries[] | select(.key != "tor") | select(.key != "stargate-control") | select((.value.volumes // []) | any(.source == "stargate-tor-state")) | .key] | join(",")')"
+[ "$TORSTATE_MOUNTED_BY" = "" ] \
+  || bail "M14: only tor (whole) and stargate-control (cookie subpath) may mount stargate-tor-state; also mounted by: '$TORSTATE_MOUNTED_BY'"
+
 # === Report ================================================================
 if (( ${#errs[@]} > 0 )); then
   printf 'FAIL: %d assertion(s) failed:\n' "${#errs[@]}" >&2

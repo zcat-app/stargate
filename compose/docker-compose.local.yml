@@ -99,10 +99,12 @@ services:
   # over the compose-internal network and authenticates with the control
   # cookie (CookieAuthFileGroupReadable 1; contracts/torrc.md invariant
   # #4). ControlPort is NEVER host-published (FR-012). The narrow cookie-
-  # read volume + GID alignment lands with the SidecarMonitor client
-  # (T039), constrained to avoid over-broad entry-guard read (THREAT-MODEL
-  # §4.2) — see T094a §Analysis "Grounding decisions". local_compose_test
-  # .sh M4 gates that no service mounts /var/run/docker.sock.
+  # read volume + GID alignment landed with the SidecarMonitor client
+  # (T039): a read-only single-file subpath mount of the cookie plus
+  # group_add of the tor image GID 5103 — Tor's entry-guard state never
+  # crosses into the CP (THREAT-MODEL §4.2) — see T094a §Analysis
+  # "Grounding decisions". local_compose_test.sh M4 gates that no service
+  # mounts /var/run/docker.sock; M14 gates the narrow-read shape.
   # ─────────────────────────────────────────────────────────────────────
   stargate-control:
     build:
@@ -111,7 +113,22 @@ services:
     image: stargate/stargate-control:local
     user: "5101:5100"
     depends_on:
-      - tor
+      tor:
+        # service_healthy is load-bearing (T039): the single-file cookie
+        # subpath below must exist when this container is created — a
+        # missing subpath fails container start. Tor's own healthcheck
+        # AUTHENTICATEs with the cookie, so "healthy" proves cookie
+        # presence. Tor still boots with zero dependency on the CP
+        # (Principle II is about the DP; the CP observing Tor is this
+        # ticket's whole function).
+        condition: service_healthy
+    # T039 GID alignment: the tor image pins its user at GID 5103 (see
+    # sidecars/tor/Dockerfile) and CookieAuthFileGroupReadable 1 creates
+    # the control cookie 0640 tor:tor — this supplementary group is what
+    # lets the SidecarMonitor read it. The DP holds neither the group nor
+    # the mount. Cross-checked by local_compose_test.sh M14.
+    group_add:
+      - "5103"
     volumes:
       - stargate-ipc:/run/stargate
       - stargate-keys:/etc/stargate/keys
@@ -123,6 +140,21 @@ services:
       # this volume. Kept declared so the volume set stays stable
       # (local_compose_test.sh M7) and the T037 render path has its target.
       - stargate-tor-config:/etc/tor
+      # T039 — the narrow cookie read (T094a grounding decision): the CP's
+      # ONLY view of stargate-tor-state is the control cookie itself, as a
+      # read-only single-file volume subpath. Tor's entry-guard state
+      # (THREAT-MODEL §4.2) is NOT mounted — mounting the volume whole was
+      # explicitly rejected by T094a (it recreates the exfil surface the
+      # docker-socket-proxy removal closed). The ControlPort session this
+      # cookie authenticates is bounded in code to a read-only three-command
+      # allowlist (SidecarMonitor); the protocol itself has no per-command
+      # ACL (redteam finding 20260727-001, open). Gated by M14.
+      - type: volume
+        source: stargate-tor-state
+        target: /run/tor/control_auth_cookie
+        read_only: true
+        volume:
+          subpath: control_auth_cookie
     # T094b: CP sits ONLY on the internal:true stargate-cp-tor net
     # (CP↔tor:9051 cookie ControlPort, T094a). No public egress, no route
     # to DP or to tor:9050. CP never shared a network with DP.
