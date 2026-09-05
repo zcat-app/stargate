@@ -55,6 +55,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
 	"github.com/zcat-app/stargate/tests/contract/internal/dpharness"
@@ -257,10 +258,18 @@ func stopDP(t *testing.T, cmd *exec.Cmd, journal *lockedBuffer) {
 
 // reloadErr is the goroutine-safe RPC wrapper (no *testing.T calls) the
 // concurrency case needs; reload is the fatal-on-transport-error wrapper
-// every sequential case uses.
+// every sequential case uses. The §5.1 wire-version metadata rides every
+// dp.sock RPC (T050 fixture lift): the DP's server interceptor rejects a
+// metadata-less RPC with FailedPrecondition before any handler runs
+// (wire-auth.md §5.2). Keys mirror data-plane/internal/protoversion —
+// the local-mirror pattern this module cannot import around.
 func (h *dpHarness) reloadErr(gen uint64, tokens []*grpcpb.TokenVerifier) (*grpcpb.ReloadTokensResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	ctx = metadata.AppendToOutgoingContext(ctx,
+		"x-stargate-proto-major", "1",
+		"x-stargate-proto-minor", "0",
+		"x-stargate-capabilities", "reload-tokens,watch-events,get-status-minimum")
 	return h.client.ReloadTokens(ctx,
 		&grpcpb.ReloadTokensRequest{Generation: gen, Tokens: tokens},
 		grpc.WaitForReady(true))

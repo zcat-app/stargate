@@ -26,8 +26,12 @@ package dpharness
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -36,6 +40,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
 )
@@ -76,6 +81,60 @@ func WritePepper(t *testing.T, keysDir string) {
 	}
 }
 
+// SeedInterPlaneKeys writes a fresh, internally-coherent ed25519
+// keypair set in the stargate-keys layout (wire-auth.md §6.1) so the
+// booted DP and the TLS fake CP cross-authenticate (§3): the DP derives
+// its cert from dp.priv and pins cp.pub; the fake CP derives its cert
+// from cp.priv and byte-pins dp.pub. PEM encodings match
+// controlclient.LoadPrivateKey/LoadPeerPublicKey (PKCS#8 private,
+// PKIX public). Modes mirror the production ownership intent (0600
+// private, 0644 public); the local-process tier's UIDs are the test
+// runner's own, so the §6.1 numeric ownership table does not apply
+// here.
+//
+// Called from the WithControlPlane boot path; also usable directly by
+// in-package harnesses (tests/contract/control-grpc) that boot the DP
+// with their own fixture functions. Re-seeding OVERWRITES prior keys —
+// each boot gets one coherent set.
+func SeedInterPlaneKeys(t *testing.T, keysDir string) {
+	t.Helper()
+	dpPub, dpPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generating dp ed25519 keypair: %v", err)
+	}
+	cpPub, cpPriv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("generating cp ed25519 keypair: %v", err)
+	}
+	writeKey := func(name string, block *pem.Block, mode os.FileMode) {
+		t.Helper()
+		path := filepath.Join(keysDir, name)
+		if err := os.WriteFile(path, pem.EncodeToMemory(block), mode); err != nil {
+			t.Fatalf("writing %s: %v", path, err)
+		}
+	}
+	dpPKCS8, err := x509.MarshalPKCS8PrivateKey(dpPriv)
+	if err != nil {
+		t.Fatalf("marshalling dp.priv: %v", err)
+	}
+	cpPKCS8, err := x509.MarshalPKCS8PrivateKey(cpPriv)
+	if err != nil {
+		t.Fatalf("marshalling cp.priv: %v", err)
+	}
+	dpSPKI, err := x509.MarshalPKIXPublicKey(dpPub)
+	if err != nil {
+		t.Fatalf("marshalling dp.pub: %v", err)
+	}
+	cpSPKI, err := x509.MarshalPKIXPublicKey(cpPub)
+	if err != nil {
+		t.Fatalf("marshalling cp.pub: %v", err)
+	}
+	writeKey("dp.priv", &pem.Block{Type: "PRIVATE KEY", Bytes: dpPKCS8}, 0o600)
+	writeKey("cp.priv", &pem.Block{Type: "PRIVATE KEY", Bytes: cpPKCS8}, 0o600)
+	writeKey("dp.pub", &pem.Block{Type: "PUBLIC KEY", Bytes: dpSPKI}, 0o644)
+	writeKey("cp.pub", &pem.Block{Type: "PUBLIC KEY", Bytes: cpSPKI}, 0o644)
+}
+
 // MintToken HMAC-SHA-256-tags a known plaintext under TestPepper,
 // yielding the 32-byte verifier wire shape the control plane would push
 // (data-model.md §1.2/§1.5: HMAC-SHA-256 under the install-time pepper;
@@ -111,10 +170,19 @@ func Reload(t *testing.T, h *Harness, generation uint64, tokens []*grpcpb.TokenV
 
 // ReloadErr is the goroutine-safe RPC wrapper (no *testing.T calls)
 // concurrency tests need. Reload is the fatal-on-transport-error
-// wrapper every sequential case uses.
+// wrapper every sequential case uses. The §5.1 wire-version metadata is
+// attached here (same keys as StatusErr / status.go, which documents the
+// local-mirror rationale): the DP's server interceptor rejects a
+// metadata-less RPC with FailedPrecondition before any handler runs
+// (wire-auth.md §5.2), so a probe without the keys measures nothing but
+// the interceptor.
 func ReloadErr(h *Harness, generation uint64, tokens []*grpcpb.TokenVerifier) (*grpcpb.ReloadTokensResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	ctx = metadata.AppendToOutgoingContext(ctx,
+		probeMetaMajor, probeMajor,
+		probeMetaMinor, probeMinor,
+		probeMetaCaps, probeCaps)
 	conn, err := grpc.NewClient("unix://"+h.SockPath(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {

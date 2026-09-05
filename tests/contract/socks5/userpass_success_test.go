@@ -150,16 +150,15 @@ func TestUserpassSubnegotiationSuccess(t *testing.T) {
 		}
 		t.Cleanup(func() { _ = upstream.Close() })
 
-		// Boot DP with: fake upstream override + fake CP hosted on
-		// control.sock BEFORE the DP boots (so the first WatchEvents
-		// dial lands against our programmable stream).
-		var cp *fakecp.Server
+		// Boot DP with: fake upstream override + the TLS fake CP hosted
+		// on control.sock BEFORE the DP boots (so the first WatchEvents
+		// dial lands against our programmable stream; the TLS transport
+		// is the wire-auth §4 fixture lift, T050).
 		h := dpharness.Start(t,
 			dpharness.WithUpstream(upstreamAddr),
-			dpharness.WithBeforeBoot(func(ipcDir string) {
-				cp = fakecp.Start(t, ipcDir)
-			}),
+			dpharness.WithControlPlane(),
 		)
+		cp := h.CP
 
 		// Push token. A HEALTHY event is pushed for advisory status
 		// visibility, but admission is NOT gated on it (data-model.md

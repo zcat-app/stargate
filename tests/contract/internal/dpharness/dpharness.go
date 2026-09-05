@@ -46,6 +46,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/zcat-app/stargate/tests/contract/internal/fakecp"
 )
 
 // Harness is one booted data-plane process plus the probes a contract
@@ -58,6 +60,9 @@ type Harness struct {
 	Journal      *LockedBuffer
 	PID          int
 	Cmd          *exec.Cmd
+	// CP is the TLS fake control plane booted by WithControlPlane; nil
+	// otherwise. The DP dials it over the §4 mutual-pin TLS handshake.
+	CP *fakecp.Server
 }
 
 // Option configures Start at construction time. The zero Option set
@@ -66,8 +71,9 @@ type Harness struct {
 type Option func(*startConfig)
 
 type startConfig struct {
-	beforeBoot func(ipcDir string)
-	upstream   string // empty = use production default (tor:9050)
+	beforeBoot   func(ipcDir string)
+	upstream     string // empty = use production default (tor:9050)
+	controlPlane bool   // seed inter-plane keys + host the TLS fake CP
 }
 
 // WithBeforeBoot registers a callback invoked AFTER the IPC dir is
@@ -86,6 +92,23 @@ func WithBeforeBoot(fn func(ipcDir string)) Option {
 // (STARGATE_TOR_SOCKS_ADDR) is the new contract surface this option pins.
 func WithUpstream(addr string) Option {
 	return func(c *startConfig) { c.upstream = addr }
+}
+
+// WithControlPlane boots the DP against a LIVE wire-auth §4 control
+// plane: SeedInterPlaneKeys fills the keys dir, and a TLS fake CP
+// (fakecp.StartTLS) hosts control.sock BEFORE the DP process starts, so
+// the DP's WatchEvents client — which refuses unauthenticated inter-plane
+// dials (controlclient NewClient, wire-auth.md §4) — actually connects
+// and consumes the programmable event stream. Tests assert delivery via
+// h.CP (Send / DialCount / LatestStream / CloseFromServer).
+//
+// This is the forced-fixture lift T050 §Analysis records: the previous
+// plaintext-fake-CP fixtures predate wire-auth.md (T095) and cannot serve
+// the TLS-mandatory client. Callers that never assert a DP dial keep the
+// keyless boot (degraded before the client starts — cold_start_snapshot_
+// test.go seedInterPlaneKeys doc pins that semantic).
+func WithControlPlane() Option {
+	return func(c *startConfig) { c.controlPlane = true }
 }
 
 // Start content-gates, builds, boots, and waits for the proxy listener
@@ -139,9 +162,18 @@ func Start(t *testing.T, opts ...Option) *Harness {
 	// candidate-side HMAC (T044) and MintToken agree on the verifier
 	// key (data-model.md §1.7; T093 tests-first contract surface).
 	WritePepper(t, keysDir)
+	if cfg.controlPlane {
+		// Wire-auth §4 boot: the DP's TLS-mandatory WatchEvents client
+		// needs its identity (dp.priv) and pin anchor (cp.pub) on disk
+		// BEFORE the process starts, and a matching TLS fake CP must own
+		// control.sock before the first dial (initial backoff would
+		// otherwise race the delivery assertions).
+		SeedInterPlaneKeys(t, keysDir)
+	}
 
 	proxyAddr := FreeLoopbackAddr(t)
 	journal := &LockedBuffer{}
+	var hCP *fakecp.Server
 
 	cmd := exec.Command(binPath)
 	env := append(os.Environ(),
@@ -159,6 +191,9 @@ func Start(t *testing.T, opts ...Option) *Harness {
 	cmd.Env = env
 	cmd.Stderr = journal
 	cmd.Stdout = journal
+	if cfg.controlPlane {
+		hCP = fakecp.StartTLS(t, ipcDir, keysDir)
+	}
 	if cfg.beforeBoot != nil {
 		cfg.beforeBoot(ipcDir)
 	}
@@ -193,6 +228,7 @@ func Start(t *testing.T, opts ...Option) *Harness {
 		Journal:      journal,
 		PID:          cmd.Process.Pid,
 		Cmd:          cmd,
+		CP:           hCP,
 	}
 }
 

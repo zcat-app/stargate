@@ -110,18 +110,17 @@ func TestSOCKS5SuccessPathLogInvariants(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = upstream.Close() })
 
-	// Boot DP with the upstream override + fake CP hosted on
-	// control.sock BEFORE the DP boots (so the first WatchEvents
-	// dial lands against our programmable stream). fakecp pushes
-	// a single HEALTHY event for "tor" once the DP's dial lands
-	// (advisory; admission is not CP-gated per T090).
-	var cp *fakecp.Server
+	// Boot DP with the upstream override + the TLS fake CP hosted on
+	// control.sock BEFORE the DP boots (so the first WatchEvents dial
+	// lands against our programmable stream; TLS per the wire-auth §4
+	// fixture lift, T050). fakecp pushes a single HEALTHY event for
+	// "tor" once the DP's dial lands (advisory; admission is not
+	// CP-gated per T090).
 	h := dpharness.Start(t,
 		dpharness.WithUpstream(upstreamAddr),
-		dpharness.WithBeforeBoot(func(ipcDir string) {
-			cp = fakecp.Start(t, ipcDir)
-		}),
+		dpharness.WithControlPlane(),
 	)
+	cp := h.CP
 
 	// Push token generation 1 with one valid hash. APPLY_STATUS_OK
 	// is the only acceptable response — a stale-generation or

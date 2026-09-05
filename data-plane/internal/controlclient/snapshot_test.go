@@ -202,6 +202,12 @@ func TestWriteSnapshotEmptyVerifiersIsArray(t *testing.T) {
 }
 
 func TestWriteSnapshotFailureKeepsPreviousIntact(t *testing.T) {
+	if os.Geteuid() == 0 {
+		// The failure injection is permission-based (chmod 0500); uid 0
+		// writes through it, so the negative case is meaningless in a
+		// root container (T050's container-validation gate runs as root).
+		t.Skip("read-only-dir injection does not bind uid 0 — run this suite unprivileged")
+	}
 	dir := t.TempDir()
 	if err := WriteSnapshot(dir, testGeneration(7, 1)); err != nil {
 		t.Fatalf("first WriteSnapshot: %v", err)

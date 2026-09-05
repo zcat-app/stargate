@@ -112,21 +112,37 @@ func TestTransportInvariants(t *testing.T) {
 	// port 8881; the gRPC surface is UDS-only. Reads BOTH /proc/<pid>/net/
 	// tcp (IPv4) and tcp6 (IPv6) so a future gRPC server switched to
 	// [::]:port does not slip past.
+	//
+	// Process-scoping (T050 fixture lift): /proc/<pid>/net/tcp is
+	// NETNS-wide, not process-wide. In the compose container the netns
+	// holds only the DP (the live-stack R7 row keeps netns-wide
+	// semantics legitimately), but the local-process tier shares the
+	// host netns, so entries are filtered to inodes the DP actually
+	// owns (readlink /proc/<pid>/fd/* → socket:[inode]). The assertion
+	// itself is unchanged: the DP process may hold no TCP LISTEN other
+	// than the proxy port.
 	t.Run("NoTCPTransport_OnlyProxyListener", func(t *testing.T) {
 		if runtime.GOOS != "linux" {
 			t.Skipf("/proc/<pid>/net/tcp is Linux-specific; skipping on %s", runtime.GOOS)
 		}
 		h := startDP(t)
 		proxyPort := h.proxyPort()
-		tcp4Ports, err := readProcNetTCPListen(fmt.Sprintf("/proc/%d/net/tcp", h.pid))
+		owned := dpSocketInodes(t, h.pid)
+		tcp4, err := readProcNetTCPListenEntries(fmt.Sprintf("/proc/%d/net/tcp", h.pid))
 		if err != nil {
 			t.Fatalf("read /proc/%d/net/tcp: %v", h.pid, err)
 		}
-		tcp6Ports, err := readProcNetTCPListen(fmt.Sprintf("/proc/%d/net/tcp6", h.pid))
+		tcp6, err := readProcNetTCPListenEntries(fmt.Sprintf("/proc/%d/net/tcp6", h.pid))
 		if err != nil {
 			t.Fatalf("read /proc/%d/net/tcp6: %v", h.pid, err)
 		}
-		listenPorts := append(tcp4Ports, tcp6Ports...)
+		var listenPorts []int
+		for _, e := range append(tcp4, tcp6...) {
+			if !owned[e.inode] {
+				continue // another process's listener in the shared host netns
+			}
+			listenPorts = append(listenPorts, e.port)
+		}
 		// Sanity: the proxy listener MUST be visible — an empty table
 		// would make the violation loop below vacuously pass.
 		if len(listenPorts) == 0 {
@@ -167,25 +183,58 @@ func (h *dpHarness) proxyPort() int {
 
 // --- /proc/<pid>/net/tcp{,6} parsing -------------------------------------
 
-// readProcNetTCPListen reads a /proc/net/tcp or /proc/net/tcp6 formatted
-// file and returns the local ports of every entry in LISTEN state
-// (0x0A). The port hex is big-endian regardless of IPv4/IPv6. Linux-only.
-func readProcNetTCPListen(path string) ([]int, error) {
+// tcpListenEntry is one LISTEN row of a /proc/net/tcp{,6} table: the
+// local port plus the socket's kernel inode (the process-ownership key —
+// see the row-1 comment on why netns-wide tables need inode filtering).
+type tcpListenEntry struct {
+	port  int
+	inode string
+}
+
+// dpSocketInodes returns the set of socket inodes the process owns,
+// read from /proc/<pid>/fd/* readlinks (socket:[<inode>]). Linux-only.
+func dpSocketInodes(t *testing.T, pid int) map[string]bool {
+	t.Helper()
+	inodes := make(map[string]bool)
+	fdDir := fmt.Sprintf("/proc/%d/fd", pid)
+	fds, err := os.ReadDir(fdDir)
+	if err != nil {
+		t.Fatalf("read %s: %v", fdDir, err)
+	}
+	for _, fd := range fds {
+		link, err := os.Readlink(filepath.Join(fdDir, fd.Name()))
+		if err != nil {
+			continue // fd closed between readdir and readlink — not ours to judge
+		}
+		if rest, ok := strings.CutPrefix(link, "socket:["); ok {
+			inodes[strings.TrimSuffix(rest, "]")] = true
+		}
+	}
+	return inodes
+}
+
+// readProcNetTCPListenEntries reads a /proc/net/tcp or /proc/net/tcp6
+// formatted file and returns every entry in LISTEN state (0x0A) with its
+// local port and socket inode. The port hex is big-endian regardless of
+// IPv4/IPv6. Linux-only.
+func readProcNetTCPListenEntries(path string) ([]tcpListenEntry, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	var ports []int
+	var entries []tcpListenEntry
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
-		// Format: sl local_address rem_address st ...
+		// Format: sl local_address rem_address st tx:rx tr:tm->tm retrns
+		//   inode uid timeout ...
 		// local_address is hex "0100007F:1F90" (IPv4) or
 		// "00000000000000000000000000000000:1F90" (IPv6). Port is the
-		// 4-hex-digit segment after the final colon.
+		// 4-hex-digit segment after the final colon; the socket inode is
+		// the 10th column.
 		fields := strings.Fields(line)
-		if len(fields) < 4 || fields[0] == "sl" {
+		if len(fields) < 10 || fields[0] == "sl" {
 			continue
 		}
 		if fields[3] != "0A" { // state 0x0A = LISTEN
@@ -205,7 +254,7 @@ func readProcNetTCPListen(path string) ([]int, error) {
 		for _, b := range portBytes {
 			port = port<<8 | int(b)
 		}
-		ports = append(ports, port)
+		entries = append(entries, tcpListenEntry{port: port, inode: fields[9]})
 	}
-	return ports, scanner.Err()
+	return entries, scanner.Err()
 }

@@ -51,7 +51,6 @@ import (
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
 	"github.com/zcat-app/stargate/tests/contract/internal/dpharness"
-	"github.com/zcat-app/stargate/tests/contract/internal/fakecp"
 	integration "github.com/zcat-app/stargate/tests/integration"
 	"github.com/zcat-app/stargate/tests/internal/loginvariants"
 )
@@ -117,13 +116,14 @@ func TestHTTPConnectAuthSuccess(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = upstream.Close() })
 
-	var cp *fakecp.Server
+	// TLS fake CP hosted on control.sock BEFORE the DP boots (the
+	// wire-auth §4 fixture lift, T050) so the WatchEvents consumer
+	// actually connects (waitForWatchEventsDial below asserts the dial).
 	h := dpharness.Start(t,
 		dpharness.WithUpstream(upstreamAddr),
-		dpharness.WithBeforeBoot(func(ipcDir string) {
-			cp = fakecp.Start(t, ipcDir)
-		}),
+		dpharness.WithControlPlane(),
 	)
+	cp := h.CP
 
 	reloadResp := dpharness.Reload(t, h, 1,
 		[]*grpcpb.TokenVerifier{dpharness.MintToken(t, connectSuccessPlaintext)})

@@ -33,8 +33,8 @@ func TestReloadTokens(t *testing.T) {
 	// it is current and stops authenticating once replaced.
 	t.Run("HappyPathAppliesNewGeneration", func(t *testing.T) {
 		h := startDP(t)
-		tokA := mintToken(t, "t020-plain-alpha")
-		tokB := mintToken(t, "t020-plain-bravo")
+		tokA := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
+		tokB := mintToken(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1")
 
 		resp := h.reload(t, 1, []*grpcpb.TokenVerifier{tokA})
 		if resp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
@@ -65,8 +65,8 @@ func TestReloadTokens(t *testing.T) {
 			t.Error("snapshot verifiers[0].verifier does not base64-match the pushed verifier (data-model.md §1.4; value redacted)")
 		}
 
-		h.requireAuth(t, "t020-plain-alpha", true, "generation 1's plaintext must authenticate after APPLY_STATUS_OK")
-		h.requireAuth(t, "t020-plain-bravo", false, "a never-loaded plaintext must not authenticate")
+		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", true, "generation 1's plaintext must authenticate after APPLY_STATUS_OK")
+		h.requireAuth(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1", false, "a never-loaded plaintext must not authenticate")
 
 		resp = h.reload(t, 2, []*grpcpb.TokenVerifier{tokB})
 		if resp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
@@ -75,14 +75,14 @@ func TestReloadTokens(t *testing.T) {
 		if resp.GetAppliedGeneration() != 2 {
 			t.Errorf("applied_generation = %d, want 2", resp.GetAppliedGeneration())
 		}
-		h.requireAuth(t, "t020-plain-bravo", true, "the NEW generation's plaintext must authenticate after the swap")
-		h.requireAuth(t, "t020-plain-alpha", false, "the REPLACED generation's plaintext must stop authenticating")
+		h.requireAuth(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1", true, "the NEW generation's plaintext must authenticate after the swap")
+		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", false, "the REPLACED generation's plaintext must stop authenticating")
 		if got := h.readSnapshot(t).Generation; got != 2 {
 			t.Errorf("snapshot generation after second push = %d, want 2", got)
 		}
 
 		assertNoSecretLeak(t, h, tokA.GetVerifier(), tokB.GetVerifier(),
-			[]byte("t020-plain-alpha"), []byte("t020-plain-bravo"))
+			[]byte("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"), []byte("b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"))
 	})
 
 	// Contract row 2: request.generation <= current →
@@ -91,9 +91,9 @@ func TestReloadTokens(t *testing.T) {
 	// also echoes current_generation so a stale CP can reconcile.
 	t.Run("StaleGenerationRejected", func(t *testing.T) {
 		h := startDP(t)
-		tokA := mintToken(t, "t020-plain-alpha")
-		tokB := mintToken(t, "t020-plain-bravo")
-		tokC := mintToken(t, "t020-plain-charlie")
+		tokA := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
+		tokB := mintToken(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1")
+		tokC := mintToken(t, "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2")
 
 		h.reload(t, 1, []*grpcpb.TokenVerifier{tokA})
 		resp := h.reload(t, 2, []*grpcpb.TokenVerifier{tokB})
@@ -123,11 +123,11 @@ func TestReloadTokens(t *testing.T) {
 		if after := h.snapshotBytes(t); string(after) != string(before) {
 			t.Error("snapshot changed on a stale push — stale generations must leave persisted state untouched")
 		}
-		h.requireAuth(t, "t020-plain-bravo", true, "the current generation's plaintext must survive stale pushes")
-		h.requireAuth(t, "t020-plain-charlie", false, "a stale push's tokens must never become live")
+		h.requireAuth(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1", true, "the current generation's plaintext must survive stale pushes")
+		h.requireAuth(t, "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2", false, "a stale push's tokens must never become live")
 
 		assertNoSecretLeak(t, h, tokA.GetVerifier(), tokB.GetVerifier(), tokC.GetVerifier(),
-			[]byte("t020-plain-alpha"), []byte("t020-plain-bravo"), []byte("t020-plain-charlie"))
+			[]byte("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"), []byte("b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"), []byte("c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2"))
 	})
 
 	// Contract row 3: verifier must be exactly 32 bytes; any mismatch →
@@ -137,7 +137,7 @@ func TestReloadTokens(t *testing.T) {
 	// consumed by a rejected push.
 	t.Run("InvalidVerifierLengthRejected", func(t *testing.T) {
 		h := startDP(t)
-		tokA := mintToken(t, "t020-plain-alpha")
+		tokA := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
 		h.reload(t, 1, []*grpcpb.TokenVerifier{tokA})
 		before := h.snapshotBytes(t)
 
@@ -163,11 +163,11 @@ func TestReloadTokens(t *testing.T) {
 		if after := h.snapshotBytes(t); string(after) != string(before) {
 			t.Error("snapshot changed on an invalid push — malformed verifiers must leave persisted state untouched")
 		}
-		h.requireAuth(t, "t020-plain-alpha", true, "the current generation must survive invalid pushes")
+		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", true, "the current generation must survive invalid pushes")
 
 		// The rejected generation number was not consumed: a valid push
 		// with the same number now succeeds.
-		tokB := mintToken(t, "t020-plain-bravo")
+		tokB := mintToken(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1")
 		if resp := h.reload(t, 2, []*grpcpb.TokenVerifier{tokB}); resp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
 			t.Errorf("valid generation 2 after invalid attempts: status = %v, want APPLY_STATUS_OK", resp.GetStatus())
 		}
@@ -177,7 +177,7 @@ func TestReloadTokens(t *testing.T) {
 		// (data-model.md §1.6).
 		assertNoSecretLeak(t, h, append(malformed,
 			tokA.GetVerifier(), tokB.GetVerifier(),
-			[]byte("t020-plain-alpha"), []byte("t020-plain-bravo"))...)
+			[]byte("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"), []byte("b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"))...)
 	})
 
 	// Contract row 4: snapshot persist failure → still APPLY_STATUS_OK
@@ -189,8 +189,8 @@ func TestReloadTokens(t *testing.T) {
 			t.Skip("running as root: a read-only parent dir does not block root writes, so the persist-failure simulation cannot work")
 		}
 		h := startDP(t)
-		tokA := mintToken(t, "t020-plain-alpha")
-		tokB := mintToken(t, "t020-plain-bravo")
+		tokA := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
+		tokB := mintToken(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1")
 		h.reload(t, 1, []*grpcpb.TokenVerifier{tokA})
 
 		if err := os.Chmod(h.stateDir, 0o555); err != nil {
@@ -207,8 +207,8 @@ func TestReloadTokens(t *testing.T) {
 		if resp.GetAppliedGeneration() != 2 {
 			t.Errorf("applied_generation = %d, want 2", resp.GetAppliedGeneration())
 		}
-		h.requireAuth(t, "t020-plain-bravo", true, "the new generation must be live despite the failed persist")
-		h.requireAuth(t, "t020-plain-alpha", false, "the replaced generation must be gone despite the failed persist")
+		h.requireAuth(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1", true, "the new generation must be live despite the failed persist")
+		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", false, "the replaced generation must be gone despite the failed persist")
 
 		if !h.journalContains("snapshot") {
 			t.Error("journal has no snapshot-write-failure line — contract row 4 requires the failure to be journaled (a line class T025a's allowlist reserves)")
@@ -220,7 +220,7 @@ func TestReloadTokens(t *testing.T) {
 		}
 
 		assertNoSecretLeak(t, h, tokA.GetVerifier(), tokB.GetVerifier(),
-			[]byte("t020-plain-alpha"), []byte("t020-plain-bravo"))
+			[]byte("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"), []byte("b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"))
 	})
 
 	// Contract row 5: generations N and N+1 pushed in parallel converge
@@ -230,8 +230,8 @@ func TestReloadTokens(t *testing.T) {
 	// (lost the race), both within contract.
 	t.Run("ConcurrentReloadsConverge", func(t *testing.T) {
 		h := startDP(t)
-		tok1 := mintToken(t, "t020-plain-alpha")
-		tok2 := mintToken(t, "t020-plain-bravo")
+		tok1 := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
+		tok2 := mintToken(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1")
 
 		var wg sync.WaitGroup
 		var resp1, resp2 *grpcpb.ReloadTokensResponse
@@ -250,21 +250,21 @@ func TestReloadTokens(t *testing.T) {
 			t.Errorf("generation 1 status = %v, want APPLY_STATUS_OK or APPLY_STATUS_STALE_GENERATION", s)
 		}
 
-		retry := h.reload(t, 1, []*grpcpb.TokenVerifier{mintToken(t, "t020-plain-charlie")})
+		retry := h.reload(t, 1, []*grpcpb.TokenVerifier{mintToken(t, "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2")})
 		if retry.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_STALE_GENERATION {
 			t.Errorf("generation 1 retry status = %v, want APPLY_STATUS_STALE_GENERATION", retry.GetStatus())
 		}
 		if retry.GetAppliedGeneration() != 2 {
 			t.Errorf("converged applied_generation = %d, want 2", retry.GetAppliedGeneration())
 		}
-		h.requireAuth(t, "t020-plain-bravo", true, "the higher generation's plaintext must be live after convergence")
-		h.requireAuth(t, "t020-plain-alpha", false, "the lower generation's plaintext must not be live after convergence")
+		h.requireAuth(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1", true, "the higher generation's plaintext must be live after convergence")
+		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", false, "the lower generation's plaintext must not be live after convergence")
 		if got := h.readSnapshot(t).Generation; got != 2 {
 			t.Errorf("snapshot generation after convergence = %d, want 2", got)
 		}
 
 		assertNoSecretLeak(t, h, tok1.GetVerifier(), tok2.GetVerifier(),
-			[]byte("t020-plain-alpha"), []byte("t020-plain-bravo"), []byte("t020-plain-charlie"))
+			[]byte("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"), []byte("b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"), []byte("c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2"))
 	})
 
 	// Contract row 6 (T092 reconciliation retry): a CP that proposes a
@@ -275,8 +275,8 @@ func TestReloadTokens(t *testing.T) {
 	// last+1 never silently revokes clients (data-model.md §1.3/§1.8).
 	t.Run("ReconciliationRetryConverges", func(t *testing.T) {
 		h := startDP(t)
-		tokA := mintToken(t, "t020-plain-alpha")
-		tokB := mintToken(t, "t020-plain-bravo")
+		tokA := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
+		tokB := mintToken(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1")
 
 		// The DP is at generation 2 (e.g. it accepted pushes from a
 		// prior CP session before the restart the handshake simulates).
@@ -308,13 +308,13 @@ func TestReloadTokens(t *testing.T) {
 
 		// The converged generation's token list is live; the stale
 		// proposal's tokens never became live.
-		h.requireAuth(t, "t020-plain-bravo", true, "the reconciled generation's plaintext must be live")
-		h.requireAuth(t, "t020-plain-alpha", false, "the stale proposal's plaintext must not be live")
+		h.requireAuth(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1", true, "the reconciled generation's plaintext must be live")
+		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", false, "the stale proposal's plaintext must not be live")
 		if got := h.readSnapshot(t).Generation; got != current+1 {
 			t.Errorf("snapshot generation after reconciliation = %d, want %d", got, current+1)
 		}
 
 		assertNoSecretLeak(t, h, tokA.GetVerifier(), tokB.GetVerifier(),
-			[]byte("t020-plain-alpha"), []byte("t020-plain-bravo"))
+			[]byte("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"), []byte("b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"))
 	})
 }

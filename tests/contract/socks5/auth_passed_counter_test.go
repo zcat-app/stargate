@@ -138,17 +138,16 @@ func TestAuthPassedCounterIncrements(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = upstream.Close() })
 
-	// Fake CP hosted on control.sock BEFORE the DP boots, then a
-	// single HEALTHY push (advisory; admission is not CP-gated per
-	// T090) — the T025a fixture shape, keeping control-channel retry
-	// noise out of the journal delta assertion (d) scans.
-	var cp *fakecp.Server
+	// TLS fake CP hosted on control.sock BEFORE the DP boots (the
+	// wire-auth §4 fixture lift, T050), then a single HEALTHY push
+	// (advisory; admission is not CP-gated per T090) — the T025a
+	// fixture shape, keeping control-channel retry noise out of the
+	// journal delta assertion (d) scans.
 	h := dpharness.Start(t,
 		dpharness.WithUpstream(upstreamAddr),
-		dpharness.WithBeforeBoot(func(ipcDir string) {
-			cp = fakecp.Start(t, ipcDir)
-		}),
+		dpharness.WithControlPlane(),
 	)
+	cp := h.CP
 
 	reloadResp := dpharness.Reload(t, h, 1,
 		[]*grpcpb.TokenVerifier{dpharness.MintToken(t, t025dLoadedToken)})

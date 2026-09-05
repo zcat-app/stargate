@@ -134,13 +134,14 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = upstream.Close() })
 
-	var cp *fakecp.Server
+	// TLS fake CP hosted on control.sock BEFORE the DP boots (the
+	// wire-auth §4 fixture lift, T050) so the first WatchEvents dial
+	// lands against the programmable stream.
 	h := dpharness.Start(t,
 		dpharness.WithUpstream(upstreamAddr),
-		dpharness.WithBeforeBoot(func(ipcDir string) {
-			cp = fakecp.Start(t, ipcDir)
-		}),
+		dpharness.WithControlPlane(),
 	)
+	cp := h.CP
 
 	reloadResp := dpharness.Reload(t, h, 1,
 		[]*grpcpb.TokenVerifier{dpharness.MintToken(t, longLivedPlaintext)})

@@ -28,6 +28,7 @@
 package controlgrpc
 
 import (
+	"crypto/tls"
 	"errors"
 	"io"
 	"net"
@@ -39,9 +40,12 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
+	"github.com/zcat-app/stargate/tests/contract/internal/dpharness"
+	"github.com/zcat-app/stargate/tests/contract/internal/fakecp"
 	integration "github.com/zcat-app/stargate/tests/integration"
 	"github.com/zcat-app/stargate/tests/internal/loginvariants"
 )
@@ -144,14 +148,42 @@ func (f *fakeEventsServer) closeFromServer() {
 // startFakeCP hosts a fake control plane on ${ipcDir}/control.sock BEFORE
 // the DP boots, so the DP's first WatchEvents dial succeeds immediately.
 // Cleanup (GracefulStop) is registered with t.
-func startFakeCP(t *testing.T, ipcDir string) *fakeEventsServer {
+//
+// The transport is the wire-auth §4 server half (T050's forced fixture
+// lift): the fake presents the cert derived from keysDir/cp.priv and
+// requires a DP client cert byte-pinned against keysDir/dp.pub — the
+// mirror of the DP's control.sock dial, which refuses unauthenticated
+// inter-plane connections (controlclient NewClient). The caller must
+// seed the coherent keypair set (dpharness.SeedInterPlaneKeys) BEFORE
+// the DP process boots. The wire-mirror TLS helpers are fakecp's
+// exported copies (single-sourced per module; the programmable server
+// itself stays in-package — this file predates that package and the
+// duplication of the server shape is the established repo pattern).
+func startFakeCP(t *testing.T, ipcDir, keysDir string) *fakeEventsServer {
 	t.Helper()
+	cpPriv, err := fakecp.LoadSigner(filepath.Join(keysDir, "cp.priv"))
+	if err != nil {
+		t.Fatalf("loading seeded cp.priv: %v", err)
+	}
+	cert, err := fakecp.SelfSigned(cpPriv, "stargate-cp")
+	if err != nil {
+		t.Fatalf("deriving CP identity cert: %v", err)
+	}
+	tlsCfg := &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		// wire-auth.md §4 (mirrored from the DP side): client auth
+		// REQUIRED, the pin hook is the sole trust decision, TLS 1.3 only.
+		InsecureSkipVerify:    true, //nolint:gosec // pinned peer public key IS the verifier (wire-auth.md §4)
+		VerifyPeerCertificate: fakecp.PinVerifier(filepath.Join(keysDir, "dp.pub")),
+		ClientAuth:            tls.RequireAnyClientCert,
+		MinVersion:            tls.VersionTLS13,
+	}
 	sockPath := filepath.Join(ipcDir, "control.sock")
 	lis, err := net.Listen("unix", sockPath)
 	if err != nil {
 		t.Fatalf("listen on %s: %v", sockPath, err)
 	}
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsCfg)))
 	f := &fakeEventsServer{}
 	grpcpb.RegisterEventsServer(srv, f)
 	go func() { _ = srv.Serve(lis) }()
@@ -405,13 +437,20 @@ func TestWatchEvents(t *testing.T) {
 		t.Cleanup(func() { _ = upstream.Close() })
 
 		var fakeCP *fakeEventsServer
-		h := startDPWithUpstream(t, upstreamAddr, func(ipcDir string) {
-			fakeCP = startFakeCP(t, ipcDir)
+		var keysDir string
+		h := startDPWithSeed(t, upstreamAddr, func(ipcDir string) {
+			fakeCP = startFakeCP(t, ipcDir, keysDir)
+		}, func(_, kd string) {
+			// Seed the coherent wire-auth keypair set BEFORE boot so the
+			// DP's TLS-mandatory WatchEvents client starts and dials the
+			// TLS fake CP (T050's forced fixture lift).
+			keysDir = kd
+			dpharness.SeedInterPlaneKeys(t, kd)
 		})
 
 		// Load a known-plaintext token so SOCKS5 auth reaches the
 		// request phase, where admission invariance is observed.
-		const plaintext = "t021-plain-alpha"
+		const plaintext = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
 		tok := mintToken(t, plaintext)
 		h.reload(t, 1, []*grpcpb.TokenVerifier{tok})
 
@@ -468,8 +507,12 @@ func TestWatchEvents(t *testing.T) {
 	// Regression gate against a maintainer piping log lines into detail.
 	t.Run("ForbiddenDetailRejected", func(t *testing.T) {
 		var fakeCP *fakeEventsServer
-		h := startDPWith(t, func(ipcDir string) {
-			fakeCP = startFakeCP(t, ipcDir)
+		var keysDir string
+		h := startDPWithSeed(t, "", func(ipcDir string) {
+			fakeCP = startFakeCP(t, ipcDir, keysDir)
+		}, func(_, kd string) {
+			keysDir = kd
+			dpharness.SeedInterPlaneKeys(t, kd)
 		})
 
 		waitFor(t, "DP to dial control.sock", 20*time.Second, h.journal, func() bool {
@@ -501,11 +544,15 @@ func TestWatchEvents(t *testing.T) {
 		// not separated here for simplicity (the sub-test runs as one unit
 		// once T042/T044/T045/T047/T050 all land).
 		var fakeCP *fakeEventsServer
-		h := startDPWithUpstream(t, upstreamAddr, func(ipcDir string) {
-			fakeCP = startFakeCP(t, ipcDir)
+		var keysDir string
+		h := startDPWithSeed(t, upstreamAddr, func(ipcDir string) {
+			fakeCP = startFakeCP(t, ipcDir, keysDir)
+		}, func(_, kd string) {
+			keysDir = kd
+			dpharness.SeedInterPlaneKeys(t, kd)
 		})
 
-		const plaintext = "t021-plain-alpha"
+		const plaintext = "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
 		tok := mintToken(t, plaintext)
 		h.reload(t, 1, []*grpcpb.TokenVerifier{tok})
 
