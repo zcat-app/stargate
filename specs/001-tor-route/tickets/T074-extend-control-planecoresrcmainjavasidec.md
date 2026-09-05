@@ -1,7 +1,7 @@
 ---
 id: T074
 title: 'Extend `control-plane/core/src/main/java/.../SidecarMonitor.java` (fro'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-05
 source: tasks.md#T074
@@ -169,16 +169,17 @@ before the implementation lands (Constitution VII; must-hold 8).
    session, then connect-refused on a later cycle: one `STOPPED` event
    with `detail=container_exit` + one row `{"kind":"STOPPED"}`;
    subsequent refused cycles are silent (must-hold 3); the reconnecting
-   cycle emits `RESTARTED` (`container_start`) with **no** unhealthy row
-   for it, and the next `PROGRESS=100` cycle emits `HEALTHY` +
-   `sidecar_healthy` (§4 edge re-armed by the drop).
+   cycle emits `RESTARTED` (`container_start`) — no unhealthy row for
+   it — and, the healthy edge having been reset by the drop, `HEALTHY` +
+   the `sidecar_healthy` row in that same cycle.
 3. `emitsCrashedOnMidSessionDrop` — established session, then the fake
    aborts the exchange mid-reply (EOF / reset shape): one `CRASHED`
    event with `detail=container_exit` + one row `{"kind":"CRASHED"}`; a
    following refused cycle adds no second drop report.
 4. `coldFailuresBeforeFirstSessionEmitNoLifecycleEvents` — refused dial
    and auth-reject cycles before the first-ever successful session
-   produce zero events and zero rows (must-hold 4).
+   produce zero events and zero rows, and the first success still emits
+   `STARTED` (not `RESTARTED`) (must-hold 4).
 5. `restartedIsEventOnly` — across a stop/restart sequence, `RESTARTED`
    appears with `container_start` and no `sidecar_unhealthy` row names
    `RESTARTED` (data-model.md §4 vocabulary exclusion; must-hold 2).
@@ -186,10 +187,13 @@ before the implementation lands (Constitution VII; must-hold 8).
    the unhealthy edge: no throw escapes `runOnce()`, the event still
    emits, the failure is contained exactly like the T039 paths
    (must-hold 5).
-7. All existing T039 tests stay green unchanged (the refined
-   STARTED/RESTARTED split is designed against them — Grounding
-   decision 1), and the wire-allowlist test (`c`) still passes with the
-   new cycle shapes in play (must-hold 6).
+7. Existing-suite carry: every T039 test stays green except
+   `auditRowFiresOnEachEntryIntoHealthyOnly`, whose drop-out leg
+   (bootstrap regression while healthy) T074's own §4 mandate supersedes
+   — extended in-place to assert the `UNHEALTHY` edge + row before the
+   re-entry `HEALTHY` row; and the wire-allowlist test (c) is extended
+   with the new cycle shapes (stop / mid-session crash) to prove the
+   allowlist holds on every path (must-hold 6).
 
 ## Out-of-scope
 

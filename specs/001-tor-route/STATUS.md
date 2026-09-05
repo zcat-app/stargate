@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 46 |
-| in-progress | 0 |
+| pending | 45 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 101 |
@@ -60,7 +60,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T071 | Extend `data-plane/internal/errortpl/render.go` (from T048)  | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T072 | Extend `data-plane/internal/forward/tor.go` (from T047) to m | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T073 | In `data-plane/internal/controlclient/client.go` (from T045) | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
-| T074 | Extend `control-plane/core/src/main/java/.../SidecarMonitor. | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T077 | Run the `quickstart.md` walkthrough on a clean Linux x86_64  | 6: Polish & Cross-Cutting Concerns |  |  |
 | T078 | Run the `stargate-redteam` agent against the completed featu | 6: Polish & Cross-Cutting Concerns |  |  |
@@ -79,7 +78,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T074 | Extend `control-plane/core/src/main/java/.../SidecarMonitor. | in-progress | ✓ | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |
 
 ---
 

@@ -21,14 +21,15 @@ import java.util.function.LongSupplier;
 import org.jboss.logging.Logger;
 
 /**
- * The Tor sidecar lifecycle monitor (T039) — observes Tor through its
- * cookie-authenticated ControlPort ({@code tor:9051} over the compose-
- * internal {@code stargate-cp-tor} network) and emits {@code STARTED} +
- * {@code HEALTHY} events into the injected {@link EventSink} (T041 adapts
- * this to {@code ControlGrpcService.publish} on the WatchEvents stream),
- * writing a §4 {@code sidecar_healthy} audit row through {@link AuditSink}
- * (T036's {@code AuditLogService}) on each transition into HEALTHY.
- * UNHEALTHY/STOPPED/CRASHED/RESTARTED transitions are T074's extension.
+ * The Tor sidecar lifecycle monitor (T039; failure transitions T074) —
+ * observes Tor through its cookie-authenticated ControlPort ({@code
+ * tor:9051} over the compose-internal {@code stargate-cp-tor} network) and
+ * emits the six-kind {@code SidecarEvent} stream into the injected {@link
+ * EventSink} (T041 adapts this to {@code ControlGrpcService.publish} on the
+ * WatchEvents stream), writing §4 audit rows through {@link AuditSink}
+ * (T036's {@code AuditLogService}): {@code sidecar_healthy} on each
+ * transition into HEALTHY, {@code sidecar_unhealthy} on each transition
+ * into UNHEALTHY/STOPPED/CRASHED.
  *
  * <p><strong>Observation channel (T094a amendment).</strong> The CP
  * authenticates with the COOKIE method only: {@code AUTHENTICATE} carries
@@ -51,23 +52,37 @@ import org.jboss.logging.Logger;
  * boundary this class owns; the compose/network boundary is M14's.
  *
  * <p><strong>Fixed vocabulary.</strong> {@code detail} is drawn from the
- * closed set in {@code contracts/control-grpc.md} §"WatchEvents":
- * {@code STARTED → container_start}, {@code HEALTHY → healthcheck_pass}.
- * Tor's reply text (bootstrap strings) never enters events or logs
- * (arch §5.2; FR-014) — logs carry state tokens and status codes only.
+ * closed set in {@code contracts/control-grpc.md} §"WatchEvents", with the
+ * v1 {@code (kind, detail)} pairings: {@code STARTED → container_start},
+ * {@code HEALTHY → healthcheck_pass}, {@code UNHEALTHY → healthcheck_fail},
+ * {@code STOPPED → container_exit}, {@code CRASHED → container_exit},
+ * {@code RESTARTED → container_start}. Tor's reply text (bootstrap strings)
+ * never enters events or logs (arch §5.2; FR-014) — logs carry state tokens
+ * and status codes only.
  *
- * <p><strong>State machine.</strong> {@code STARTED} fires on the edge into
- * an authenticated control session (the honest analog of "the container
- * started" available over this channel; a failed cycle re-arms it, so
- * a Tor restart re-emits {@code STARTED}). {@code HEALTHY} fires on each
- * edge into {@code PROGRESS=100}, the same signal Tor's own healthcheck
- * probes ({@code sidecars/tor/Dockerfile}); each entry writes exactly one
- * §4 row {@code sidecar_healthy}/{@code tor}/
- * {@code {"generation":<gen>}} with {@code <gen>} from the injected
- * generation supplier (§1.8: {@code 0} = none). Failed cycles (refused
- * connection, auth rejection, absent cookie, malformed reply) emit and
- * write nothing and never propagate — the monitor is advisory surface and
- * must never take the control plane down (Principle II; FR-014).
+ * <p><strong>State machine (T039 + T074).</strong> {@code STARTED} fires on
+ * the edge into the first-ever authenticated control session. {@code
+ * RESTARTED} fires on the edge into a re-established session after an
+ * observed drop — event-only, no §4 row (data-model.md §4's {@code
+ * sidecar_unhealthy} vocabulary excludes it; the next entry into HEALTHY
+ * re-emits the {@code sidecar_healthy} row). {@code UNHEALTHY} fires on the
+ * bootstrap-regression edge while a session stays up (was {@code
+ * PROGRESS=100}, now lower). The control port exposes no exit codes, so the
+ * drop shapes are derived from the connection signal: a cycle failing
+ * <em>after</em> this cycle's authentication succeeded is the abrupt-death
+ * shape ({@code CRASHED}); a dial-level failure is the quiet-exit shape
+ * ({@code STOPPED}) — but only once per lost session (the drop edge is
+ * consumed by the first report; later failed cycles stay silent until a
+ * session re-establishes), and never before the first session (a monitor
+ * that saw no session has no stop or crash to report). Failures before
+ * authentication completes carry no lifecycle claim and stay silent — the
+ * sidecar answered protocol, so it is alive; the problem is ours. Every
+ * UNHEALTHY/STOPPED/CRASHED edge writes exactly one §4 row {@code
+ * sidecar_unhealthy}/{@code tor}/{@code {"kind":…}} via {@link AuditSink};
+ * a lost row is contained and logged. Failed cycles (refused connection,
+ * auth rejection, absent cookie, malformed reply) never propagate — the
+ * monitor is advisory surface and must never take the control plane down
+ * (Principle II; FR-014).
  */
 public final class SidecarMonitor implements AutoCloseable {
 
@@ -82,9 +97,22 @@ public final class SidecarMonitor implements AutoCloseable {
     /** Fixed-vocabulary detail for {@link Kind#HEALTHY} (control-grpc.md). */
     public static final String DETAIL_HEALTHCHECK_PASS = "healthcheck_pass";
 
+    /** Fixed-vocabulary detail for {@link Kind#UNHEALTHY} (control-grpc.md). */
+    public static final String DETAIL_HEALTHCHECK_FAIL = "healthcheck_fail";
+
+    /** Fixed-vocabulary detail shared by {@link Kind#STOPPED} and
+     * {@link Kind#CRASHED} (control-grpc.md — {@code detail} names the
+     * container action; {@code kind} disambiguates). */
+    public static final String DETAIL_CONTAINER_EXIT = "container_exit";
+
     /** data-model.md §4 action for a transition into HEALTHY. Validated
      * against the same fixed vocabulary by AuditLogService (T036). */
     public static final String ACTION_SIDECAR_HEALTHY = "sidecar_healthy";
+
+    /** data-model.md §4 action for a transition into UNHEALTHY/STOPPED/
+     * CRASHED (T074). Validated against the same fixed vocabulary by
+     * AuditLogService (T036). */
+    public static final String ACTION_SIDECAR_UNHEALTHY = "sidecar_unhealthy";
 
     /** Tor ControlPort default inside the compose network (torrc invariant #3). */
     public static final int CONTROL_PORT = 9051;
@@ -103,9 +131,10 @@ public final class SidecarMonitor implements AutoCloseable {
     private static final int MAX_LINE_CHARS = 8_192;
     private static final int MAX_REPLY_LINES = 64;
 
-    /** The v1 subset of the wire {@code stargate.v1.EventKind}; T074 adds
-     * UNHEALTHY/STOPPED/CRASHED/RESTARTED (control-grpc.md §"WatchEvents"). */
-    public enum Kind { STARTED, HEALTHY }
+    /** The full v1 {@code stargate.v1.EventKind} subset this monitor emits
+     * (control-grpc.md §"WatchEvents" pairing table); T074 added the failure
+     * transitions UNHEALTHY/STOPPED/CRASHED/RESTARTED. */
+    public enum Kind { STARTED, HEALTHY, UNHEALTHY, STOPPED, CRASHED, RESTARTED }
 
     /**
      * Neutral event shape mirroring {@code stargate.v1.SidecarEvent} minus
@@ -138,6 +167,13 @@ public final class SidecarMonitor implements AutoCloseable {
     private volatile boolean running;
     private volatile boolean connected;
     private volatile boolean healthy;
+    /** At least one authenticated session has been observed (must-hold 4:
+     * no stop/crash claim before the first session). */
+    private volatile boolean everConnected;
+    /** The drop edge of the current outage window is consumed (must-hold 3:
+     * exactly one STOPPED/CRASHED report per lost session). Cleared when a
+     * session re-establishes. */
+    private volatile boolean dropReported;
 
     /**
      * @param host       ControlPort host (compose DNS name {@code tor})
@@ -204,7 +240,10 @@ public final class SidecarMonitor implements AutoCloseable {
      * One poll cycle: read the cookie, dial the ControlPort, authenticate,
      * query bootstrap phase, fire edges. Every failure mode inside this
      * method is contained — a failed cycle changes state to "down" and
-     * returns quietly so the next cycle can proceed (must-hold 7).
+     * returns quietly so the next cycle can proceed (must-hold 7). T074:
+     * failures after authentication succeeded classify as CRASHED, dial-
+     * level failures as STOPPED — both only for a previously-observed
+     * session and only once per outage window.
      */
     void runOnce() {
         final byte[] cookie;
@@ -224,6 +263,15 @@ public final class SidecarMonitor implements AutoCloseable {
             markDown();
             return;
         }
+        // Set once this cycle's AUTHENTICATE succeeds: an IOException after
+        // it is the mid-session abrupt-death shape, before it a dial/upgrade
+        // failure that carries no lifecycle claim (the sidecar is speaking
+        // protocol, so it is alive). Drop claims also require a session
+        // observed on a PREVIOUS cycle — this cycle's own flags do not count,
+        // or an aborted first cycle (T039: "aborted cycles emit nothing")
+        // would manufacture a crash report out of its own failure.
+        final boolean previouslyObserved = everConnected;
+        boolean sessionEstablished = false;
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(host, port), CONNECT_TIMEOUT_MS);
             socket.setSoTimeout(READ_TIMEOUT_MS);
@@ -238,19 +286,21 @@ public final class SidecarMonitor implements AutoCloseable {
                         statusCode(reply));
                 return;
             }
-            // STARTED is edge-triggered per session: a failed cycle marked
-            // the session down, so the next authenticated cycle re-arms it.
-            // It fires only after the cycle's state read has completed — a
-            // session that authenticates but cannot report bootstrap state
-            // has not observably "started" (aborted cycles emit nothing).
+            sessionEstablished = true;
             boolean wasConnected = connected;
+            final boolean firstEver = !everConnected;
             connected = true;
+            everConnected = true;
+            dropReported = false;
 
             send(out, "GETINFO status/bootstrap-phase");
             String phase = readReply(in);
 
             if (!wasConnected) {
-                emit(Kind.STARTED, DETAIL_CONTAINER_START);
+                // A re-established session after an observed drop is a
+                // RESTARTED, not a second STARTED (T074; contract rationale:
+                // both pair container_start — kind disambiguates).
+                emit(firstEver ? Kind.STARTED : Kind.RESTARTED, DETAIL_CONTAINER_START);
             }
             boolean bootstrapped = false;
             for (String token : phase.split("\\s+")) {
@@ -264,7 +314,12 @@ public final class SidecarMonitor implements AutoCloseable {
                 emit(Kind.HEALTHY, DETAIL_HEALTHCHECK_PASS);
                 writeAuditRow();
             } else if (!bootstrapped) {
+                final boolean wasHealthy = healthy;
                 healthy = false;
+                if (wasHealthy) {
+                    emit(Kind.UNHEALTHY, DETAIL_HEALTHCHECK_FAIL);
+                    writeUnhealthyRow(Kind.UNHEALTHY.name());
+                }
             }
 
             try {
@@ -274,8 +329,24 @@ public final class SidecarMonitor implements AutoCloseable {
             }
         } catch (IOException e) {
             markDown();
-            LOG.warnf("sidecar tor: ControlPort cycle failed (%s)", e.getClass().getSimpleName());
+            if (previouslyObserved && !dropReported) {
+                // One drop report per lost session: the abrupt-death shape
+                // after authentication succeeded, the quiet-exit shape
+                // otherwise (T074; control-grpc.md pairs both with
+                // container_exit — kind disambiguates).
+                reportDrop(sessionEstablished ? Kind.CRASHED : Kind.STOPPED);
+            } else {
+                LOG.warnf("sidecar tor: ControlPort cycle failed (%s)", e.getClass().getSimpleName());
+            }
         }
+    }
+
+    /** Emits one drop event + its §4 row, consuming the drop edge of this
+     * outage window (must-hold 3). */
+    private void reportDrop(Kind kind) {
+        dropReported = true;
+        emit(kind, DETAIL_CONTAINER_EXIT);
+        writeUnhealthyRow(kind.name());
     }
 
     private void markDown() {
@@ -311,6 +382,21 @@ public final class SidecarMonitor implements AutoCloseable {
             audit.write(ACTION_SIDECAR_HEALTHY, SIDECAR_TOR, detailJson);
         } catch (RuntimeException e) {
             LOG.warnf("sidecar tor: sidecar_healthy audit row lost (%s)", e.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * The §4 {@code sidecar_unhealthy} row for one UNHEALTHY/STOPPED/CRASHED
+     * edge (T074; data-model.md §4 shape {@code {"kind":…}} — no generation
+     * field, so unlike the healthy row there is no supplier to defer on; a
+     * sink failure is contained and logged, mirroring the T039 policy).
+     * RESTARTED deliberately has no row here — §4's vocabulary excludes it.
+     */
+    private void writeUnhealthyRow(String stateKind) {
+        try {
+            audit.write(ACTION_SIDECAR_UNHEALTHY, SIDECAR_TOR, "{\"kind\":\"" + stateKind + "\"}");
+        } catch (RuntimeException e) {
+            LOG.warnf("sidecar tor: sidecar_unhealthy audit row lost (%s)", e.getClass().getSimpleName());
         }
     }
 

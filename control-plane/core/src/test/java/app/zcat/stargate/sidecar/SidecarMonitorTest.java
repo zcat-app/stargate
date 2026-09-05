@@ -29,13 +29,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Contract suite for the Tor ControlPort monitor (T039) — pins the ticket's
- * must-holds against a scripted fake ControlPort server: COOKIE auth with the
- * exact hex of the mounted cookie, the read-only command allowlist, the
- * fixed-vocabulary (kind, detail) pairings (control-grpc.md §"WatchEvents"),
- * the edge-triggered §4 {@code sidecar_healthy} audit row, and survivability
- * of every failed-cycle shape (Principle II — the monitor is advisory
- * surface and must never take the control plane down).
+ * Contract suite for the Tor ControlPort monitor (T039 + T074) — pins the
+ * tickets' must-holds against a scripted fake ControlPort server: COOKIE auth
+ * with the exact hex of the mounted cookie, the read-only command allowlist,
+ * the fixed-vocabulary (kind, detail) pairings (control-grpc.md §"WatchEvents",
+ * all six kinds), the edge-triggered §4 audit rows ({@code sidecar_healthy} on
+ * each entry into HEALTHY; {@code sidecar_unhealthy} with {@code kind} on each
+ * UNHEALTHY/STOPPED/CRASHED edge, once per lost session, never for RESTARTED),
+ * and survivability of every failed-cycle shape (Principle II — the monitor is
+ * advisory surface and must never take the control plane down).
  */
 class SidecarMonitorTest {
 
@@ -70,7 +72,7 @@ class SidecarMonitorTest {
      */
     private static final class FakeControlPort implements AutoCloseable {
 
-        final ServerSocket serverSocket;
+        final int port;
         final List<String> received = new ArrayList<>();
         final AtomicInteger connections = new AtomicInteger();
         final AtomicReference<String> bootstrapReply = new AtomicReference<>(
@@ -78,26 +80,57 @@ class SidecarMonitorTest {
                 + "250 OK\r\n");
         volatile boolean rejectAuth;
         volatile boolean malformedAuthReply;
+        // T074 crash shape: answer 250 OK to AUTHENTICATE, then sever the
+        // connection before GETINFO is answered (the abrupt-death shape the
+        // monitor must report as CRASHED once a session was observed).
+        volatile boolean dropAfterAuth;
+        private volatile ServerSocket serverSocket;
+        private volatile boolean acceptIdle;
         private final Thread accepter;
         private volatile boolean closed;
 
         FakeControlPort(byte[] cookie) throws IOException {
-            this.serverSocket = new ServerSocket(0, 16, java.net.InetAddress.getLoopbackAddress());
+            ServerSocket ss = new ServerSocket(0, 16, java.net.InetAddress.getLoopbackAddress());
+            this.serverSocket = ss;
+            this.port = ss.getLocalPort();
+            // Bounded accept: the accept loop revisits the (volatile) server
+            // socket every 50 ms, so stopListening() can deterministically
+            // wait for the accepter to leave a blocked accept() before the
+            // next monitor dial (Linux does not wake accept() on close()).
+            ss.setSoTimeout(50);
             final String expectedHex = SidecarMonitorTest.hex(cookie);
             this.accepter = new Thread(() -> {
                 while (!closed) {
-                    try (Socket conn = serverSocket.accept()) {
+                    final ServerSocket current = serverSocket;
+                    if (current == null || current.isClosed()) {
+                        acceptIdle = true;
+                        sleepQuietly(5);
+                        continue;
+                    }
+                    try (Socket conn = current.accept()) {
                         connections.incrementAndGet();
                         handle(conn, expectedHex);
+                    } catch (java.net.SocketTimeoutException stalled) {
+                        acceptIdle = true;
                     } catch (IOException e) {
-                        if (!closed) {
-                            // accept loop keeps serving the next cycle
+                        acceptIdle = true;
+                        if (closed) {
+                            break;
                         }
+                        sleepQuietly(5);
                     }
                 }
             }, "fake-control-port");
             accepter.setDaemon(true);
             accepter.start();
+        }
+
+        private static void sleepQuietly(long millis) {
+            try {
+                Thread.sleep(millis);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
         }
 
         private void handle(Socket conn, String expectedHex) throws IOException {
@@ -117,6 +150,11 @@ class SidecarMonitorTest {
                         out.write("HELLO NOT-A-CONTROL-REPLY\r\n");
                     } else if (line.equals("AUTHENTICATE " + expectedHex)) {
                         out.write("250 OK\r\n");
+                        out.flush();
+                        if (dropAfterAuth) {
+                            conn.close();
+                            return;
+                        }
                     } else {
                         out.write("513 Authentication failed.\r\n");
                     }
@@ -134,7 +172,31 @@ class SidecarMonitorTest {
         }
 
         int port() {
-            return serverSocket.getLocalPort();
+            return port;
+        }
+
+        /** Closes the listening socket: the monitor's next dial is REFUSED —
+         * the honest "container exited, no listener" shape. Returns only once
+         * the accepter has left a possibly-still-blocked accept(), so no
+         * zombie listener can serve the next dial. */
+        void stopListening() throws IOException, InterruptedException {
+            acceptIdle = false;
+            serverSocket.close();
+            final long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
+            while (!acceptIdle && System.nanoTime() < deadline) {
+                Thread.sleep(5);
+            }
+            if (!acceptIdle) {
+                throw new IllegalStateException("fake accepter never released its accept() after close");
+            }
+        }
+
+        /** Re-binds the same port after {@link #stopListening()}: the monitor's
+         * next dial finds the sidecar back (the reconnect shape). */
+        void resumeListening() throws IOException {
+            ServerSocket ss = new ServerSocket(port, 16, java.net.InetAddress.getLoopbackAddress());
+            ss.setSoTimeout(50);
+            serverSocket = ss;
         }
 
         List<String> lines() {
@@ -185,6 +247,29 @@ class SidecarMonitorTest {
 
         @Override
         public void write(String action, String target, String detailJson) {
+            rows.add(new String[] { action, target, detailJson });
+        }
+    }
+
+    /**
+     * T074 containment probe: records events and healthy rows, but the audit
+     * store throws whenever the §4 {@code sidecar_unhealthy} row is attempted.
+     */
+    private static final class UnhealthyRowThrower
+            implements SidecarMonitor.EventSink, SidecarMonitor.AuditSink {
+        final List<SidecarMonitor.Event> events = new ArrayList<>();
+        final List<String[]> rows = new ArrayList<>();
+
+        @Override
+        public void publish(SidecarMonitor.Event event) {
+            events.add(event);
+        }
+
+        @Override
+        public void write(String action, String target, String detailJson) {
+            if (action.equals(SidecarMonitor.ACTION_SIDECAR_UNHEALTHY)) {
+                throw new IllegalStateException("audit store down");
+            }
             rows.add(new String[] { action, target, detailJson });
         }
     }
@@ -306,6 +391,19 @@ class SidecarMonitorTest {
         fake.awaitCycle();
         m.runOnce();
         fake.awaitCycle();
+        // T074 shapes: a refused dial adds no wire line at all; a reconnect
+        // and a mid-session crash use the same three commands.
+        fake.stopListening();
+        m.runOnce();
+        fake.resumeListening();
+        m.runOnce();
+        fake.awaitCycle();
+        fake.dropAfterAuth = true;
+        m.runOnce();
+        // the crash shape severs the connection before GETINFO is read, so
+        // the fake's last recorded line is the AUTHENTICATE of that cycle
+        fake.awaitLines("AUTHENTICATE " + hex(COOKIE));
+        fake.dropAfterAuth = false;
 
         for (String line : fake.lines()) {
             boolean allowed =
@@ -346,23 +444,29 @@ class SidecarMonitorTest {
         fake.awaitCycle();
         assertEquals(1, recorder.rows.size());
 
-        // 4/5: drop out and re-enter → second row
+        // 4: drop out of healthy — the T074 UNHEALTHY edge (data-model.md §4
+        // supersedes the silent drop-out this leg pinned before T074)
         fake.bootstrapReply.set(
                 "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=95 TAG=circuit_create\r\n250 OK\r\n");
         m.runOnce();
         fake.awaitCycle();
+        assertEquals(2, recorder.rows.size(), "the regression edge writes the sidecar_unhealthy row");
+        assertEquals("sidecar_unhealthy", recorder.rows.get(1)[0]);
+        assertEquals("{\"kind\":\"UNHEALTHY\"}", recorder.rows.get(1)[2]);
+        assertEquals(SidecarMonitor.Kind.UNHEALTHY,
+                recorder.events.get(recorder.events.size() - 1).kind());
+
+        // 5: re-enter → second healthy row
         fake.bootstrapReply.set(
                 "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=done\r\n250 OK\r\n");
         m.runOnce();
         fake.awaitCycle();
-        assertEquals(2, recorder.rows.size(), "each entry into healthy writes one row");
-        for (String[] row : recorder.rows) {
-            assertEquals("sidecar_healthy", row[0]);
-            assertEquals("tor", row[1]);
-        }
-        // STARTED is edge-triggered per session too: it fired once at cycle 1
-        // and never re-fired inside one continuous authenticated session.
+        assertEquals(3, recorder.rows.size(), "each entry into healthy writes one row");
+        assertEquals("sidecar_healthy", recorder.rows.get(2)[0]);
+        // the drop-out was a bootstrap regression on a live session — no
+        // lifecycle re-fire (no STARTED duplicate, no RESTARTED)
         assertEquals(1, recorder.events.stream().filter(e -> e.kind() == SidecarMonitor.Kind.STARTED).count());
+        assertEquals(0, recorder.events.stream().filter(e -> e.kind() == SidecarMonitor.Kind.RESTARTED).count());
     }
 
     // ─── e. survivability ────────────────────────────────────────────────
@@ -528,5 +632,229 @@ class SidecarMonitorTest {
         m.runOnce();
         fake.awaitCycle();
         assertEquals(2, recorder.events.size(), "monitor resumes after the bound trips");
+    }
+
+    // ─── i. failure transitions (T074) ───────────────────────────────────
+
+    @Test
+    void emitsUnhealthyOnBootstrapRegression() throws Exception {
+        FakeControlPort fake = startFake();
+        Path cookie = writeCookie();
+        Recorder recorder = new Recorder();
+        SidecarMonitor m = monitor(fake, cookie, recorder);
+
+        // 1: entry into healthy
+        m.runOnce();
+        fake.awaitCycle();
+        assertEquals(2, recorder.events.size());
+        assertEquals(1, recorder.rows.size());
+
+        // 2: regression while the session stays up → the UNHEALTHY edge
+        fake.bootstrapReply.set(
+                "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=95 TAG=circuit_create\r\n250 OK\r\n");
+        m.runOnce();
+        fake.awaitCycle();
+        SidecarMonitor.Event unhealthy = recorder.events.get(2);
+        assertEquals(SidecarMonitor.Kind.UNHEALTHY, unhealthy.kind());
+        assertEquals("healthcheck_fail", unhealthy.detail());
+        assertEquals("tor", unhealthy.sidecar());
+        assertEquals(2, recorder.rows.size(), "exactly one §4 row on the regression edge");
+        assertEquals("sidecar_unhealthy", recorder.rows.get(1)[0]);
+        assertEquals("tor", recorder.rows.get(1)[1]);
+        assertEquals("{\"kind\":\"UNHEALTHY\"}", recorder.rows.get(1)[2]);
+
+        // 3: level stall — edge already consumed, nothing new
+        m.runOnce();
+        fake.awaitCycle();
+        assertEquals(3, recorder.events.size(), "no repeated event while stalled");
+        assertEquals(2, recorder.rows.size(), "no repeated row while stalled");
+
+        // 4: recovery → HEALTHY edge + sidecar_healthy row again
+        fake.bootstrapReply.set(
+                "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=done\r\n250 OK\r\n");
+        m.runOnce();
+        fake.awaitCycle();
+        assertEquals(SidecarMonitor.Kind.HEALTHY, recorder.events.get(3).kind());
+        assertEquals(3, recorder.rows.size());
+        assertEquals("sidecar_healthy", recorder.rows.get(2)[0]);
+        // the regression happened on a live session — no lifecycle re-fire
+        assertEquals(1, recorder.events.stream().filter(e -> e.kind() == SidecarMonitor.Kind.STARTED).count());
+        assertEquals(0, recorder.events.stream().filter(e -> e.kind() == SidecarMonitor.Kind.RESTARTED).count());
+    }
+
+    @Test
+    void emitsStoppedWhenListenerVanishesAfterObservedSession() throws Exception {
+        FakeControlPort fake = startFake();
+        Path cookie = writeCookie();
+        Recorder recorder = new Recorder();
+        SidecarMonitor m = monitor(fake, cookie, recorder);
+
+        m.runOnce();
+        fake.awaitCycle();
+
+        fake.stopListening();
+        m.runOnce();
+        SidecarMonitor.Event stopped = recorder.events.get(2);
+        assertEquals(SidecarMonitor.Kind.STOPPED, stopped.kind());
+        assertEquals("container_exit", stopped.detail());
+        assertEquals(2, recorder.rows.size());
+        assertEquals("sidecar_unhealthy", recorder.rows.get(1)[0]);
+        assertEquals("{\"kind\":\"STOPPED\"}", recorder.rows.get(1)[2]);
+
+        m.runOnce();
+        assertEquals(3, recorder.events.size(), "the drop edge is consumed: exactly-once per lost session");
+        assertEquals(2, recorder.rows.size());
+
+        fake.resumeListening();
+        m.runOnce();
+        fake.awaitCycle();
+        SidecarMonitor.Event restarted = recorder.events.get(3);
+        assertEquals(SidecarMonitor.Kind.RESTARTED, restarted.kind());
+        assertEquals("container_start", restarted.detail());
+        // the drop reset the healthy edge, so the reconnecting cycle also
+        // re-enters HEALTHY and writes the sidecar_healthy row again
+        assertEquals(SidecarMonitor.Kind.HEALTHY, recorder.events.get(4).kind());
+        assertEquals(3, recorder.rows.size());
+        assertEquals("sidecar_healthy", recorder.rows.get(2)[0]);
+    }
+
+    @Test
+    void emitsCrashedOnMidSessionDrop() throws Exception {
+        FakeControlPort fake = startFake();
+        Path cookie = writeCookie();
+        Recorder recorder = new Recorder();
+        SidecarMonitor m = monitor(fake, cookie, recorder);
+
+        m.runOnce();
+        fake.awaitCycle();
+
+        fake.dropAfterAuth = true;
+        m.runOnce();
+        SidecarMonitor.Event crashed = recorder.events.get(2);
+        assertEquals(SidecarMonitor.Kind.CRASHED, crashed.kind());
+        assertEquals("container_exit", crashed.detail());
+        assertEquals(2, recorder.rows.size());
+        assertEquals("sidecar_unhealthy", recorder.rows.get(1)[0]);
+        assertEquals("{\"kind\":\"CRASHED\"}", recorder.rows.get(1)[2]);
+
+        fake.dropAfterAuth = false;
+        fake.stopListening();
+        m.runOnce();
+        assertEquals(3, recorder.events.size(), "no second drop report in the same outage window");
+        assertEquals(2, recorder.rows.size());
+
+        fake.resumeListening();
+        m.runOnce();
+        fake.awaitCycle();
+        assertEquals(SidecarMonitor.Kind.RESTARTED, recorder.events.get(3).kind());
+        assertEquals(SidecarMonitor.Kind.HEALTHY, recorder.events.get(4).kind());
+        assertEquals(3, recorder.rows.size());
+        assertEquals("sidecar_healthy", recorder.rows.get(2)[0]);
+    }
+
+    @Test
+    void coldFailuresBeforeFirstSessionEmitNoLifecycleEvents() throws Exception {
+        FakeControlPort fake = startFake();
+        Path cookie = writeCookie();
+        Recorder recorder = new Recorder();
+        SidecarMonitor m = monitor(fake, cookie, recorder);
+
+        // refused dials before ANY session: silence — no STOPPED/CRASHED
+        fake.stopListening();
+        m.runOnce();
+        assertEquals(0, recorder.events.size(), "no lifecycle event before the first session");
+        assertEquals(0, recorder.rows.size());
+
+        // first-ever success: STARTED, not RESTARTED
+        fake.resumeListening();
+        m.runOnce();
+        fake.awaitCycle();
+        assertEquals(SidecarMonitor.Kind.STARTED, recorder.events.get(0).kind());
+        assertEquals(2, recorder.events.size());
+
+        // cold auth rejection: still no lifecycle claims
+        FakeControlPort authFake = startFake();
+        authFake.rejectAuth = true;
+        Recorder authRecorder = new Recorder();
+        SidecarMonitor authMonitor = monitor(authFake, writeCookie(), authRecorder);
+        authMonitor.runOnce();
+        authFake.awaitLines("AUTHENTICATE " + hex(COOKIE));
+        assertEquals(0, authRecorder.events.size());
+        assertEquals(0, authRecorder.rows.size());
+
+        authFake.rejectAuth = false;
+        authMonitor.runOnce();
+        authFake.awaitCycle();
+        assertEquals(SidecarMonitor.Kind.STARTED, authRecorder.events.get(0).kind(),
+                "silent failed cycles do not turn the first success into a RESTARTED");
+        assertEquals(0, authRecorder.events.stream()
+                .filter(e -> e.kind() == SidecarMonitor.Kind.RESTARTED).count());
+    }
+
+    @Test
+    void restartedIsEventOnly() throws Exception {
+        FakeControlPort fake = startFake();
+        Path cookie = writeCookie();
+        Recorder recorder = new Recorder();
+        SidecarMonitor m = monitor(fake, cookie, recorder);
+
+        m.runOnce();
+        fake.awaitCycle();
+
+        fake.stopListening();
+        m.runOnce();
+        fake.resumeListening();
+        m.runOnce();
+        fake.awaitCycle();
+
+        assertTrue(recorder.events.stream().anyMatch(
+                e -> e.kind() == SidecarMonitor.Kind.RESTARTED && e.detail().equals("container_start")),
+                "RESTARTED pairs container_start");
+        for (String[] row : recorder.rows) {
+            assertEquals("tor", row[1]);
+            assertTrue(row[0].equals("sidecar_healthy") || row[0].equals("sidecar_unhealthy"),
+                    "unexpected action: " + row[0]);
+            if (row[0].equals("sidecar_unhealthy")) {
+                // data-model.md §4: the sidecar_unhealthy kind vocabulary
+                // excludes RESTARTED — and RESTARTED writes no row at all
+                assertTrue(row[2].equals("{\"kind\":\"UNHEALTHY\"}")
+                        || row[2].equals("{\"kind\":\"STOPPED\"}")
+                        || row[2].equals("{\"kind\":\"CRASHED\"}"),
+                        "sidecar_unhealthy vocabulary violation: " + row[2]);
+            }
+        }
+        assertEquals(3, recorder.rows.size(), "healthy, STOPPED, healthy — and no RESTARTED row");
+    }
+
+    @Test
+    void unhealthyAuditSinkThrowIsContained() throws Exception {
+        FakeControlPort fake = startFake();
+        Path cookie = writeCookie();
+        UnhealthyRowThrower recorder = new UnhealthyRowThrower();
+        SidecarMonitor m = new SidecarMonitor("127.0.0.1", fake.port(), cookie,
+                Duration.ofSeconds(10), GENERATION_7, recorder, recorder);
+        monitors.add(m);
+
+        m.runOnce();
+        fake.awaitCycle();
+        assertEquals(2, recorder.events.size());
+        assertEquals(1, recorder.rows.size());
+
+        fake.bootstrapReply.set(
+                "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=90 TAG=rendezvous\r\n250 OK\r\n");
+        m.runOnce();
+        fake.awaitCycle();
+        assertEquals(SidecarMonitor.Kind.UNHEALTHY, recorder.events.get(2).kind(),
+                "the event still emits with a dead audit sink");
+        assertEquals(1, recorder.rows.size(), "the unhealthy row was lost to the throwing sink");
+
+        fake.bootstrapReply.set(
+                "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=done\r\n250 OK\r\n");
+        m.runOnce();
+        fake.awaitCycle();
+        assertEquals(SidecarMonitor.Kind.HEALTHY, recorder.events.get(3).kind(),
+                "the monitor survives the sink throw");
+        assertEquals(2, recorder.rows.size());
+        assertEquals("sidecar_healthy", recorder.rows.get(1)[0]);
     }
 }
