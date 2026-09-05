@@ -1,7 +1,7 @@
 ---
 id: T039
 title: 'Implement `control-plane/core/src/main/java/.../SidecarMonitor.java`'
-status: pending
+status: done
 created: 2026-07-04
 last_updated: 2026-09-05
 source: tasks.md#T039
@@ -24,7 +24,7 @@ spec_refs:
 decision_refs:
   - SECURITY-DECISIONS.md §"2026-07-16 — docker-socket-proxy mechanism removed (T094a)"
   - specs/001-tor-route/tickets/T094a-drop-docker-socket-proxy-use-tor-cookie.md §Analysis "Grounding decisions" (cookie-read path deferred to T039, constrained by must-hold #2)
-reviews: {}
+reviews: { round: 2, date: 2026-09-05, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

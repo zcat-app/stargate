@@ -17,9 +17,9 @@
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 100 |
+| done | 101 |
 | deferred | 1 |
-| **total** | **147** |
+| **total** | **148** |
 
 ---
 
@@ -31,8 +31,8 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T039 | Implement `control-plane/core/src/main/java/.../SidecarMonit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
+| T041 | Implement `control-plane/runtime/src/main/java/.../StargateC | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T051 | Author `extension/manifest.json` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T052 | Author `extension/lib/storage.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T053 | Author `extension/lib/firstparty.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
@@ -60,6 +60,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T071 | Extend `data-plane/internal/errortpl/render.go` (from T048)  | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T072 | Extend `data-plane/internal/forward/tor.go` (from T047) to m | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T073 | In `data-plane/internal/controlclient/client.go` (from T045) | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
+| T074 | Extend `control-plane/core/src/main/java/.../SidecarMonitor. | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T077 | Run the `quickstart.md` walkthrough on a clean Linux x86_64  | 6: Polish & Cross-Cutting Concerns |  |  |
 | T078 | Run the `stargate-redteam` agent against the completed featu | 6: Polish & Cross-Cutting Concerns |  |  |
@@ -72,6 +73,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T111 | BUILD-DIFFS: document extension zip binary as build input | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T112 | Wire the stale-prose regression guard as a contract test | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
+| T116 | Fix ForbiddenDetailRejected journal-read race (poll the mark | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 
 ---
 
@@ -91,7 +93,7 @@ _(nothing in flight)_
 
 ## Done
 
-_100 ticket(s) done._
+_101 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -148,6 +150,7 @@ _100 ticket(s) done._
 - T035a — Unit test for `TokenLoader.java` (T035) diff logic and validation
 - T036 — Implement `control-plane/persistence/src/main/java/.../entity/AuditLog
 - T038 — In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcService.jav
+- T039 — Implement `control-plane/core/src/main/java/.../SidecarMonitor.java`
 - T042 — Implement `data-plane/internal/listener/socks5.go`
 - T043 — Implement `data-plane/internal/listener/connect.go`
 - T044 — Implement `data-plane/internal/auth/token.go`
