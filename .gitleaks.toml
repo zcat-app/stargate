@@ -29,3 +29,10 @@ description = "Test-fixture bearer token in tests/integration/dns_leak_test.go (
 regexes = [
   '''0123456789abcdef0123456789abcdef''',
 ]
+
+[[allowlists]]
+description = "Java type-name false positive (T038): generic-api-key treats 'certificate' as a keyword and the JDK type name X509Certificate in CpTls.Identity's record header as its value. No credential material — the full declaration line is allowlisted (regexTarget=line) so any other occurrence still scans."
+regexTarget = "line"
+regexes = [
+  '''public record Identity\(PrivateKey privateKey, X509Certificate certificate\) \{''',
+]
