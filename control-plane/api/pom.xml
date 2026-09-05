@@ -30,6 +30,23 @@
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-grpc</artifactId>
         </dependency>
+        <!-- The inter-plane gRPC surface is UDS-only (wire-auth.md §4, arch
+             §5.4): grpc-netty hosts/dials unix-domain sockets through Netty's
+             native epoll domain-socket channels, which are NOT on the
+             quarkus-grpc classpath by default. The linux-x86_64 classifier
+             matches the deployment platform (control-plane/Dockerfile);
+             the version is Quarkus-BOM-managed (netty-bom) so grpc-netty and
+             the native transport stay on the same Netty build. -->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport-native-epoll</artifactId>
+            <classifier>linux-x86_64</classifier>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <!--

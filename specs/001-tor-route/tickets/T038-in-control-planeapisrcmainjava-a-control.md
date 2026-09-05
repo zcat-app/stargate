@@ -1,9 +1,9 @@
 ---
 id: T038
 title: 'In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcService.jav'
-status: pending
+status: in-review
 created: 2026-07-04
-last_updated: 2026-07-12
+last_updated: 2026-09-05
 source: tasks.md#T038
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'

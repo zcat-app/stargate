@@ -110,11 +110,14 @@
                     <configuration>
                         <release>${maven.compiler.release}</release>
                         <!-- Error Prone + NullAway (T104; infochat D48).
-                             NullAway treats app.zcat.stargate as
-                             @NonNull-by-default (AnnotatedPackages);
-                             genuinely-nullable parameters, returns, and fields
-                             carry @Nullable (JSpecify). @NonNull is never
-                             written — non-null is the default.
+                             NullAway treats app.zcat.stargate AND
+                             io.quarkus.stargate (T038's api module gRPC
+                             package, pinned by the T095 wire gate's impl
+                             probe) as @NonNull-by-default
+                             (AnnotatedPackages); genuinely-nullable
+                             parameters, returns, and fields carry @Nullable
+                             (JSpecify). @NonNull is never written — non-null
+                             is the default.
                              Tests are exempted per module via the
                              default-testCompile stanza (main sources only
                              until T104a onboards them). -->
@@ -159,7 +162,7 @@
                                  check, keeping the @NonNull dereference
                                  contract). -XepExcludedPaths drops generated
                                  sources (quarkus-grpc stubs) from analysis. -->
-                            <arg>-Xplugin:ErrorProne -XepOpt:NullAway:AnnotatedPackages=app.zcat.stargate -XepOpt:NullAway:ExcludedFieldAnnotations=jakarta.inject.Inject,org.eclipse.microprofile.config.inject.ConfigProperty -XepExcludedPaths:.*/target/generated-sources/.* -Xep:NullAway:ERROR -Xep:MissingOverride:ERROR -Xep:ReferenceEquality:ERROR -Xep:FallThrough:ERROR -Xep:MissingCasesInEnumSwitch:ERROR -Xep:DefaultCharset:ERROR -Xep:JdkObsolete:ERROR -Xep:FutureReturnValueIgnored:ERROR</arg>
+                            <arg>-Xplugin:ErrorProne -XepOpt:NullAway:AnnotatedPackages=app.zcat.stargate,io.quarkus.stargate -XepOpt:NullAway:ExcludedFieldAnnotations=jakarta.inject.Inject,org.eclipse.microprofile.config.inject.ConfigProperty -XepExcludedPaths:.*/target/generated-sources/.* -Xep:NullAway:ERROR -Xep:MissingOverride:ERROR -Xep:ReferenceEquality:ERROR -Xep:FallThrough:ERROR -Xep:MissingCasesInEnumSwitch:ERROR -Xep:DefaultCharset:ERROR -Xep:JdkObsolete:ERROR -Xep:FutureReturnValueIgnored:ERROR</arg>
                             <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED</arg>
                             <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
                             <arg>-J--add-exports=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
