@@ -1,7 +1,7 @@
 ---
 id: T074
 title: 'Extend `control-plane/core/src/main/java/.../SidecarMonitor.java` (fro'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-05
 source: tasks.md#T074
@@ -20,7 +20,7 @@ spec_refs:
   - specs/001-tor-route/data-model.md §4 (sidecar_unhealthy row shape; actor system; RESTARTED excluded) + §2 (advisory consumption)
   - THREAT-MODEL.md §5.8 (three-command allowlist residue 20260727-001 — unchanged by this ticket)
 decision_refs: []   # no Blocker/Major finding accepted by this ticket
-reviews: {}
+reviews: { round: 1, date: 2026-09-05, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

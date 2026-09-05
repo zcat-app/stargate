@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 45 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 101 |
+| done | 102 |
 | deferred | 1 |
 | **total** | **148** |
 
@@ -78,9 +78,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T074 | Extend `control-plane/core/src/main/java/.../SidecarMonitor. | in-progress | ✓ | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |
+_(nothing in flight)_
 
 ---
 
@@ -94,7 +92,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_101 ticket(s) done._
+_102 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -162,6 +160,7 @@ _101 ticket(s) done._
 - T049 — Implement `data-plane/internal/audit/counters.go`
 - T050 — Implement `data-plane/cmd/stargate-proxy/main.go`
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
+- T074 — Extend `control-plane/core/src/main/java/.../SidecarMonitor.java` (fro
 - T075b — Author `tests/reproducibility/extension_test.sh`
 - T076 — Run every test module in the single green gate
 - T082 — Reconcile the threat model with the local stack
