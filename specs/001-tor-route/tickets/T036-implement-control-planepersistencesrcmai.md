@@ -1,7 +1,7 @@
 ---
 id: T036
 title: 'Implement `control-plane/persistence/src/main/java/.../entity/AuditLog'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-05
 source: tasks.md#T036
@@ -20,7 +20,7 @@ spec_refs:
   - specs/001-tor-route/spec.md#FR-018          # audit entries per the tokens.yaml load diff
   - specs/000-architecture/spec.md §6.5         # audit_log append-only by mechanism
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-05, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

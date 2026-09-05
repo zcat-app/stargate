@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 49 |
+| pending | 48 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 97 |
+| done | 98 |
 | deferred | 1 |
 | **total** | **147** |
 
@@ -32,7 +32,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T035 | Implement `control-plane/core/src/main/java/.../TokenLoader. | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T036 | Implement `control-plane/persistence/src/main/java/.../entit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T038 | In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcS | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T039 | Implement `control-plane/core/src/main/java/.../SidecarMonit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
@@ -94,7 +93,7 @@ _(nothing in flight)_
 
 ## Done
 
-_97 ticket(s) done._
+_98 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -148,6 +147,7 @@ _97 ticket(s) done._
 - T034e — Unit test for the canonical `storage.local` warning text (Principle VI
 - T034g — T034d follow-up: assert surface exclusivity in `firstparty.tes
 - T035a — Unit test for `TokenLoader.java` (T035) diff logic and validation
+- T036 — Implement `control-plane/persistence/src/main/java/.../entity/AuditLog
 - T042 — Implement `data-plane/internal/listener/socks5.go`
 - T043 — Implement `data-plane/internal/listener/connect.go`
 - T044 — Implement `data-plane/internal/auth/token.go`
