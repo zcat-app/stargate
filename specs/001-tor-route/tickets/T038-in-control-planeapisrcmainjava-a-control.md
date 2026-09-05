@@ -1,7 +1,7 @@
 ---
 id: T038
 title: 'In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcService.jav'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-05
 source: tasks.md#T038
@@ -21,7 +21,7 @@ spec_refs:
   - specs/000-architecture/spec.md §5.4
 decision_refs:
   - SECURITY-DECISIONS.md 2026-07-12 (cert validity policy)
-reviews: {}
+reviews: { round: 2, date: 2026-09-05, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

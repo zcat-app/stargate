@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 47 |
+| pending | 46 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 99 |
+| done | 100 |
 | deferred | 1 |
 | **total** | **147** |
 
@@ -31,7 +31,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T038 | In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcS | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T039 | Implement `control-plane/core/src/main/java/.../SidecarMonit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
 | T051 | Author `extension/manifest.json` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
@@ -92,7 +91,7 @@ _(nothing in flight)_
 
 ## Done
 
-_99 ticket(s) done._
+_100 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -148,6 +147,7 @@ _99 ticket(s) done._
 - T035 — Implement `control-plane/core/src/main/java/.../TokenLoader.java`
 - T035a — Unit test for `TokenLoader.java` (T035) diff logic and validation
 - T036 — Implement `control-plane/persistence/src/main/java/.../entity/AuditLog
+- T038 — In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcService.jav
 - T042 — Implement `data-plane/internal/listener/socks5.go`
 - T043 — Implement `data-plane/internal/listener/connect.go`
 - T044 — Implement `data-plane/internal/auth/token.go`
