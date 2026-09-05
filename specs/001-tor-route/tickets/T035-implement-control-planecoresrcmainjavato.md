@@ -1,7 +1,7 @@
 ---
 id: T035
 title: 'Implement `control-plane/core/src/main/java/.../TokenLoader.java`'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-05
 source: tasks.md#T035
@@ -31,7 +31,7 @@ decision_refs:
   - "specs/001-tor-route/tickets/T093-test-token-verifier-lifecycle.md (landed cross-plane oracle: mint determinism, buffer-clear reference model, failure decision table, last+1 proposal)"
   - "specs/001-tor-route/tickets/T035a-unit-test-for-tokenloaderjava-t035-diff.md (landed test-first suite + TokenLoaderContract seam; §Analysis pins the surface this ticket must conform to; §Out-of-scope forbids editing its artifacts)"
   - "SECURITY-DECISIONS.md §Bearer-token verifier: HMAC-SHA-256 + install-time pepper (T092)"
-reviews: {}
+reviews: { round: 1, date: 2026-09-05, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
