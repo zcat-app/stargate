@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-04
+**Last updated:** 2026-09-05
 
 ---
 
@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 50 |
+| pending | 49 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 96 |
+| done | 97 |
 | deferred | 1 |
 | **total** | **147** |
 
@@ -36,7 +36,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T038 | In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcS | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T039 | Implement `control-plane/core/src/main/java/.../SidecarMonit | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
-| T050 | Implement `data-plane/cmd/stargate-proxy/main.go` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T051 | Author `extension/manifest.json` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T052 | Author `extension/lib/storage.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T053 | Author `extension/lib/firstparty.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
@@ -68,6 +67,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T077 | Run the `quickstart.md` walkthrough on a clean Linux x86_64  | 6: Polish & Cross-Cutting Concerns |  |  |
 | T078 | Run the `stargate-redteam` agent against the completed featu | 6: Polish & Cross-Cutting Concerns |  |  |
 | T079 | Run the `stargate-perf` agent against the data plane (Princi | 6: Polish & Cross-Cutting Concerns | ✓ |  |
+| T079a | PR-cadence regression gate for SC-005''s pool-fill + steady- | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T080 | Sweep with `scripts/check-license-headers.sh` (from T006); v | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T081 | Author `release.yml` workflow: GHCR push + image digest pin  | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T109 | Cross-host JVM reproducibility assertion at release cadence | 6: Polish & Cross-Cutting Concerns |  | ✓ |
@@ -94,7 +94,7 @@ _(nothing in flight)_
 
 ## Done
 
-_96 ticket(s) done._
+_97 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -156,6 +156,7 @@ _96 ticket(s) done._
 - T047 — Implement `data-plane/internal/forward/tor.go`
 - T048 — Implement `data-plane/internal/errortpl/render.go`
 - T049 — Implement `data-plane/internal/audit/counters.go`
+- T050 — Implement `data-plane/cmd/stargate-proxy/main.go`
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T075b — Author `tests/reproducibility/extension_test.sh`
 - T076 — Run every test module in the single green gate
