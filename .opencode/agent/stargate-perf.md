@@ -12,7 +12,6 @@ permission:
     git show*: allow
     git status*: allow
     git rev-parse*: allow
-    "*: deny"
 ---
 
 

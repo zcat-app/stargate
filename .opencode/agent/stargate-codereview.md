@@ -2,7 +2,9 @@
 description: Fresh-context correctness + scope review of a single implemented task against its acceptance criteria and the constitution. Blind to the implementer's rationale. Invoke after each /speckit-implement task, before committing.
 mode: subagent
 permission:
-  edit: ask
+  edit:
+    "*": deny
+    target/runs/*.verdict: allow
   read: allow
   glob: allow
   grep: allow
@@ -12,7 +14,6 @@ permission:
     git show*: allow
     git status*: allow
     git rev-parse*: allow
-    "*: deny"
 ---
 
 

@@ -16,8 +16,27 @@
 #   description: <...>                 → description: <...>
 #   model: opus | sonnet               → (dropped; opencode picks per agent
 #                                         via opencode.json or its default)
-#   tools: Read, Grep, Glob, Bash      → permission rules (read-only = deny
-#                                         edit; allow the listed tools)
+#   tools: Read, Grep, Glob, Bash[, Write]
+#                                      → permission rules ONLY. Do NOT emit
+#                                         an opencode `tools:` frontmatter map:
+#                                         it is not in the documented agent
+#                                         frontmatter schema, and unknown
+#                                         keys are passed through as provider
+#                                         model options — the 2026-09-06 T053
+#                                         round-1 review spawns lost bash
+#                                         entirely with it present. Tools
+#                                         follow from permission: an allow
+#                                         somewhere provisions the tool.
+#
+#   Permission-map ordering is load-bearing: opencode takes the LAST
+#   matching rule (docs: "put the * wildcard first and specific rules
+#   after"). So a scoped writer emits `"*": deny` FIRST and the narrow
+#   allow AFTER it; the reverse order denies everything, the exact
+#   signature of the first T053 spawn (verdict file unwritable, git diff
+#   blocked). Unmatched bash commands fall through to the global
+#   opencode.json policy (ask; --auto approves) — reviewers' real guards
+#   are their agent-definition mandate and the driver's staged-paths-only
+#   commit, same as the Claude Code path.
 #
 # Body is copied verbatim — the prompt is shared. Re-run after any edit to a
 # .claude/agents/*.md file.
@@ -37,15 +56,22 @@ fi
 mkdir -p "$DST_DIR"
 
 # Transform Claude "tools:" list into an opencode permission map.
-# Read-only reviewers (no Edit/Write) get edit: deny; everything else gets
-# ask. Tools that have a per-pattern form (bash) get an explicit narrow allow.
+# Read-only reviewers (no Edit/Write) get edit: deny. Verdict-writing
+# reviewers get edit allowed ONLY on target/runs/*.verdict: the wildcard
+# deny MUST come first because opencode takes the last matching rule
+# (docs §Agents — "put the * wildcard first and specific rules after").
+# Never "ask": it hangs silently inside a non-interactive subagent
+# (2026-07-16 review-freeze root cause) — under --auto, ask would also
+# auto-approve, so deny is the honest block.
 emit_permission() {
   local tools="$1"
   echo "permission:"
   # Default: read-only. If Edit or Write appears in the list, the agent is a
-  # writer and gets edit: ask instead of deny.
+  # writer and gets a narrow verdict-path allow instead of deny.
   if echo "$tools" | grep -Eq '\b(Edit|Write)\b'; then
-    echo "  edit: ask"
+    echo "  edit:"
+    echo "    \"*\": deny"
+    echo "    target/runs/*.verdict: allow"
   else
     echo "  edit: deny"
   fi
@@ -53,7 +79,10 @@ emit_permission() {
   echo "  read: allow"
   echo "  glob: allow"
   echo "  grep: allow"
-  # Bash: allow only the read-only git inspection commands reviewers need.
+  # Bash: allow the read-only git inspection commands reviewers need.
+  # Deliberately NO trailing wildcard deny — with last-match-wins it
+  # would silence every allow above it, and unmatched commands belong to
+  # the global opencode.json policy, not a per-agent block.
   if echo "$tools" | grep -Eq '\bBash\b'; then
     echo "  bash:"
     echo "    git diff*: allow"
@@ -61,7 +90,6 @@ emit_permission() {
     echo "    git show*: allow"
     echo "    git status*: allow"
     echo "    git rev-parse*: allow"
-    echo "    \"*: deny\""
   fi
 }
 
