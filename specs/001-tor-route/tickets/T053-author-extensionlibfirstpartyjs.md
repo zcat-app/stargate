@@ -1,7 +1,7 @@
 ---
 id: T053
 title: 'Author `extension/lib/firstparty.js`'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T053
@@ -35,7 +35,7 @@ decision_refs:
 constitution_refs:
   - "III: Privacy-Preserving by Construction (per-first-party stream isolation is FR-002's operationalisation; this string is the signal)"
   - "VII: Tests-First for Privacy-Critical and Contract Code (satisfied via done, self-skipping T034d — T068a/T034b/T035a precedent)"
-reviews: {}
+reviews: { round: 2, date: 2026-09-06, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
