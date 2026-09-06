@@ -1,15 +1,18 @@
 ---
 id: T116
 title: 'Fix ForbiddenDetailRejected journal-read race (poll the marker)'
-status: pending
+status: in-review
 created: 2026-09-05
-last_updated: 2026-09-05
+last_updated: 2026-09-06
 source: hand-filed follow-up (surfaced during T039 /start verify; not a tasks.md entry)
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
 blocked_by: []
 parallel: true
-files_budget: 2
+files_budget: 3   # raw-diff-path counting (run-task.sh): 1 code file +
+                  # this ticket + STATUS.md regen — the filing value of 2
+                  # forgot the regen path (corrected pre-review, 2026-09-06;
+                  # ticket-template.md excludes specs/ paths from the budget)
 privacy_critical: false
 complexity: low
 risk: low

@@ -376,9 +376,21 @@ func assertDetailRejected(t *testing.T, h *dpHarness, fakeCP *fakeEventsServer, 
 	// The DP MUST journal the violation (a line class T025a's allowlist
 	// reserves). The marker set matches plausible violation-line phrasings
 	// without matching event-receipt lines.
-	if !h.journalHasDetailViolation() {
-		t.Errorf("journal has no contract-violation marker for forbidden detail %q — contract requires the violation to be journaled", detail)
-	}
+	//
+	// Poll to a deadline instead of reading once (T116): after the DP
+	// closes the stream, the journal line still has to travel child
+	// stdout → pipe → the harness pump goroutine → lockedBuffer; under
+	// scheduler delay a one-shot read races the pump and fails with the
+	// marker absent at check time yet present in the failure dump
+	// (~2/10 full-suite runs on 2026-09-05). Same 10s budget as the
+	// stream-close wait above; waitFor Fatalfs with the journal on
+	// timeout, and a timeout with the marker absent from that dump is a
+	// REAL regression (the DP stopped journaling violations) and must
+	// fail. Order pinned by T116 §Acceptance 1: close-stream wait →
+	// marker poll → leak scan (the scan below runs only once the marker
+	// is confirmed present, so its verdict is about a journal that
+	// actually carries the violation line).
+	waitFor(t, "journal to record the contract-violation marker", 10*time.Second, h.journal, h.journalHasDetailViolation)
 	// The closed-vocabulary gate exists so sidecar free text never reaches
 	// the DP journal. The violation must be journaled WITHOUT the offending
 	// value — a DP that logs "rejected: detail=\"could not bind...\"" would
