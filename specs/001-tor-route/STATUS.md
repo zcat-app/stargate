@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 38 |
+| pending | 37 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 112 |
+| done | 113 |
 | deferred | 1 |
 | **total** | **151** |
 
@@ -31,7 +31,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T057 | Author `extension/popup/popup.html` and `extension/popup/pop | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T058 | Contract test in `tests/contract/torrc/isolate_socks_auth_ef | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T058a | Contract test pinning Tor''s behaviour under `IsolateSOCKSAu | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T059 | Integration test in `tests/integration/stream_isolation_test | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
@@ -86,7 +85,7 @@ _(nothing in flight)_
 
 ## Done
 
-_112 ticket(s) done._
+_113 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -161,6 +160,7 @@ _112 ticket(s) done._
 - T054 — Author `extension/background/router.js`
 - T055 — Author `extension/background/hardening.js`
 - T056 — Author `extension/options/options.html` and `extension/options/options
+- T057 — Author `extension/popup/popup.html` and `extension/popup/popup.js`
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T074 — Extend `control-plane/core/src/main/java/.../SidecarMonitor.java` (fro
 - T075b — Author `tests/reproducibility/extension_test.sh`

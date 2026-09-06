@@ -1,7 +1,7 @@
 ---
 id: T057
 title: 'Author `extension/popup/popup.html` and `extension/popup/popup.js`'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T057
@@ -26,7 +26,7 @@ decision_refs:
   - "specs/001-tor-route/tickets/T034c-unit-test-for-extensionpopuppopupjs-per.md (the Principle-VII gate that lifts here; §'Pinned surface (the ONLY surface assumptions on T057)' is the executable spec for this ticket)"
   - "specs/001-tor-route/tickets/T056-author-extensionoptionsoptionshtml-and-e.md (sibling page-surface impl precedent: landed-gate lift + own falsification battery in §Notes; round-1 APPROVE)"
   - "extension/background/router.js (T054, done — the background half of the pinned protocol already exists: the onBeforeRequest tabDecisions cache and the runtime.onMessage responder the popup queries)"
-reviews: {}
+reviews: { round: 1, date: 2026-09-06, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
