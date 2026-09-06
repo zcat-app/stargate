@@ -1,7 +1,7 @@
 ---
 id: T055
 title: 'Author `extension/background/hardening.js`'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T055
@@ -27,7 +27,7 @@ constitution_refs:
 decision_refs:
   - "specs/001-tor-route/tickets/T034b-unit-test-for-extensionbackgroundhardeni.md (the verifying suite; §Analysis 'Pinned surface' is the authorization boundary this implementation conforms to)"
   - "specs/001-tor-route/tickets/T091-amend-browser-hardening-boundary.md (the amendment defining the runtime enforcement boundary, failure UX, and accepted residue)"
-reviews: {}
+reviews: { round: 1, date: 2026-09-06, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
