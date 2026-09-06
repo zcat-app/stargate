@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<!-- Copyright 2026 The Stargate Authors -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stargate — Bearer token</title>
+  <style>
+    body { font-family: sans-serif; max-width: 40rem; margin: 1rem auto; padding: 0 1rem; }
+    #token-form { display: flex; gap: 0.5rem; align-items: baseline; }
+    #bearer-token { flex: 1; }
+    #status { min-height: 1.2rem; }
+    /* The FR-019 warning must be VISIBLE, not fine print (data-model.md §5.1
+       pins the string; the T034e suite gates it byte-exact). */
+    #storage-warning { border: 1px solid; padding: 0.5rem 0.75rem; }
+  </style>
+</head>
+<body>
+  <h1>Stargate</h1>
+  <form id="token-form">
+    <label for="bearer-token">Bearer token</label>
+    <input id="bearer-token" type="text" autocomplete="off" spellcheck="false">
+    <button type="submit">Save</button>
+  </form>
+  <p id="status" role="status"></p>
+  <p id="storage-warning" role="note">Your bearer token will be saved to disk in
+    this extension's storage.local, inside your browser profile directory. Any
+    local process with read access to that directory can read it. Firefox ESR
+    offers no credential-grade alternative for extensions.</p>
+  <script src="../lib/storage.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

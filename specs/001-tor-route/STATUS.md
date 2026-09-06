@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 39 |
+| pending | 38 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 109 |
 | deferred | 1 |
@@ -31,7 +31,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T056 | Author `extension/options/options.html` and `extension/optio | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T057 | Author `extension/popup/popup.html` and `extension/popup/pop | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T058 | Contract test in `tests/contract/torrc/isolate_socks_auth_ef | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T058a | Contract test pinning Tor''s behaviour under `IsolateSOCKSAu | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
@@ -73,7 +72,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T056 | Author `extension/options/options.html` and `extension/optio | in-review | ✓ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
 
 ---
 

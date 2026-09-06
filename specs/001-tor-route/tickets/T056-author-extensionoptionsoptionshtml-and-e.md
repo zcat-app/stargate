@@ -1,7 +1,7 @@
 ---
 id: T056
 title: 'Author `extension/options/options.html` and `extension/options/options'
-status: pending
+status: in-review
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T056
@@ -250,4 +250,40 @@ loads exactly `../lib/storage.js` then `options.js` as external scripts
 
 ## Notes
 
-Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04. Grounded on
+2026-09-06 (§Analysis; no amendment consumed — the body is consistent with
+FR-019, data-model.md §5/§5.1, quickstart Step 4, and research.md §6 as
+landed).
+
+The ticket title's trailing fragment "and `extension/options/options" is a
+60-char truncation artifact of `bootstrap-tickets.sh`; the tasks.md body is
+authoritative: **…and `extension/options/options.js`**.
+
+**Falsification record (2026-09-06, implement phase).** Throwaway copy at
+`/tmp/t056-falsify` (options + lib/storage.js). Pristine control: 7/7
+PASS. Impl mutations, each re-run against the full suite:
+
+1. *validation deleted* (`if (false)`) → `invalidTokensRenderError...`
+   fails on the ZERO-storage-touches pin (an invalid token would reach
+   storage.local). CAUGHT.
+2. *lowercase anchor dropped* (`/i`) → `invalidTokensRenderError...`
+   fails on the uppercase-hex matrix entry (data-model.md §5 is
+   lowercase-only). CAUGHT.
+3. *saved status before the write resolves* (`render(SAVED)` hoisted
+   above the `try`) → `storageFailureRendersFailureStatusNeverSaved`
+   fails (the swallow — success reported on a rejected write; the same
+   mutant class storage.test.js A5 pins for the wrapper). CAUGHT.
+4. *listener double-registered* → cases 1/2/3/5/6 fail (surface pin;
+   duplicate saves per submit). CAUGHT. — First execution of this
+   mutation was a harness-script quoting bug that silently ran PRISTINE
+   (7/7 "pass"): re-derived with an anchor-presence check before the
+   replace (`ANCHOR NOT FOUND` guard) and a registration-count print.
+   Recorded per the honest-mutant doctrine — the suite was never
+   weakened; the mutation itself was.
+5. *preventDefault dropped* → cases 2 and 6 fail (page reload would
+   discard the status line). CAUGHT.
+
+T034e's own suite was exercised separately: its html case lifts from the
+loud skip to PASS on the real options.html — not re-mutated here (T034e
+§Acceptance 6 owns that battery).
+
