@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-05
+**Last updated:** 2026-09-06
 
 ---
 
@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 45 |
-| in-progress | 0 |
+| pending | 44 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 102 |
@@ -31,7 +31,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  |  |
 | T041 | Implement `control-plane/runtime/src/main/java/.../StargateC | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T051 | Author `extension/manifest.json` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T052 | Author `extension/lib/storage.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
@@ -78,7 +77,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | in-progress |  | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
 
 ---
 

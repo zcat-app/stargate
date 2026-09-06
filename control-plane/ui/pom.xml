@@ -16,18 +16,37 @@
 
     <artifactId>ui</artifactId>
 
-    <name>Stargate Control Plane :: ui (v1 stub)</name>
+    <name>Stargate Control Plane :: ui (v1 healthcheck stub)</name>
     <description>
-        Empty in v1 of the 001-tor-route feature (plan.md §"Project
-        Structure" — ui/ is a stub for this feature). The admin UI lands
-        in a later feature spec; this pom exists only to satisfy the
-        multi-module reactor declared in the parent pom.
+        Stub in v1 of the 001-tor-route feature. Serves exactly one HTTP
+        surface — the compose healthcheck GET /healthz (T040, gated by
+        HealthEndpointTest); the admin UI lands in a later
+        feature spec (spec.md §Assumptions "No Quarkus dashboard UI yet").
     </description>
 
-    <!-- T104: no sources in v1, but the stanza keeps this module consistent
-         with the reactor: main sources inherit the parent's Error Prone +
-         NullAway compiler config; default-testCompile clears compilerArgs so
-         tests stay ungated until onboarded (T104a pattern). -->
+    <dependencies>
+        <!-- T040: the ONLY HTTP surface is the compose healthcheck, so the
+             substrate is bare quarkus-vertx-http with one route registered
+             by observing the Router (Quarkus 3.33 ships no declarative
+             @Route annotation) — deliberately not quarkus-rest/Qute: the
+             stub must "serve nothing else" (research.md §"Decision",
+             headless CP), and the future admin-UI feature picks its own
+             stack. -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-vertx-http</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <!-- T104: the module ships a single source set (the T040 healthcheck
+         endpoint); the stanza below clears compilerArgs on
+         default-testCompile so tests stay outside the Error Prone +
+         NullAway main-source gate until onboarded (T104a pattern). -->
     <build>
         <plugins>
             <plugin>

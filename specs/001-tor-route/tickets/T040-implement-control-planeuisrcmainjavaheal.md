@@ -1,7 +1,7 @@
 ---
 id: T040
 title: 'Implement `control-plane/ui/src/main/java/.../HealthEndpoint.java`'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T040
