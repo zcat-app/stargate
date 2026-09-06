@@ -1,7 +1,7 @@
 ---
 id: T052
 title: 'Author `extension/lib/storage.js`'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T052
@@ -25,7 +25,7 @@ decision_refs:
   - "T051 /start grounding (502f71d): background.scripts pins exactly four paths with lib/storage.js listed second (load order firstparty → storage → hardening → router); manifest is single-owned — T052 amends no manifest key"
   - "extension/lib/firstparty.test.js (T034d + T034g round-1 FINDINGS[1] precedent): MV2 classic-script surface exclusivity — assert exactly-one-new-global, an extra top-level binding is a namespace-collision surface"
   - "specs/001-tor-route/tickets/T034b-unit-test-for-extensionbackgroundhardeni.md (round-1 APPROVE precedent: recording browser mock via vm.runInNewContext, node:test, discovery runner picks the file up with no runner amendment)"
-reviews: {}
+reviews: { round: 2, date: 2026-09-06, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
