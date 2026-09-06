@@ -1,7 +1,7 @@
 ---
 id: T116
 title: 'Fix ForbiddenDetailRejected journal-read race (poll the marker)'
-status: in-review
+status: done
 created: 2026-09-05
 last_updated: 2026-09-06
 source: hand-filed follow-up (surfaced during T039 /start verify; not a tasks.md entry)
@@ -20,7 +20,7 @@ round_cap: 2
 spec_refs:
   - specs/001-tor-route/contracts/control-grpc.md §"WatchEvents · Contract" (Tests row 2: forbidden detail)
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-06, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -101,3 +101,19 @@ test's read of the journal races:
 - Changing the marker set / violation line phrasings.
 - The T070b failure-transition suite beyond what the shared helper's fix
   gives it for free.
+
+**Round-1 review record (2026-09-06).** APPROVE, 0 findings. The reviewer
+independently re-ran `go test -count=10 ./tests/contract/control-grpc/`
+(ok, 60.3s) and added `go test -race -run TestWatchEvents` (ok) — the flake
+signature is structurally removed: the poll bounds pump latency instead of
+racing it. All four must-holds verified intact (close-stream assertion
+untouched; poll uses the SAME `journalHasDetailViolation` marker predicate,
+not a loosened substring; leak scan now strictly after marker success since
+waitFor Fatalfs; timeout stays loud with the journal dump in the failure).
+Five falsified-and-dropped candidates each carried a defeating citation
+(method-value closure re-evaluates per call; timeout-Fatal cannot mask a
+leak; the pre-existing close-wait Errorf is not an escape this diff
+introduces; STATUS regen byte-equivalent; budget correction 2→3 judged
+LEGITIMATE — the raw-path counter would have false-triggered the over-
+budget bright-line stop on a 1-counted-code-file change). Verify GREEN
+PASS=20 at the APPROVE freshness gate. STATUS regen.

@@ -15,9 +15,9 @@
 |---|---|
 | pending | 38 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 110 |
+| done | 111 |
 | deferred | 1 |
 | **total** | **150** |
 
@@ -72,9 +72,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T116 | Fix ForbiddenDetailRejected journal-read race (poll the mark | in-review |  | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
+_(nothing in flight)_
 
 ---
 
@@ -88,7 +86,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_110 ticket(s) done._
+_111 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -200,3 +198,4 @@ _110 ticket(s) done._
 - T108 — verify.sh must record repro-test SKIP as SKIP, not PASS
 - T113 — Drop the inert PostConstruct token from ExcludedFieldAnnotations
 - T115 — Fix the wire gate's comment-sensitive impl-detection probe
+- T116 — Fix ForbiddenDetailRejected journal-read race (poll the marker)
