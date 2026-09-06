@@ -1,7 +1,7 @@
 ---
 id: T052
 title: 'Author `extension/lib/storage.js`'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T052
