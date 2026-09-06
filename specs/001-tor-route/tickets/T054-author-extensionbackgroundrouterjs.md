@@ -1,7 +1,7 @@
 ---
 id: T054
 title: 'Author `extension/background/router.js`'
-status: pending
+status: in-review
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T054
@@ -123,10 +123,15 @@ into the design (method per T035a/T034b/T055 §Analysis):
     for `tabId >= 0`; non-tab requests have no indicator) — `tor` only when
     the full gate passes, `unrouted` otherwise. The `runtime.onMessage`
     responder answers `{route:'tor'}` iff the cache holds `tor` for that
-    tab, `{route:'unrouted'}` for a recorded non-Tor decision, `undefined`
-    for an unknown tab; non-matching messages get `undefined` (not handled
-    — other listeners may answer). An onion tab must NEVER read
-    `{route:'tor'}` while the gate is closed.
+    tab, `{route:'unrouted'}` for a recorded non-Tor decision, a Promise
+    resolving `undefined` for an unknown tab — and the answer leaves **via
+    the response channel** (a Promise return): Firefox's `runtime.onMessage`
+    discards plain synchronous listener returns ("The listener function can
+    return either a Boolean or a Promise", MDN; round-1 review Major — the
+    plain-return shape would have left every popup on its fail-closed
+    label). Non-owned or malformed messages get a plain `undefined` (not
+    handled — other listeners may answer; the MDN multi-listener pattern).
+    An onion tab must NEVER read `{route:'tor'}` while the gate is closed.
   - **failoverTimeout absent:** the returned descriptor does not carry the
     key (tasks.md T054 decision — Firefox's 5-second default; no magic
     number without spec-level rationale).
@@ -147,8 +152,11 @@ into the design (method per T035a/T034b/T055 §Analysis):
   (never a silent skip — the module ships in the same commit as its suite).
   `scripts/check-license-headers.sh` gates the SPDX header;
   `scripts/lint-ticket.py` gates ticket well-formedness; the pre-commit
-  secret scanner gates fixture hygiene (tokens in fixtures are syntactic
-  32-hex placeholders, same as T034d/T034c).
+  secret scanner gates fixture hygiene (tokens in fixtures are computed
+  32-hex placeholders — `'0f1e2d3c'.repeat(4)`, the T052 storage.test.js
+  convention — so the scanner sees no literal, every assertion a full
+  32-hex string; caught by the gitleaks hook at first commit attempt and
+  fixed, see §Notes).
 - **Residue:**
   - **Descriptor correctness in the real browser** — that Firefox MV2
     honours the synchronous ProxyInfo return, `proxyDNS`, and the SOCKS5
@@ -206,8 +214,12 @@ background/router.test.js`. Named runner (pre-existing, unchanged):
    evaluation with an `<all_urls>` filter and records per-tab decisions
    (tabId ≥ 0 only); the `runtime.onMessage` responder answers
    `{type:'stargate:getRoute', tabId}` with `{route:'tor'}` / `{route:
-   'unrouted'}` / `undefined` per the pinned semantics and ignores foreign
-   message shapes.
+   'unrouted'}` / nothing-meaningful per the pinned semantics — delivered
+   through the response channel (a Promise return for owned, valid
+   queries; a plain `undefined` for non-owned or malformed messages — the
+   channel probe is realm-safe: the vm loader's promises come from the
+   sandbox realm, so the suite asserts thenability + the awaited value
+   rather than a cross-realm-false `instanceof Promise`).
 5. Token-mirror cases: a `storage.onChanged` event for the device key
    updates subsequent descriptors (new token in `password`) and removing
    the device fail-closes.
@@ -250,3 +262,116 @@ background/router.test.js`. Named runner (pre-existing, unchanged):
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04. Grounded and
 refined on 2026-09-06 (T091 acceptance #6 step-17 refine — T054 is named;
 T091 is `done`, so the refine is authorized; same handling as T034b/T055).
+
+**Pre-impl state (Principle-VII signal).** `router.test.js` was authored
+first and run before `router.js` existed: 11/11 cases FAILED (loader
+ENOENT — this suite ships in the same commit as its implementation, so the
+RED run, not a skip, is the tests-first evidence). Two first-run test
+harness defects were fixed before any implementation assertion was
+satisfied, recorded for honesty: `deepStrictEqual` across a vm context
+compares prototypes (fixed with a JSON round-trip `plain()` helper), and
+an explicit `device: undefined` silently triggered the loader's
+destructuring default — the missing-token case was unknowingly testing the
+tokened load (fixed with an explicit `null`-means-absent sentinel).
+
+**Falsification record (2026-09-06, implement phase).** Exercised in a
+throwaway copy (`/tmp/t054-probe`, repo untouched) against the shipped
+`router.js`; each mutation tripped its named case, pristine control green:
+
+| # | Mutation (what would falsify the claim) | Trips |
+|---|---|---|
+| M1 | hardening gate check removed (fail-open) | `closedHardeningGateFailsClosedAndRecordsUnrouted` |
+| M2 | token-presence check removed | `missingOrEmptyTokenFailsClosed` (+ `storageOnChangedRefreshes…`) |
+| M3 | `TOR_PORT = 8880` | `onionTopLevelNavigationReturnsCanonicalSocksDescriptor` |
+| M4 | `proxyDNS: true` dropped (SOCKS5h hole) | `onionTopLevelNavigationReturnsCanonicalSocksDescriptor` |
+| M5 | username constant `stargate-shared` (isolation collapse) | `distinctOnionFirstPartiesGetDistinctUsernames` + 3 descriptor cases |
+| M6 | `.onion` suffix check inverted (route clearnet) | `clearnetRequestsAreDirectAndNeverCarryTheTokenOrPort` + 6 cases |
+| M7 | cache writes `'tor'` unconditionally (popup wrong-positive) | `closedHardeningGateFailsClosedAndRecordsUnrouted` + `getRouteResponderPinnedSemantics` |
+| M8 | IIFE unrolled to a top-level `var` (global leak) | exclusivity conformance hard-FAIL on every load + `routerContributesZeroNewGlobals…` |
+| M9 | `failoverTimeout: 5` pinned | `onionTopLevelNavigationReturnsCanonicalSocksDescriptor` |
+| M10 | `storage.onChanged` refresh dropped (stale credential) | `storageOnChangedRefreshesMirroredToken` |
+| M11 | FirstPartyError swallowed → guessed username | `firstPartyErrorFailsClosedWithoutGuessedUsername` |
+| M12 | trailing-dot strip removed (FQDN evasion) | `trailingDotFqdnOnionHostStillRoutesAsOnion` |
+| M13a | cache-writer tabId guard removed ONLY | **SURVIVED — recorded**: masked by the responder's own independent tabId guard, so the mutation is unobservable through the pinned surface (cache internals are not externally visible by T034c design); defense-in-depth, not a suite hole |
+| M13b | BOTH tabId guards removed (observable compound) | `getRouteResponderPinnedSemantics` (`non-tab requests never enter the per-tab cache` assertion) |
+
+M13a is the honest survivor the battery exists to surface: the suite pins
+the observable protocol, and a write the responder can never serve is
+invisible by design. The compound M13b proves the pair of guards is
+load-bearing where observability begins.
+
+**Round-1 review (2026-09-06) — REWORK (1 Major, 1 Minor); round-2 record.**
+The reviewer (fresh context) independently re-derived 8 of the battery
+mutations, confirmed the descriptor path correct, and filed:
+
+- **[Major] the getRoute responder answered via plain synchronous returns**
+  (router.js `stargateGetRoute`): Firefox's `runtime.onMessage` discards any
+  listener return that is not a Boolean or a Promise ("The listener function
+  can return either a Boolean or a Promise", MDN — independently re-verified
+  during this rework; reviewer traced `MessageEvent.wrapResponse` in
+  ExtensionChild across ESR 91/140/central). Effect: in the real browser the
+  popup's `sendMessage` would never receive `{route:'tor'}` and would always
+  render `Route: Direct (unrouted)` — fail-safe direction (wrong-negative,
+  never wrong-positive), but it hollowed acceptance #4 and the T034c
+  protocol into harness-only truth. The hermetic suite missed it because it
+  asserted the listener's return value directly and never modeled the
+  response channel. **Fix:** owned, valid queries now get
+  `Promise.resolve({route:'tor'})` / `Promise.resolve({route:'unrouted'})` /
+  `Promise.resolve(undefined)` (unknown tab — owns the channel, resolves
+  nothing meaningful); non-owned or malformed messages keep the plain
+  `undefined` (not handled; MDN multi-listener pattern). **Probe (the
+  verdict's EVALUATED-AS, realized):** the suite now asserts the channel
+  itself — `isResponseChannel(reply)` (thenable) + the awaited
+  `deepStrictEqual` — in all three responder-driving cases, while foreign /
+  malformed messages must still return a plain `undefined`. One probe
+  deviation from the verdict's literal text, recorded: `a instanceof
+  Promise` is cross-realm-false under the vm loader (the router's answers
+  are built with the sandbox realm's Promise constructor), so the suite
+  asserts thenability instead — same contract, loader-proof.
+- **[Minor] companion TEST-INTEGRITY:** the suite never modeled the
+  response channel, so the plain-return mutant stayed green. Same probe
+  closes it.
+- **Round-2 falsification:** the verdict's own mutant — responder answers
+  via plain return — now trips (`closedHardeningGate…` + 2 more); the full
+  battery re-run on the fixed code trips M1–M10, M12, M13b with the control
+  green. M11 first reported SURVIVED on the re-run: battery-script anchor
+  bug (the shortened match hit the URL-parse catch, which no test
+  exercises), not a suite hole; re-run with the round-1 unique anchor
+  (the `firstPartyDomain` try/catch) trips
+  `firstPartyErrorFailsClosedWithoutGuessedUsername` as before. Both probe
+  errors recorded for honesty.
+- Reviewer RECOMMENDED-FOLLOW-UP carried: once the popup lands (T057) or at
+  the live stack (T033), add one real `browser.runtime.sendMessage`
+  round-trip assertion — hermetic suites structurally cannot model
+  Firefox's response channel, which is where this defect class hides.
+
+**Commit-gate record (2026-09-06, landing).** The first `git commit`
+attempt was blocked by the pre-commit gitleaks hook: the fixture literals
+`'0f1e…'` / `'a1b2…'` tripped `generic-api-key` (entropy 4.0). The gate did
+its job — the fixtures were never credentials, but the house convention
+(T052 storage.test.js) is computed placeholders precisely so the scanner
+has no literals to adjudicate. Fixed as `'0f1e2d3c'.repeat(4)` /
+`'a1b2c3d4'.repeat(4)` (byte-length and assertion semantics unchanged;
+suite 11/11 green); no scanner config change, no `--no-verify`.
+
+**Verify notes (2026-09-06).** First full `scripts/verify.sh` run went RED
+on `go:tests/contract:control-grpc` (pass=20 fail=2) — the T116-filed
+journal-read flake; the package passes fresh standalone (`go clean
+-testcache`) and the re-run went GREEN (PASS=20 SKIP=1 FAIL=0). This diff
+touches no Go file. Local node is v18 (below the Node 20 CI pin;
+run-tests.sh warns and proceeds — CI is authoritative, research.md §10).
+
+**Adjacent decisions.** Classification host = the request URL's host
+(one trailing FQDN dot stripped, mirroring firstparty.js) — FR-001 keys on
+where the bytes go; the USERNAME separately follows the governing document
+via `firstPartyDomain(details)` — FR-002 precedence, pinned by the
+cross-origin case (`example.com` page embedding an `ONION_B` pixel routes
+via Tor under username `example.com`). An onion subresource OF a clearnet
+page has no clearnet alternative (only Tor can resolve it), which is why
+FR-001's request-host key and FR-002's username key compose this way.
+`route()` is evaluated by both listeners over the same in-memory state
+(`hardeningOk`, mirrored token) so the descriptor and the popup feed can
+never disagree by construction; the transient double-eval race is §Analysis
+residue. The `stargateOnBeforeRequest` listener returns `{}` (no cancel,
+no redirect) — it is an observer, not a blocker; the arch §14.2 DoH
+blocklist listener is a different guarantee, out of scope here.
