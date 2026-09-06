@@ -1,7 +1,7 @@
 ---
 id: T054
 title: 'Author `extension/background/router.js`'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T054
@@ -32,7 +32,7 @@ decision_refs:
   - "specs/001-tor-route/tickets/T034g-t034d-followup-assert-surface-exclusivity.md (the shared-background-scope exclusivity doctrine this module conforms to)"
   - "specs/001-tor-route/tickets/T053-author-extensionlibfirstpartyjs.md (the firstPartyDomain surface — pure string function; router.js owns all browser.* access)"
   - "specs/001-tor-route/tickets/T052-author-extensionlibstoragejs.md (StargateStorage.getDevice — the bearer-token source; §Analysis: router.js reads the token for the SOCKS5 password)"
-reviews: {}
+reviews: { round: 2, date: 2026-09-06, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
