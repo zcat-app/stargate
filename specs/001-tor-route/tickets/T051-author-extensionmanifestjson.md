@@ -1,7 +1,7 @@
 ---
 id: T051
 title: 'Author `extension/manifest.json`'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T051

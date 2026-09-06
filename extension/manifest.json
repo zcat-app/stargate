@@ -1,0 +1,36 @@
+{
+  "manifest_version": 2,
+  "name": "Stargate",
+  "version": "0.1.0",
+  "description": "Per-request privacy routing (Tor, I2P, Nym mixnet, Direct) through the Stargate proxy.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "stargate@stargate.local"
+    }
+  },
+  "permissions": [
+    "proxy",
+    "storage",
+    "webRequest",
+    "webRequestBlocking",
+    "privacy",
+    "notifications",
+    "management",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": [
+      "lib/firstparty.js",
+      "lib/storage.js",
+      "background/hardening.js",
+      "background/router.js"
+    ],
+    "persistent": false
+  },
+  "options_ui": {
+    "page": "options/options.html"
+  },
+  "browser_action": {
+    "default_popup": "popup/popup.html"
+  }
+}
