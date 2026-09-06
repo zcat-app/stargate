@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 39 |
-| in-progress | 1 |
+| pending | 40 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 107 |
+| done | 108 |
 | deferred | 1 |
-| **total** | **148** |
+| **total** | **149** |
 
 ---
 
@@ -31,6 +31,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T054 | Author `extension/background/router.js` | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T056 | Author `extension/options/options.html` and `extension/optio | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T057 | Author `extension/popup/popup.html` and `extension/popup/pop | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T058 | Contract test in `tests/contract/torrc/isolate_socks_auth_ef | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
@@ -67,14 +68,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T112 | Wire the stale-prose regression guard as a contract test | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T116 | Fix ForbiddenDetailRejected journal-read race (poll the mark | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
+| T117 | Reconcile arch §14.4 hardening-record example with T091 | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T055 | Author `extension/background/hardening.js` | in-progress | ✓ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
+_(nothing in flight)_
 
 ---
 
@@ -88,7 +88,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_107 ticket(s) done._
+_108 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -160,6 +160,7 @@ _107 ticket(s) done._
 - T051 — Author `extension/manifest.json`
 - T052 — Author `extension/lib/storage.js`
 - T053 — Author `extension/lib/firstparty.js`
+- T055 — Author `extension/background/hardening.js`
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T074 — Extend `control-plane/core/src/main/java/.../SidecarMonitor.java` (fro
 - T075b — Author `tests/reproducibility/extension_test.sh`
