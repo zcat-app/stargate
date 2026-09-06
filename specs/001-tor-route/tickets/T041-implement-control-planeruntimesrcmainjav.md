@@ -1,7 +1,7 @@
 ---
 id: T041
 title: 'Implement `control-plane/runtime/src/main/java/.../StargateControlPlan'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T041
@@ -31,7 +31,7 @@ decision_refs:
   - T039 §Analysis (T041 adapts SidecarMonitor.EventSink → ControlGrpcService.publish and supplies the §1.8 generation LongSupplier)
   - T093 landing notes (#3 decomposed: CP-side proposal rule + failure-semantics already pinned; this ticket consumes)
   - T040 §Out-of-scope (quarkus-maven-plugin activation in runtime/ + application.properties = T041)
-reviews: {}
+reviews: { round: 2, date: 2026-09-06, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -315,3 +315,19 @@ to `TokenLoader` for HMAC-SHA-256 verifier construction (`data-model.md`
 (c) seed/migrate the `token_generation` singleton + `configured_tokens`
 table on start (arch §6.6/§6.7). T093 (blocked_by T092) gates this ticket
 test-first.
+
+**Landing record (2026-09-06).** Round-1 review: REWORK (1 Major, 3 Minor) —
+the Major was real (no test observed the `monitor.start()` wiring; deleting
+it kept the suite green). All four items addressed and mutation-verified in
+round 2 (`monitorStartIsWiredAtBootAndFeedsTheAuditAdapter` via a fake
+ControlPort; `teardownReleasesTheControlSockForRebind`;
+`absentGenerationRowReadsAsZeroDeterministically`; frontmatter 9→11), round-2
+verdict APPROVE (0 findings; all four dispositions SATISFIED; six candidate
+concerns falsified-and-dropped). Reviewer RECOMMENDED-FOLLOW-UP (non-blocking,
+not an acceptance item): pin the §1.9 un-revoke sub-case (upsert → delete →
+upsert keeps original `created_at`, clears `revoked_at`) with a three-line
+extension of `upsertStampsCreatedAtOnceAndRefreshesVerifier` — feed as
+candidate input to the next persistence-suite-touching ticket. Implementation
+set: 11 counted files (§Analysis) + specs/ regen; tests-first honored (suites
+RED on the five absent classes, driven green in-ticket); `verify.sh` GREEN
+(PASS=20) at commit.
