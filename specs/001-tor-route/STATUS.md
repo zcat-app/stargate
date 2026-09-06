@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 38 |
+| pending | 39 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 110 |
 | deferred | 1 |
-| **total** | **149** |
+| **total** | **150** |
 
 ---
 
@@ -67,6 +67,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T116 | Fix ForbiddenDetailRejected journal-read race (poll the mark | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T117 | Reconcile arch §14.4 hardening-record example with T091 | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
+| T118 | Clear the bearer-token field after a successful save | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 
 ---
 
