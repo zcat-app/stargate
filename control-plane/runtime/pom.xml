@@ -19,9 +19,10 @@
     <name>Stargate Control Plane :: runtime</name>
     <description>
         The runnable Quarkus application. Aggregates the api / core /
-        persistence / ui sibling modules and (in later tasks) invokes the
-        quarkus-maven-plugin to produce the deployable artefact. The
-        StargateControlPlane.java entry point lands here under T040.
+        persistence / ui sibling modules and invokes the quarkus-maven-plugin
+        to produce the deployable fast-jar the Dockerfile ENTRYPOINT copies
+        (T003a). The StargateControlPlane.java entry point and the production
+        boot sequence land here (T041).
     </description>
 
     <dependencies>
@@ -45,6 +46,11 @@
             <artifactId>ui</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-junit5</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <!-- T104: main sources inherit the parent's Error Prone + NullAway
@@ -61,6 +67,25 @@
                         <configuration>
                             <compilerArgs combine.self="override"/>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- T041: produce the runnable fast-jar (runtime/target/quarkus-app/)
+                 that the Dockerfile ENTRYPOINT (T003a) copies — the "activates
+                 the quarkus-maven-plugin in runtime/" contract T040 deferred
+                 here. build binds to package; generate-code is inert for this
+                 module (the proto stubs are api/'s) but keeps the standard
+                 execution shape. -->
+            <plugin>
+                <groupId>${quarkus.platform.group-id}</groupId>
+                <artifactId>quarkus-maven-plugin</artifactId>
+                <version>${quarkus.platform.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate-code</goal>
+                            <goal>build</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>

@@ -60,6 +60,23 @@
                     </execution>
                 </executions>
             </plugin>
+            <!-- T041: HealthEndpoint (@Observes Router → GET /healthz) is a
+                 CDI bean consumed at the runtime module's boot; without an
+                 index the ui jar is a library and the observer never fires
+                 (the compose healthcheck would 404). Same reasoning as the
+                 persistence pom's jandex stanza. -->
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>make-index</id>
+                        <goals>
+                            <goal>jandex</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 </project>

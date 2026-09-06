@@ -53,4 +53,27 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- T041: this module's CDI beans (AuditLogService T036,
+                 SqliteTokenState) are injected by the runtime module's
+                 StargateControlPlane — a sibling jar without an index is
+                 treated as a library and its beans are NOT discovered at
+                 the runtime build (ArC "Unsatisfied dependency"). The
+                 Jandex index marks the jar as an application archive. -->
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>make-index</id>
+                        <goals>
+                            <goal>jandex</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>
