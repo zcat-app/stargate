@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 44 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 102 |
+| done | 103 |
 | deferred | 1 |
 | **total** | **148** |
 
@@ -77,9 +77,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T040 | Implement `control-plane/ui/src/main/java/.../HealthEndpoint | in-progress |  | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
+_(nothing in flight)_
 
 ---
 
@@ -93,7 +91,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_102 ticket(s) done._
+_103 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -151,6 +149,7 @@ _102 ticket(s) done._
 - T036 — Implement `control-plane/persistence/src/main/java/.../entity/AuditLog
 - T038 — In `control-plane/api/src/main/java/.../`: (a) `ControlGrpcService.jav
 - T039 — Implement `control-plane/core/src/main/java/.../SidecarMonitor.java`
+- T040 — Implement `control-plane/ui/src/main/java/.../HealthEndpoint.java`
 - T042 — Implement `data-plane/internal/listener/socks5.go`
 - T043 — Implement `data-plane/internal/listener/connect.go`
 - T044 — Implement `data-plane/internal/auth/token.go`

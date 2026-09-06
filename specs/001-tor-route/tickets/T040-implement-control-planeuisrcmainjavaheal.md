@@ -1,7 +1,7 @@
 ---
 id: T040
 title: 'Implement `control-plane/ui/src/main/java/.../HealthEndpoint.java`'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T040
@@ -26,7 +26,7 @@ spec_refs:
 decision_refs:
   - research.md §"Decision" (headless CP; minimal subset)
   - plan.md §"Tech Stack" — DEVIATION recorded: plan lists "Quarkus Qute (stub healthcheck page)" but the task body pins "200 with no body"; a body-less healthcheck needs no template engine (see Notes)
-reviews: {}
+reviews: { round: 1, date: 2026-09-06, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
