@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 39 |
+| pending | 38 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 110 |
 | deferred | 1 |
@@ -65,7 +65,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T111 | BUILD-DIFFS: document extension zip binary as build input | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T112 | Wire the stale-prose regression guard as a contract test | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T116 | Fix ForbiddenDetailRejected journal-read race (poll the mark | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T117 | Reconcile arch §14.4 hardening-record example with T091 | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T118 | Clear the bearer-token field after a successful save | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 
@@ -73,7 +72,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T116 | Fix ForbiddenDetailRejected journal-read race (poll the mark | in-review |  | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
 
 ---
 
