@@ -15,9 +15,9 @@
 |---|---|
 | pending | 38 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 109 |
+| done | 110 |
 | deferred | 1 |
 | **total** | **149** |
 
@@ -72,9 +72,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T056 | Author `extension/options/options.html` and `extension/optio | in-review | ✓ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
+_(nothing in flight)_
 
 ---
 
@@ -88,7 +86,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_109 ticket(s) done._
+_110 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -162,6 +160,7 @@ _109 ticket(s) done._
 - T053 — Author `extension/lib/firstparty.js`
 - T054 — Author `extension/background/router.js`
 - T055 — Author `extension/background/hardening.js`
+- T056 — Author `extension/options/options.html` and `extension/options/options
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T074 — Extend `control-plane/core/src/main/java/.../SidecarMonitor.java` (fro
 - T075b — Author `tests/reproducibility/extension_test.sh`

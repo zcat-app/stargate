@@ -1,7 +1,7 @@
 ---
 id: T056
 title: 'Author `extension/options/options.html` and `extension/options/options'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T056
@@ -25,7 +25,7 @@ decision_refs:
   - "specs/001-tor-route/tickets/T034e-unit-test-for-the-canonical-storagelocal.md (the tests-first gate that lifts here; §Analysis pins the ONLY surface assumption on this ticket; §Out-of-scope assigns options.js behavior + its test here)"
   - "specs/001-tor-route/tickets/T054-author-extensionbackgroundrouterjs.md (impl-ticket-authors-its-own-suite precedent: no dedicated test ticket exists for options.js behavior — Constitution VII satisfied the router.test.js way, authored FIRST and RED in this ticket)"
   - "extension/popup/popup.test.js (landed T034c suite — the page-script idiom this ticket follows: zero new context globals, listener wiring at load, textContent-only writes, access-recording vm mocks)"
-reviews: {}
+reviews: { round: 1, date: 2026-09-06, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -287,3 +287,24 @@ T034e's own suite was exercised separately: its html case lifts from the
 loud skip to PASS on the real options.html — not re-mutated here (T034e
 §Acceptance 6 owns that battery).
 
+
+**Round-1 review record (2026-09-06).** APPROVE, 0 findings. The reviewer
+independently re-ran all five §Notes mutations PLUS five of its own in a
+throwaway copy (pristine control 7/7 + T034e 3/3): M6 textContent→innerHTML
+(cases 2/3/4), M7 warning-string drift (save suite survives BY DESIGN —
+subject split; the frozen T034e gate caught it), M8 `id="status"` rename
+(P5), M9 script-src `./options.js` textual drift (P5), M10 try/catch removed
+(whole run fails loudly on the unhandled rejection — the P4 mechanism is
+real, not aspirational). All CAUGHT. Six falsified-and-dropped candidates,
+each with a defeating citation (double-save race — merge idempotent,
+single-key overwrite cannot interleave; `undefined` matrix entry — harness
+strictness beyond the DOM; P3 self-referential set-args expectation —
+non-circular coverage held by the [before, after] bucket range; no-DOM
+render model divergence — inherited T034e residue, no defeating constructs
+in this html; post-save token left in field — no contract basis, the §5.1
+warning discloses a strictly stronger exposure). RECOMMENDED-FOLLOW-UP
+(outside this diff): field-clearing after a successful save as an optional
+UX-hardening ticket candidate — spec-silent today, needs a spec owner, not a
+code drive-by. Verify GREEN PASS=20 at APPROVE freshness (one earlier
+freshness re-run RED on 2 control-grpc Go tests — T116-class flake, package
+green standalone, zero Go files in this diff). STATUS regen.
