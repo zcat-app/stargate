@@ -1,7 +1,7 @@
 ---
 id: T051
 title: 'Author `extension/manifest.json`'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T051
@@ -29,7 +29,7 @@ decision_refs:
   - "T034b §Analysis (step-17 refine precedent: consume the T091-amended contract at the dependent's own /start)"
   - "TICKET-LEVEL: gecko id value `stargate@stargate.local` — no spec/doc pin exists for the add-on id; it is an opaque Firefox identifier (email-like form), not a resolvable address. Reviewer falsification: any doc pin found for an id supersedes this."
   - "TICKET-LEVEL: `strict_min_version` omitted — no spec pins a Firefox floor; the MV2 support-window maintenance flag is arch §15 #6, verified at release cadence (residue R4)."
-reviews: {}
+reviews: { round: 1, date: 2026-09-06, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -201,3 +201,21 @@ or flipping `persistent` to `true` each fails a named case.
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04. Grounded + step-17
 refine (T091) applied 2026-09-06.
+
+**Landing record (2026-09-06).** Round-1 review: APPROVE (0 findings; five
+candidate concerns falsified-and-dropped, incl. the `description` key
+in-contract via §Analysis W2/R2 and the dangling-registrations hole via
+§Out-of-scope/R1). Tests-first honored: `manifest.test.js` authored first and
+observed RED (ENOENT on `manifest.json`, exit 1), driven GREEN in-ticket
+(6/6 cases). Implementation set = 2 counted files (`manifest.json` +
+`manifest.test.js`; budget 8) + specs/ regen. `verify.sh` GREEN (PASS=20,
+SKIP=1 release-cadence repro) — Gate 2b `extension-tests` passes with the
+new suite discovered automatically. A4 packaging sanity evidenced: a
+`package.sh` run includes `manifest.json` + `manifest.test.js` in the zip
+member list (no packaging amendment needed). Reviewer
+RECOMMENDED-FOLLOW-UP (non-blocking): at assembly time (last of T052–T057),
+per this ticket's R1, extend the suite to assert every registered path (4
+scripts, options page, popup) exists on disk; at the same time decide
+whether `description` gets pinned or stays under R2 — it is the first
+concrete instance of R2's "key neither body nor arch §14 names" class (R2
+currently says "none is known").
