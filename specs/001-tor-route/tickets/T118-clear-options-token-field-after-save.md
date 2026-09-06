@@ -1,7 +1,7 @@
 ---
 id: T118
 title: 'Clear the bearer-token field after a successful save'
-status: in-review
+status: done
 created: 2026-09-06
 last_updated: 2026-09-06
 source: target/runs/T056.verdict RECOMMENDED-FOLLOW-UP (T056 round-1 APPROVE, 0 findings)
@@ -28,7 +28,7 @@ constitution_refs:
 decision_refs:
   - "specs/001-tor-route/tickets/T056-author-extensionoptionsoptionshtml-and-e.md (the shipped save flow this ticket amends; §Residue 'no configured-state display' is a SEPARATE decision — this ticket does not add read-back)"
   - "target/runs/T056.verdict (RECOMMENDED-FOLLOW-UP origin; reviewer's falsified-and-dropped entry for the shoulder-surf concern is superseded by filing: the human opted to track it)"
-reviews: {}
+reviews: { round: 1, date: 2026-09-06, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -96,6 +96,11 @@ Design constraints pinned up front:
     UX trade this ticket does not settle.
   - A screen-scraping process can read the field mid-edit regardless —
     THREAT-MODEL §2.8 OS-level attacker, out of scope.
+  - The browser text-field undo stack can restore the cleared value
+    within the session — the bound this ticket buys is on passive
+    rendered-state exposure (the shoulder-surf window), not on
+    user-initiated undo (round-1 review follow-up note; Principle V
+    honesty).
 
 ## Acceptance
 
