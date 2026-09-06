@@ -102,9 +102,9 @@
       "mode": "subagent",
       "model": "zai-coding-plan/glm-5.3",
       "permission": {
-        "edit": { "target/runs/*.verdict": "allow", "*": "deny" },
+        "edit": { "*": "deny", "target/runs/*.verdict": "allow" },
         "task": "deny",
-        "bash": { "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "*": "deny" }
+        "bash": { "*": "deny", "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "git rev-parse*": "allow" }
       }
     },
     "stargate-redteam": {
@@ -114,7 +114,7 @@
       "permission": {
         "edit": "deny",
         "task": "deny",
-        "bash": { "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "*": "deny" }
+        "bash": { "*": "deny", "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "git rev-parse*": "allow" }
       }
     },
     "stargate-perf": {
@@ -124,7 +124,7 @@
       "permission": {
         "edit": "deny",
         "task": "deny",
-        "bash": { "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "*": "deny" }
+        "bash": { "*": "deny", "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "git rev-parse*": "allow" }
       }
     }
   }
