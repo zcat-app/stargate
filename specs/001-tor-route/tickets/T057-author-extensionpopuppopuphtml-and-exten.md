@@ -1,7 +1,7 @@
 ---
 id: T057
 title: 'Author `extension/popup/popup.html` and `extension/popup/popup.js`'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-06
 source: tasks.md#T057
@@ -251,3 +251,34 @@ quickstart Step 6 as landed).
 The ticket filename's trailing fragment "popuphtml-and-exten" is a
 60-char truncation artifact of `bootstrap-tickets.sh`; the tasks.md body
 is authoritative: **…and `extension/popup/popup.js`**.
+
+**Falsification record (2026-09-06, implement phase).** Throwaway copy
+at `/tmp/t057-falsify` (popup/ + the frozen T034c suite). Pristine
+control: 10/10 PASS, 0 skips — re-verified green after the battery
+(restored pristine). Impl mutations, each anchor-guarded (ANCHOR NOT
+FOUND = loud abort, never a silent pristine run — T056 lesson):
+
+1. *URL-derived routing* (reply check → `tab.url.endsWith('.onion')`) →
+   case 1 fails (the mock tab's full URL ends in `/page`, so the
+   suffix test misfires — the mutant is a wrong-negative machine);
+   `nonTorRepliesNeverRenderTorLabel` is the durable catch for the
+   hostname-check variant of this mutant class. CAUGHT.
+2. *wrong-positive mapping* (`route === 'tor'` → any object reply) →
+   cases 2 and 6 fail (`{route:'unrouted'}` on a clearnet tab renders
+   Tor; the `'TOR'` matrix entry pins exactness). CAUGHT.
+3. *no re-ask* (listener registration deleted) → case 3 fails on the
+   stale `Route: Tor`; case 9 fails the exactly-one-listener and
+   non-vacuousness pins. CAUGHT.
+4. *blind flip-to-Direct on any event* (listener renders the default
+   without asking) → case 4 — the mirror falsifier — fails (fresh Tor
+   answer never shown). CAUGHT.
+5. *catch rethrows* → case 7 fails loudly (unhandled rejection
+   surfaces the `sendMessage` failure on the popup document). CAUGHT.
+6. *listener double-registered* → case 9 fails (stacked listeners).
+   CAUGHT.
+7. *innerHTML write* → case 9 fails on the textContent-only pin (the
+   mock models the pinned write exactly: an `innerHTML` write never
+   lands in `textContent`, so every label assertion fails with it).
+   CAUGHT.
+8. *canonical label drift* (`'Route: Tor'` → `'Route: tor'`) → case 1
+   fails byte-exact. CAUGHT.

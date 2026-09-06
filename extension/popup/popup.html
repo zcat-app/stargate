@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<!-- Copyright 2026 The Stargate Authors -->
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stargate</title>
+  <style>
+    body { font-family: sans-serif; margin: 0.75rem 1rem; min-width: 14rem; }
+    /* The label string is the privacy property (US1 scenario 1); the
+       styling is this ticket's review-facing choice, unpinned by spec
+       (T057 §Residue). */
+    #route-indicator { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <!-- The indicator ships EMPTY (T057 §Analysis finding 8): popup.js
+       renders the label at load from the background's live answer, and
+       a static replica of a canonical label string here would be an
+       ungated second copy. Empty shows no claim at all. -->
+  <p id="route-indicator"></p>
+  <script src="popup.js"></script>
+</body>
+</html>
