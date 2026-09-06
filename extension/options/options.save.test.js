@@ -23,6 +23,10 @@
 //       scripts and provides the pinned element ids (popup.test.js
 //       id-drift gate applied to this page) — no inline script, no
 //       inline handlers (MV2 CSP: script-src 'self')
+//   P6  post-save field hygiene (T118): a RESOLVED save clears the pasted
+//       token from #bearer-token — bounding the on-screen lifetime of the
+//       secret (Constitution V); a REJECTED write preserves the input for
+//       retry — a cleared field beside a failure status would be a lying UI
 //
 // The warning STRING is not this suite's subject: the landed T034e suite
 // (options.test.js) is the canonical-text gate and its html case lifts in
@@ -395,6 +399,45 @@ test('storageFailureRendersFailureStatusNeverSaved', async () => {
       'the saved status is NEVER rendered when the write failed (P4)'
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// P6 — post-save field hygiene (T118): bound the on-screen lifetime of the
+// pasted secret. Clear ONLY on a resolved write; the failure path keeps the
+// input so the user can retry without retyping a 32-char token.
+// ---------------------------------------------------------------------------
+
+test('resolvedSaveClearsTheTokenField', async () => {
+  const h = loadOptionsPage({});
+  requireConformance(h.sandbox);
+  await submit(h, TOKEN);
+  assert.strictEqual(
+    renderedStatus(h), SAVED_MESSAGE,
+    'precondition: the save resolved and says so (P6)'
+  );
+  assert.strictEqual(
+    h.document.getElementById(INPUT_ID).value, '',
+    'a resolved save clears the pasted token from the field — the §5.1 ' +
+      'warning discloses the on-disk exposure, but the still-rendered ' +
+      'secret is an avoidable residual with unbounded on-screen lifetime ' +
+      '(P6; T118; Constitution V)'
+  );
+});
+
+test('failedSaveKeepsTheTokenInTheFieldForRetry', async () => {
+  const h = loadOptionsPage({ failSet: true });
+  requireConformance(h.sandbox);
+  await submit(h, TOKEN);
+  assert.strictEqual(
+    renderedStatus(h), FAILURE_MESSAGE,
+    'precondition: the write was rejected and says so (P6)'
+  );
+  assert.strictEqual(
+    h.document.getElementById(INPUT_ID).value, TOKEN,
+    'a rejected write must NOT clear the field — the user retries without ' +
+      'retyping the token, and a cleared field beside a failure status ' +
+      'would be a lying UI (P6; T118)'
+  );
 });
 
 // ---------------------------------------------------------------------------

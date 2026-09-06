@@ -54,6 +54,11 @@
     }
     try {
       await StargateStorage.setDeviceToken(value);
+      // Bound the on-screen lifetime of the pasted secret (T118;
+      // Constitution V): clear only after the write RESOLVES — the
+      // failure path below preserves the input for retry, and a cleared
+      // field beside a failure status would be a lying UI.
+      input.value = '';
       render(SAVED_MESSAGE);
     } catch (_err) {
       render(FAILURE_MESSAGE);

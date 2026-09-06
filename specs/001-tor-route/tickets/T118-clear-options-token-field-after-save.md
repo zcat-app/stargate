@@ -1,7 +1,7 @@
 ---
 id: T118
 title: 'Clear the bearer-token field after a successful save'
-status: pending
+status: in-review
 created: 2026-09-06
 last_updated: 2026-09-06
 source: target/runs/T056.verdict RECOMMENDED-FOLLOW-UP (T056 round-1 APPROVE, 0 findings)
@@ -142,3 +142,49 @@ T116/T117 filing convention. Origin: T056 round-1 verdict (APPROVE,
 0 findings) RECOMMENDED-FOLLOW-UP; the reviewer had dropped the
 shoulder-surf concern as "no contract basis" under then-current scope —
 filing it gives it the owner the reviewer required.
+
+### Grounding (2026-09-06, round 1)
+
+All cited anchors read and verified on disk (`options.js`,
+`options.save.test.js`, `options.html`, frozen `options.test.js`,
+`lib/storage.js` all present). FR-019 confirmed spec-silent on clearing
+(minimum UX = field + persist + warning); data-model §5 validation shape
+untouched; quickstart Step 4 prose unaffected by a cleared field. The
+§Analysis property map above was validated against the shipped T056 code:
+the clear belongs in `saveToken`'s `try`-block success branch, and the
+existing mock-element proxy already records `value` writes, so both new
+properties are assertable through the T056 harness unchanged. Lint
+pre-flight: PASS (`lint-ticket.py` exit 0).
+
+### Falsification record (AC5)
+
+Tests authored FIRST: `resolvedSaveClearsTheTokenField` +
+`failedSaveKeepsTheTokenInTheFieldForRetry` added to
+`options.save.test.js` (P6 section + header line; the seven T056-era
+cases and their assertions untouched). RED state demonstrated before the
+impl edit: case `resolvedSaveClearsTheTokenField` NOT ok — the property
+is genuinely new; `failedSaveKeepsTheTokenInTheFieldForRetry` ok pre-impl
+by construction — it is the regression guard pinning the failure branch
+against misplaced clears, not a new behavior. After the impl edit: 9/9
+green standalone; frozen T034e suite 3/3, 0 skipped.
+
+Mutations exercised in a throwaway copy (`/tmp/t118-falsify`, pristine
+control 9/9; each row: production mutation → failing case):
+
+| Mutation | Result |
+|---|---|
+| M1: clear moved to the `catch` (failure branch) | CAUGHT — `failedSaveKeepsTheTokenInTheFieldForRetry` fails (field emptied on a failed write); `resolvedSaveClearsTheTokenField` also fails (success no longer clears) |
+| M2: clear hoisted above the `await` | CAUGHT — `failedSaveKeepsTheTokenInTheFieldForRetry` fails via the rejection probe (field emptied before the rejection is known) |
+| M3: clear dropped entirely | CAUGHT — `resolvedSaveClearsTheTokenField` fails (field still holds the token after a resolved save) |
+
+All three match §Acceptance #5's list 1:1. Invalid-path preservation,
+split honestly: the zero-storage-touches half IS gated unmodified by the
+existing T056 case (b) (passed unmodified in every run); the
+field-untouched half holds in the shipped code (the clear sits only in
+the `try`-success branch) but is NOT gated by any existing case — case
+(b) never reads the field value, and `submit()` re-assigns `input.value`
+before every fire (round-1 review mutation M4: an invalid-branch clear
+passes the suite 9/9). AC1(c)/AC4 forbid closing that gap in this
+ticket's diff; tracked as a follow-up ticket candidate — one new named
+case asserting invalid-path field preservation, whose non-vacuity proof
+is M4 itself (origin: T118 round-1 review finding 1).
