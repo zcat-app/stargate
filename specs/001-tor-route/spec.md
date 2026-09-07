@@ -618,12 +618,28 @@ tests-first suite (Principle VII) before implementation lands.
   beyond the project quick-start (`specs/001-tor-route/quickstart.md`
   in this feature; a top-level README will mirror or supersede it in a
   later feature). Measured by the walkthrough in T077 on a clean profile.
-- **SC-002**: Over a run of **100 sequential CONNECTs to 100 distinct
-  first-party `.onion` domains** (synthetic test corpus published in
-  `tests/integration/`), the Tor sidecar reports **≥95 distinct circuit
-  IDs** across the 100 streams (allowing some legitimate reuse). This
-  measures that stream isolation is in effect end-to-end through the
-  extension and the data plane.
+- **SC-002**: Over a run of **100 sequential CONNECTs, each labeled with
+  one of 100 distinct first-party `.onion` domains** from the synthetic
+  corpus published in `tests/integration/` — the corpus string is the
+  SOCKS5 username, the isolation key the extension sends in production
+  (FR-007) — the Tor sidecar reports **≥95 distinct circuit IDs** across
+  the 100 streams (allowing some legitimate reuse), read through the
+  control port (FR-012). This measures that stream isolation is in
+  effect end-to-end through the extension and the data plane.
+  *(Amended 2026-09-07, T061 escalation → amend-spec: the original
+  wording — CONNECTs addressed TO the corpus strings — is unmeasurable
+  on the pinned sidecar. Tor rejects the corpus addresses at parse
+  (their embedded 32-byte keys are not valid Ed25519 public points, so
+  the checksums valid per T063 A5 are beside the question), and for any
+  unpublished-but-well-formed address it defers circuit construction
+  until a descriptor arrives, which never does — no circuit exists to
+  count. Probe evidence: T061 ticket §Notes; decision record:
+  SECURITY-DECISIONS.md 2026-09-07. The isolation property, the corpus,
+  the scale, and the threshold are UNCHANGED; only the addressing
+  mechanism is corrected. The username is the isolation axis the shipped
+  config actually enforces — `IsolateSOCKSAuth` keys circuits on the SOCKS
+  auth identity, and the shipped torrc carries no destination-based
+  isolation directive (SECURITY-DECISIONS.md 2026-09-07, T058 entry).)*
 - **SC-003**: During a continuous **10-minute Mullvad Browser session
   loading only `.onion` content** through Stargate, a Wireshark capture
   on the host's loopback interface and on its egress NIC contains
@@ -686,9 +702,15 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
   harness must update the address and record the change in
   `SECURITY-DECISIONS.md`). For US2's circuit-isolation test, the
   harness uses a synthetic corpus of 100 distinct onion-style address
-  *strings* presented to the SOCKS5 layer; reachability is not
-  required for circuit-isolation verification, only that the Tor
-  sidecar attempts distinct circuits.
+  *strings* presented to the SOCKS5 layer as the per-connection
+  isolation key (the SOCKS5 username, FR-007); the sidecar's per-label
+  circuit assignment is verified directly through the control port.
+  *(Amended 2026-09-07, T061 escalation → amend-spec: the prior claim
+  that "reachability is not required … only that the Tor sidecar
+  attempts distinct circuits" toward the corpus strings is false on the
+  pinned image — the sidecar neither parses them (invalid Ed25519 keys)
+  nor builds any circuit toward an unpublished address; see SC-002's
+  amendment note.)*
 - **`AUTH_REQUIRED` is a new error code added by this feature.** The
   architecture spec §10.1 enumerates `ROUTE_DISABLED`, `ROUTE_DOWN`,
   `ROUTE_TIMEOUT`, `ROUTE_REFUSED`, `BIND_REFUSED`. `AUTH_REQUIRED`

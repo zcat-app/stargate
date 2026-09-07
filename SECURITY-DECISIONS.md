@@ -41,6 +41,62 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-09-07 — SC-002 corpus measurement mechanism corrected; isolation property unchanged (T061 grounding, ESCALATE → amend-spec, user-approved)
+
+**Finding (accepted, Major — measurement unimplementable as speced).**
+SC-002's original mechanism — 100 sequential CONNECTs addressed TO the
+100 synthetic-corpus `.onion` strings, asserting ≥95 distinct circuit
+IDs — cannot run on the pinned sidecar, established by pre-
+implementation probes against `compose up tor` (T058's harness, T062
+helper, in-container SOCKS5 dial). Two independent facts: (1) every
+corpus address is rejected at parse — tor logs `ed25519 group order
+scalarmult failed` / `Service address [scrubbed] has bad pubkey` /
+`Invalid onion hostname [scrubbed]; rejecting` and answers `REP=0x01`
+with no stream and no circuit. The corpus passes T063's A5 (checksums,
+shape, distinctness) because A5 validates the checksum over whatever
+key bytes exist; it does not require the embedded 32-byte key to be a
+valid Ed25519 public point, and the corpus's random keys are not.
+(2) The reachability premise fails independent of the corpus: an
+address built from a fresh, valid Ed25519 keypair (unpublished — no
+descriptor exists) is accepted at parse, but its stream lingers at
+`SENTCONNECT 0` with no per-connection circuit for the whole
+observation window; tor attaches an HS client stream to a circuit only
+after the descriptor arrives. Positive control (the spec-pinned
+reference onion over the same dial path) attached and carried the
+`SOCKS_USERNAME` tag normally, so the observation harness is not the
+variable. Spec §Assumptions' "reachability is not required … only that
+the Tor sidecar attempts distinct circuits" is therefore false on this
+image: the sidecar does not attempt.
+
+**Decision.** User-approved amend-spec (2026-09-07): SC-002 and the
+Assumptions bullet are rewritten so the corpus strings serve as the
+per-CONNECT SOCKS5 username — the isolation key the extension sends in
+production (FR-007) — while each CONNECT targets the spec-pinned
+reachable reference onion; the assertion (≥95 distinct
+`SOCKS_USERNAME`-tagged circuit IDs across the 100 streams, read via
+FR-012's control port) is unchanged. US2's acceptance scenarios are
+untouched: they describe user-visible behavior and remain true; the
+amendment corrects only the harness measurement mechanism.
+
+**Security analysis (no weakening).** The property under measurement is
+the same and is now actually measured (previously it was unmeasurable —
+zero verification): 100 distinct first-party labels from the committed
+corpus → ≥95 distinct sidecar-assigned circuits. The username is the
+isolation axis the shipped config enforces: `IsolateSOCKSAuth` keys
+circuits on the SOCKS auth identity, the baked torrc carries no
+destination-based isolation directive, and the 2026-09-07 T058 entry
+(below) pins the behavioral pair — distinct identities isolate,
+identical identities share — on this exact tor build. Destination was
+therefore never an isolation input, so removing it from the measurement
+removes no guard. FR-007 (bearer token verified at the data plane,
+never re-sent upstream), FR-012, the static torrc gates (T029/T030/
+T031/T032), T058/T058a, and the through-the-data-plane tests (T059/
+T060) are all unchanged by this amendment. The corpus's Ed25519-invalid
+keys are harmless in its two remaining roles (isolation-key strings
+here; forbidden substrings in T064's leak corpus); should any future
+consumer use them as addresses, regenerate the corpus with valid
+keypairs (remediation optional, none filed today).
+
 ## 2026-09-07 — `IsolateSOCKSAuth` behavioral redundancy on tor 0.4.9; contract-sheet sensitivity claim corrected (T058 review round 1, ESCALATE → amend-spec)
 
 **Finding (accepted, Major).** `contracts/torrc.md`
