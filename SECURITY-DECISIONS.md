@@ -75,11 +75,23 @@ gates never exercise docker networking. THREAT-MODEL §3.1's
 "proxy ports bind to 127.0.0.1" row is about HOST-facing exposure, which
 is exactly what survives this amendment.
 
+**Finding, round 2 (live).** The first cut of this decision moved the
+bind to the wildcard but kept the DP on internal networks only — and
+Docker **silently discards published ports on internal:true networks**
+(the container config carried `127.0.0.1:8881` while
+`NetworkSettings.Ports` was null; host CONNECT still refused). Caught by
+the T059 live run minutes after landing round 1. Fix: a dedicated
+`stargate-host` bridge network (NOT internal, `enable_ip_masquerade:
+"false"`), attached to the DP only — publish-capable, egress-dead
+(probed: `HOST-TCP-OK` through the publish; `nc 1.1.1.1 80` from the net
+blocked as designed).
+
 **Decision.** FR-010 is amended to a boundary reading: the loopback-only
 HOST guarantee is carried by (a) the host-side publish
-`127.0.0.1:8881:8881` (long-form, structural-gated) and (b) the container
-network namespace (T094b's `internal: true` split) — not by the
-in-container bind address. Inside compose (attested by
+`127.0.0.1:8881:8881` over the dedicated no-masquerade `stargate-host`
+attachment (long-form publish, structural-gated; masquerade off) and (b)
+the container network namespace (T094b's `internal: true` split) — not by
+the in-container bind address. Inside compose (attested by
 `STARGATE_IN_CONTAINER=1`, set only in `docker-compose.local.yml`) the
 DP binds the container-wide address `0.0.0.0:8881`. A SPECIFIC
 non-loopback interface literal stays refused in both modes (the listener
@@ -94,11 +106,17 @@ is already inside the deployment (THREAT-MODEL §3.1 assumes local
 execution is game-over). The host-facing surface an external adversary
 meets is unchanged: loopback publish + internal-only networks.
 
-**Residual risk accepted.** A misconfigured compose file that dropped the
-`127.0.0.1:` prefix from the publish would now expose the DP wildcard
+**Residual risk accepted.** (a) A misconfigured compose file that dropped
+the `127.0.0.1:` prefix from the publish would now expose the DP wildcard
 listener beyond loopback; mitigated by the structural compose contract
-pinning the long-form loopback publish, and unchanged for bare-metal
-runs. LAN/VPS profiles (real non-loopback interfaces) remain out of scope
+pinning the long-form loopback publish (M13 extended), and unchanged for
+bare-metal runs. (b) The embedded DNS resolver on the non-internal
+`stargate-host` attachment still forwards external names, so a
+COMPROMISED data plane retains a DNS side-channel even with IP egress
+blocked (no masquerade); accepted because a compromised DP already holds
+in-flight request bytes and the token-verifier set — the runtime
+no-DNS-leak behaviour for non-compromised operation stays gated by T034.
+(c) LAN/VPS profiles (real non-loopback interfaces) remain out of scope
 and still require their tunnel sidecars.
 
 **Enforcement.** `bind.CheckListener` unit rows (loopback/wildcard/specific

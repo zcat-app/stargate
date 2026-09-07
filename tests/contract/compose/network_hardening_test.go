@@ -93,14 +93,19 @@ const healthDeadline = 5 * time.Minute
 // healthPollInterval paces the State.Health.Status poll via the Docker SDK.
 const healthPollInterval = 5 * time.Second
 
-// The three compose networks T094b defines (compose-logical names, NOT the
-// runtime `<project>_<name>` identifiers). See the ticket's §Grounding
-// decisions for why this is a 3-net model and why stargate-internal is the
+// The four compose networks T094b+T125 define (compose-logical names, NOT
+// the runtime `<project>_<name>` identifiers). See the tickets' grounding
+// decisions for why this is a 4-net model and why stargate-internal is the
 // preserved DP↔tor transport name (T019b references it by literal).
 const (
 	netEgress = "stargate-egress"   // NOT internal — Tor's sole egress path.
 	netDPTor  = "stargate-internal" // internal:true — DP↔tor:9050 (FR-007).
 	netCPTor  = "stargate-cp-tor"   // internal:true — CP↔tor:9051 (cookie ControlPort).
+	// T125 round 2: carries the DP's host-loopback publish. NOT internal —
+	// Docker silently discards published ports on internal:true networks
+	// (the live finding that reopened T125) — but with IP masquerade
+	// DISABLED so attached containers still have no internet egress.
+	netHost = "stargate-host"
 )
 
 // dpMainGate / cpMainGate are PER-PLANE content-gates that mirror T019b's
@@ -127,7 +132,9 @@ var (
 //   - IntendedPathsResolve (d): DP-net→tor:9050, CP-net→tor:9051
 //   - CrossPlaneTorPortResidue_DocumentedAndExpectedReachable: pins the
 //     actual (wider) tor-port reach matrix as residue (redteam Major)
-//   - NetworkTopologyAppliedAtRuntime: 3 nets, internal flags take effect
+//   - NetworkTopologyAppliedAtRuntime: 4 nets, internal flags take effect
+//   - HostNetCarriesPublishWithoutEgress (T125): publish-capable net is
+//     masquerade-off (publish works, egress stays dead)
 //   - TorContainerHardened: read-only/caps/security_opt/limits/tmpfs
 //   - AppPlaneContainersHardened: content-gated on DP/CP buildability
 //
@@ -170,13 +177,18 @@ func TestNetworkSplitAndHardening(t *testing.T) {
 		}
 	})
 
-	// Bring up tor only. tor is attached to all three networks, so compose
-	// creates all three regardless of DP/CP being started — the networks
-	// exist for the reachability probes below. Full-stack bring-up is
-	// impossible today (DP/CP images unbuildable); the AppPlaneContainers
-	// hardening sub-test self-skips on that gate. `--build` forces a rebuild
-	// against the current Dockerfile so the test exercises the on-disk
-	// contract (mirrors T019b).
+	// Bring up tor only. tor is attached to three of the four networks, so
+	// compose creates those three regardless of DP/CP being started; the
+	// fourth (stargate-host, T125) is created by the DP bring-up in the
+	// per-plane loop below (buildable since T050) — the network exists for
+	// the HostNetCarriesPublishWithoutEgress probe whether or not the DP
+	// process stays up. Full-stack bring-up is impossible today (fresh
+	// volumes lack the operator-provisioned keys/pepper — T059 §Residue);
+	// the AppPlaneContainers hardening sub-test inspects config, not
+	// runtime health, so a DP that exits on missing pepper is still
+	// inspectable. `--build` forces a rebuild against the current
+	// Dockerfile so the test exercises the on-disk contract (mirrors
+	// T019b).
 	upCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	if out, err := dockerCompose(upCtx, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
@@ -387,6 +399,74 @@ func TestNetworkSplitAndHardening(t *testing.T) {
 			} else {
 				t.Logf("OK: tor attached to %q", logical)
 			}
+		}
+	})
+
+	// T125 round 2: the DP's host-facing publish must actually WORK, and
+	// the net that carries it must not hand the DP internet egress.
+	// Docker silently DISCARDS published ports on internal:true networks
+	// (the live finding that reopened T125: the container config carried
+	// the binding while NetworkSettings.Ports was null), so the DP rides
+	// stargate-host — a NON-internal bridge with IP masquerade disabled:
+	// the publish path (docker-proxy / DNAT from the host, which sits on
+	// the bridge) works, while originated traffic leaves with a private
+	// source address and dies upstream. Both halves are load-bearing:
+	//   - masquerade ON  → DP gains direct clearnet egress (Principle III
+	//     broken: Tor is no longer the sole egress);
+	//   - masquerade OFF but net internal → publish discarded (FR-005
+	//     unreachable; the exact regression this sub-test exists to catch).
+	// Accepted residue (documented, not probed): the Docker embedded
+	// resolver on a non-internal network forwards external names, so a
+	// COMPROMISED DP retains a DNS side-channel even with IP egress
+	// blocked — SECURITY-DECISIONS.md (T125 entry) records the acceptance;
+	// the runtime no-DNS-leak behaviour itself is gated by T034.
+	t.Run("HostNetCarriesPublishWithoutEgress", func(t *testing.T) {
+		if !dpBuildable {
+			t.Skipf("blocked: %s absent — T050 (DP main) not landed; stargate-host is DP-only and is not created without the DP service", dpMainGate)
+		}
+		ri, err := inspectComposeNet(ctx, cli, netHost)
+		if err != nil {
+			t.Fatalf("inspect network %q: %v", netHost, err)
+		}
+		if ri.Internal {
+			t.Errorf("network %q is internal:true — Docker discards published ports on internal networks; the DP's host publish would be dead (the T125 live regression)", netHost)
+		} else {
+			t.Logf("OK: network %q Internal=false (publish-capable)", netHost)
+		}
+		masq, ok := ri.Options["com.docker.network.bridge.enable_ip_masquerade"]
+		if !ok || masq != "false" {
+			t.Errorf("network %q enable_ip_masquerade = %q (present=%v), want \"false\" — with NAT the DP gains direct clearnet egress (Principle III: Tor must be the sole egress)",
+				netHost, masq, ok)
+		} else {
+			t.Logf("OK: network %q enable_ip_masquerade=false (no egress)", netHost)
+		}
+
+		// Negative egress path on the host net: TCP must fail. (No
+		// default-route check here — a non-internal bridge legitimately HAS
+		// a default route via its gateway; the masquerade-less design kills
+		// egress upstream of the host, not in the container's routing
+		// table.)
+		netHostName := mustResolveNet(t, ctx, cli, netHost)
+		out, err := probeNet(ctx, netHostName, "nc", "-z", "-w", "5", "1.1.1.1", "80")
+		if err == nil {
+			t.Errorf("host net %q reached public 1.1.1.1:80 — masquerade-off not enforced; the DP has direct clearnet egress:\n%s",
+				netHostName, bytes.TrimSpace(out))
+		} else {
+			t.Logf("OK: probe on host net %q could not TCP-reach 1.1.1.1:80 (egress blocked as designed): %v", netHostName, err)
+		}
+
+		// The publish itself: the DP container's runtime port map must
+		// carry the loopback binding — the assertion whose absence let the
+		// discarded-publish regression through. (A full host→8881 SOCKS
+		// handshake is the live suite's positive control, T059.)
+		dpInsp := mustInspectByService(t, ctx, cli, "stargate-dp")
+		bindings, ok := dpInsp.HostConfig.PortBindings["8881/tcp"]
+		if !ok || len(bindings) == 0 {
+			t.Errorf("DP container has no 8881/tcp PortBindings — the host publish is gone (FR-005 unreachable)")
+		} else if bindings[0].HostIP != "127.0.0.1" {
+			t.Errorf("DP 8881/tcp published on %q, want 127.0.0.1 (FR-005 loopback-only)", bindings[0].HostIP)
+		} else {
+			t.Logf("OK: DP 8881/tcp published on %s:%s", bindings[0].HostIP, bindings[0].HostPort)
 		}
 	})
 

@@ -89,10 +89,17 @@ services:
       - stargate-ipc:/run/stargate
       - stargate-keys:/etc/stargate/keys:ro
       - stargate-dp-state:/var/lib/stargate
-    # T094b: DP sits ONLY on the internal:true stargate-internal net
-    # (DP↔tor:9050 transport). It has no public egress and no route to CP.
+    # T094b: DP sits on the internal:true stargate-internal net
+    # (DP↔tor:9050 transport). It has no route to CP.
+    # T125 round 2: the DP ALSO sits on stargate-host (no-masquerade) —
+    # Docker silently discards published ports on internal:true networks
+    # (the first T125 cut published nothing; caught live), so the
+    # host-loopback publish needs one non-internal attachment. The net's
+    # driver_opts kill NAT, so the DP still has no internet egress —
+    # Tor remains the sole egress (Principle III).
     networks:
       - stargate-internal
+      - stargate-host
     # T094b hardening (arch §8): read-only rootfs, all caps dropped, no
     # privilege escalation, bounded resources. Only the named volumes
     # (ipc/keys/dp-state) remain writable; /tmp + /run are tmpfs.
@@ -273,6 +280,16 @@ networks:
     # no network → mutually unreachable at L3.
     driver: bridge
     internal: true
+  stargate-host:
+    # T125 round 2: NOT internal (a publish on an internal net is
+    # silently discarded — that was the live finding), but with IP
+    # masquerade DISABLED so attached containers have no internet egress:
+    # originated packets leave with a private source address and are
+    # dropped upstream. Only the host↔DP publish path rides this net.
+    # Attached: stargate-dp only.
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "false"
 
 volumes:
   # Exactly the seven named volumes from data-model.md §6 — local_compose_test.sh

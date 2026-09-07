@@ -157,20 +157,25 @@ DP_DEPS="$(q '.services["stargate-dp"].depends_on // "" | tostring')"
 [ "$DP_DEPS" = "null" ] || [ "$DP_DEPS" = "" ] \
   || bail "M10: stargate-dp MUST NOT declare depends_on (Constitution II — DP keeps routing if CP/sidecars are unreachable); got: $DP_DEPS"
 
-# --- M13: split networks, internal flags, membership, Tor sole egress (T094b) --
-# T094b split the stack into three networks so only Tor has egress:
+# --- M13: split networks, internal flags, membership, Tor sole egress (T094b; T125 adds stargate-host) --
+# T094b split the stack into three networks so only Tor has egress; T125
+# added a fourth so the DP's host-loopback publish survives (Docker
+# discards published ports on internal nets):
 #   stargate-egress   (NOT internal) — tor only; Tor's sole NAT route.
 #   stargate-internal (internal:true) — stargate-dp + tor (DP→tor:9050, FR-007).
 #   stargate-cp-tor   (internal:true) — stargate-control + tor (CP→tor:9051).
+#   stargate-host     (NOT internal, enable_ip_masquerade:"false") —
+#                     stargate-dp only; carries the 127.0.0.1:8881 publish
+#                     (T125) while keeping the DP off the internet.
 # DP and CP share no network → mutually unreachable at L3. The runtime
 # reachability + per-container hardening is gated by
 # tests/contract/compose/network_hardening_test.go (//go:build docker);
 # this is the static topology gate that runs at PR cadence (no daemon).
 NET_COUNT="$(q '.networks | length | tostring')"
-[ "$NET_COUNT" = "3" ] || bail "M13: expected exactly 3 networks (stargate-egress, stargate-internal, stargate-cp-tor — T094b split); got: $NET_COUNT"
+[ "$NET_COUNT" = "4" ] || bail "M13: expected exactly 4 networks (stargate-egress, stargate-internal, stargate-cp-tor, stargate-host — T094b split + T125 publish net); got: $NET_COUNT"
 NET_NAMES="$(q '.networks | keys | sort | join(",")')"
-[ "$NET_NAMES" = "stargate-cp-tor,stargate-egress,stargate-internal" ] \
-  || bail "M13: network set must be {stargate-egress, stargate-internal, stargate-cp-tor}; got: $NET_NAMES"
+[ "$NET_NAMES" = "stargate-cp-tor,stargate-egress,stargate-host,stargate-internal" ] \
+  || bail "M13: network set must be {stargate-egress, stargate-internal, stargate-cp-tor, stargate-host}; got: $NET_NAMES"
 
 # internal flags: egress NOT internal (Tor's route out); transport nets internal:true.
 EGRESS_INTERNAL="$(q '.networks["stargate-egress"].internal // false')"
@@ -180,11 +185,18 @@ DPTOR_INTERNAL="$(q '.networks["stargate-internal"].internal // false')"
 CPTOR_INTERNAL="$(q '.networks["stargate-cp-tor"].internal // false')"
 [ "$CPTOR_INTERNAL" = "true" ] || bail "M13: stargate-cp-tor must be internal:true (CP has no public egress); internal=$CPTOR_INTERNAL"
 
+# T125: the publish net must be publish-capable (NOT internal) and must
+# NOT hand the DP internet egress (masquerade off).
+HOST_INTERNAL="$(q '.networks["stargate-host"].internal // false')"
+[ "$HOST_INTERNAL" = "false" ] || bail "M13: stargate-host must NOT be internal (Docker discards published ports on internal nets — the DP's 127.0.0.1:8881 publish would be dead); internal=$HOST_INTERNAL"
+HOST_MASQ="$(q '.networks["stargate-host"].driver_opts["com.docker.network.bridge.enable_ip_masquerade"] // "unset"')"
+[ "$HOST_MASQ" = "false" ] || bail "M13: stargate-host must set enable_ip_masquerade:'false' (DP must gain no clearnet egress from the publish net); got: $HOST_MASQ"
+
 # Per-service membership. .services[svc].networks renders as an object keyed
 # by network name; its keys are exactly the nets the service attaches to.
 svc_nets() { q ".services[\"$1\"].networks | keys | sort | join(\",\")"; }
-[ "$(svc_nets stargate-dp)" = "stargate-internal" ] \
-  || bail "M13: stargate-dp must be attached ONLY to stargate-internal (DP↔tor:9050, FR-007); got: $(svc_nets stargate-dp)"
+[ "$(svc_nets stargate-dp)" = "stargate-host,stargate-internal" ] \
+  || bail "M13: stargate-dp must be attached ONLY to stargate-internal + stargate-host (DP↔tor:9050 per FR-007; the T125 publish net); got: $(svc_nets stargate-dp)"
 [ "$(svc_nets stargate-control)" = "stargate-cp-tor" ] \
   || bail "M13: stargate-control must be attached ONLY to stargate-cp-tor (CP↔tor:9051, T094a); got: $(svc_nets stargate-control)"
 [ "$(svc_nets tor)" = "stargate-cp-tor,stargate-egress,stargate-internal" ] \

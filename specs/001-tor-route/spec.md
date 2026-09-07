@@ -403,8 +403,12 @@ tests-first suite (Principle VII) before implementation lands.
   binds `127.0.0.1` only (FR-005); inside the compose deployment the
   process binds the container-wide address (`0.0.0.0`) instead, because
   the container network namespace plus the host-published
-  `127.0.0.1:8881` binding — not the in-container bind address — is
-  what guarantees loopback-only host exposure. A specific non-loopback
+  `127.0.0.1:8881` binding over a dedicated no-masquerade network
+  attachment — not the in-container bind address — is what guarantees
+  loopback-only host exposure while keeping the data plane off the
+  internet (Docker discards published ports on `internal: true`
+  networks, and an unqualified second network would NAT the data plane
+  straight to the internet). A specific non-loopback
   interface address is refused in both modes. (Amended 2026-09-07,
   T125, user-approved amend-spec: a container-loopback listener is
   unreachable through Docker's port publishing, so the literal

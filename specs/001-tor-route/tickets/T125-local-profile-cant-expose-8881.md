@@ -1,7 +1,7 @@
 ---
 id: T125
 title: 'Local profile cannot expose 8881: FR-010 bind vs compose publish'
-status: in-review
+status: in-progress
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T120 convention)
@@ -22,10 +22,19 @@ spec_refs:
    - specs/001-tor-route/tasks.md#T059   # discoverer (live probe chain, 2026-09-07)
 decision_refs:
    - .specify/memory/constitution.md#Principle-III   # any amendment keeps "no non-host exposure" as the invariant
-reviews: {}
+reviews: { round: 1, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
-reopens: []
+reopens:
+   - 2026-09-07 (round 2, live falsification): the T059 live run minutes
+     after landing proved the wildcard-bind fix NECESSARY but NOT
+     SUFFICIENT — Docker silently discards published ports on
+     internal:true networks (container config carried 127.0.0.1:8881
+     while NetworkSettings.Ports was null; host CONNECT refused with the
+     DP listener up). Fix: dedicated stargate-host bridge (NOT internal,
+     enable_ip_masquerade "false", DP-only) + M13/network-hardening
+     contract updates + SD/THREAT-MODEL/spec wording; probed green
+     (HOST-TCP-OK; egress blocked as designed) before this reopen.
 redteam_findings: []
 clarity_check:
   analyzed_at: 2026-09-07

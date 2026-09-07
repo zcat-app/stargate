@@ -14,8 +14,8 @@
 | Status | Count |
 |---|---|
 | pending | 37 |
-| in-progress | 2 |
-| in-review | 1 |
+| in-progress | 3 |
+| in-review | 0 |
 | escalated | 0 |
 | done | 119 |
 | deferred | 1 |
@@ -74,7 +74,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T059 | Integration test in `tests/integration/stream_isolation_test | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 | T122 | Fix DP/CP image builds: proto/ outside build contexts | in-progress |  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
-| T125 | Local profile cannot expose 8881: FR-010 bind vs compose pub | in-review | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
+| T125 | Local profile cannot expose 8881: FR-010 bind vs compose pub | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 
