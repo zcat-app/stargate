@@ -1,7 +1,7 @@
 ---
 id: T125
 title: 'Local profile cannot expose 8881: FR-010 bind vs compose publish'
-status: in-progress
+status: in-review
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T120 convention)

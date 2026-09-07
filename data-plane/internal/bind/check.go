@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package bind implements the FR-010 bind-safety check: the data plane
-// refuses to start if its bind address would publish on a non-loopback
-// interface in the local profile. The single function Check is pure —
-// no sockets, no listener side effects, no DNS resolution — and is
-// called by the startup sequence (T050) BEFORE any listener opens.
+// refuses to start if its bind address would make port 8881 reachable
+// beyond the deployment's sanctioned boundary. Both entry points are
+// pure — no sockets, no listener side effects, no DNS resolution — and
+// are called by the startup sequence (T050) BEFORE any listener opens:
+// CheckListener is the production gate (the T125-amended policy:
+// loopback anywhere, wildcard only behind the compose container
+// boundary, specific non-loopback interfaces always refused), and Check
+// remains the bare-metal loopback-only contract that TestCheck pins.
 package bind
 
 import (
@@ -14,8 +18,8 @@ import (
 	"net/netip"
 )
 
-// ErrBindRefused is the sentinel returned by Check when addr is not a
-// loopback IP literal. The startup sequence classifies the failure mode
+// ErrBindRefused is the sentinel returned by Check and CheckListener
+// when addr fails the FR-010 bind policy. The startup sequence classifies the failure mode
 // via errors.Is(err, ErrBindRefused) and exits non-zero on a match
 // (FR-010 / arch §10.1 BIND_REFUSED row). Wrapped errors carry context
 // for debuggability; callers MUST match with errors.Is, not equality or

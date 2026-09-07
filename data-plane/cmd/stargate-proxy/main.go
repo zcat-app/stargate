@@ -19,7 +19,8 @@
 // Configuration surface: the test-defined env contract pinned in
 // tests/contract/control-grpc/dpharness_test.go §header (STARGATE_IPC_DIR,
 // STARGATE_STATE_DIR, STARGATE_KEYS_DIR, STARGATE_LISTEN_ADDR,
-// STARGATE_TOR_SOCKS_ADDR); production compose sets none of them.
+// STARGATE_TOR_SOCKS_ADDR, STARGATE_IN_CONTAINER); production compose
+// sets STARGATE_LISTEN_ADDR and STARGATE_IN_CONTAINER (T125).
 package main
 
 import (
@@ -169,8 +170,9 @@ func run() int {
 	}
 
 	// --- (6) the port-8881 proxy listener (FR-005). The bind check (step
-	// 1) already proved the address is a loopback IP literal, so
-	// net.Listen performs no name resolution (Principle I/FR-007).
+	// 1) already proved the address is an IP literal — loopback, or the
+	// wildcard behind the container boundary (T125) — so net.Listen
+	// performs no name resolution (Principle I/FR-007).
 	proxyLis, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		log.Error("shutdown", "reason", err.Error())
