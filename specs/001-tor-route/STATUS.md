@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 38 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 123 |
+| done | 124 |
 | deferred | 1 |
 | **total** | **163** |
 
@@ -72,9 +72,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T131 | Stack smoke test: full-path bring-up acceptance (RED until T | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
+_(nothing in flight)_
 
 ---
 
@@ -88,7 +86,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_123 ticket(s) done._
+_124 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -213,3 +211,4 @@ _123 ticket(s) done._
 - T122 — Fix DP/CP image builds: proto/ outside build contexts
 - T125 — Local profile cannot expose 8881: FR-010 bind vs compose publish
 - T129 — CP crash-loop: noexec tmpfs /tmp blocks sqlite-jdbc native lib
+- T131 — Stack smoke test: full-path bring-up acceptance (RED until T130)

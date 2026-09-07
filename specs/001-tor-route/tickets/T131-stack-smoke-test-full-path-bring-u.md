@@ -1,7 +1,7 @@
 ---
 id: T131
 title: 'Stack smoke test: full-path bring-up acceptance (RED until T130)'
-status: in-progress
+status: done
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T120 convention; root-cause audit of the T059 cascade)
@@ -21,7 +21,7 @@ spec_refs:
    - specs/001-tor-route/spec.md §"User Story 1"   # the load-the-onion shape this smoke-minimises (T033's cadence problem, fixed)
 decision_refs:
    - .specify/memory/constitution.md#Principle-VII   # tests-first applied to the STACK: the acceptance exists before the fixes that must turn it green
-reviews: {}
+reviews: { round: 2, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
