@@ -396,10 +396,20 @@ tests-first suite (Principle VII) before implementation lands.
   - **Both paths** MUST NOT carry destination, upstream, token, or
     sidecar-derived bytes in any field of the response.
 - **FR-010**: The data plane MUST refuse to start if the bind-safety
-  check would publish port 8881 on a non-loopback interface in the
-  local profile. (Architecture spec §4 bind-safety paragraph,
-  enforced in `data-plane/internal/bind`.) In this feature, the local
-  profile binds to `127.0.0.1` only; LAN/VPS are out of scope.
+  check would make port 8881 reachable beyond the deployment's
+  sanctioned boundary. (Architecture spec §4 bind-safety paragraph,
+  enforced in `data-plane/internal/bind`.) In the local profile the
+  sanctioned boundary is host loopback: on a bare-metal run the process
+  binds `127.0.0.1` only (FR-005); inside the compose deployment the
+  process binds the container-wide address (`0.0.0.0`) instead, because
+  the container network namespace plus the host-published
+  `127.0.0.1:8881` binding — not the in-container bind address — is
+  what guarantees loopback-only host exposure. A specific non-loopback
+  interface address is refused in both modes. (Amended 2026-09-07,
+  T125, user-approved amend-spec: a container-loopback listener is
+  unreachable through Docker's port publishing, so the literal
+  in-container reading contradicted FR-005; SECURITY-DECISIONS.md has
+  the decision and the live probe evidence.) LAN/VPS are out of scope.
 
 #### Sidecar configuration
 
@@ -679,8 +689,9 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
 - **Local profile only for this feature.** LAN and VPS profiles
   (architecture spec §3 profiles) are explicitly out of scope here, per
   the user input. They are revisited in a separate feature spec once
-  the local-profile slice is proven. The bind-safety check (FR-010)
-  still verifies the loopback-only invariant.
+  the local-profile slice is proven. The bind-safety check (FR-010,
+  as amended by T125) still verifies the loopback-only host-exposure
+  invariant.
 - **No bridges.** Tor bridge support (Constitution v1 Scope) is
   delivered as a separate feature spec. The `torrc` baked into the Tor
   image by this feature has `UseBridges 0` and no `Bridge` lines (FR-011).

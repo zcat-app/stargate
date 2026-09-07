@@ -229,7 +229,12 @@ imply different trust boundaries. The mode is selected by which
 
 **Shape**: All proxy ports (8881–8885) and the admin UI (8443) bind to
 `127.0.0.1`. No WireGuard sidecar. Single device, single user. The browser
-is on the same machine.
+is on the same machine. (T125, 2026-09-07 user-approved amend-spec: the
+loopback-only host guarantee is carried by the host-side publish binding
+plus the container network namespace; inside compose the data plane
+listens on the container-wide address because a container-loopback
+listener is unreachable through Docker's port publishing — the
+exposure boundary an adversary meets is unchanged.)
 
 **Protects against**:
 

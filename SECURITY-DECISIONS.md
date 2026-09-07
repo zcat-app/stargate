@@ -41,6 +41,57 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-09-07 — FR-010 bind policy amended to a container-boundary reading; host loopback-only exposure unchanged (T125 live-run finding, ESCALATE → amend-spec, user-approved)
+
+**Finding (accepted, Major — the local profile's core path was
+architecturally unreachable as speced).** FR-010's literal reading (the
+data plane binds `127.0.0.1` only) combined with FR-005's host-published
+`127.0.0.1:8881` and Docker's publishing semantics produced a dead port:
+docker delivers a published port to the container's **eth0**, so a
+container-**loopback** listener is unreachable — from the host AND from
+compose neighbours. Probed live 2026-09-07 (docker 29.1.3): with the DP
+booted clean and its own log showing `startup listener=127.0.0.1:8881`,
+host `CONNECT 127.0.0.1:8881` → connection refused;
+`nc -z stargate-dp 8881` from the tor container → refused. Masked until
+the first-ever full-stack bring-up (T122 discovery chain); the hermetic
+gates never exercise docker networking. THREAT-MODEL §3.1's
+"proxy ports bind to 127.0.0.1" row is about HOST-facing exposure, which
+is exactly what survives this amendment.
+
+**Decision.** FR-010 is amended to a boundary reading: the loopback-only
+HOST guarantee is carried by (a) the host-side publish
+`127.0.0.1:8881:8881` (long-form, structural-gated) and (b) the container
+network namespace (T094b's `internal: true` split) — not by the
+in-container bind address. Inside compose (attested by
+`STARGATE_IN_CONTAINER=1`, set only in `docker-compose.local.yml`) the
+DP binds the container-wide address `0.0.0.0:8881`. A SPECIFIC
+non-loopback interface literal stays refused in both modes (the listener
+may be container-wide, never pointed at a shared interface); bare-metal
+runs keep the original loopback-only contract
+(`bind.CheckListener`, `data-plane/internal/bind`).
+
+**Why the relaxation is bounded.** The wildcard is only honoured when the
+compose file attests the container boundary; that env travels with the
+version-controlled compose file, and whoever can set the DP's environment
+is already inside the deployment (THREAT-MODEL §3.1 assumes local
+execution is game-over). The host-facing surface an external adversary
+meets is unchanged: loopback publish + internal-only networks.
+
+**Residual risk accepted.** A misconfigured compose file that dropped the
+`127.0.0.1:` prefix from the publish would now expose the DP wildcard
+listener beyond loopback; mitigated by the structural compose contract
+pinning the long-form loopback publish, and unchanged for bare-metal
+runs. LAN/VPS profiles (real non-loopback interfaces) remain out of scope
+and still require their tunnel sidecars.
+
+**Enforcement.** `bind.CheckListener` unit rows (loopback/wildcard/specific
+IP per mode, `data-plane/internal/bind/check_test.go`), the compose
+environment block + ports comment (`compose/docker-compose.local.yml`),
+and the full-vertical runtime gates (T059/T033 live runs) that motivated
+the fix.
+
+---
+
 ## 2026-09-07 — SC-002 corpus measurement mechanism corrected; isolation property unchanged (T061 grounding, ESCALATE → amend-spec, user-approved)
 
 **Finding (accepted, Major — measurement unimplementable as speced).**

@@ -67,8 +67,24 @@ services:
     # The short form `8881:8881` would silently bind 0.0.0.0 (FR-005
     # violation). FR-012's "no host publication" rule for Tor applies in
     # spirit here too: the proxy is reachable ONLY from loopback.
+    #
+    # T125 (user-approved amend-spec): THIS publish is what carries the
+    # loopback-only host guarantee — Docker can only deliver a published
+    # port to the container's eth0, so the in-container listener must
+    # bind the wildcard (environment below) and a container-loopback
+    # bind made the port unreachable (probed live; the literal FR-010
+    # reading contradicted FR-005). bind.CheckListener refuses the
+    # wildcard without STARGATE_IN_CONTAINER=1, so a bare-metal run
+    # keeps the original loopback-only contract.
     ports:
       - "127.0.0.1:8881:8881/tcp"
+    environment:
+      # T125: attests the compose boundary (bind.CheckListener then
+      # allows only the wildcard or loopback — never a specific
+      # non-loopback interface) and points the listener at the wildcard
+      # so the publish above can deliver traffic.
+      STARGATE_IN_CONTAINER: "1"
+      STARGATE_LISTEN_ADDR: "0.0.0.0:8881"
     volumes:
       - stargate-ipc:/run/stargate
       - stargate-keys:/etc/stargate/keys:ro

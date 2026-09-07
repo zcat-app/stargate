@@ -45,3 +45,50 @@ func Check(addr string) error {
 	}
 	return nil
 }
+
+// CheckListener verifies a listen address against the T125-amended FR-010
+// bind policy for the given deployment mode.
+//
+// The user-approved amend-spec (2026-09-07, SECURITY-DECISIONS.md) moved
+// the loopback-only HOST guarantee out of the in-container bind address:
+// Docker's port publishing can only reach the container's eth0, so a
+// container-loopback listener (the literal FR-010 reading) is unreachable
+// from the host and contradicts FR-005. In a compose deployment the
+// guarantee is carried by the host-published `127.0.0.1:8881:8881`
+// binding plus the container network namespace (THREAT-MODEL §3.1), and
+// the listener binds the container-wide address instead.
+//
+// Policy:
+//   - loopback: accepted in both modes (Check's contract, preserved).
+//   - unspecified address (0.0.0.0/::): accepted ONLY behind
+//     containerBoundary — i.e. when the caller attests the process runs
+//     inside the compose network namespace (main.go wires
+//     STARGATE_IN_CONTAINER=1 from the compose file). Bare metal keeps
+//     the original loopback-only contract.
+//   - a SPECIFIC non-loopback interface literal: refused in both modes —
+//     the listener may be container-wide, never pointed at a shared
+//     interface (a LAN/public address must never be bindable, whoever
+//     sets the env).
+//   - malformed input / hostnames: refused (same as Check — ParseAddr
+//     rejects names, so resolution cannot smuggle a bind past this gate).
+//
+// The function stays pure: parsed IP literals only, no I/O, no
+// resolution; the deployment mode arrives as a parameter, not from the
+// environment — env wiring is the caller's decision (and is what the
+// compose structural contract pins).
+func CheckListener(addr string, containerBoundary bool) error {
+	ip, err := netip.ParseAddr(addr)
+	if err != nil {
+		return fmt.Errorf("bind refused %q: not an IP literal: %w", addr, ErrBindRefused)
+	}
+	if ip.IsLoopback() {
+		return nil
+	}
+	if containerBoundary && ip.IsUnspecified() {
+		return nil
+	}
+	if ip.IsUnspecified() {
+		return fmt.Errorf("bind refused %q: wildcard bind requires the container boundary (STARGATE_IN_CONTAINER=1): %w", addr, ErrBindRefused)
+	}
+	return fmt.Errorf("bind refused %q: not loopback: %w", addr, ErrBindRefused)
+}
