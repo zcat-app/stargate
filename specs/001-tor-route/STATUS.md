@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 35 |
+| pending | 36 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 115 |
 | deferred | 1 |
-| **total** | **151** |
+| **total** | **152** |
 
 ---
 
@@ -64,6 +64,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T117 | Reconcile arch §14.4 hardening-record example with T091 | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T119 | Gate invalid-path field preservation in options.save.test.js | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
+| T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
 
 ---
 
