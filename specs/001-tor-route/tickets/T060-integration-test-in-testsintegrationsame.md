@@ -1,7 +1,7 @@
 ---
 id: T060
 title: 'Integration test in `tests/integration/same_origin_shared_circuit_test'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T060
@@ -9,7 +9,7 @@ phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P
 story: 'US2'
 blocked_by: [T009, T062]   # manual edge: circuit IDs are asserted via the T062 control-port helper (derive-deps missed prose deps; tightened 2026-09-07)
 parallel: true
-files_budget: 4   # test file + integration go.mod (+go.sum if tidy demands) + this ticket
+files_budget: 5   # test file + integration go.mod + go.sum (tidy demanded: module-graph hashes of the replaced contract module) + this ticket + STATUS.md (derived, driver-regenerated)
 privacy_critical: true
 complexity: low
 risk: low
@@ -193,3 +193,16 @@ changes must leave all modules resolvable, including GOWORK=off).
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+Implement-time record (2026-09-07, worktree `t060`):
+
+1. First live run PASSED in 56.8 s warm: both same-username streams shared
+   circuit 12 (BUILT cross-check green) — the same circuit number the T058
+   session's same-identity control probe observed, independently
+   reproducing its observation as a committed pin; calibration subtest saw
+   distinct usernames on circuits 19 vs 16.
+2. `GOWORK=off go mod tidy` forced `golang.org/x/net` v0.54.0 → v0.55.0
+   and `golang.org/x/sys` v0.44.0 → v0.45.0: MVS selection — the replaced
+   `tests/contract` module's graph already requires those versions (its
+   go.mod carries them as indirect). Not a drive-by upgrade; the module's
+   own direct code is untouched by it.

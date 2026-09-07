@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 35 |
-| in-progress | 0 |
+| pending | 34 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 117 |
@@ -32,7 +32,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T059 | Integration test in `tests/integration/stream_isolation_test | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
-| T060 | Integration test in `tests/integration/same_origin_shared_ci | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T061 | Integration test in `tests/integration/circuit_isolation_cor | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T064 | Author the curated leak corpus `tests/contract/error-templat | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T065 | Contract test `tests/contract/error-template/route_down_test | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
@@ -69,7 +68,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T060 | Integration test in `tests/integration/same_origin_shared_ci | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 

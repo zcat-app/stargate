@@ -7,9 +7,18 @@ go 1.26
 
 toolchain go1.26.3
 
-require golang.org/x/net v0.54.0
+require golang.org/x/net v0.55.0
 
 require (
 	github.com/google/gopacket v1.1.19
-	golang.org/x/sys v0.44.0 // indirect
+	github.com/zcat-app/stargate/tests/contract v0.0.0
+	golang.org/x/sys v0.45.0 // indirect
 )
+
+// T060: the circuit-isolation integration tests read circuit state through
+// the T062 cookie-authenticated control-port helper (tests/contract/tor),
+// a sibling module in the same go.work workspace. The replace keeps the
+// import resolvable with GOWORK=off (fresh clones without the workspace
+// file, containerized builds); locally replaced modules need no go.sum
+// entry.
+replace github.com/zcat-app/stargate/tests/contract => ../contract
