@@ -16,10 +16,10 @@
 | pending | 38 |
 | in-progress | 0 |
 | in-review | 0 |
-| escalated | 0 |
+| escalated | 1 |
 | done | 124 |
 | deferred | 1 |
-| **total** | **163** |
+| **total** | **164** |
 
 ---
 
@@ -66,13 +66,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T126 | Pin DP UNAME forwarding: same target, distinct usernames, vi | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 | T127 | Correct T058 comment: DP dials upstream with UNAME only, no  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T128 | Stabilize TestMutualTLSHandshakeEndToEnd benign closeNotify  | 6: Polish & Cross-Cutting Concerns |  | ✓ |
-| T130 | Inter-plane gRPC channel never establishes in the compose st | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T130 | Inter-plane gRPC channel never establishes in the compose st | escalated | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 

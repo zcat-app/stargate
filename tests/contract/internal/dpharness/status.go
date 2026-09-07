@@ -23,12 +23,10 @@ package dpharness
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
@@ -70,12 +68,11 @@ func StatusErr(h *Harness) (*grpcpb.StatusResponse, error) {
 		probeMetaMajor, probeMajor,
 		probeMetaMinor, probeMinor,
 		probeMetaCaps, probeCaps)
-	conn, err := grpc.NewClient("unix://"+h.SockPath(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, closeFn, err := dialControlTLS(h)
 	if err != nil {
-		return nil, fmt.Errorf("grpc.NewClient(unix://%s): %w", h.SockPath(), err)
+		return nil, err
 	}
-	defer conn.Close()
+	defer closeFn()
 	client := grpcpb.NewControlClient(conn)
 	return client.GetStatus(ctx, &grpcpb.StatusRequest{}, grpc.WaitForReady(true))
 }

@@ -16,6 +16,8 @@ package controlclient
 
 import (
 	"context"
+	"crypto/tls"
+	"errors"
 	"log/slog"
 	"net"
 	"os"
@@ -26,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -168,19 +171,36 @@ func Listen(ipcDir string) (net.Listener, error) {
 // installed and the Control service registered on it — the only shape T050
 // may boot, so no handler can ever run un-gated (§5.3: an RPC that
 // bypasses the interceptor chain is a contract violation).
-func NewGRPCServer(control *Server) *grpc.Server {
+//
+// T130: serverTLS is REQUIRED — dp.sock is a mutual-TLS surface
+// (wire-auth.md §4: mTLS, peer-pinned, "never degraded into an
+// unauthenticated socket"). The pre-T130 constructor had no TLS pathway,
+// so main.go's wiring served dp.sock PLAINTEXT: the Java CP's ClientHello
+// was read as an HTTP/2 preface ("bogus greeting") and ReloadTokens never
+// delivered (live-caught, first-ever Java↔Go execution). A nil config is
+// an error, not a plaintext fallback; the caller's degraded mode is to
+// not serve dp.sock at all.
+func NewGRPCServer(control *Server, serverTLS *tls.Config) (*grpc.Server, error) {
+	if serverTLS == nil {
+		return nil, errors.New("dp.sock requires server TLS material (wire-auth.md §4; T130) — refusing to serve unauthenticated")
+	}
 	gs := grpc.NewServer(
+		grpc.Creds(credentials.NewTLS(serverTLS)),
 		grpc.ChainUnaryInterceptor(UnaryProtoVersionInterceptor),
 		grpc.ChainStreamInterceptor(StreamProtoVersionInterceptor),
 	)
 	grpcpb.RegisterControlServer(gs, control)
-	return gs
+	return gs, nil
 }
 
-// Serve boots NewGRPCServer on lis. Blocking; T050 owns the goroutine and
-// the GracefulStop path.
-func (s *Server) Serve(lis net.Listener) error {
-	return NewGRPCServer(s).Serve(lis)
+// Serve boots NewGRPCServer on lis with the given server TLS config.
+// Blocking; T050 owns the goroutine and the GracefulStop path.
+func (s *Server) Serve(lis net.Listener, serverTLS *tls.Config) error {
+	gs, err := NewGRPCServer(s, serverTLS)
+	if err != nil {
+		return err
+	}
+	return gs.Serve(lis)
 }
 
 // UnaryProtoVersionInterceptor is the §5.3 server interceptor (unary):

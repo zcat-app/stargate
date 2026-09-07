@@ -38,11 +38,13 @@ import (
 	"testing"
 	"time"
 
+	"crypto/tls"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
+	"github.com/zcat-app/stargate/tests/contract/internal/fakecp"
 )
 
 // PepperLen is the install-time pepper length in bytes (data-model.md
@@ -176,6 +178,34 @@ func Reload(t *testing.T, h *Harness, generation uint64, tokens []*grpcpb.TokenV
 // metadata-less RPC with FailedPrecondition before any handler runs
 // (wire-auth.md §5.2), so a probe without the keys measures nothing but
 // the interceptor.
+// dialControlTLS builds the CP-shaped TLS transport for dp.sock dials
+// (T130): self-signed cert from the seeded cp.priv, byte-pin dp.pub (§3),
+// TLS 1.3, ALPN h2 — the same shape the Java ReloadTokensClient and the
+// control-grpc harness present. A plaintext dial no longer reaches dp.sock
+// (the DP serves it only with TLS material; wire-auth.md §4 as amended).
+func dialControlTLS(h *Harness) (grpc.ClientConnInterface, func(), error) {
+	cpPriv, err := fakecp.LoadSigner(filepath.Join(h.KeysDir, "cp.priv"))
+	if err != nil {
+		return nil, nil, fmt.Errorf("loading seeded cp.priv: %w", err)
+	}
+	cpCert, err := fakecp.SelfSigned(cpPriv, "stargate-cp-harness")
+	if err != nil {
+		return nil, nil, fmt.Errorf("deriving CP harness cert: %w", err)
+	}
+	conn, err := grpc.NewClient("unix://"+h.SockPath(),
+		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+			Certificates:          []tls.Certificate{cpCert},
+			InsecureSkipVerify:    true, //nolint:gosec // pinned peer public key IS the verifier (wire-auth.md §4)
+			VerifyPeerCertificate: fakecp.PinVerifier(filepath.Join(h.KeysDir, "dp.pub")),
+			MinVersion:            tls.VersionTLS13,
+			NextProtos:            []string{"h2"},
+		})))
+	if err != nil {
+		return nil, nil, fmt.Errorf("grpc.NewClient(unix://%s): %w", h.SockPath(), err)
+	}
+	return conn, func() { _ = conn.Close() }, nil
+}
+
 func ReloadErr(h *Harness, generation uint64, tokens []*grpcpb.TokenVerifier) (*grpcpb.ReloadTokensResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -183,12 +213,11 @@ func ReloadErr(h *Harness, generation uint64, tokens []*grpcpb.TokenVerifier) (*
 		probeMetaMajor, probeMajor,
 		probeMetaMinor, probeMinor,
 		probeMetaCaps, probeCaps)
-	conn, err := grpc.NewClient("unix://"+h.SockPath(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, closeFn, err := dialControlTLS(h)
 	if err != nil {
-		return nil, fmt.Errorf("grpc.NewClient(unix://%s): %w", h.SockPath(), err)
+		return nil, err
 	}
-	defer conn.Close()
+	defer closeFn()
 	client := grpcpb.NewControlClient(conn)
 	return client.ReloadTokens(ctx,
 		&grpcpb.ReloadTokensRequest{Generation: generation, Tokens: tokens},

@@ -1,7 +1,7 @@
 ---
 id: T130
 title: 'Inter-plane gRPC channel never establishes in the compose stack'
-status: pending
+status: in-progress
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T120 convention)
@@ -9,7 +9,7 @@ phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P
 story: 'US2'
 blocked_by: [T122, T125, T129]   # stack must boot first: images (T122), publish (T125), CP boot (T129)
 parallel: false   # THE live-path blocker; privacy-critical auth plumbing — needs dedicated investigation
-files_budget: 8
+files_budget: 9   # tightened 2026-09-07: the defect spans both planes' TLS wiring + the three harness surfaces that dialed dp.sock plaintext (data-plane ×4, tests/contract ×4, wire-auth.md) — each traces to acceptance
 privacy_critical: true   # the channel carries ReloadTokens/WatchEvents — the auth-generation path
 complexity: high
 risk: medium
@@ -63,8 +63,61 @@ why this defect is invisible to anything that doesn't authenticate.
 
 ## Analysis
 
-*(The investigation plan; the fix is unknown until the handshake failure
-is observed.)*
+*(Investigation plan as filed; RESOLVED below — root cause observed live
+before any fix was written, per the falsify-first discipline.)*
+
+**ROOT CAUSE (observed live 2026-09-07, logging repro in a provisioned
+stack):** two composition defects, both invisible until the first-ever
+Java-CP↔Go-DP execution —
+
+1. **dp.sock served PLAINTEXT.** `main.go`'s wiring discarded the SERVER
+   half of `DeriveDPTLS` (`clientTLS, _, tlsErr := …`), and
+   `NewGRPCServer` had no TLS pathway at all. The DP's own log showed
+   the CP's TLS ClientHello read as an HTTP/2 preface — grpc-go
+   "bogus greeting" — and the CP logged `ReloadTokens generation 1 not
+   delivered (UNAVAILABLE: io exception … SslHandler…)`. The crypto was
+   never wrong: `TestMutualTLSHandshakeEndToEnd` pinned the §2/§3/§4
+   material by wiring `tls.NewListener` itself — the COMPOSITION (the
+   production server shape) was pinned by no test, and the contract
+   harness dialed dp.sock with `insecure.NewCredentials()` under a
+   "T022 seam: mutual-ed25519 client credentials attach at this dial"
+   comment that was never implemented.
+2. **No ALPN h2 on the Go configs.** gRPC over TLS requires negotiated
+   `h2`; the Go `tls.Config`s set no `NextProtos`. Go↔Go pairs passed
+   (both sides skip ALPN — mutually consistent, mutually underspecified,
+   the T063 external-calibration lesson again), while grpc-java
+   negotiates strictly. wire-auth.md §4 never named ALPN — a contract
+   omission, now amended (exactly `["h2"]`, both planes, client+server).
+
+Also observed: DP→CP (WatchEvents) CONNECTED fine even pre-fix (grpc-java
+server accepted the ALPN-less Go client); the one-attempt-at-boot reading
+was wrong on both sides — grpc channels auto-reconnect with backoff; the
+CP's PUSH invocation is boot-time (§1.8 containment, as designed). The
+DP-restarts-while-CP-up re-push gap is a separate follow-up (T132).
+
+**FIX (tests-first):** `TestNewGRPCServerRequiresTLS`,
+`TestGRPCServerServesMTLSOverUDS` (CP-shaped mTLS dial + plaintext
+negative control through the PRODUCTION server shape),
+`TestTLSConfigsOfferALPNH2` (red, then): `NewGRPCServer(control,
+serverTLS)` REQUIRED (nil → error, never a plaintext fallback; degraded
+mode serves NO dp.sock — main.go logs it and keeps routing, Principle
+II), `NextProtos: ["h2"]` on the shared config constructor, harnesses
+seed inter-plane keys and dial with CP-shaped pinned credentials
+(control-grpc harness + the shared socks5/error-template dpharness),
+wire-auth §4 amended (ALPN row + dp.sock-server-TLS row). The T095
+R4-static gate caught the new bufconn test's unpinned InsecureSkipVerify
+mid-flight — fixed by pinning dp.pub; the gate's own catch is the
+system working.
+
+**VALIDATION (full path, not symptom):** hermetic verify.sh GREEN
+(20/0/1); all three affected contract suites green over the TLS dial;
+live provisioned stack: DP log `tokens applied generation=1 count=1`
+(push delivered over TLS dp.sock) and an authenticated CONNECT through
+127.0.0.1:8881 → DP → tor → the reference onion returned HTTP 200 with
+176 KB of body — the FIRST-EVER full-stack green. The T131 stack smoke
+test (landed RED-by-design against this ticket) went
+`--- PASS: TestStackSmoke (32.25s)` — the acceptance criterion this
+ticket was driven against.
 
 - **Observe the failure first**: enable gRPC/Netty debug logging on the
   CP (`QUARKUS_LOG_CATEGORY` env or a compose-scoped override) and

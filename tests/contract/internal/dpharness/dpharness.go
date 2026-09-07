@@ -57,6 +57,7 @@ type Harness struct {
 	ProxyAddr    string // 127.0.0.1:<port>; STARGATE_LISTEN_ADDR
 	UpstreamAddr string // loopback fake upstream (fake_socks5_tor); empty in tests that don't forward
 	IPCDir       string // dir hosting dp.sock + where control.sock is dialed
+	KeysDir      string // inter-plane key set (T130: dp.sock dials need CP-shaped TLS creds)
 	Journal      *LockedBuffer
 	PID          int
 	Cmd          *exec.Cmd
@@ -162,14 +163,15 @@ func Start(t *testing.T, opts ...Option) *Harness {
 	// candidate-side HMAC (T044) and MintToken agree on the verifier
 	// key (data-model.md §1.7; T093 tests-first contract surface).
 	WritePepper(t, keysDir)
-	if cfg.controlPlane {
-		// Wire-auth §4 boot: the DP's TLS-mandatory WatchEvents client
-		// needs its identity (dp.priv) and pin anchor (cp.pub) on disk
-		// BEFORE the process starts, and a matching TLS fake CP must own
-		// control.sock before the first dial (initial backoff would
-		// otherwise race the delivery assertions).
-		SeedInterPlaneKeys(t, keysDir)
-	}
+	// T130: seeded UNCONDITIONALLY. dp.sock is a mutual-TLS surface
+	// (wire-auth.md §4 as amended): the DP serves it ONLY with TLS
+	// material, so a keys-less boot now serves no dp.sock at all and the
+	// boot wait below would time out. The WatchEvents-client rationale
+	// (identity + pin on disk before start) still applies; when
+	// cfg.controlPlane is set, a matching TLS fake CP must additionally
+	// own control.sock before the first dial (initial backoff would
+	// otherwise race the delivery assertions).
+	SeedInterPlaneKeys(t, keysDir)
 
 	proxyAddr := FreeLoopbackAddr(t)
 	journal := &LockedBuffer{}
@@ -225,6 +227,7 @@ func Start(t *testing.T, opts ...Option) *Harness {
 		ProxyAddr:    proxyAddr,
 		UpstreamAddr: cfg.upstream,
 		IPCDir:       ipcDir,
+		KeysDir:      keysDir,
 		Journal:      journal,
 		PID:          cmd.Process.Pid,
 		Cmd:          cmd,

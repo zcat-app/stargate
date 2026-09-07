@@ -53,12 +53,15 @@ import (
 	"testing"
 	"time"
 
+	"crypto/tls"
+
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
 	"github.com/zcat-app/stargate/tests/contract/internal/dpharness"
+	"github.com/zcat-app/stargate/tests/contract/internal/fakecp"
 	"github.com/zcat-app/stargate/tests/internal/loginvariants"
 )
 
@@ -169,7 +172,13 @@ func startDPWithSeed(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir s
 	}
 	t.Cleanup(func() { os.RemoveAll(ipcDir) })
 	stateDir := t.TempDir()
-	keysDir := t.TempDir() // empty until T022 pins the key-material format
+	keysDir := t.TempDir()
+	// T130: dp.sock is a mutual-TLS surface — the DP serves it ONLY with
+	// TLS material, so the harness seeds the full inter-plane key set
+	// (wire-auth.md §6.1 layout; the helper SeedInterPlaneKeys was written
+	// for the fake-CP path and is now used for the DP boot too) and dials
+	// with CP-shaped credentials below.
+	dpharness.SeedInterPlaneKeys(t, keysDir)
 	// Write the test pepper so the booted DP's candidate-side HMAC
 	// (T044) and mintToken agree on the verifier key (data-model.md
 	// §1.7; T093 tests-first contract surface).
@@ -215,9 +224,25 @@ func startDPWithSeed(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir s
 		return true
 	})
 
-	// T022 seam: mutual-ed25519 client credentials attach at this dial.
+	// T130: the seam is wired. The harness plays the CP: self-signed cert
+	// from cp.priv, byte-pin dp.pub (§3), TLS 1.3, ALPN h2 — the same
+	// shape the Java ReloadTokensClient presents (CpTls.clientContext).
+	cpPriv, err := fakecp.LoadSigner(filepath.Join(keysDir, "cp.priv"))
+	if err != nil {
+		t.Fatalf("loading seeded cp.priv: %v", err)
+	}
+	cpCert, err := fakecp.SelfSigned(cpPriv, "stargate-cp-test")
+	if err != nil {
+		t.Fatalf("deriving CP test cert: %v", err)
+	}
 	conn, err := grpc.NewClient("unix://"+sockPath,
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
+		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+			Certificates:          []tls.Certificate{cpCert},
+			InsecureSkipVerify:    true, //nolint:gosec // pinned peer public key IS the verifier (wire-auth.md §4)
+			VerifyPeerCertificate: fakecp.PinVerifier(filepath.Join(keysDir, "dp.pub")),
+			MinVersion:            tls.VersionTLS13,
+			NextProtos:            []string{"h2"},
+		})))
 	if err != nil {
 		t.Fatalf("grpc.NewClient(unix://%s): %v", sockPath, err)
 	}

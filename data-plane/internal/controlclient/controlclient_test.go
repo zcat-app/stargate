@@ -39,6 +39,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -1128,14 +1129,35 @@ func TestServerServeInstallsInterceptorsAndRegisters(t *testing.T) {
 	// the exact server shape T050 will boot.
 	rec := &snapshotRecorder{}
 	s := newTestServer(t, rec)
-	gs := NewGRPCServer(s)
+	// T130: the production server shape requires TLS — this test drives
+	// it with the same in-package fixtures the mTLS tests use, over
+	// bufconn (credentials.NewTLS skips verification for the in-process
+	// hop; the §3 pin rows are covered by TestGRPCServerServesMTLSOverUDS).
+	dpKey, _ := newEd25519Key(t)
+	cpKey, _ := newEd25519Key(t)
+	keys := t.TempDir()
+	writePubFile(t, filepath.Join(keys, "cp.pub"), cpKey)
+	writePubFile(t, filepath.Join(keys, "dp.pub"), dpKey)
+	gs, err := NewGRPCServer(s, ServerTLSConfig(mustDerive(t, dpKey), filepath.Join(keys, "cp.pub")))
+	if err != nil {
+		t.Fatalf("NewGRPCServer: %v", err)
+	}
 	lis := bufconn.Listen(1024 * 1024)
 	go func() { _ = gs.Serve(lis) }()
 	t.Cleanup(gs.Stop)
 
 	conn, err := grpc.NewClient("passthrough:///bufnet",
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithTransportCredentials(credentials.NewTLS(&tls.Config{
+			// §4 shape: skip CA-chain verification, PIN the server's dp.pub
+			// (the R4-static gate demands the co-located hook — correctly).
+			InsecureSkipVerify:    true, //nolint:gosec // pinned peer public key IS the verifier (wire-auth.md §4)
+			VerifyPeerCertificate: PeerPinVerifier(filepath.Join(keys, "dp.pub")),
+			MinVersion:            tls.VersionTLS13,
+			NextProtos:            []string{"h2"},
+			// §4: the server REQUIRES a client cert (RequireAnyClientCert).
+			Certificates: []tls.Certificate{mustDerive(t, cpKey)},
+		})),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -1291,4 +1313,108 @@ func ioReadFull(c net.Conn, buf []byte) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+// TestNewGRPCServerRequiresTLS pins the T130 fix's security shape: the
+// dp.sock server constructor REFUSES to build an unauthenticated server —
+// wire-auth.md §4 ("never degraded into an unauthenticated socket").
+// Before T130, main.go discarded DeriveDPTLS's server half and NewGRPCServer
+// served dp.sock PLAINTEXT (live-caught: the CP's TLS ClientHello read as
+// an HTTP/2 preface — "bogus greeting" — so ReloadTokens never delivered).
+func TestNewGRPCServerRequiresTLS(t *testing.T) {
+	s := newTestServer(t, &snapshotRecorder{})
+	if _, err := NewGRPCServer(s, nil); err == nil {
+		t.Fatal("NewGRPCServer(nil TLS) succeeded — dp.sock must never serve unauthenticated (wire-auth.md §4)")
+	}
+}
+
+// TestGRPCServerServesMTLSOverUDS pins the composition TestMutualTLS-
+// HandshakeEndToEnd could not (it wired tls.NewListener itself): the
+// PRODUCTION server shape — NewGRPCServer(ctl, ServerTLSConfig) — serves
+// a TLS dp.sock that a CP-shaped client (own cert from cp.priv, pinning
+// dp.pub, ALPN h2) completes an RPC through, while a PLAINTEXT dial of
+// the same socket fails. This is the Go-side mirror of the Java CP's
+// ReloadTokensClient (CpTls.clientContext): the live failure mode T130
+// exists to fix.
+func TestGRPCServerServesMTLSOverUDS(t *testing.T) {
+	dir := t.TempDir()
+	dpKey, dpPEM := newEd25519Key(t)
+	cpKey, cpPEM := newEd25519Key(t)
+	writePubFile(t, filepath.Join(dir, "dp.pub"), dpKey)
+	writePubFile(t, filepath.Join(dir, "cp.pub"), cpKey)
+	writePrivFile(t, filepath.Join(dir, "dp.priv"), dpPEM)
+	writePrivFile(t, filepath.Join(dir, "cp.priv"), cpPEM)
+
+	rec := &snapshotRecorder{}
+	s := newTestServer(t, rec)
+	serverTLS := ServerTLSConfig(mustDerive(t, dpKey), filepath.Join(dir, "cp.pub"))
+	gs, err := NewGRPCServer(s, serverTLS)
+	if err != nil {
+		t.Fatalf("NewGRPCServer: %v", err)
+	}
+	sock := filepath.Join(dir, "dp.sock")
+	lis, err := Listen(dir)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = lis.Close(); gs.Stop() })
+	go func() { _ = gs.Serve(lis) }()
+
+	// CP-shaped client: cert from cp.priv, pin dp.pub, ALPN h2 — the
+	// ClientTLSConfig-of-the-OTHER-plane shape (client_test.go's CP fake).
+	cpCert := mustDerive(t, cpKey)
+	clientTLS := ClientTLSConfig(cpCert, filepath.Join(dir, "dp.pub"))
+	conn, err := grpc.NewClient("unix://"+sock,
+		grpc.WithTransportCredentials(credentials.NewTLS(clientTLS)))
+	if err != nil {
+		t.Fatalf("grpc.NewClient: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// §5.3: the version metadata the Java CP's interceptor always sends.
+	ctx = metadata.AppendToOutgoingContext(ctx, protoversion.MetaMajor, "1")
+	stub := grpcpb.NewControlClient(conn)
+	resp, err := stub.ReloadTokens(ctx, &grpcpb.ReloadTokensRequest{Generation: 1})
+	if err != nil {
+		t.Fatalf("ReloadTokens over mTLS dp.sock: %v — the production server shape broke the CP dial (T130)", err)
+	}
+	if resp.GetAppliedGeneration() != 1 {
+		t.Errorf("applied_generation = %d, want 1", resp.GetAppliedGeneration())
+	}
+
+	// Negative control: a PLAINTEXT dial of the same socket must fail —
+	// a server that accepted it would be the pre-T130 defect reborn.
+	pt, err := grpc.NewClient("unix://"+sock,
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.NewClient(plaintext): %v", err)
+	}
+	t.Cleanup(func() { _ = pt.Close() })
+	if _, err := grpcpb.NewControlClient(pt).ReloadTokens(ctx, &grpcpb.ReloadTokensRequest{Generation: 2}); err == nil {
+		t.Error("PLAINTEXT ReloadTokens over dp.sock succeeded — the server is unauthenticated (pre-T130 defect)")
+	}
+}
+
+// TestTLSConfigsOfferALPNH2 pins the gRPC-over-TLS ALPN invariant
+// (wire-auth.md §4 as amended by T130): both halves offer exactly h2.
+// The Java CP (grpc-netty) negotiates ALPN strictly; a Go config without
+// NextProtos lets the handshake die protocol-less against it (the CP-side
+// half of the live failure), and Go↔Go only passed because BOTH sides
+// skipped ALPN.
+func TestTLSConfigsOfferALPNH2(t *testing.T) {
+	dir := t.TempDir()
+	_, dpPEM := newEd25519Key(t)
+	cpKey, _ := newEd25519Key(t)
+	writePrivFile(t, filepath.Join(dir, "dp.priv"), dpPEM)
+	writePubFile(t, filepath.Join(dir, "cp.pub"), cpKey)
+	clientCfg, serverCfg, err := DeriveDPTLS(dir)
+	if err != nil {
+		t.Fatalf("DeriveDPTLS: %v", err)
+	}
+	for name, cfg := range map[string]*tls.Config{"client": clientCfg, "server": serverCfg} {
+		if len(cfg.NextProtos) != 1 || cfg.NextProtos[0] != "h2" {
+			t.Errorf("%s TLS NextProtos = %v, want exactly [h2] (gRPC over TLS requires ALPN h2; wire-auth.md §4)", name, cfg.NextProtos)
+		}
+	}
 }

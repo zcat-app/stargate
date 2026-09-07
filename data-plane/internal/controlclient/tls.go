@@ -205,6 +205,13 @@ func ClientTLSConfig(cert tls.Certificate, peerPubPath string) *tls.Config {
 		InsecureSkipVerify:    true, //nolint:gosec // pinned peer public key IS the verifier (wire-auth.md §4)
 		VerifyPeerCertificate: PeerPinVerifier(peerPubPath),
 		MinVersion:            tls.VersionTLS13,
+		// T130: gRPC over TLS requires ALPN h2 (wire-auth.md §4 as
+		// amended). The Java CP (grpc-netty) negotiates ALPN strictly; a
+		// protocol-less handshake dies against it. Go↔Go only ever passed
+		// because BOTH sides skipped ALPN — mutually consistent, mutually
+		// underspecified (the T063 lesson). The server config (below)
+		// inherits this via the shared constructor.
+		NextProtos: []string{"h2"},
 	}
 }
 

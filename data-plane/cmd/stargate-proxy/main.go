@@ -123,7 +123,11 @@ func run() int {
 	// §2.2/§3.3 and ticket acceptance #3): without it the WatchEvents
 	// client never starts (NewClient rejects nil TLS — never an
 	// unauthenticated inter-plane dial) while routing continues.
-	clientTLS, _, tlsErr := controlclient.DeriveDPTLS(keysDir)
+	// T130: BOTH halves are consumed — the client config for the
+	// control.sock dialer below, the SERVER config for dp.sock. The
+	// pre-T130 wiring discarded the server half, so dp.sock served
+	// PLAINTEXT and the CP's mutual-TLS dial failed every push.
+	clientTLS, serverTLS, tlsErr := controlclient.DeriveDPTLS(keysDir)
 	if tlsErr != nil {
 		// The control_channel class's degraded line — the same vocabulary
 		// client.go journals on runtime channel loss. The error text is
@@ -136,20 +140,39 @@ func run() int {
 	// --- (4) DP gRPC server on dp.sock (bind(2) role separation; mode
 	// 0660 past umask; §5.3 interceptor chain via NewGRPCServer — the only
 	// server shape T050 may boot).
+	// T130: dp.sock is a mutual-TLS surface — served ONLY when the TLS
+	// material derived (wire-auth.md §4: "never degraded into an
+	// unauthenticated socket"). Degraded mode (no keys) serves NO dp.sock
+	// at all: routing on 8881 continues (Principle II), the CP's pushes
+	// fail to connect and re-sync on its next boot (§1.8 containment),
+	// and a plaintext listener is never substituted.
 	// A SIGKILL leaves the socket file in the persistent ipc volume; the
 	// next boot would fail bind(2) forever (restart crash-loop). The DP is
 	// the only process wired to bind dp.sock (control-grpc.md §"Socket
 	// topology"), so clearing its own stale socket is safe.
 	_ = os.Remove(filepath.Join(ipcDir, "dp.sock"))
-	sockLis, err := controlclient.Listen(ipcDir)
-	if err != nil {
-		log.Error("shutdown", "reason", err.Error())
-		return 1
+	var grpcSrv *grpc.Server
+	if serverTLS != nil {
+		sockLis, err := controlclient.Listen(ipcDir)
+		if err != nil {
+			log.Error("shutdown", "reason", err.Error())
+			return 1
+		}
+		ctl := controlclient.NewServer(store,
+			controlclient.SnapshotWriter(stateDir, log), counters.Snapshot, log)
+		grpcSrv, err = controlclient.NewGRPCServer(ctl, serverTLS)
+		if err != nil {
+			log.Error("shutdown", "reason", err.Error())
+			return 1
+		}
+		go func() { _ = grpcSrv.Serve(sockLis) }() // returns on GracefulStop/Stop
+	} else {
+		// FR-008 journal vocabulary: folds into the existing
+		// control_channel class (six-class allowlist — a new class is a
+		// Constitution-level change; T045's allowlist-amendment
+		// precedent, T130 round-1 review).
+		log.Warn("control channel degraded", "err", "dp.sock not served: no inter-plane TLS material (wire-auth.md §2.2 degraded mode; T130)")
 	}
-	ctl := controlclient.NewServer(store,
-		controlclient.SnapshotWriter(stateDir, log), counters.Snapshot, log)
-	grpcSrv := controlclient.NewGRPCServer(ctl)
-	go func() { _ = grpcSrv.Serve(sockLis) }() // returns on GracefulStop/Stop
 
 	// --- (5) control-plane client (T045): concurrent, advisory, never
 	// fatal (Principle II). With no TLS material the boot already
@@ -240,6 +263,9 @@ func run() int {
 // window (an in-flight RPC that never finishes must not wedge the
 // process past its supervisor's SIGKILL).
 func grpcGracefulStop(srv *grpc.Server) {
+	if srv == nil { // T130 degraded mode never served dp.sock
+		return
+	}
 	stopped := make(chan struct{})
 	go func() { srv.GracefulStop(); close(stopped) }()
 	select {
