@@ -1,7 +1,7 @@
 ---
 id: T127
 title: 'Correct T058 comment: DP dials upstream with UNAME only, no token'
-status: pending
+status: in-progress
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T121 convention); T061 round-1 codereview RECOMMENDED-FOLLOW-UP

@@ -122,8 +122,11 @@ const (
 	isoAuthB = "first-party-b.t058.invalid"
 
 	// Fixed PASSWD so UNAME is the only isolation differentiator. In
-	// production the DP forwards PASSWD = bearer token; against tor
-	// directly it is simply the second half of the SOCKS auth identity.
+	// production the DP dials the sidecar with the inbound UNAME verbatim
+	// and an EMPTY password (PLEN=0): the bearer token is validated at the
+	// data plane and never re-sent upstream (FR-002/FR-006/FR-007;
+	// forward/tor.go dialUpstream). Against tor directly this constant is
+	// simply the second half of the SOCKS auth identity.
 	isoPasswd = "stargate-t058"
 )
 
