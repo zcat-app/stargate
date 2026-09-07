@@ -52,20 +52,27 @@ WORKDIR /src
 # artefacts at package time (extension processors), so a separate
 # `dependency:go-offline` step is best-effort at best and we skip it;
 # the structured COPY still gives Docker a stable cache key for the
-# poms-only layer.
-COPY pom.xml             ./pom.xml
-COPY api/pom.xml         ./api/pom.xml
-COPY core/pom.xml        ./core/pom.xml
-COPY persistence/pom.xml ./persistence/pom.xml
-COPY runtime/pom.xml     ./runtime/pom.xml
-COPY ui/pom.xml          ./ui/pom.xml
+# poms-only layer. COPY paths are repo-root relative: the build context
+# is the REPO ROOT (T122) because the codegen reads the repo-top proto/
+# module — WORKDIR /src keeps the in-image layout identical to the old
+# ../control-plane context.
+COPY control-plane/pom.xml             ./pom.xml
+COPY control-plane/api/pom.xml         ./api/pom.xml
+COPY control-plane/core/pom.xml        ./core/pom.xml
+COPY control-plane/persistence/pom.xml ./persistence/pom.xml
+COPY control-plane/runtime/pom.xml     ./runtime/pom.xml
+COPY control-plane/ui/pom.xml          ./ui/pom.xml
 
-# Source layer; rebuilds only when Java source actually changes.
-COPY api/src         ./api/src
-COPY core/src        ./core/src
-COPY persistence/src ./persistence/src
-COPY runtime/src     ./runtime/src
-COPY ui/src          ./ui/src
+# Source layer; rebuilds only when Java source actually changes. proto/
+# lands at /proto: the api pom's Quarkus gRPC codegen reads
+# ${project.basedir}/../../proto/stargate/v1, which from /src/api
+# resolves to /proto (T122).
+COPY control-plane/api/src         ./api/src
+COPY control-plane/core/src        ./core/src
+COPY control-plane/persistence/src ./persistence/src
+COPY control-plane/runtime/src     ./runtime/src
+COPY control-plane/ui/src          ./ui/src
+COPY proto/                        /proto/
 
 # JVM-mode package. Byte-reproducibility is the POM's responsibility
 # (reproducible-build-maven-plugin, arch §12.2); no Dockerfile flags

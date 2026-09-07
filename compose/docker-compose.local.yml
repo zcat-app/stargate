@@ -54,8 +54,13 @@ services:
   # ─────────────────────────────────────────────────────────────────────
   stargate-dp:
     build:
-      context: ../data-plane
-      dockerfile: Dockerfile
+      # T122: the context is the REPO ROOT, not ../data-plane — the DP
+      # module carries `replace github.com/zcat-app/stargate/proto =>
+      # ../proto` (data-plane/go.mod) and the builder must see the
+      # repo-top proto/ module or `go mod download` / `go build` fail.
+      # The Dockerfile's COPY paths are repo-root relative accordingly.
+      context: ..
+      dockerfile: data-plane/Dockerfile
     image: stargate/stargate-dp:local
     user: "5102:5100"
     # Long-form port binding: explicit 127.0.0.1 prefix is load-bearing.
@@ -108,8 +113,11 @@ services:
   # ─────────────────────────────────────────────────────────────────────
   stargate-control:
     build:
-      context: ../control-plane
-      dockerfile: Dockerfile
+      # T122: repo-root context — the api pom's Quarkus gRPC codegen reads
+      # ${project.basedir}/../../proto/stargate/v1 (repo-top proto/), so
+      # the builder must see it; see the stargate-dp build comment above.
+      context: ..
+      dockerfile: control-plane/Dockerfile
     image: stargate/stargate-control:local
     user: "5101:5100"
     depends_on:

@@ -37,8 +37,14 @@ FROM golang:1.26.3-bookworm@sha256:252599aeb51ad60b83e4d8821802068127c528c707cb7
 
 WORKDIR /src
 
-# Dependency-only layer: rebuilds only when go.mod / go.sum change.
-COPY go.mod go.sum ./
+# Dependency-only layer: rebuilds only when go.mod / go.sum change. The
+# build context is the REPO ROOT (T122: compose sets `context: ..`), and
+# COPY paths below are repo-root relative. Both module roots are needed:
+# data-plane/go.mod carries `replace github.com/zcat-app/stargate/proto =>
+# ../proto`, which resolves to /proto from WORKDIR /src — so the proto
+# module's manifests are copied to /proto before `go mod download`.
+COPY data-plane/go.mod data-plane/go.sum ./
+COPY proto/go.mod proto/go.sum /proto/
 RUN go mod download
 
 # Synthesise the runtime passwd/group entries here so the scratch
@@ -47,10 +53,12 @@ RUN go mod download
 RUN printf 'stargate-dp:x:5102:5100::/:/sbin/nologin\n' > /tmp/passwd \
  && printf 'stargate-ipc:x:5100:stargate-dp\n'         > /tmp/group
 
-# Source layer; targeted COPYs keep the build context small and the
-# layer cache friendly (re-runs only when source actually changes).
-COPY cmd/      ./cmd/
-COPY internal/ ./internal/
+# Source layer; targeted COPYs keep the layer cache friendly (re-runs only
+# when source actually changes). proto/ completes /proto so the replace
+# target's generated stubs (proto/stargate/v1) compile into the binary.
+COPY data-plane/cmd/      ./cmd/
+COPY data-plane/internal/ ./internal/
+COPY proto/               /proto/
 
 # Build flags duplicate data-plane/Makefile (arch §12.1 is the
 # authority; the Makefile and this Dockerfile are two consumers of the
