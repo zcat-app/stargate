@@ -16,7 +16,7 @@ risk: low
 round_cap: 2
 spec_refs:
   - 'specs/001-tor-route/spec.md SC-002 (100 distinct first-party .onion domains, synthetic corpus published in tests/integration/)'
-  - 'specs/001-tor-route/spec.md §Assumptions — reference-target bullet (synthetic corpus of 100 distinct onion-style address strings; reachability not required, only that the Tor sidecar attempts distinct circuits)'
+  - 'specs/001-tor-route/spec.md §Assumptions — reference-target bullet (synthetic corpus of 100 distinct onion-style address strings; reachability not required, only that the Tor sidecar attempts distinct circuits) — AMENDED 2026-09-07: that assumption was falsified on the pinned sidecar; see SECURITY-DECISIONS.md 2026-09-07 (T061 amend-spec)'
   - 'specs/001-tor-route/tasks.md#T063'
   - 'specs/001-tor-route/research.md §7 (the SC-002 corpus run goes against the real Tor sidecar — within its normal load envelope)'
 decision_refs:
@@ -42,6 +42,8 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 > **Full task body (verbatim from tasks.md):**
 >
 > Author `tests/integration/synthetic_onion_corpus.txt` — 100 distinct onion-style address *strings* (well-formed but not necessarily reachable; the property under test is circuit selection, not reachability, per research.md §7 / spec Assumptions).
+
+*(Amendment note, 2026-09-07: the corpus did prove unreachable-address CONNECTs unusable as circuit-isolation targets — the sidecar parse-rejects the keys and builds no circuit toward any unpublished address; see SECURITY-DECISIONS.md 2026-09-07. The corpus stands as isolation-key strings (T061) and leak-corpus substrings (T064).)*
 
 ## Analysis
 
@@ -111,7 +113,9 @@ below):
   spec §Assumptions and is T064's separate line item (see A4).
 - **No torrc / compose / sidecar changes** — the corpus never names real
   infrastructure, and per spec §Assumptions reachability is explicitly not
-  a property of these addresses.
+  a property of these addresses. *(Amended 2026-09-07: that assumption was
+  falsified — see SECURITY-DECISIONS.md 2026-09-07; harmless for this
+  ticket, whose addresses are consumed as strings only.)*
 
 ## Notes
 
