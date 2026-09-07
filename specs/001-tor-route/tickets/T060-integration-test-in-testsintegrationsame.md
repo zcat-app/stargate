@@ -1,7 +1,7 @@
 ---
 id: T060
 title: 'Integration test in `tests/integration/same_origin_shared_circuit_test'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T060
@@ -26,7 +26,7 @@ decision_refs:
   - T058 — the distinct-identities-isolate live gate (this ticket pins the same-credential mirror)
   - T047 TestForwardPassesUNAMEVerbatimAsUpstreamUsername — the hermetic through-8881 UNAME pin T060 composes with, not re-proves
   - T033 — the spec-pinned reference onion constant (duplicated here; separate Go module)
-reviews: {}
+reviews: { round: 1, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

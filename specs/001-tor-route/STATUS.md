@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 34 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 117 |
+| done | 118 |
 | deferred | 1 |
 | **total** | **153** |
 
@@ -68,9 +68,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T060 | Integration test in `tests/integration/same_origin_shared_ci | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
+_(nothing in flight)_
 
 ---
 
@@ -84,7 +82,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_117 ticket(s) done._
+_118 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -162,6 +160,7 @@ _117 ticket(s) done._
 - T057 — Author `extension/popup/popup.html` and `extension/popup/popup.js`
 - T058 — Contract test in `tests/contract/torrc/isolate_socks_auth_effect_test.
 - T058a — Pin no-username circuit sharing under IsolateSOCKSAuth (tor/ suite)
+- T060 — Integration test in `tests/integration/same_origin_shared_circuit_test
 - T062 — Author `tests/contract/tor/control_port.go`
 - T063 — Author `tests/integration/synthetic_onion_corpus.txt`
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
