@@ -1,7 +1,7 @@
 ---
 id: T130
 title: 'Inter-plane gRPC channel never establishes in the compose stack'
-status: in-review
+status: done
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T120 convention)
@@ -20,7 +20,7 @@ spec_refs:
    - specs/001-tor-route/tasks.md#T059   # discoverer (live run, 2026-09-07)
 decision_refs:
    - .specify/memory/constitution.md#Principle-II   # the DP keeps routing degraded — why the stack LOOKS alive while the channel is dead
-reviews: {}
+reviews: { round: 1, date: 2026-09-07, verdict: APPROVE }
 overrides:
    - 2026-09-07, user-approved ("do one more round"): round-2 REWORK's
      single Major — the degraded-mode journal line used field key
