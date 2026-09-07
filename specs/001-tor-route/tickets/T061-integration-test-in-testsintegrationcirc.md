@@ -1,7 +1,7 @@
 ---
 id: T061
 title: 'Integration test in `tests/integration/circuit_isolation_corpus_test.g'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T061
@@ -29,7 +29,7 @@ decision_refs:
   - 'tests/integration/onion_load_test.go (T033 — repo-root discovery, compose bring-up + pre-registered cleanup, signal-safe teardown)'
   - 'research.md §7 (SC-002 corpus run goes against the real Tor sidecar, within its normal load envelope)'
   - 'Constitution Principle III (per-first-party stream isolation — the privacy property SC-002 measures)'
-reviews: {}
+reviews: { round: 1, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
