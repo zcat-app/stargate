@@ -1,7 +1,7 @@
 ---
 id: T061
 title: 'Integration test in `tests/integration/circuit_isolation_corpus_test.g'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T061
