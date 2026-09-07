@@ -1,7 +1,7 @@
 ---
 id: T127
 title: 'Correct T058 comment: DP dials upstream with UNAME only, no token'
-status: in-progress
+status: done
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T121 convention); T061 round-1 codereview RECOMMENDED-FOLLOW-UP
@@ -23,7 +23,7 @@ decision_refs:
    - data-plane/internal/forward/tor.go dialUpstream — `proxy.Auth{User: string(uname)}` with empty password (PLEN=0); the inbound PASSWD is "auth-layer material that is never re-sent upstream"
    - tests/integration/stream_isolation_test.go — T059's comment states the correct shape ("never re-sent upstream")
    - tests/integration/circuit_isolation_corpus_test.go — T061's comment states the correct shape
-reviews: {}
+reviews: { round: 1, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
