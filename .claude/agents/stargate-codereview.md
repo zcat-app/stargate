@@ -113,6 +113,18 @@ fails, say so and include the block inline so the run is not lost.
    (`contracts/*.md`, a `.proto`, the `torrc` shape, the error template), does
    the diff match it byte-for-byte where the contract is literal (header sets,
    field names, modes, UIDs/GIDs, ports)? Mismatches are REWORK.
+   **External calibration (wire-format artifacts):** for any diff that
+   produces or validates a formatted artifact — addresses, tokens,
+   encoders, parsers, protocol helpers — the acceptance check must include
+   a positive control anchored OUTSIDE the author's own code: a
+   spec-pinned reference value, a published real-world artifact, or
+   captured wire bytes. Self-consistency between a generator and its own
+   checker proves nothing — both can share the same wrong byte order,
+   framing, or encoding (T063 round 1, 2026-09-07: a corpus generator and
+   its acceptance checker were mutually consistent and mutually wrong
+   against rend-spec-v3; the spec-pinned DuckDuckGo onion address is what
+   caught it). A missing positive control on a format-sensitive artifact
+   is a finding.
 
 6. **Correctness.** Logic errors, unhandled errors, wrong boundary conditions,
    resource leaks (unclosed files/sockets/goroutines), nil/null hazards at
@@ -138,7 +150,10 @@ required output); content-free phrasing ("could be improved", "robustness",
 "hardening", "best practices", "potential issue") is not substance — a
 finding that needs such a phrase does not stand. Every REWORK item ends with
 **EVALUATED-AS**: the exact probe (test+assertion or command) that verifies
-the fix next round.
+the fix next round. The same duty binds when CLEARING a format claim:
+agreement with the implementation under review is not survival — an
+artifact-level claim survives only against an independent, externally
+sourced anchor.
 
 ## Round disposition (round ≥ 2 only)
 
