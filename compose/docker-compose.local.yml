@@ -198,7 +198,12 @@ services:
     # /tmp + /run are tmpfs.
     read_only: true
     tmpfs:
-      - /tmp
+      # T129: exec is REQUIRED here — sqlite-jdbc extracts its native
+      # library into java.io.tmpdir and mmaps it PROT_EXEC; Docker's tmpfs
+      # default is noexec, which crash-looped the CP on its first boot
+      # ever. Confined to the CP's own tmpfs; the DP keeps the noexec
+      # default.
+      - /tmp:rw,exec
       - /run
     cap_drop:
       - ALL
