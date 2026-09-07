@@ -7,7 +7,7 @@ last_updated: 2026-07-04
 source: tasks.md#T064
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009, T063]   # manual edge: the leak corpus embeds the 100-domain synthetic corpus authored by T063 (derive-deps missed prose deps; tightened 2026-09-07)
 parallel: true
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true
@@ -53,3 +53,13 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+**Refinement (2026-09-07, post-T063).** The "100-domain synthetic corpus
+from T063" entries must be embedded verbatim from the committed
+`tests/integration/synthetic_onion_corpus.txt` (T063, done; final corpus
+bytes landed in commit `ddc51b9`). Do NOT retype, regenerate, or "fix" the
+addresses: T063's round-1 corpus bytes were malformed (wrong v3 byte order)
+and were regenerated in round 2 — copying from any pre-`ddc51b9` source
+embeds dead strings into the leak corpus and silently voids their SC-004
+coverage. (T063 round-1/2 verdict follow-up; recorded here because
+`target/runs/*.verdict` is gitignored.)

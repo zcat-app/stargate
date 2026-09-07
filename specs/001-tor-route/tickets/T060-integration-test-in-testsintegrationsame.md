@@ -7,7 +7,7 @@ last_updated: 2026-07-04
 source: tasks.md#T060
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: [T009, T062]   # manual edge: circuit IDs are asserted via the T062 control-port helper (derive-deps missed prose deps; tightened 2026-09-07)
 parallel: true
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true
