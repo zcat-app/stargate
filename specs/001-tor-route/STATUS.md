@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 37 |
-| in-progress | 3 |
-| in-review | 0 |
+| pending | 38 |
+| in-progress | 2 |
+| in-review | 1 |
 | escalated | 0 |
-| done | 119 |
+| done | 120 |
 | deferred | 1 |
-| **total** | **160** |
+| **total** | **162** |
 
 ---
 
@@ -74,7 +74,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T059 | Integration test in `tests/integration/stream_isolation_test | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 | T122 | Fix DP/CP image builds: proto/ outside build contexts | in-progress |  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
-| T125 | Local profile cannot expose 8881: FR-010 bind vs compose pub | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
+| T129 | CP crash-loop: noexec tmpfs /tmp blocks sqlite-jdbc native l | in-review |  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 
@@ -88,7 +88,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_119 ticket(s) done._
+_120 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -209,3 +209,4 @@ _119 ticket(s) done._
 - T115 — Fix the wire gate's comment-sensitive impl-detection probe
 - T116 — Fix ForbiddenDetailRejected journal-read race (poll the marker)
 - T118 — Clear the bearer-token field after a successful save
+- T125 — Local profile cannot expose 8881: FR-010 bind vs compose publish

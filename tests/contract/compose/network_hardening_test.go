@@ -17,7 +17,8 @@
 // egress actually being blocked) could regress between static-test runs:
 //
 //   - Tor bootstraps healthy on the split topology (it kept its egress).
-//   - The DP and CP networks have no public egress (internal:true enforced).
+//   - The DP and CP networks have no public egress (internal:true on the
+//     transport nets; masquerade-off on the T125 publish net).
 //   - The intended internal paths resolve (DP-net → tor:9050,
 //     CP-net → tor:9051).
 //   - The application planes are mutually unreachable (no shared network:
@@ -343,7 +344,7 @@ func TestNetworkSplitAndHardening(t *testing.T) {
 
 	// Cross-plane tor-port residue (redteam Major, Principle V). tor binds
 	// SocksPort + ControlPort on 0.0.0.0 (contracts/torrc.md) and is multi-
-	// homed across all three networks, so the ACTUAL L3 reach matrix is
+	// homed across its three networks, so the ACTUAL L3 reach matrix is
 	// wider than the design-intent DP→{tor:9050}; CP→{tor:9051}: CP can also
 	// reach tor:9050 (unauthenticated SOCKS — a Tor-transiting exfil channel
 	// that bypasses DP routing + per-first-party stream isolation) and DP can
@@ -455,10 +456,16 @@ func TestNetworkSplitAndHardening(t *testing.T) {
 			t.Logf("OK: probe on host net %q could not TCP-reach 1.1.1.1:80 (egress blocked as designed): %v", netHostName, err)
 		}
 
-		// The publish itself: the DP container's runtime port map must
-		// carry the loopback binding — the assertion whose absence let the
-		// discarded-publish regression through. (A full host→8881 SOCKS
-		// handshake is the live suite's positive control, T059.)
+		// The publish REQUEST: HostConfig.PortBindings pins the long-form
+		// loopback binding (catches wildcard-publish drift). It is the
+		// requested config, NOT the runtime map — the round-1 failure
+		// state had exactly this binding present while the engine silently
+		// discarded it — so the silent-discard regression itself is caught
+		// by the stargate-host existence/Internal/masquerade assertions
+		// above, by M13's membership gate statically, and by T059's live
+		// host→8881 positive control (NetworkSettings.Ports is null for
+		// the pepper-less exited DP here, so the runtime map cannot be
+		// asserted in this suite).
 		dpInsp := mustInspectByService(t, ctx, cli, "stargate-dp")
 		bindings, ok := dpInsp.HostConfig.PortBindings["8881/tcp"]
 		if !ok || len(bindings) == 0 {

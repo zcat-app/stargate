@@ -104,12 +104,13 @@ compose file attests the container boundary; that env travels with the
 version-controlled compose file, and whoever can set the DP's environment
 is already inside the deployment (THREAT-MODEL §3.1 assumes local
 execution is game-over). The host-facing surface an external adversary
-meets is unchanged: loopback publish + internal-only networks.
+meets is unchanged: loopback publish over the no-masquerade host
+attachment (no IP egress from it), transport nets internal-only.
 
 **Residual risk accepted.** (a) A misconfigured compose file that dropped
 the `127.0.0.1:` prefix from the publish would now expose the DP wildcard
 listener beyond loopback; mitigated by the structural compose contract
-pinning the long-form loopback publish (M13 extended), and unchanged for
+pinning the long-form loopback publish (M1), and unchanged for
 bare-metal runs. (b) The embedded DNS resolver on the non-internal
 `stargate-host` attachment still forwards external names, so a
 COMPROMISED data plane retains a DNS side-channel even with IP egress

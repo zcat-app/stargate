@@ -9,7 +9,8 @@
 # to loopback only. T094b splits the services across three Compose networks
 # so only Tor has egress (THREAT-MODEL §5.8): stargate-egress (Tor only),
 # stargate-internal (DP↔tor, internal:true), stargate-cp-tor (CP↔tor,
-# internal:true). This file is the single source of truth for service
+# internal:true); T125 adds stargate-host (non-internal, IP masquerade
+# disabled, DP only) to carry the loopback-only 8881 publish. This file is the single source of truth for service
 # topology, runtime users, and volume mounts. The CP observes
 # Tor lifecycle via the cookie-authenticated ControlPort (tor:9051), not a
 # Docker Engine observer — the docker-socket-proxy auxiliary container was
@@ -261,7 +262,8 @@ services:
     restart: unless-stopped
 
 networks:
-  # T094b: three networks split so only Tor has egress.
+  # T094b three networks + the T125 stargate-host publish net: only Tor
+  # has egress.
   stargate-egress:
     # NOT internal: keeps Docker's default NAT egress. Attached: tor only.
     # This is Tor's sole route to the Tor network — every other service is
