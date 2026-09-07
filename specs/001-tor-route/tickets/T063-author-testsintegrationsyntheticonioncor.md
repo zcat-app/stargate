@@ -1,7 +1,7 @@
 ---
 id: T063
 title: 'Author `tests/integration/synthetic_onion_corpus.txt`'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T063
@@ -23,7 +23,7 @@ decision_refs:
   - 'T061 (direct consumer: `circuit_isolation_corpus_test.go` reads the corpus, one CONNECT per line)'
   - 'T064 (downstream consumer: leak-corpus.txt embeds every corpus entry as a must-not-appear substring)'
   - 'contracts/error-template.md §"Leak-corpus invariant" (every synthetic .onion string from this corpus enters the leak corpus)'
-reviews: {}
+reviews: { round: 2, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

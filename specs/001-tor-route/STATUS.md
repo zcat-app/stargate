@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-06
+**Last updated:** 2026-09-07
 
 ---
 
@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 37 |
+| pending | 36 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 113 |
+| done | 114 |
 | deferred | 1 |
 | **total** | **151** |
 
@@ -37,7 +37,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T060 | Integration test in `tests/integration/same_origin_shared_ci | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T061 | Integration test in `tests/integration/circuit_isolation_cor | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T062 | Author `tests/contract/tor/control_port.go` | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
-| T063 | Author `tests/integration/synthetic_onion_corpus.txt` | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  |  |
 | T064 | Author the curated leak corpus `tests/contract/error-templat | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T065 | Contract test `tests/contract/error-template/route_down_test | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T066 | Contract test `tests/contract/error-template/route_refused_t | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
@@ -85,7 +84,7 @@ _(nothing in flight)_
 
 ## Done
 
-_113 ticket(s) done._
+_114 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -161,6 +160,7 @@ _113 ticket(s) done._
 - T055 — Author `extension/background/hardening.js`
 - T056 — Author `extension/options/options.html` and `extension/options/options
 - T057 — Author `extension/popup/popup.html` and `extension/popup/popup.js`
+- T063 — Author `tests/integration/synthetic_onion_corpus.txt`
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T074 — Extend `control-plane/core/src/main/java/.../SidecarMonitor.java` (fro
 - T075b — Author `tests/reproducibility/extension_test.sh`
