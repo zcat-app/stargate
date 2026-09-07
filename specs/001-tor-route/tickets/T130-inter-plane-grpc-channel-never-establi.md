@@ -1,7 +1,7 @@
 ---
 id: T130
 title: 'Inter-plane gRPC channel never establishes in the compose stack'
-status: in-progress
+status: in-review
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T120 convention)
@@ -21,7 +21,18 @@ spec_refs:
 decision_refs:
    - .specify/memory/constitution.md#Principle-II   # the DP keeps routing degraded — why the stack LOOKS alive while the channel is dead
 reviews: {}
-overrides: []
+overrides:
+   - 2026-09-07, user-approved ("do one more round"): round-2 REWORK's
+     single Major — the degraded-mode journal line used field key
+     `reason` where the control_channel class allows exactly `err` — was
+     a one-token fix the round-2 verdict itself pre-authorized ("one-token
+     fix (`reason`→`err`), then approve"). The token was applied and
+     verified BEFORE the cap escalation fired (verify.sh GREEN
+     PASS=20/0/1; the loginvariants gate's own fixtures at
+     loginvariants_test.go:57 pin exactly `msg="control channel degraded"
+     err=…`). Resolution: override recorded, cycle reset, fresh round-1
+     review of the complete diff. No finding was declined; both round-1
+     Majors are fixed in-tree.
 aborted_attempts: []
 reopens: []
 redteam_findings: []

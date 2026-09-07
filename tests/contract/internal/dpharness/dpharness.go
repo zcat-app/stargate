@@ -105,9 +105,11 @@ func WithUpstream(addr string) Option {
 //
 // This is the forced-fixture lift T050 §Analysis records: the previous
 // plaintext-fake-CP fixtures predate wire-auth.md (T095) and cannot serve
-// the TLS-mandatory client. Callers that never assert a DP dial keep the
-// keyless boot (degraded before the client starts — cold_start_snapshot_
-// test.go seedInterPlaneKeys doc pins that semantic).
+// the TLS-mandatory client. Keys are seeded on EVERY Start (T130: dp.sock
+// is served over mTLS on every boot; a keyless boot would serve no dp.sock
+// at all and fail Start's boot wait) — WithControlPlane's increment is
+// hosting the TLS fake CP so the first WatchEvents dial succeeds, nothing
+// more.
 func WithControlPlane() Option {
 	return func(c *startConfig) { c.controlPlane = true }
 }

@@ -94,10 +94,10 @@ func WritePepper(t *testing.T, keysDir string) {
 // runner's own, so the §6.1 numeric ownership table does not apply
 // here.
 //
-// Called from the WithControlPlane boot path; also usable directly by
-// in-package harnesses (tests/contract/control-grpc) that boot the DP
-// with their own fixture functions. Re-seeding OVERWRITES prior keys —
-// each boot gets one coherent set.
+// Called unconditionally from Start (T130: every boot serves dp.sock
+// over TLS) and from in-package harnesses (tests/contract/control-grpc)
+// that boot the DP with their own fixture functions. Re-seeding
+// OVERWRITES prior keys — each boot gets one coherent set.
 func SeedInterPlaneKeys(t *testing.T, keysDir string) {
 	t.Helper()
 	dpPub, dpPriv, err := ed25519.GenerateKey(rand.Reader)
