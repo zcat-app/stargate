@@ -1,7 +1,7 @@
 ---
 id: T058
 title: 'Contract test in `tests/contract/torrc/isolate_socks_auth_effect_test.'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T058
@@ -28,7 +28,7 @@ decision_refs:
   - tests/contract/tor/control_port_live_test.go (T062): live poll shapes — cookie read + connect + AUTHENTICATE poll, bootstrap PROGRESS=100 poll, BUILT-circuit grace
   - contracts/socks5-auth.md §"Username/password sub-negotiation": UNAME is the first-party domain, NOT a credential — opaque isolation key passed through verbatim
   - docs/process/analysis.md (privacy_critical property-map gate)
-reviews: {}
+reviews: { round: 1, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
