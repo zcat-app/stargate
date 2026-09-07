@@ -41,6 +41,23 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-09-07 — Erratum: FR citation corrected in the SC-002 amendment entry (record-only supersession, T061 round-1 review follow-up)
+
+The 2026-09-07 entry "SC-002 corpus measurement mechanism corrected"
+(below) cites **FR-007** for its bearer-token clause ("bearer token
+verified at the data plane, never re-sent upstream"). That citation is
+wrong: FR-007 pins the SOCKS5 **username**-only passthrough and is silent
+on the password. The bearer-token facts are pinned by **FR-002** (the
+extension sets the inbound SOCKS5 password to the device's bearer token)
+and **FR-006** (the data plane verifies it, HMAC-SHA-256 + install-time
+pepper), with `data-plane/internal/forward/tor.go` `dialUpstream` as the
+code anchor: the DP dials the sidecar with the inbound UNAME verbatim and
+an empty password (PLEN=0) — "auth-layer material that is never re-sent
+upstream". The finding, the decision, and the security analysis of the
+superseded entry are unchanged; only the citation is corrected. Spotted by
+the T061 round-1 codereview (Minor, record-only); filed as a supersession
+because this log's entries are immutable once committed.
+
 ## 2026-09-07 — FR-010 bind policy amended to a container-boundary reading; host loopback-only exposure unchanged (T125 live-run finding, ESCALATE → amend-spec, user-approved)
 
 **Finding (accepted, Major — the local profile's core path was
@@ -147,6 +164,8 @@ keys are harmless in its two remaining roles (isolation-key strings
 here; forbidden substrings in T064's leak corpus); should any future
 consumer use them as addresses, regenerate the corpus with valid
 keypairs (remediation optional, none filed today).
+
+**Superseded by:** §"2026-09-07 — Erratum: FR citation corrected in the SC-002 amendment entry (record-only supersession, T061 round-1 review follow-up)" (citation-only correction; findings, decision, and security analysis stand).
 
 ## 2026-09-07 — `IsolateSOCKSAuth` behavioral redundancy on tor 0.4.9; contract-sheet sensitivity claim corrected (T058 review round 1, ESCALATE → amend-spec)
 

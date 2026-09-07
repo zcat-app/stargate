@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 35 |
-| in-progress | 3 |
-| in-review | 0 |
+| pending | 37 |
+| in-progress | 2 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 119 |
 | deferred | 1 |
-| **total** | **158** |
+| **total** | **160** |
 
 ---
 
@@ -63,6 +63,8 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
+| T127 | Correct T058 comment: DP dials upstream with UNAME only, no  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
+| T128 | Stabilize TestMutualTLSHandshakeEndToEnd benign closeNotify  | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 
 ---
 
@@ -72,7 +74,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T059 | Integration test in `tests/integration/stream_isolation_test | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 | T122 | Fix DP/CP image builds: proto/ outside build contexts | in-progress |  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
-| T125 | Local profile cannot expose 8881: FR-010 bind vs compose pub | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
+| T125 | Local profile cannot expose 8881: FR-010 bind vs compose pub | in-review | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 
