@@ -1,7 +1,7 @@
 ---
 id: T063
 title: 'Author `tests/integration/synthetic_onion_corpus.txt`'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T063
@@ -59,16 +59,18 @@ below):
   and embedded verbatim as substrings by T064 — so the file carries *data
   only*, no prose.
 - **A2 — well-formed v3**: every line matches `^[a-z2-7]{56}\.onion$`
-  (canonical lowercase base32). "Well-formed" is the strong sense: each
-  address's embedded 2-byte checksum is valid per the v3 onion address
-  format (`SHA3-256(".onion checksum" || 32-byte key || 0x03)`, first two
-  bytes base32-encoded in chars 53–56). A random-looking string that fails
-  the checksum is *not* well-formed: the real-Tor sidecar (research.md §7 —
-  the SC-002 run uses real Tor) rejects it at parse time and never attempts
-  a circuit, which would make T061's ≥95-distinct-circuits assertion
-  untestable. The 32-byte keys are random, so the services are unreachable
-  in practice (no descriptor exists) — exactly the spec-Assumptions pairing
-  of "well-formed but not necessarily reachable".
+  (canonical lowercase base32). "Well-formed" is the strong sense per
+  rend-spec-v3 §[ONIONADDRESS]: the 35-byte payload is
+  `key(32) ‖ checksum(2) ‖ version(1)` in exactly that order, with
+  `checksum = SHA3-256(".onion checksum" ‖ key ‖ version)[:2]` and version
+  byte `0x03`. A random-looking string that fails the checksum is *not*
+  well-formed: the real-Tor sidecar (research.md §7 — the SC-002 run uses
+  real Tor) rejects it at parse time and never attempts a circuit, which
+  would make T061's ≥95-distinct-circuits assertion untestable. The 32-byte
+  keys are random, so the services are unreachable in practice (no
+  descriptor exists) — exactly the spec-Assumptions pairing of "well-formed
+  but not necessarily reachable". (Cheap invariant: with version `0x03`
+  last, every correct address's 56th base32 char is `d`.)
 - **A3 — distinctness**: all 100 addresses are pairwise distinct
   (SC-002: "100 distinct").
 - **A4 — no reference-target conflation**: the corpus does NOT contain the
@@ -91,8 +93,8 @@ below):
   assert "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion" not in lines
   for ln in lines:
       assert re.fullmatch(r"[a-z2-7]{56}\.onion", ln), f"bad shape: {ln}"
-      blob = base64.b32decode(ln[:-6].upper())
-      key, version, chk = blob[:32], blob[32], blob[33:]
+      blob = base64.b32decode(ln[:56].upper())
+      key, chk, version = blob[:32], blob[32:34], blob[34]
       assert version == 3, f"bad version byte: {ln}"
       want = hashlib.sha3_256(b".onion checksum" + key + bytes([version])).digest()[:2]
       assert chk == want, f"checksum mismatch: {ln}"
@@ -127,11 +129,17 @@ verify.sh green; mitigation is the A5 command recorded here for re-runs and
 T061 consuming the file verbatim.
 
 **Provenance / regeneration.** The file is generated deterministically
-(fixed-seed PRNG → 100 random 32-byte keys → append version byte `0x03` and
-the SHA3-256 checksum → lowercase base32 + `.onion`), so a re-run of the
+(100 32-byte keys expanded as `SHA-256("stargate T063 synthetic onion
+corpus" ‖ big-endian uint32 index)` for index 0..99 → each address is
+lowercase `base32(key ‖ SHA3-256(".onion checksum" ‖ key ‖ 0x03)[:2] ‖
+0x03) + ".onion"` per rend-spec-v3 §[ONIONADDRESS]), so a re-run of the
 documented procedure is byte-stable and the corpus is auditable without
 trusting the author. The generator lives in the implementation commit
-message; the committed artifact is pure data per A1.
+message; the committed artifact is pure data per A1. *(Round-1 correction:
+the first generation assembled the payload as key ‖ version ‖ checksum —
+caught by codereview round 1 against the rend-spec byte order and the
+published reference addresses; corpus and A5 regenerated in the correct
+order.)*
 
 **Parallel note (2026-09-07).** Run concurrently with T062 by explicit user
 instruction. Both tickets' file sets are disjoint (`tests/contract/tor/
