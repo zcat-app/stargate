@@ -1,7 +1,7 @@
 ---
 id: T062
 title: 'Author `tests/contract/tor/control_port.go`'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T062
@@ -30,7 +30,7 @@ decision_refs:
   - docs/process/analysis.md (privacy_critical property-map gate)
   - tickets/T019a (precedent: a helper ticket ships library code + a committed self-test)
   - AGENTS.md doctrine: validate at edges (bounded reads on replies), no secrets in logs/prompts
-reviews: {}
+reviews: { round: 2, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
