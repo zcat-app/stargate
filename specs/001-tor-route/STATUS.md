@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 37 |
-| in-progress | 0 |
+| pending | 36 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 126 |
@@ -64,14 +64,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T126 | Pin DP UNAME forwarding: same target, distinct usernames, vi | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
-| T128 | Stabilize TestMutualTLSHandshakeEndToEnd benign closeNotify  | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T132 | Inter-plane follow-ups from T130 (re-push, ALPN pins, fakecp | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T128 | Stabilize TestMutualTLSHandshakeEndToEnd benign closeNotify  | in-progress |  | 6: Polish & Cross-Cutting Concerns |
 
 ---
 

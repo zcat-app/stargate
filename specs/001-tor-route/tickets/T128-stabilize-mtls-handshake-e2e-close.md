@@ -1,7 +1,7 @@
 ---
 id: T128
 title: 'Stabilize TestMutualTLSHandshakeEndToEnd benign closeNotify close'
-status: pending
+status: in-progress
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T121 convention); observed RED on 001-tor-route during the 2026-09-07 T061 cherry-pick verify

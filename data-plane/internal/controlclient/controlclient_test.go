@@ -466,9 +466,13 @@ func TestMutualTLSHandshakeEndToEnd(t *testing.T) {
 	if _, err := conn.Write([]byte("ping")); err != nil {
 		t.Fatalf("post-handshake write: %v", err)
 	}
-	if err := conn.Close(); err != nil {
-		t.Fatalf("close: %v", err)
-	}
+	// Close is deliberately best-effort (T128): tls.Conn.Close also writes
+	// the closeNotify alert, and when the server goroutine's read+close
+	// wins the race that write hits EPIPE — Close returns "failed to send
+	// closeNotify alert (but connection was closed anyway)", a benign,
+	// signal-free error for an already-closed conn. The property under
+	// test is ground-truthed by the serverErr channel below, not by Close.
+	_ = conn.Close()
 	if err := <-serverErr; err != nil {
 		t.Errorf("server side of the handshake/round-trip failed: %v", err)
 	}
