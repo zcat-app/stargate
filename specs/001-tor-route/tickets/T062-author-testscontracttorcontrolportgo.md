@@ -1,7 +1,7 @@
 ---
 id: T062
 title: 'Author `tests/contract/tor/control_port.go`'
-status: pending
+status: in-review
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T062
@@ -230,3 +230,36 @@ present; image USER tor owns the 0640 cookie).
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+**Falsification battery outcomes (§Acceptance #5), recorded pre-review:**
+
+- **(i) wrong cookie path fails loudly** — exercised against the live
+  sidecar (isolated module copy, own compose project): with `CookieAuthPath`
+  pointed at the T087 wrong path `/var/lib/tor/.tor/control_auth_cookie`,
+  the auth subtest fails loudly with
+  `read control cookie (docker compose exec tor cat /var/lib/tor/.tor/control_auth_cookie failed): cat: No such file or directory`;
+  with the authoritative path restored the suite is green. Re-gated at
+  docker cadence: the live auth subtest reads the invariant-#11 path on
+  every named run (R1 residue — not PR-gated).
+- **(ii) CRLF stripped → not a silent success** — hermetic
+  `AuthenticateSuccessAndFraming` pins the exact wire bytes
+  (`AUTHENTICATE <hex>\r\n`); a framing mutation fails that assertion.
+- **(iii) 5xx → named error, not nil-success** — hermetic
+  `ErrorStatus551` / `ErrorStatus513` (plus the live auth-failure subtest,
+  where real tor answered `515 Authentication failed` and the parser named
+  it).
+- **(iv) dot-stuffing parsed correctly** — hermetic
+  `DataBlockWithDotStuffing` (un-stuffing) and
+  `TerminatorOnlyWhenLineExactlyDot` (`..` is data, `.` terminates).
+- **(v) dump-then-read deadlock is structurally excluded** — the live
+  `LiveBootstrapPollViaSession` subtest drove many sequential Commands
+  through ONE real session (passed against the production tor image,
+  bootstrap PROGRESS=100), and the hermetic suite drives the interleaved
+  reader directly; a write-everything-first regression deadlocks the live
+  subtest into its named deadline failure.
+
+**Round-1 review note:** the reviewer independently re-ran the hermetic
+suite (PASS) and confirmed items (ii)–(iv) evidence; its Major finding (the
+`maxReplyLines` bound had no demonstrating test → `LineCountOverBound`
+added) and two Minor doc items (Command discard-after-error contract; this
+battery record) were fixed in round 2.
