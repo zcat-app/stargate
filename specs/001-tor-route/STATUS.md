@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 34 |
-| in-progress | 0 |
+| pending | 37 |
+| in-progress | 2 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 118 |
 | deferred | 1 |
-| **total** | **153** |
+| **total** | **158** |
 
 ---
 
@@ -31,7 +31,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T059 | Integration test in `tests/integration/stream_isolation_test | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T061 | Integration test in `tests/integration/circuit_isolation_cor | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T064 | Author the curated leak corpus `tests/contract/error-templat | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T065 | Contract test `tests/contract/error-template/route_down_test | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
@@ -63,12 +62,18 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T119 | Gate invalid-path field preservation in options.save.test.js | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
 | T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
+| T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
+| T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
+| T125 | Local profile cannot expose 8881: FR-010 bind vs compose pub | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T059 | Integration test in `tests/integration/stream_isolation_test | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
+| T122 | Fix DP/CP image builds: proto/ outside build contexts | in-progress |  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 

@@ -1,7 +1,7 @@
 ---
 id: T059
 title: 'Integration test in `tests/integration/stream_isolation_test.go`'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T059
@@ -109,6 +109,15 @@ re-proof, through the DP, of the isolation T058 pins at the torrc level.
   pull), restarts `stargate-control`, and lets the request-retry window
   absorb the CP's argon2id load + `ReloadTokens` push to the DP. The token
   lives only in run-time memory/pipe; never in source, argv, or logs.
+  The same seed step pre-creates `keys/` in that volume (implement-phase
+  refinement, live-run finding 2026-09-07): without it the CP cannot
+  start on a fresh volume set (rw child mount under the :ro parent —
+  runc EROFS; product gap filed as T123). Bring-up is two-phase
+  (implement-phase refinement, live-run finding #2): tor is upped and
+  bootstrapped under the suite's own 5-minute deadline BEFORE the full
+  stack, because the tor healthcheck's ~150 s bootstrap window can
+  abort a single-phase `up` on a slow Tor day (product gap filed as
+  T124).
 
 ### Must hold
 
@@ -149,6 +158,31 @@ re-proof, through the DP, of the isolation T058 pins at the torrc level.
 - **Live Tor network + both onion services reachable** (release-tag
   opt-in via `STARGATE_RUN_NETWORK_TESTS=1`; same cadence as T033).
   Environmental, not a contract gap; a dead target fails loudly.
+- **Spec-level blocker (live phase, 2026-09-07): T125.** The live run got
+  as far as a fully-up stack (post T122 build fix + T123/T124 harness
+  compensations + init-equivalent keys/pepper/volume-root provisioning),
+  and then proved the DP's in-container loopback bind (FR-010) is
+  unreachable through the host-published port (FR-005's `127.0.0.1:8881`)
+  AND from compose neighbours — host CONNECT → connection refused while
+  the DP's own logs show `startup listener=127.0.0.1:8881`. The live
+  CONNECT phase cannot pass until T125's amend-spec decision lands.
+- **Operator provisioning prerequisite (round-1 review Finding 1).** The
+  harness automates ONLY the tokens.yaml + keys/-mountpoint half of the
+  provisioning; the key material itself stays the release-run operator's
+  job (T033's approved residue, restated precisely): before the live
+  command, run the init-equivalent of `scripts/stargate init` steps 2–3
+  against THIS project's volume names — ed25519 keypairs + 32-byte pepper
+  into `<project>_stargate-keys` (cp.priv 0600 5101:5100, dp.priv 0600
+  5102:5100, pubs 0644, pepper 0640 cp:ipc) and volume-root ownership
+  (stargate-keys 5101:5100 0750, stargate-ipc 5102:5100 0770,
+  stargate-control-state / stargate-dp-state / stargate-tor-config
+  0750) — without it both planes fail-fast on the missing pepper
+  (DP `auth.LoadPepper` → exit 1; CP `readPepper` → IllegalStateException).
+  A shared init-equivalent provisioning helper for the full-stack suites
+  is the T123/T126-era follow-up; this file deliberately does not
+  re-implement init per-suite. Given the T125 blockage, "runnable the day
+  T125 lands" means runnable **with** this prerequisite documented and
+  performed.
 - **Compose/volume mechanics of token seeding** (volume subpath write via
   short-lived container + CP restart). If compose semantics change, the
   seed step fails at run time (loud), and the hermetic gate still
@@ -178,8 +212,9 @@ re-proof, through the DP, of the isolation T058 pins at the torrc level.
    (c) both circuits appear BUILT in `GETINFO circuit-status`. Failures
    name the broken link (auth / route / isolation) with tor log tail
    attached.
-2. **Runnable (live, release-tag cadence):**
-   `cd tests/integration && STARGATE_RUN_NETWORK_TESTS=1 go test -run TestStreamIsolationPerFirstPartyDomain -v -timeout 25m`
+2. **Runnable (live, release-tag cadence, after the T125 decision AND
+   the operator provisioning prerequisite documented in §Residue):**
+   `cd tests/integration && STARGATE_RUN_NETWORK_TESTS=1 go test -run TestStreamIsolationPerFirstPartyDomain -v -timeout 35m`
 3. **Hermetic gate:** `bash scripts/verify.sh` green — the test compiles
    and vets in the go-workspace gate and env-skips its live body.
 
