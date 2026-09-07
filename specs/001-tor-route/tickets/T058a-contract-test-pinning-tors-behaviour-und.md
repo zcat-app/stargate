@@ -1,9 +1,9 @@
 ---
 id: T058a
 title: 'Pin no-username circuit sharing under IsolateSOCKSAuth (tor/ suite)'
-status: pending
+status: in-review
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-09-07
 source: tasks.md#T058a
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
@@ -121,19 +121,26 @@ Property map (required: `privacy_critical: true`), grounded 2026-09-07 at
 
 1. `tests/contract/tor/username_less_isolation_test.go` exists,
    `//go:build docker`, package `tor`, test `TestUsernameLessIsolation` with
-   subtests:
+   subtests (each subtest owns its sessions outright — Go subtest cleanups
+   run at SUBTEST end, so sessions are never handed across subtests;
+   amended at implement time after the first live run, see §Notes):
    - `NoAuthAcceptedBothConnections` — two independent exec/nc SOCKS5
      sessions; each greeting `\x05\x01\x00` answered by exactly
-     `\x05\x00` (ticket assertion (a)); each CONNECT (ATYP=3, reference
-     onion:80) answered `VER=5 REP=0`.
-   - `NoAuthStreamsShareCircuit` — with both connections held open,
+     `\x05\x00` (ticket assertion (a)).
+   - `NoAuthStreamsShareCircuit` — pairs two fresh sessions via
+     `ulPairConnect` (dial+greet+CONNECT with bounded per-attempt retry:
+     an onion CONNECT right after PROGRESS=100 fails transiently while tor
+     fetches descriptors — T033's retry-window precedent, observed live as
+     REP=1 within seconds of bootstrap); with both CONNECTed,
      `GETINFO stream-status` (via T062 helper) shows exactly two lines for
      `<reference-onion>:80`; their CircIDs are equal, non-zero, and present
      in `GETINFO circuit-status` as BUILT (ticket assertion (b)).
    - `CalibrationDistinctUsernamesDiverge` — control: two connections with
      method `0x02` and distinct usernames attach to distinct CircIDs
      (same reading machinery; per `contracts/torrc.md`
-     §"isolate_socks_auth_effect_test.go").
+     §"isolate_socks_auth_effect_test.go"). Preceded by a drain wait until
+     the previous subtest's streams detach, so the exactly-two count sees
+     only its own streams.
 2. Suite brings up its own compose project (`stargate-t058a-test`) with
    pre-registered `down --volumes --remove-orphans` cleanup (T019b/T062
    conventions), distinct from sibling suites' projects.
@@ -162,3 +169,44 @@ Property map (required: `privacy_critical: true`), grounded 2026-09-07 at
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+Implement-time amendments (2026-09-07, live-run findings, worktree
+`t058a`):
+
+1. First live run failed with "service tor is not running": the suite had
+   reused T062's `cpCompose` helper (which bakes T062's project const) for
+   up/down while its exec transports used `stargate-t058a-test` — the run
+   brought tor up under the WRONG project and polled an empty one. Fixed by
+   the per-suite `ulCompose` runner (the T032/T062 re-implementation
+   precedent each suite already follows). The mis-up was cleaned down by the
+   suite's own cleanup; the parallel T058 session's containers were never
+   touched (distinct project names did their job).
+2. Sessions cannot be handed across subtests: Go runs a subtest's cleanups
+   when the SUBTEST ends, so subtest-1-owned sessions arrived closed at
+   subtest 2 ("file already closed" on the CONNECT write). Restructured:
+   each subtest owns its sessions outright; subtest 1 closes its
+   greeting-only sessions before subtest 2 counts streams.
+3. `ulPairConnect` adds the bounded dial+greet+CONNECT retry: the first
+   calibration CONNECT got REP=1 within seconds of PROGRESS=100 (descriptor
+   fetch + circuit-builder warmup), the exact transience T033's
+   90 s retry window exists for. A true pin regression fails every attempt
+   and the deadline Fatal carries the last error verbatim.
+4. Root cause of the persistent REP=1 storms (runs 3–4, named by the tor
+   log tail this file attaches to failures): `connect()` passed the
+   stream-status match target `"onion:80"` whole as the SOCKS5 ATYP=domain
+   DST.ADDR — the wire field is the bare hostname; the port belongs only in
+   the trailing DST.PORT bytes. tor read a 59-char onion and logged
+   "malformed hostname" on every attempt. The independent Python reference
+   client (bare onion) succeeded in 1 s against the same container, which
+   isolated the wire difference. Fixed: `connect(ulOnion)`.
+5. Calibration-subtest failure decoded from the same forensics:
+   "Socks version 120 not recognized" = 0x78 = the PASSWD byte parsed as a
+   NEW handshake — `greetingUserPass` appended `01 01 'x'` (a stray extra
+   0x01), so tor consumed PLEN=1, PASSWD=0x01 and left `'x'` in the stream.
+   Fixed to RFC 1929 §2 shape (`01 'x'`). After both fixes the full suite
+   PASSES live (67 s warm): greeting accepted both, NO_AUTH streams shared
+   circuit 14 (BUILT cross-check), distinct usernames diverged (18 vs 17).
+6. `ulConnectWait` (3 m) provenance corrected: the widened window was
+   justified by a misdiagnosis (runs 3–4 failures were #4, not warmup).
+   Kept as cold-boot insurance with the honest note in the const comment;
+   costs nothing on the happy path.
