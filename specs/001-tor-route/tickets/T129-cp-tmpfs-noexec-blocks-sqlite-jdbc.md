@@ -1,7 +1,7 @@
 ---
 id: T129
 title: 'CP crash-loop: noexec tmpfs /tmp blocks sqlite-jdbc native lib'
-status: in-review
+status: done
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T120 convention)
@@ -18,7 +18,7 @@ spec_refs:
    - specs/001-tor-route/spec.md#FR-012   # CP persistence (SQLite) is the surface that cannot initialise
    - specs/001-tor-route/tasks.md#T059   # discoverer (live run, 2026-09-07)
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 38 |
-| in-progress | 2 |
-| in-review | 1 |
+| in-progress | 0 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 120 |
+| done | 123 |
 | deferred | 1 |
 | **total** | **162** |
 
@@ -63,18 +63,16 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
+| T126 | Pin DP UNAME forwarding: same target, distinct usernames, vi | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 | T127 | Correct T058 comment: DP dials upstream with UNAME only, no  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T128 | Stabilize TestMutualTLSHandshakeEndToEnd benign closeNotify  | 6: Polish & Cross-Cutting Concerns |  | ✓ |
+| T130 | Inter-plane gRPC channel never establishes in the compose st | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T059 | Integration test in `tests/integration/stream_isolation_test | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
-| T122 | Fix DP/CP image builds: proto/ outside build contexts | in-progress |  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
-| T129 | CP crash-loop: noexec tmpfs /tmp blocks sqlite-jdbc native l | in-review |  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
+_(nothing in flight)_
 
 ---
 
@@ -88,7 +86,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_120 ticket(s) done._
+_123 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -166,6 +164,7 @@ _120 ticket(s) done._
 - T057 — Author `extension/popup/popup.html` and `extension/popup/popup.js`
 - T058 — Contract test in `tests/contract/torrc/isolate_socks_auth_effect_test.
 - T058a — Pin no-username circuit sharing under IsolateSOCKSAuth (tor/ suite)
+- T059 — Integration test in `tests/integration/stream_isolation_test.go`
 - T060 — Integration test in `tests/integration/same_origin_shared_circuit_test
 - T061 — Integration test in `tests/integration/circuit_isolation_corpus_test.g
 - T062 — Author `tests/contract/tor/control_port.go`
@@ -209,4 +208,6 @@ _120 ticket(s) done._
 - T115 — Fix the wire gate's comment-sensitive impl-detection probe
 - T116 — Fix ForbiddenDetailRejected journal-read race (poll the marker)
 - T118 — Clear the bearer-token field after a successful save
+- T122 — Fix DP/CP image builds: proto/ outside build contexts
 - T125 — Local profile cannot expose 8881: FR-010 bind vs compose publish
+- T129 — CP crash-loop: noexec tmpfs /tmp blocks sqlite-jdbc native lib

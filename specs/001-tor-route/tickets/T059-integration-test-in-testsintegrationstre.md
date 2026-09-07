@@ -1,7 +1,7 @@
 ---
 id: T059
 title: 'Integration test in `tests/integration/stream_isolation_test.go`'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T059
@@ -24,7 +24,7 @@ spec_refs:
 decision_refs:
    - .specify/memory/constitution.md#Principle-VII   # tests-first: FR-002's privacy-critical test clause; the named test IS the deliverable
    - .specify/memory/constitution.md#Principle-III   # the test drives only the routed path (8881 → DP → tor:9050); control-port reads ride the compose-internal channel
-reviews: {}
+reviews: { round: 2, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -158,14 +158,15 @@ re-proof, through the DP, of the isolation T058 pins at the torrc level.
 - **Live Tor network + both onion services reachable** (release-tag
   opt-in via `STARGATE_RUN_NETWORK_TESTS=1`; same cadence as T033).
   Environmental, not a contract gap; a dead target fails loudly.
-- **Spec-level blocker (live phase, 2026-09-07): T125.** The live run got
-  as far as a fully-up stack (post T122 build fix + T123/T124 harness
-  compensations + init-equivalent keys/pepper/volume-root provisioning),
-  and then proved the DP's in-container loopback bind (FR-010) is
-  unreachable through the host-published port (FR-005's `127.0.0.1:8881`)
-  AND from compose neighbours — host CONNECT → connection refused while
-  the DP's own logs show `startup listener=127.0.0.1:8881`. The live
-  CONNECT phase cannot pass until T125's amend-spec decision lands.
+- **Live-gate blocker (updated 2026-09-07, post-cascade): T130 (open).**
+  The T125 spec conflict was resolved and landed (wildcard bind +
+  stargate-host publish net, both rounds), and T129 landed the CP tmpfs
+  fix — the live run now reaches a fully-booted stack with the published
+  port answering. The remaining blocker is T130: the inter-plane gRPC
+  channel (first-ever Java-CP↔Go-DP mTLS execution) never establishes,
+  so no ReloadTokens push lands and every CONNECT is auth-rejected. The
+  T123/T124 harness compensations in this file stay until their product
+  fixes land behind the stack smoke test (T131).
 - **Operator provisioning prerequisite (round-1 review Finding 1).** The
   harness automates ONLY the tokens.yaml + keys/-mountpoint half of the
   provisioning; the key material itself stays the release-run operator's

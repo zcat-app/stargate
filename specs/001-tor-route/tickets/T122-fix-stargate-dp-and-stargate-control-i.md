@@ -1,7 +1,7 @@
 ---
 id: T122
 title: 'Fix DP/CP image builds: proto/ outside build contexts'
-status: in-progress
+status: done
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T120 convention)
@@ -18,7 +18,7 @@ spec_refs:
    - specs/001-tor-route/spec.md §"User Story 1" acceptance scenario 1   # "docker-compose.local.yml up" — the acceptance scenarios presuppose the stack BUILDS
    - specs/001-tor-route/tasks.md#T059   # discoverer: live run failed at `docker compose up -d --build` (2026-09-07)
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
