@@ -102,6 +102,46 @@ ticket/STATUS prose).
 
 ---
 
+## 2026-09-07 — `IsolateSOCKSAuth` behavioral redundancy on tor 0.4.9; contract-sheet sensitivity claim corrected (T058 review round 1, ESCALATE → amend-spec)
+
+**Finding (accepted, Major).** `contracts/torrc.md`
+§"isolate_socks_auth_effect_test.go" claimed the US2 contract test is a
+gate on the loaded `torrc` such that "if `IsolateSOCKSAuth` were silently
+dropped, this test fails immediately". T058's mutation battery — run by
+the implementer and independently reproduced by the codereview agent —
+proved that false on the pinned tor `0.4.9.11-1~d12.bookworm+1`: with the
+directive removed from `sidecars/tor/torrc` (mutation verified
+in-container — the baked `/etc/tor/torrc` bytes AND `GETCONF SocksPort`
+both show it absent), `TestIsolateSOCKSAuthDistinctCircuits` still passes
+with the two distinct-identity streams on distinct circuits; the control
+experiment (two CONNECTs, identical identity) shows them sharing one
+circuit. I.e. on this Tor version, distinct SOCKS username/password
+identities isolate regardless of the flag, and identical identities share
+regardless — the directive is behaviorally redundant for this probe
+family, so the test cannot detect its own namesake's removal.
+
+**Decision.** (a) The contract sheet is amended to state what the test
+actually gates — the US2 acceptance scenario 1 *behavioral* property
+(distinct first-party auth identities → distinct circuits on the real
+sidecar; a Tor upgrade that merges them fails the digest-bump PR's live
+run) — and to attribute dropped-directive detection to the static gates:
+invariant #1 via T029's byte-match and T030's invariants, plus T032's
+live GETCONF. (b) The `IsolateSOCKSAuth` directive itself STAYS in the
+baked `torrc` unchanged (invariant #1 remains a privacy invariant per the
+contract's own change procedure): it is the spec-pinned declaration of
+the isolation intent, costs nothing, defends against a future Tor
+release changing isolation defaults (where it becomes load-bearing
+again), and removing it would require a fresh entry here per
+contracts/torrc.md §"When this contract changes" item 4.
+
+**Residual risk.** A reader of the older contract prose could over-trust
+the behavioral test's sensitivity; mitigated by this entry, the amended
+contract sheet, and the ticket's §Notes record (T058). The behavioral
+property itself remains gated and verified live (T058's test, docker
+cadence). None additional.
+
+---
+
 ## 2026-07-16 — docker-socket-proxy mechanism removed (T094a)
 
 **Supersedes** §"2026-07-06 — docker-socket-proxy `CONTAINERS=1` read

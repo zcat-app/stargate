@@ -105,11 +105,24 @@ baked in. (T087 adds a cold-volume companion that asserts Docker
 ### `isolate_socks_auth_effect_test.go`
 
 Spins up the Tor sidecar; issues two SOCKS5 CONNECTs with distinct
-username; queries the control port for circuit status; asserts the two
+usernames; queries the control port for circuit status; asserts the two
 streams attached to distinct circuit IDs. This is the same test
 described in spec User Story 2 acceptance scenario 1, but as a contract
-gate on the `torrc` config Tor loaded — if `IsolateSOCKSAuth` were
-silently dropped, this test fails immediately.
+gate on the `torrc` config Tor loaded: it pins the *behavioral* property
+— distinct SOCKS auth identities attach to distinct circuits on the real
+sidecar — so a Tor upgrade that ever merges distinct-identity streams
+fails here, loudly, at the digest-bump PR's live run. Detecting a
+*dropped directive*, by contrast, is the static gates' job, not this
+test's: `IsolateSOCKSAuth`'s presence is pinned by invariant #1 via
+T029's byte-match and T030's invariants, and T032's live GETCONF proves
+Tor loaded what the image baked. (Amended 2026-09-07 per T058's
+mutation battery, accepted in SECURITY-DECISIONS.md: on the pinned tor
+0.4.9, distinct auth identities isolate even with `IsolateSOCKSAuth`
+removed from the config, and identical identities share a circuit with
+or without it — so an earlier draft's claim that this test "fails
+immediately" on a silent directive drop was empirically false; the
+directive stays pinned as cheap defense-in-depth against Tor isolation
+defaults changing.)
 
 ---
 

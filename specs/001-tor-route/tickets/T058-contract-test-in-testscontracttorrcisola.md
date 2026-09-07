@@ -1,9 +1,9 @@
 ---
 id: T058
 title: 'Contract test in `tests/contract/torrc/isolate_socks_auth_effect_test.'
-status: pending
+status: in-progress
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: 2026-09-07
 source: tasks.md#T058
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
@@ -60,9 +60,13 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
     Principle III per-first-party stream isolation).
   - Auth identity is the ONLY variable: both CONNECTs hit the same target
     from the same client address, so circuit distinctness is attributable to
-    `IsolateSOCKSAuth` alone — with the flag dropped, tor's default shares one
-    circuit across both streams and this test fails (torrc.md's "fails
-    immediately" clause).
+    the auth-identity difference. *(Grounding correction, 2026-09-07: the
+    mutation battery below proved this does NOT attribute to
+    `IsolateSOCKSAuth` specifically on tor 0.4.9 — distinct identities
+    isolate with the flag dropped too. The test gates the US2 scenario-1
+    behavioral property; flag-drop detection rests on the static gates
+    (T029/T030) + T032's GETCONF. Recorded here so the acceptance tells the
+    truth.)*
   - Circuit IDs are read through the cookie-authenticated control port via
     T062's helper (`tests/contract/tor/control_port.go`), never from tor log
     lines (torrc.md #8: Stargate does not consume Tor logs as data).
@@ -115,14 +119,18 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
      first-party domain string, CONNECT (ATYP=0x03) to the spec-pinned
      reference onion `duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion:443`
      → reply rep 0x00. `GETINFO stream-status` then shows exactly one
-     SUCCEEDED stream for that target; record (streamID → circuitID).
+     attached stream for that target (state SENTCONNECT or SUCCEEDED —
+     both prove attachment; calibrated field order
+     `<StreamID> <STATE> <CircuitID> <target>`); its circuit must carry the
+     identity A `SOCKS_USERNAME` tag in `circuit-status`.
    - `SecondStreamDistinctUsernameAttaches`: same target, second distinct
      UNAME → rep 0x00; the new stream (streamID set-difference) maps to its
      circuit ID.
    - `CircuitsAreDistinct`: the two circuit IDs differ AND both appear as
-     entries in `GETINFO circuit-status` — the literal control-port query the
-     contract names. A shared circuit ID fails the test (the
-     dropped-`IsolateSOCKSAuth` regression).
+     identity-tagged entries in `GETINFO circuit-status` — the literal
+     control-port query the contract names. A shared circuit fails the test
+     (distinct first-party identities did not isolate → the US2 privacy
+     property does not hold on this sidecar).
 3. Runnable command: `cd tests/contract && go test -tags docker ./torrc/
    -run TestIsolateSOCKSAuth -v -timeout 20m` (manual), or
    `STARGATE_TEST_TAGS=docker scripts/verify.sh` (named Docker job). Hermetic
@@ -144,13 +152,67 @@ Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
 
 Design note (grounding, 2026-09-07): both CONNECTs intentionally target the
 SAME destination (the spec-pinned reference onion) with distinct usernames —
-the sharpest probe of `IsolateSOCKSAuth`: tor's default shares one circuit
-across streams regardless of destination, so same-target + distinct-username
-+ distinct-circuit proves the auth-isolation flag did the isolating.
-Scenario 1's two-distinct-destinations variant through port 8881 is T059's
-end-to-end scope; the contract sheet for THIS test (torrc.md
+the sharpest probe of auth-identity isolation: tor's default shares one
+circuit across streams regardless of destination, so same-target +
+distinct-username + distinct-circuit isolates the auth identity as the only
+variable. Scenario 1's two-distinct-destinations variant through port 8881
+is T059's end-to-end scope; the contract sheet for THIS test (torrc.md
 §"isolate_socks_auth_effect_test.go") pins only "two SOCKS5 CONNECTs with
 distinct username". Usernames are opaque isolation keys (socks5-auth.md:
 UNAME is the first-party domain, NOT a credential); stream-correlation uses
 the streamID set-difference across the two handshakes because both streams
 share one target string.
+
+Calibration (live, production image, 2026-09-07): the test's wire parsing is
+grounded in observed production bytes, not assumed shapes — stream-status
+entries are `<StreamID> <STATE> <CircuitID> <target>` (attached from
+SENTCONNECT onward; the reference onion's service closes the idle
+connection after ~30s so the entry disappears while the SOCKS session is
+still open — polls run close to each CONNECT); single-entry GETINFO values
+arrive glue-attached to their keyword (`250-stream-status=<entry>`), which
+the parsers strip; circuit-status entries carry `SOCKS_USERNAME=`/
+`SOCKS_PASSWORD=` identity tags, used as the identity→circuit correlation
+key. `go test` caching note: live evidence runs use `-count=1` (a cached
+PASS re-prints old output without touching docker — this fooled the first
+mutation attempt).
+
+Mutation battery + FINDING (2026-09-07, recorded for review): with
+`IsolateSOCKSAuth` sed-dropped from `sidecars/tor/torrc` (mutation verified
+in-container: baked file bytes AND `GETCONF SocksPort` both show the flag
+absent), the test STILL PASSES — tor 0.4.9 puts distinct-username streams
+on distinct circuits regardless of the flag, and same-username streams on
+one shared circuit (both halves observed live). I.e. the flag's presence is
+behaviorally redundant for this probe family on the pinned tor version, so
+contracts/torrc.md §"isolate_socks_auth_effect_test.go"'s "if
+IsolateSOCKSAuth were silently dropped, this test fails immediately" is
+overstated: flag-drop detection rests on the static gates (T029 byte-match,
+T030 invariants) plus T032's live GETCONF. What THIS test gates — and what
+no other gate caught — is the US2 acceptance scenario 1 behavioral property
+itself: distinct first-party identities → distinct circuits on the real
+sidecar (the property the feature advertises; a tor upgrade that ever
+merges them fails here, loudly, at the digest-bump PR's live run). The
+contract-doc correction is an amend-spec question and is surfaced to
+review/the user, not absorbed silently here.
+
+Escalation resolution (2026-09-07, user picked menu option 5 — amend):
+review round 1 returned ESCALATE (1 Major = the contract-sheet overclaim
+above, independently reproduced by the reviewer's own mutation battery;
+2 Minor doc-level items). Resolution as approved: (a)
+`contracts/torrc.md` §"isolate_socks_auth_effect_test.go" amended to
+state the behavioral property this test gates and to attribute
+dropped-directive detection to the static gates (T029/T030/T032) —
+probe: `grep -c "fails immediately" specs/001-tor-route/contracts/torrc.md`
+→ 0; the torrc template bytes themselves are UNCHANGED (invariant #1
+stands; the defense-in-depth rationale for keeping the directive is
+recorded in the amendment). (b) Accepted-finding rationale appended to
+SECURITY-DECISIONS.md (2026-09-07 `IsolateSOCKSAuth` entry). (c) The two
+Minors folded into this ticket's diff: `Close()` doc comment now
+describes the kill grace as the expected path (openbsd nc does not exit
+on stdin EOF — observed 4/4 sessions), and the dead
+`circuitA != circuitB` guard around the final Logf removed (the
+equal-circuit case early-returns above it). The §Out-of-scope line "no
+changes to the contract document" is superseded for this one prose
+section by the user's amend decision. Ticket status manually reset
+escalated → in-progress per run-task.sh's escalated-resume instruction
+(grounding and implementation are done; what re-reviews is the amended
+input set).
