@@ -17,9 +17,9 @@
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 116 |
+| done | 117 |
 | deferred | 1 |
-| **total** | **152** |
+| **total** | **153** |
 
 ---
 
@@ -31,7 +31,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T058a | Contract test pinning Tor''s behaviour under `IsolateSOCKSAu | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T059 | Integration test in `tests/integration/stream_isolation_test | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T060 | Integration test in `tests/integration/same_origin_shared_ci | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T061 | Integration test in `tests/integration/circuit_isolation_cor | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
@@ -64,6 +63,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T117 | Reconcile arch §14.4 hardening-record example with T091 | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
 | T119 | Gate invalid-path field preservation in options.save.test.js | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
+| T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 
 ---
 
@@ -83,7 +83,7 @@ _(nothing in flight)_
 
 ## Done
 
-_116 ticket(s) done._
+_117 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -160,6 +160,7 @@ _116 ticket(s) done._
 - T056 — Author `extension/options/options.html` and `extension/options/options
 - T057 — Author `extension/popup/popup.html` and `extension/popup/popup.js`
 - T058 — Contract test in `tests/contract/torrc/isolate_socks_auth_effect_test.
+- T058a — Pin no-username circuit sharing under IsolateSOCKSAuth (tor/ suite)
 - T062 — Author `tests/contract/tor/control_port.go`
 - T063 — Author `tests/integration/synthetic_onion_corpus.txt`
 - T068a — Contract test for the **response-header invariants** of the privacy-sa

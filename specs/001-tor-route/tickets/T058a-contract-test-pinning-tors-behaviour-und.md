@@ -1,7 +1,7 @@
 ---
 id: T058a
 title: 'Pin no-username circuit sharing under IsolateSOCKSAuth (tor/ suite)'
-status: in-review
+status: done
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T058a
@@ -22,7 +22,7 @@ spec_refs:
 decision_refs:
    - .specify/memory/constitution.md#Principle-IV   # this test IS the sidecar contract test the manual-promotion flow runs (step 2)
    - .specify/memory/constitution.md#Principle-VII  # tests-first: pin derived from spec, not from observed code
-reviews: {}
+reviews: { round: 1, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
