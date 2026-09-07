@@ -14,12 +14,12 @@
 | Status | Count |
 |---|---|
 | pending | 38 |
-| in-progress | 0 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 123 |
 | deferred | 1 |
-| **total** | **162** |
+| **total** | **163** |
 
 ---
 
@@ -72,7 +72,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T131 | Stack smoke test: full-path bring-up acceptance (RED until T | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 
