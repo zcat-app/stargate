@@ -1,7 +1,7 @@
 ---
 id: T128
 title: 'Stabilize TestMutualTLSHandshakeEndToEnd benign closeNotify close'
-status: in-progress
+status: done
 created: 2026-09-07
 last_updated: 2026-09-07
 source: hand-filed (T121 convention); observed RED on 001-tor-route during the 2026-09-07 T061 cherry-pick verify
@@ -19,7 +19,7 @@ spec_refs:
 decision_refs:
    - data-plane/internal/controlclient/controlclient_test.go:461-473 — honest-client round trip; the Fatalf-on-Close at :469 is the flake
    - T105 (stabilize flaky run-task test) / T116 (journal race) — prior stability-ticket conventions
-reviews: {}
+reviews: { round: 1, date: 2026-09-07, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

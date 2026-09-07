@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 36 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 126 |
+| done | 127 |
 | deferred | 1 |
 | **total** | **164** |
 
@@ -70,9 +70,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T128 | Stabilize TestMutualTLSHandshakeEndToEnd benign closeNotify  | in-progress |  | 6: Polish & Cross-Cutting Concerns |
+_(nothing in flight)_
 
 ---
 
@@ -86,7 +84,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_126 ticket(s) done._
+_127 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -211,6 +209,7 @@ _126 ticket(s) done._
 - T122 — Fix DP/CP image builds: proto/ outside build contexts
 - T125 — Local profile cannot expose 8881: FR-010 bind vs compose publish
 - T127 — Correct T058 comment: DP dials upstream with UNAME only, no token
+- T128 — Stabilize TestMutualTLSHandshakeEndToEnd benign closeNotify close
 - T129 — CP crash-loop: noexec tmpfs /tmp blocks sqlite-jdbc native lib
 - T130 — Inter-plane gRPC channel never establishes in the compose stack
 - T131 — Stack smoke test: full-path bring-up acceptance (RED until T130)
