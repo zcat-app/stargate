@@ -1,7 +1,7 @@
 ---
 id: T058
 title: 'Contract test in `tests/contract/torrc/isolate_socks_auth_effect_test.'
-status: in-progress
+status: in-review
 created: 2026-07-04
 last_updated: 2026-09-07
 source: tasks.md#T058

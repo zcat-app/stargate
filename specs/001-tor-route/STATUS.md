@@ -14,8 +14,8 @@
 | Status | Count |
 |---|---|
 | pending | 35 |
-| in-progress | 1 |
-| in-review | 0 |
+| in-progress | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 115 |
 | deferred | 1 |
@@ -71,7 +71,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
-| T058 | Contract test in `tests/contract/torrc/isolate_socks_auth_ef | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
+| T058 | Contract test in `tests/contract/torrc/isolate_socks_auth_ef | in-review | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 
