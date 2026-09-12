@@ -10,10 +10,13 @@ the ticket's acceptance criteria and the Constitution. You may use
 Read/Grep/Glob to verify a claim against the actual files on disk; **verify
 before asserting** (Constitution doctrine: falsify before publishing).
 
-You are the SINGLE merged review gate: correctness, scope, test discipline
-AND security (SECURITY-CHECK below) in one fresh context, one verdict.
-The separate milestone-wide `stargate-redteam` sweep does not gate your
-verdict.
+You review correctness, scope, test discipline and baseline security in one
+fresh context. For privacy-critical tickets, the root driver separately invokes
+independent redteam before commit. Do not delegate or read that reviewer's
+current verdict. Check `privacy_critical` against the changed behavior: routing,
+DNS, auth, protocol parsing, logs, browser privacy, sidecars, deployment isolation,
+and their documented guarantees require true; incorrect classification is REWORK.
+Milestone redteam remains an additional integration review.
 
 You run at the REVIEW phase of `scripts/run-task.sh` (see
 `docs/process/workflow.md`). Your verdict block (verbatim, fenced) is what

@@ -140,17 +140,27 @@ feature branch squash-merges to `main` at milestone close.**
    prior-round verdict on round ≥ 2). **The reviewer writes its own verdict
    block to `target/runs/<id>.verdict`** (its single writable path) before
    replying; the caller never transcribes it. Re-invoking run-task.sh
-   parses it and acts (APPROVE → done; APPROVE-WITH-FIXES → APPLY-FIXES
+   parses it and acts (APPROVE → independent redteam if privacy-critical,
+   otherwise commit; APPROVE-WITH-FIXES → APPLY-FIXES
    handoff: caller applies the comment-only FIX ITEMS, re-verifies, touches
-   `target/runs/<id>.awf-applied`, and the driver commits without a new
-   round; REWORK → bump round; ESCALATE → surface the menu). Verdict:
+   `target/runs/<id>.awf-applied`, and the driver advances to any required
+   redteam review and commit without a new round; REWORK → bump round; ESCALATE → surface the menu). Verdict:
    `APPROVE | APPROVE-WITH-FIXES | REWORK | ESCALATE`.
+   For `privacy_critical: true`, the driver emits REDTEAM after approval and
+   any comment fixes. The root spawns a second fresh-context reviewer, blind
+   to implementation rationale and the current codereview findings. It writes
+   `target/runs/<id>.redteam.verdict` with VERDICT, SNAPSHOT and ROUND fields
+   copied from the handoff. No reviewer may delegate. Both approvals are
+   required; redteam REWORK/ESCALATE uses the existing shared round budget.
+   The snapshot covers HEAD, baseline, tracked worktree, index, round and
+   codereview output. Changes invalidate both approvals, including changes
+   during final verification. Legacy `.redteam` files cannot approve work.
 6. **Resolve:**
 
    | Verdict | Action |
    |---|---|
-   | `APPROVE` | Commit (step 7). |
-   | `APPROVE-WITH-FIXES` | Apply ONLY its comment/doc-only FIX ITEMS; re-`verify`; touch `.awf-applied`; commit (step 7) — no new review round. |
+   | `APPROVE` | Complete independent redteam when privacy-critical, then commit. |
+   | `APPROVE-WITH-FIXES` | Apply ONLY its comment/doc-only FIX ITEMS; re-`verify`; touch `.awf-applied`; independent redteam if required, then commit — no new review round. |
    | `REWORK` (round 1) | Address only the named items; re-`verify`; re-review. |
    | `REWORK` (round 2 = cap) / `ESCALATE` | STOP. Surface the menu (below). **You** decide. |
 
@@ -206,9 +216,12 @@ Separate from correctness review and **blind to rationale**.
 - **`stargate-redteam`** — security/privacy fresh-eyes pass. Sees
   `THREAT-MODEL.md` + the cumulative diff, NOT the design notes or ticket
   bodies. Hunts the gap between Constitution promise and shipped bytes.
-  **Mandatory** when `privacy_critical: true`, at feature boundaries, and
-  before release tags. Findings reach this workflow only when the user runs
-  `escalate <id> redteam-finding`; the agent never auto-promotes them.
+  **Mandatory before commit** when `privacy_critical: true`; the root driver
+  requests a ticket-scoped verdict independently of codereview. Also runs at
+  feature boundaries and before release tags against cumulative changes.
+  Ticket Blocker/Major findings prevent commit; human acceptance follows the
+  existing override process and SECURITY-DECISIONS.md. Milestone findings on
+  completed tickets become remediation tickets.
 - **`stargate-perf`** — performance and resource pass. Runs at milestone
   boundaries. Identifies hot-path allocations, blocking-on-event-loop, leaks.
 
@@ -256,13 +269,13 @@ gets its own live verification when its feature ships.
 Until Phase 5, leave this section as a forward reference — don't build the
 tracker ahead of the substrate.
 
-## Autonomous runs (the future `/run` autopilot)
+## Autonomous runs
 
 The green path carries no human decision — each gate (`verify.sh`, the
 fresh-context `stargate-codereview`, the fresh-context `stargate-redteam`) is
 an *independent* check, not the agent grading itself. So a clean run executes
 **unattended**: the autopilot drives start → implement → verify → review →
-(redteam if `privacy_critical`) → commit-on-feature → push, stopping only on
+(independent redteam if `privacy_critical`) → commit-on-feature, stopping on
 **bright-line conditions**:
 
 - **Front** — analyze finds acceptance blank or diverges from ground truth, or
@@ -270,7 +283,8 @@ an *independent* check, not the agent grading itself. So a clean run executes
 - **Scope** — `files_budget` would be exceeded.
 - **Build** — `verify.sh` not green after addressing a rework round.
 - **Review** — REWORK round cap or `ESCALATE`.
-- **Redteam** — `FINDINGS`.
+- **Redteam** — ESCALATE or REWORK at the shared round cap; invalid verdicts
+  cannot authorize a commit.
 
 **Push always stays manual.** A local merge is revertible (`git revert
 <sha>`); a push is outward and irreversible — keeping it manual is what makes
@@ -280,9 +294,9 @@ auto-merge safe.
 path; `privacy_critical: false` tickets skip it. **No separate autonomy
 dial** — the flag is the dial, the residue map is its input.
 
-Until `/run` is implemented, drive the loop manually via the per-step
-invocations (`scripts/next-task.sh` → implement → `scripts/verify.sh` → spawn
-`stargate-codereview` → commit → merge).
+The `/run` skill follows driver handoffs through local completion. Push and
+milestone merge require the user's authorization; the skill does not add an
+independent commit or push step.
 
 ## Pure-doc commits (no ticket)
 

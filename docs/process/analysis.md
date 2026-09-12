@@ -104,14 +104,13 @@ reviewer focus on.
 - **Tests.** Every residue item gets a named test or guard added in this
   ticket's §Acceptance — prefer promoting residue into the gated set; the
   residue left over is what redteam and review focus on.
-- **Redteam scope.** Residue is exactly what the `stargate-redteam` pass
-  should hunt. A `privacy_critical: true` ticket with non-empty residue gets
-  the redteam pass; that is what `privacy_critical` *means* operationally.
-  Empty residue means the change sits entirely inside the mechanical envelope.
-- **Autonomy.** Empty residue means the change is safe to run with less
-  supervision. Non-empty residue needs eyes. The future `/run` autopilot
-  reads this signal: `privacy_critical: true` AND non-empty residue →
-  redteam-mandatory; either alone → standard review; neither → fast-path.
+- **Redteam scope.** Residue helps target the independent adversarial pass.
+  Every `privacy_critical: true` ticket requires redteam before commit,
+  including when the author believes the residue list is empty. The reviewer
+  challenges that completeness claim. It is not a gate-skipping signal.
+- **Autonomy.** The root follows the driver through codereview and, when
+  privacy-critical, independent redteam. Both approvals are required; rework
+  and escalation follow the shared review-loop policy.
 
 ## Where it lives, who does it
 

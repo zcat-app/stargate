@@ -64,14 +64,18 @@ mkdir -p "$DST_DIR"
 # (2026-07-16 review-freeze root cause) — under --auto, ask would also
 # auto-approve, so deny is the honest block.
 emit_permission() {
-  local tools="$1"
+  local tools="$1" name="$2"
   echo "permission:"
   # Default: read-only. If Edit or Write appears in the list, the agent is a
   # writer and gets a narrow verdict-path allow instead of deny.
   if echo "$tools" | grep -Eq '\b(Edit|Write)\b'; then
     echo "  edit:"
     echo "    \"*\": deny"
-    echo "    target/runs/*.verdict: allow"
+    if [ "$name" = stargate-redteam ]; then
+      echo "    target/runs/*.redteam.verdict: allow"
+    else
+      echo "    target/runs/*.verdict: allow"
+    fi
   else
     echo "  edit: deny"
   fi
@@ -120,7 +124,7 @@ for src in "$SRC_DIR"/*.md; do
     echo "---"
     printf 'description: %s\n' "$description"
     echo "mode: subagent"
-    emit_permission "$tools"
+    emit_permission "$tools" "$name"
     echo "---"
     echo
     cat "$body_file"

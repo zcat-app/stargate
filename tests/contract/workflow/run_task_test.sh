@@ -242,38 +242,108 @@ echo "$rt_out" | grep -qi "COMMIT" || bail "S5: handoff should mention COMMIT"
 assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S5: no commit created on feature branch"
 
 # ===========================================================================
-# Scenario 6: APPROVE — privacy_critical commits directly (per-ticket redteam
-# gate RETIRED: security is the codereview's SECURITY-CHECK on every ticket;
-# stargate-redteam survives only as the milestone sweep, ticket T078).
-# ===========================================================================
-setup_sandbox s6
-write_ticket T305 "privacy approves without per-ticket redteam" true in-review >/dev/null
-commit_all "add T305 ticket"
-git checkout -q -b 001-testfeat main
-printf 'impl\n' > p.txt; git add p.txt specs/001-testfeat/tickets/T305-fixture.md
-mkdir -p target/runs
-printf 'VERDICT: APPROVE\nround 1\n' > target/runs/T305.verdict
+# Scenario 6/7 (T133): independent redteam gates privacy-critical commits.
+# Each fixture starts with codereview approval and staged implementation.
+privacy_fixture() {
+  setup_sandbox "$1"
+  write_ticket T305 "independent review" true in-review >/dev/null
+  commit_all "add ticket"
+  git checkout -q -b 001-testfeat main
+  printf 'first\n' > p.txt
+  git add p.txt
+  mkdir -p target/runs
+  printf 'VERDICT: APPROVE\n' > target/runs/T305.verdict
+}
+redteam_verdict() {
+  local snapshot
+  snapshot="$(cat target/runs/T305.redteam-snapshot 2>/dev/null || true)"
+  printf 'VERDICT: %s\nSNAPSHOT: %s\nROUND: %s\nSUMMARY: Fixture review\nFINDINGS: []\n' "$1" "$snapshot" "${2:-1}" > target/runs/T305.redteam.verdict
+}
+bad_index=0
+for bad in 'APPROVE-BOGUS' $'APPROVE\nVERDICT: REWORK'; do
+  bad_index=$((bad_index + 1))
+  privacy_fixture "s6-invalid-codereview-$bad_index"
+  printf 'VERDICT: %s\n' "$bad" > target/runs/T305.verdict
+  run_task T305
+  assert '[ "$rt_rc" -ne 0 ]' "S6: malformed codereview cannot bypass redteam"
+  assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S6: malformed codereview cannot commit"
+done
+privacy_fixture s6
 run_task T305
-assert '[ "$rt_rc" -eq 0 ]' "S6: privacy APPROVE with NO redteam file exits 0 (got $rt_rc)"
-assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = done ]' \
-  "S6: privacy ticket -> done without any redteam verdict"
+assert '[ "$rt_rc" -eq 0 ]' "S6: emits handoff"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = in-review ]' "S6: waits for independent review"
+assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S6: no premature commit"
+echo "$rt_out" | grep -q '(REDTEAM,' || bail "S6: missing REDTEAM handoff"
+redteam_verdict APPROVE
+run_task T305
+assert '[ "$rt_rc" -eq 0 ]' "S6: two approvals commit"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = done ]' "S6: done after redteam"
+assert 'git log -1 --format=%B | grep -q "Reviewed-by: stargate-redteam"' "S6: redteam trailer"
 
-# ===========================================================================
-# Scenario 7: APPROVE — a stale legacy .redteam file must NOT block the
-# commit path (the driver no longer consults it).
-# ===========================================================================
-setup_sandbox s7
-write_ticket T306 "legacy redteam file ignored" true in-review >/dev/null
-commit_all "add T306 ticket"
-git checkout -q -b 001-testfeat main
-printf 'impl\n' > p.txt; git add p.txt specs/001-testfeat/tickets/T306-fixture.md
-mkdir -p target/runs
-printf 'VERDICT: APPROVE\nround 1\n' > target/runs/T306.verdict
-printf 'VERDICT: FINDINGS\nBlocker: DNS leak in path X\n' > target/runs/T306.redteam
-run_task T306
-assert '[ "$rt_rc" -eq 0 ]' "S7: legacy FINDINGS file does not block (got $rt_rc)"
-assert '[ "$(fm_field specs/001-testfeat/tickets/T306-fixture.md status)" = done ]' \
-  "S7: privacy ticket -> done despite legacy redteam file"
+privacy_fixture s7
+printf 'VERDICT: CLEAN\n' > target/runs/T305.redteam
+run_task T305
+assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S7: legacy output cannot approve"
+for bad in 'VERDICT: APPROVE-BOGUS' $'VERDICT: APPROVE\nVERDICT: REWORK' 'VERDICT: APPROVE'; do
+  printf '%s\nSNAPSHOT: wrong\nROUND: 1\n' "$bad" > target/runs/T305.redteam.verdict
+  run_task T305
+  assert '[ "$rt_rc" -ne 0 ]' "S7: invalid verdict rejected"
+  assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S7: invalid output cannot commit"
+done
+for field in SUMMARY FINDINGS; do
+  for malformed in missing duplicate; do
+    redteam_verdict APPROVE
+    if [ "$malformed" = missing ]; then
+      sed -i "/^$field:/d" target/runs/T305.redteam.verdict
+    else
+      printf '%s: duplicate\n' "$field" >> target/runs/T305.redteam.verdict
+    fi
+    before="$(git rev-parse HEAD)"
+    run_task T305
+    assert '[ "$rt_rc" -ne 0 ]' "S7: $malformed $field rejected"
+    assert '[ "$(git rev-parse HEAD)" = "$before" ]' "S7: $malformed $field cannot commit"
+    assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = in-review ]' "S7: $malformed $field retains review state"
+  done
+done
+redteam_verdict REWORK
+run_task T305
+assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = in-progress ]' "S7: redteam rework"
+assert '[ "$(cat target/runs/T305.round)" = 2 ]' "S7: shared round increment"
+assert '[ ! -e target/runs/T305.verdict ] && [ ! -e target/runs/T305.redteam.verdict ]' "S7: both approvals removed"
+
+for mutation in worktree index head verdict privacy verify; do
+  privacy_fixture "s7-$mutation"
+  if [ "$mutation" = verify ]; then
+    sed -i '/^exit 0$/i [ ! -f target/mutate ] || echo changed >> p.txt' scripts/verify.sh
+    git add scripts/verify.sh
+  fi
+  run_task T305
+  redteam_verdict APPROVE
+  case "$mutation" in
+    worktree) echo changed >> p.txt ;;
+    index) printf 'second\n' > p.txt; git add p.txt; printf 'first\n' > p.txt ;;
+    head) git commit -q -m 'intervening commit' ;;
+    verdict) echo 'changed review' >> target/runs/T305.verdict ;;
+    privacy) sed -i 's/privacy_critical: true/privacy_critical: false/' specs/001-testfeat/tickets/T305-fixture.md ;;
+    verify) touch target/mutate ;;
+  esac
+  before="$(git rev-parse HEAD)"
+  run_task T305
+  assert '[ "$rt_rc" -ne 0 ]' "S7-$mutation: changed snapshot rejected"
+  assert '[ "$(git rev-parse HEAD)" = "$before" ]' "S7-$mutation: no commit"
+  assert '[ ! -e target/runs/T305.verdict ] && [ ! -e target/runs/T305.redteam.verdict ]' "S7-$mutation: fresh reviews required"
+done
+
+for verdict in REWORK ESCALATE; do
+  privacy_fixture "s7-cap-$verdict"
+  echo 2 > target/runs/T305.round
+  run_task T305
+  redteam_verdict "$verdict" 2
+  run_task T305
+  assert '[ "$rt_rc" -ne 0 ]' "S7-cap: redteam $verdict stops"
+  assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = escalated ]' "S7-cap: escalated"
+  assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S7-cap: no commit"
+done
 
 # ===========================================================================
 # Scenario 8: MERGE — milestone squash-merge of feature branch into main

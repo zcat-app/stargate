@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-07
+**Last updated:** 2026-09-12
 
 ---
 
@@ -15,11 +15,11 @@
 |---|---|
 | pending | 36 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 127 |
 | deferred | 1 |
-| **total** | **164** |
+| **total** | **165** |
 
 ---
 
@@ -70,7 +70,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T133 | Require independent redteam before privacy-critical ticket c | in-review |  | Polish |
 
 ---
 

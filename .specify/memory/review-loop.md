@@ -23,8 +23,13 @@ For one task `[ID]` from `specs/NNN-*/tasks.md`:
 3. **Gate green.** Run `scripts/verify.sh`. It must be GREEN (exit 0) before
    review. A green run is valid only while the tree is unchanged — do not edit
    after gating and before committing without re-running.
-4. **Review.** Invoke the `stargate-codereview` agent (fresh context, blind to
-   your rationale). It returns `APPROVE | REWORK | ESCALATE`.
+4. **Review.** The root invokes `stargate-codereview` in fresh context for
+   every ticket. For `privacy_critical: true`, after codereview approval and
+   any APPROVE-WITH-FIXES corrections, the driver requests independent
+   `stargate-redteam`. Both must approve before commit; neither delegates.
+   Redteam returns APPROVE, REWORK, or ESCALATE and shares the round cap.
+   A changed reviewed snapshot invalidates both approvals. Milestone redteam
+   remains an additional cumulative review.
 5. **Act on the verdict:**
    - `APPROVE` → commit the task (one task = one focused commit; squash-merge
      folds a feature's task-commits into `main` per CONTRIBUTING PR norms).
@@ -70,10 +75,10 @@ to open a PR / notification for human review rather than to push further.
 
 ## Bypass
 
-Pure-documentation changes (a `docs:`-prefixed commit per CONTRIBUTING PR
-norms) skip this loop — there is no acceptance criterion or privacy surface for
-it to bite on. Keep the prefix grep-able so tooling can still tell change
-classes apart.
+Pure-documentation changes without changes to privacy/security guarantees
+(a `docs:`-prefixed commit per CONTRIBUTING PR norms) skip this loop. Changes
+to those guarantees use the privacy-critical review path. Keep the prefix
+grep-able so tooling can still tell change classes apart.
 
 ## Process doctrine: deletion over addition
 

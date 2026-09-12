@@ -108,11 +108,11 @@
       }
     },
     "stargate-redteam": {
-      "description": "Adversarial security/privacy review of Stargate code against the constitution and threat model. Invoke at the end of each implementation cycle and before each release.",
+      "description": "Adversarial security/privacy review of Stargate code against the constitution and threat model. Invoke before privacy-critical ticket commits and at feature/release milestones.",
       "mode": "subagent",
       "model": "zai-coding-plan/glm-5.3",
       "permission": {
-        "edit": "deny",
+        "edit": { "*": "deny", "target/runs/*.redteam.verdict": "allow" },
         "task": "deny",
         "bash": { "*": "deny", "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "git rev-parse*": "allow" }
       }
