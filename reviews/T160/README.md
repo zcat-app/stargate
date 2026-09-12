@@ -59,5 +59,8 @@ T155 precedes remaining feature work; T078/T079 and applicable external human re
 
 ## Delivery
 
-The focused source commit and subsequent lifecycle bookkeeping are recorded after delivery.
-Lifecycle and reviewer artifacts are outputs; they do not change the approved source snapshot.
+The focused reviewed source and evidence landed in local commit
+`55c567783a084354ba6321b6ecd0f7b88651f574` with both review trailers and a DCO
+sign-off. All 19 source hashes match the reviewed manifest. This subsequent lifecycle update
+marks T160 done, closes the original finding and regenerates the board; it does not change the
+approved source snapshot.

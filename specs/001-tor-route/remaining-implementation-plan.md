@@ -2,8 +2,8 @@
 
 Updated 2026-09-12 after the foundation audit and **T156 constitution strengthening**.
 Ticket frontmatter is executable; this document supplies priority within the runnable set.
-Inventory after reviewed T156 delivery: **193 tickets: 129 done, 60 pending,
-one active security update (T160), three deferred (T037, T140 and T154)**. No runtime fix is delivered by the amendment.
+Inventory after reviewed T160 delivery: **193 tickets: 130 done, 60 pending and
+three deferred (T037, T140 and T154)**. T139 is the only runnable ticket.
 
 ## Decision and implementation boundary
 
@@ -27,12 +27,12 @@ and live evidence remain blocking. Completed tickets keep their history.
 Each arrow is a preferred execution order, with one focused ticket per implementation/review
 loop. Frontmatter encodes mandatory prerequisites, not every preference in this table. Use
 explicit IDs with `scripts/run-task.sh`; after each completion, consult `scripts/next-task.sh`
-and choose the earliest ready entry here. T156 is complete. T160 is the active security-update prerequisite; T139 follows its reviewed delivery.
+and choose the earliest ready entry here. T156 and T160 are complete; T139 is now runnable.
 
 | Order | Tickets | Required outcome |
 |---|---|---|
 | 0 — completed authoritative baseline | T156 | Amendment, downstream reconciliation and independent reviews delivered in `3aac431`. |
-| 0a — expedited security update | T160 | Upgrade Tor to 0.4.9.12 and enforce exact package hashes; explicit maintainer priority on 2026-09-12. |
+| 0a — completed security update | T160 | Tor 0.4.9.12 candidate and exact package/dependency-source enforcement delivered in `55c5677`; T161 still blocks promotion. |
 | 1 — gate integrity | T139 | Required scripts/module coverage and complete reviewed-source snapshots cannot silently disappear. |
 | 1a — live security-upgrade validation | T161 | Resolve actual Tor bootstrap/isolation evidence gaps before deployment/release promotion; keep failed cold runs visible. |
 | 2 — definite defects | T135 → T137 → T136 | Fix resumed peer authorization, reload deadlines and complete client/profile/site partitioning, with spec-derived regressions first. |
@@ -49,16 +49,16 @@ and choose the earliest ready entry here. T156 is complete. T160 is the active s
 | 13 — live acceptance | T034f → T034a → T077 → T080 | Attributed network evidence, reference browser, clean-host quickstart and license/doc sweep. |
 | 14 — final cumulative reviews | T078 → T079 | Completed-candidate security/privacy and performance evidence, then finding closure. |
 
-All 60 pending IDs, active T160 and completed baseline T156 appear once. T037 stays deferred;
+All 60 pending IDs and completed baseline/update T156/T160 appear once. T037 stays deferred;
 T140 is folded into T160 and T154 is replaced by T156. T074 and T068a are done and retain their history. No runtime implementation starts until
 T156 completes normal reviewed delivery (now satisfied); unavailable required evidence does not turn into PASS.
 
-The Tor 0.4.9.12 security announcement adds an urgent upstream dependency repair. T160
-precedes T139 and absorbs T140's package-integrity work. No constitutional exception is made.
+The Tor 0.4.9.12 security announcement added an urgent upstream dependency repair. T160 is
+delivered and absorbs T140's package-integrity work. No constitutional exception was made.
 Its live rechecks revisit the old T058 assumptions, including the upstream Conflux isolation fix.
 Two cold T058 attempts failed before circuit evidence; a separate cold configuration run,
 live control checks and T058a's distinct-username calibration passed. T161 follows T139 to
-diagnose the failed runs and complete required live validation. T160 prepares
+diagnose the failed runs and complete required live validation. T160 prepared
 the upgraded candidate; T161 blocks actual deployment/release promotion and T155/T078/T079.
 No failed run is converted to PASS and no timeout/constitutional guarantee is relaxed.
 

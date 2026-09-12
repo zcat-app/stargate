@@ -15,9 +15,9 @@
 |---|---|
 | pending | 60 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 129 |
+| done | 130 |
 | deferred | 3 |
 | **total** | **193** |
 
@@ -27,15 +27,15 @@
 
 Tickets where `status: pending` AND every `blocked_by` is `done`.
 
-_(none — every pending ticket has unsatisfied `blocked_by`, or no pending tickets.)_
+| ID | Title | Phase | Priv? | Parallel? |
+|---|---|---|---|---|
+| T139 | Prevent required verification coverage from disappearing | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T160 | Prepare Tor security upgrade with enforced package content p | in-review | ✓ | Urgent security update |
+_(nothing in flight)_
 
 ---
 
@@ -51,7 +51,7 @@ _(none — every pending ticket has unsatisfied `blocked_by`, or no pending tick
 
 ## Done
 
-_129 ticket(s) done._
+_130 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -182,3 +182,4 @@ _129 ticket(s) done._
 - T131 — Stack smoke test: full-path bring-up acceptance (RED until T130)
 - T133 — Require independent redteam before privacy-critical ticket commits
 - T156 — Strengthen constitution and reconcile implementation prerequisites
+- T160 — Prepare Tor security upgrade with enforced package content pins

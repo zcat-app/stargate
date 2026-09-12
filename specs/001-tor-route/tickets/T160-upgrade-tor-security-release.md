@@ -1,7 +1,7 @@
 ---
 id: "T160"
 title: "Prepare Tor security upgrade with enforced package content pins"
-status: "in-review"
+status: "done"
 created: "2026-09-12"
 last_updated: "2026-09-12"
 source: "https://forum.torproject.org/t/security-release-0-4-9-12/22096"
@@ -19,11 +19,11 @@ decision_refs: ["SECURITY-DECISIONS.md"]
 remediates: "T099"
 decomposed_from: "T140"
 tests_first: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-12, verdict: APPROVE, findings: 0 }
 overrides: []
 aborted_attempts: []
 reopens: []
-redteam_findings: []
+redteam_findings: [{ round: 1, date: 2026-09-12, severity: "1 Major + 1 Minor", verdict: "remediated-in-round-2" }]
 clarity_check: {}
 ---
 
@@ -96,3 +96,9 @@ its provenance, snapshot and failure protections must remain covered.
 The regression is authored within this ticket; empty tests_first is not an exemption.
 The current user instruction authorizes expedited priority and deliberate upstream promotion.
 Actual deployment promotion remains separate from preparing and reviewing the upgraded image.
+
+Delivered in commit `55c567783a084354ba6321b6ecd0f7b88651f574` after round-two
+codereview and independent redteam approval. The exact candidate manifest, failing and passing
+regressions, signed metadata, build evidence and reviewer verdicts are retained in
+[T160 delivery evidence](../../../reviews/T160/README.md). T161 remains the mandatory
+live-validation blocker before deployment or release promotion.

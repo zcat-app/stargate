@@ -1,14 +1,14 @@
 ---
 id: 20260727-002-tor-deb-hash-never-verified
-status: open
+status: closed
 severity: major
 principle: [IV, VI]
 threat-model: 5.9
 location: sidecars/tor/Dockerfile:163-167
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
-decision-ref: SECURITY-DECISIONS.md "2026-07-04 — Tor sidecar trust rationale (FR-015)" + its T099 snapshot-pin addendum
+fix-commit: 55c567783a084354ba6321b6ecd0f7b88651f574
+decision-ref: SECURITY-DECISIONS.md "2026-09-12 — Tor 0.4.9.12 security promotion and exact package content pins (T160)"
 ---
 
 # The `tor` .deb comes from a mutable repo and its recorded sha256 is verified by no build step
@@ -103,3 +103,18 @@ catches the failure mode, the same discipline
 - Constitution Principle VI's Tor-sidecar reproducibility tier (added by T099) is the claim
   that does not currently hold.
 - Found during the 2026-07-27 milestone audit (`.scratch/audit.md`, finding S2).
+
+## Closure — 2026-09-12
+
+T160 downloads the exact architecture-specific Tor package, verifies it against an independently
+reviewed SHA256 lock and installs from the checked local file with further downloads disabled.
+Its regression rejects same-name/version byte substitution, refetch, missing pins and unsupported
+architectures. Round-one review also found that the mutable Tor repository could supply an
+unchecked dependency while the Tor bytes remained valid; the delivered installer now excludes
+that repository from dependency resolution and installation, with higher- and same-version APT
+source-selection controls. Native builds, a real wrong-hash negative build, two cold package-
+manifest comparisons and the full gate passed. Codereview and redteam approved exact snapshot
+`5494521621dccc84d55ca179ad81e51e10816d23015b9dc6b6f6f738337c4130` in round two.
+
+This closes the package-substitution finding. It does not establish live Tor isolation or authorize
+promotion; T161 owns the retained failed T058 evidence and blocks deployment/release promotion.
