@@ -1,7 +1,7 @@
 ---
 id: T133
 title: 'Require independent redteam before privacy-critical ticket commits'
-status: in-review
+status: done
 created: 2026-09-12
 last_updated: 2026-09-12
 source: maintainer-approved review-stage correction
@@ -21,7 +21,7 @@ constitution_refs:
   - 'VII: Tests-first for privacy-critical and contract code'
   - 'VIII: Adversarial review at milestones'
 decision_refs: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-12, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

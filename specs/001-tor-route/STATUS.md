@@ -15,9 +15,9 @@
 |---|---|
 | pending | 36 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 127 |
+| done | 128 |
 | deferred | 1 |
 | **total** | **165** |
 
@@ -70,9 +70,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T133 | Require independent redteam before privacy-critical ticket c | in-review |  | Polish |
+_(nothing in flight)_
 
 ---
 
@@ -86,7 +84,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_127 ticket(s) done._
+_128 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -215,3 +213,4 @@ _127 ticket(s) done._
 - T129 — CP crash-loop: noexec tmpfs /tmp blocks sqlite-jdbc native lib
 - T130 — Inter-plane gRPC channel never establishes in the compose stack
 - T131 — Stack smoke test: full-path bring-up acceptance (RED until T130)
+- T133 — Require independent redteam before privacy-critical ticket commits
