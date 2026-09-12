@@ -2,8 +2,8 @@
 
 Updated 2026-09-12 after the foundation audit and **T156 constitution strengthening**.
 Ticket frontmatter is executable; this document supplies priority within the runnable set.
-Inventory after reviewed T156 delivery: **191 tickets: 129 done, 60 pending,
-two deferred (T037 and T154)**. No runtime fix is delivered by the amendment.
+Inventory after reviewed T156 delivery: **193 tickets: 129 done, 60 pending,
+one active security update (T160), three deferred (T037, T140 and T154)**. No runtime fix is delivered by the amendment.
 
 ## Decision and implementation boundary
 
@@ -27,17 +27,19 @@ and live evidence remain blocking. Completed tickets keep their history.
 Each arrow is a preferred execution order, with one focused ticket per implementation/review
 loop. Frontmatter encodes mandatory prerequisites, not every preference in this table. Use
 explicit IDs with `scripts/run-task.sh`; after each completion, consult `scripts/next-task.sh`
-and choose the earliest ready entry here. T156 is complete; T139 is next and is the only runnable ticket.
+and choose the earliest ready entry here. T156 is complete. T160 is the active security-update prerequisite; T139 follows its reviewed delivery.
 
 | Order | Tickets | Required outcome |
 |---|---|---|
 | 0 — completed authoritative baseline | T156 | Amendment, downstream reconciliation and independent reviews delivered in `3aac431`. |
+| 0a — expedited security update | T160 | Upgrade Tor to 0.4.9.12 and enforce exact package hashes; explicit maintainer priority on 2026-09-12. |
 | 1 — gate integrity | T139 | Required scripts/module coverage and complete reviewed-source snapshots cannot silently disappear. |
+| 1a — live security-upgrade validation | T161 | Resolve actual Tor bootstrap/isolation evidence gaps before deployment/release promotion; keep failed cold runs visible. |
 | 2 — definite defects | T135 → T137 → T136 | Fix resumed peer authorization, reload deadlines and complete client/profile/site partitioning, with spec-derived regressions first. |
 | 3 — foundational design | T134 → T138 → T147 | Review compliant topology, enforced observer authority and CONNECT isolation/refusal contract. |
 | 4 — implement selected designs | Children created by row 3 | Implement tests-first repairs; add each child to closure AND affected consumer dependencies. Additional IDs are assigned when the design is concrete. |
 | 5 — remaining foundation behavior | T148 → T143 → T149 → T158 → T152 → T153 → T150 → T151 → T157 → T159 | Peer validity/renewal, stale constants, byte accounting, finalized metrics, aggregate-only operations, startup failures, truthful UI, browser blocking and auth rollback/durability. |
-| 6 — supply chain and workflow evidence | T140 → T141 → T142 → T144 → T145 → T146 → T120 → T114 | Pins, effective agent boundaries, tests-first records, integrity regressions, init diagnostics, verify log isolation and analyzers. |
+| 6 — supply chain and workflow evidence | T141 → T142 → T144 → T145 → T146 → T120 → T114 | Pins, effective agent boundaries, tests-first records, integrity regressions, init diagnostics, verify log isolation and analyzers. |
 | 7 — startup and integrated recovery | T123 → T124 → T132 → T121 → T126 | Real operator initialization, authenticated readiness, reconnect, shared harness and real same-target partition isolation. |
 | 8 — foundation closure | T155 | Integrated constitutional probes and fresh independent cumulative foundation redteam. |
 | 9 — US3 contract tests | T064 → T065 → T066 → T067 → T067a → T067b → T068 → T069 → T070 → T070a → T070b | Failure corpus, protocol responses/counters, reference IDs, Tor-down/midstream and event behavior. Ground against the new supported ingress contract first. |
@@ -47,9 +49,18 @@ and choose the earliest ready entry here. T156 is complete; T139 is next and is 
 | 13 — live acceptance | T034f → T034a → T077 → T080 | Attributed network evidence, reference browser, clean-host quickstart and license/doc sweep. |
 | 14 — final cumulative reviews | T078 → T079 | Completed-candidate security/privacy and performance evidence, then finding closure. |
 
-All 60 pending IDs and the completed baseline T156 appear once. T037 stays deferred; T154 is replaced by
-T156. T074 and T068a are done and retain their history. No runtime implementation starts until
+All 60 pending IDs, active T160 and completed baseline T156 appear once. T037 stays deferred;
+T140 is folded into T160 and T154 is replaced by T156. T074 and T068a are done and retain their history. No runtime implementation starts until
 T156 completes normal reviewed delivery (now satisfied); unavailable required evidence does not turn into PASS.
+
+The Tor 0.4.9.12 security announcement adds an urgent upstream dependency repair. T160
+precedes T139 and absorbs T140's package-integrity work. No constitutional exception is made.
+Its live rechecks revisit the old T058 assumptions, including the upstream Conflux isolation fix.
+Two cold T058 attempts failed before circuit evidence; a separate cold configuration run,
+live control checks and T058a's distinct-username calibration passed. T161 follows T139 to
+diagnose the failed runs and complete required live validation. T160 prepares
+the upgraded candidate; T161 blocks actual deployment/release promotion and T155/T078/T079.
+No failed run is converted to PASS and no timeout/constitutional guarantee is relaxed.
 
 ## Execution constraints and remaining grounding
 

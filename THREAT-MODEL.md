@@ -167,6 +167,24 @@ not *trustworthy*: the closure still rides Debian's archive key, and a
 malicious-but-behaviourally-conforming library is undetected. See §5.8,
 §5.9, and `SECURITY-DECISIONS.md` §"Debian archive snapshot pin".
 
+**T160 security update (2026-09-12).** The selected Tor package is now
+`0.4.9.12-1~d12.bookworm+1`, addressing the upstream security release that includes
+client memory-safety, availability and Conflux stream-isolation fixes. The build verifies
+amd64/arm64 package hashes independently of the mutable signed repository index before
+installing the checked local file. This prevents same-version package replacement from
+silently changing the reviewed bytes. Dependency resolution and offline installation enable only
+the pinned Debian snapshot source, excluding the mutable Tor repository from the rest of the
+executable closure. This also prevents a compromised Tor publisher from bypassing the Tor hash
+through replacement dependencies; repository priority alone is insufficient for same-version
+source isolation. The key, base and Debian snapshot trust remain;
+malicious reviewed upstream code and the remaining foundation defects are not solved by
+a version/hash check. Protocol/build results and their limits belong to T160 evidence. Cold live isolation
+checks failed before circuit evidence, while separate control/configuration and T058a
+distinct-username calibration checks passed. T161 blocks deployment/release promotion
+until the failed runs and their preconditions are resolved. T155 still owns integrated
+constitutional validation. See the dated T160 entry in
+SECURITY-DECISIONS.md and the [official release announcement](https://forum.torproject.org/t/security-release-0-4-9-12/22096).
+
 ### 2.7 Malicious browser extension
 
 An extension running alongside the Stargate WebExtension in the same
@@ -1386,17 +1404,21 @@ decision is resolved and recorded — `SECURITY-DECISIONS.md`
 §"2026-07-04 — Tor sidecar trust rationale (FR-015)" is the authoritative
 rationale, rotation policy, and residual-risk record.
 
-Two residues stay honestly open here:
+T160 independently checks the Tor artifact against reviewed architecture-specific hashes before
+installation, then excludes the mutable Tor source while obtaining dependencies from the Debian
+snapshot. The earlier lack of an independent Tor hash check (finding 20260727-002) is repaired by
+that implementation, subject to its recorded review/delivery state. It does not make malicious
+reviewed upstream code trustworthy. The dated T160 decision supplements the historical rationale.
+
+Remaining obligations:
 
 - The final composed image digests are not yet pinned; that lands at
   release-tag time with the release workflow (T081). Until then the
   supply chain is base-pinned + snapshot-pinned + key-verified, not
   fully image-pinned.
-- The recorded sha256 of the `tor` `.deb` is enforced by no independent
-  build step — apt verifies it only against the repository's own signed
-  index, so a same-version replacement by a compromised
-  `deb.torproject.org` remains maintainer-trust residue. This is tracked
-  as open redteam finding 20260727-002 and is not claimed as mitigated.
+- T161 blocks deployment/release promotion until the failed cold T058 runs and required live
+  behavior have attributable evidence. Passing package/build checks do not close this gate or
+  T155's integrated foundation validation and final security/performance review obligations.
 
 Update-channel compromise of a sidecar is §5.9; the wider sidecar-in-TCB
 residuals are §5.8.

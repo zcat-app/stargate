@@ -1,0 +1,41 @@
+VERDICT: APPROVE
+SNAPSHOT: 5494521621dccc84d55ca179ad81e51e10816d23015b9dc6b6f6f738337c4130
+ROUND: 2
+SUMMARY: RT1 and RT2 are resolved in the scoped candidate; no new Blocker/Major was identified in their fixes. T161 continues to block deployment/release promotion.
+
+FINDINGS:
+No unresolved Blocker/Major findings in this repeat-review scope.
+
+RT1 — Major — RESOLVED.
+Location: sidecars/tor/install-tor.sh:23-34; sidecars/tor/Dockerfile:163-175; tests/contract/security-decisions/tor_package_integrity_test.sh:81-205.
+Affected properties: Constitution IV/VI/VII; THREAT-MODEL 2.6/5.9.
+Prior reachable attack path: a compromised Tor archive publisher could retain the pinned Tor archive while supplying an unpinned higher-version dependency, which would execute during installation or inside Tor.
+Attempted falsification: traced all installer APT calls, including the second install phase. The first command downloads only Tor; its local bytes are checked before dependency resolution. Both later commands explicitly select snapshot.list and disable sourceparts, removing the mutable Tor source rather than relying on version priority. The checked local package remains the explicit target; final installation prohibits downloads. Read the actual regression harness and retained red/green artifacts: the old implementation selects the forged Tor-repository libevent URI and fails; the repaired harness challenges both higher and equal versions through real offline APT selection with the actual installer's source-selection options. It retains both architecture success paths and the four rejection controls. The wrapper is instrumented and the dependency query is a real APT download/URI selector, not execution of a complete adversarial dependency graph; no inert package is retrieved or executed.
+EVALUATED-AS: FIX — exact source exclusion closes the reported publisher/dependency bypass. Inspected supplied current-source native-build, wrong-hash, and cold-manifest evidence and verified their artifact hashes. No newly introduced executable source, runtime permission, or unchecked Tor install was found. This does not eliminate Debian archive trust or malicious reviewed upstream code.
+
+RT2 — Minor — RESOLVED.
+Location: THREAT-MODEL.md:170 and :1407.
+Affected property: Constitution V.
+Prior reachable path: auditors encountered contradictory statements about independent Tor archive hash enforcement.
+Attempted falsification: compared sections 2.6 and 8.6 with the installer. Both now identify the independent Tor hash and snapshot-only dependency boundary; the obsolete denial of hash enforcement is removed. Both retain T161's failed-live-evidence promotion blocker and T155's foundation obligations. Section 8.6 retains final image-pinning obligations.
+EVALUATED-AS: FIX — the prose consistently describes implemented candidate protections and unresolved delivery/live obligations; no runtime test is required for this correction.
+
+SCOPED VERIFIED-ABSENT CHECKLIST:
+- DNS handling: installer/Dockerfile fixes add no deployed resolver or request-path change; build retrieval is the Constitution III build actor.
+- Headers/payload inspection: no new parser or forwarding behavior in the fixes.
+- Logs/metrics: only build status/checksum output is added; no new browsing-data writer. Existing runtime logging gaps are outside this closure review.
+- Sidecar contracts: fixes change dependency source selection only, preserving package version, torrc and runtime invocation. Supplied package-manifest and sampled-content comparisons support bounded equivalence, not a complete behavior proof.
+- Auth bypass: no auth or cookie handling change in the fixes.
+- Port binding: no new listener, publication or privilege change in the fixes; existing deployment gaps remain open.
+- Browser APIs: no extension code or permissions in these fixes.
+- Inter-plane leaks: no DP/CP/IPC schema or call changes in these fixes.
+- Update integrity: RT1 resolved as above; no runtime updater or automatic promotion added.
+- Cover traffic: no new runtime timer or traffic generator in these fixes.
+- Outbound connections: APT activity remains build-time; no DP/CP runtime egress added.
+
+EVIDENCE AND LIMITS:
+Reviewer: independent OpenAI Codex agent, GPT-6 based according to session identity; exact serving revision is not exposed. Tools used: functions.exec/exec_command, read-only git/source inspection, Python hashing/parsing, and the write of this verdict. No delegation; no claim of Opus or external-human expertise.
+Scope: repeat review of RT1/RT2 and regressions created by their fixes, not a new cumulative full-stack audit. Read AGENTS.md, reviewer instructions, constitution including IV-VIII, T160, relevant threat-model sections, prior redteam verdict, scoped source/diff and evidence. SECURITY-DECISIONS.md was hashed only; its contents, other review outputs and findings directories were not read.
+Independently verified serialized manifest SHA256 equals SNAPSHOT and every listed worktree/staged file hash matches. Independently verified all log hashes listed in evidence-r2.json. No source files were written.
+Supplied gate reports 21 PASS, 1 release-reproducibility SKIP, 0 FAIL. Separate supplied cold builds compare identical 96-package manifests; this is not image-byte or whole-rootfs equality. Native round2 package/version/helper and sampled-content evidence and real wrong-hash rejection are supplied evidence, not independently rerun builds. No independent test/live/network run was performed in this read-only review. Arm64 evidence remains authenticated artifact identity and fixture coverage, not native execution.
+Prior live T032/T062/T058a evidence is not a new round2 live run. Cold T058 failures do not establish circuit isolation. T161 remains mandatory before deployment/release promotion; T155, final cumulative reviews and applicable external human review remain outstanding. This approval authorizes only the reviewed candidate-preparation scope and accepts no constitutional exception.

@@ -15,11 +15,11 @@
 |---|---|
 | pending | 60 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 129 |
-| deferred | 2 |
-| **total** | **191** |
+| deferred | 3 |
+| **total** | **193** |
 
 ---
 
@@ -27,15 +27,15 @@
 
 Tickets where `status: pending` AND every `blocked_by` is `done`.
 
-| ID | Title | Phase | Priv? | Parallel? |
-|---|---|---|---|---|
-| T139 | Prevent required verification coverage from disappearing | Foundation audit remediation | ✓ |  |
+_(none — every pending ticket has unsatisfied `blocked_by`, or no pending tickets.)_
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T160 | Prepare Tor security upgrade with enforced package content p | in-review | ✓ | Urgent security update |
 
 ---
 
@@ -44,6 +44,7 @@ _(nothing in flight)_
 | ID | Title | Reason | Blocked on |
 |---|---|---|---|
 | T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | spec-amend | T089 |
+| T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
 
 ---

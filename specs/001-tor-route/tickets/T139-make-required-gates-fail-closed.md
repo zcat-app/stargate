@@ -7,7 +7,7 @@ last_updated: "2026-09-12"
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
-blocked_by: ["T076", "T156"]
+blocked_by: ["T076", "T156", "T160"]
 parallel: false
 files_budget: 12
 privacy_critical: true
@@ -51,6 +51,10 @@ Existing findings 20260727-007/008 remain: executable-bit changes skip required 
    precondition, all-path budget count and reviewer snapshot invalidation (including new files).
    Test ordinary staged tracked/new files still work and unrelated ignored build artifacts do
    not masquerade as intended source. Manual manifest checks are required until this lands.
+
+Retain failing Go test diagnostics and test names with nonzero package results; the current
+gate emitted only summary counts during the T156 bookkeeping rerun, preventing diagnosis.
+A targeted unchanged rerun passed; do not fabricate a root cause or silence an intermittent failure.
 
 ## Out-of-scope
 

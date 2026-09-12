@@ -124,7 +124,7 @@ The constitution amended on 2026-09-12 and `contracts/foundation-boundaries.md` 
 | I — dumb router | Negotiation/management scope clarified; CONNECT identity/refusal design T147 remains pending. |
 | II — separation | CP authority, recovery/rollback and peer lifecycle incomplete: T138/T132/T135/T148/T159. |
 | III — privacy | Isolation, browser blocking, aggregate-only diagnostics and completed-hour publication: T136/T147/T152/T157/T158. |
-| IV — immutable updates | Package/tool pins and release integrity evidence pending T140/T141/T145/T081. |
+| IV — immutable updates | Package/tool pins and release integrity evidence pending T160 (folded T140)/T141/T145/T081. |
 | V — honest threat model | Known gaps recorded; T155 and final live evidence must establish actual compliance. |
 | VI — reproducibility | Obligations remain pending T075/T109/T081; no empty comparison is PASS. |
 | VII — tests-first | Required-coverage/evidence repairs T139/T144; implementations preserve real failing-before-fix evidence. |

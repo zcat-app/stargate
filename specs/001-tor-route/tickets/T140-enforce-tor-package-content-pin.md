@@ -1,7 +1,7 @@
 ---
 id: "T140"
 title: "Enforce Tor package content integrity pins"
-status: "pending"
+status: "deferred"
 created: "2026-09-12"
 last_updated: "2026-09-12"
 source: "reviews/redteam-20260912-677960b.md"
@@ -18,6 +18,9 @@ spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md"]
 decision_refs: []
 remediates: "T099"
 tests_first: []
+deferred_reason: "decomposed"
+deferred_on: "T160"
+replaced_by: ["T160"]
 reviews: {}
 overrides: []
 aborted_attempts: []
@@ -57,3 +60,6 @@ regression before the fix; tests_first is empty because the named regression
 is authored within this ticket rather than a separate test ticket. For design
 work, no production implementation is authorized until its stated decision
 boundary is satisfied. Preserve approved historical commits.
+
+T160 folds this unimplemented repair into the explicitly requested Tor 0.4.9.12 security
+upgrade. Its acceptance preserves the same-version byte-substitution negative control.

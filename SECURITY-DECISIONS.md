@@ -41,6 +41,81 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-09-12 — Tor 0.4.9.12 security promotion and exact package content pins (T160)
+
+**Decision and authorization.** The maintainer explicitly requests the Tor security upgrade
+announced on 2026-09-08. Select the Tor Project's Bookworm package
+`0.4.9.12-1~d12.bookworm+1`. Fold pending T140 into T160 and perform this urgent dependency
+repair before T139. Constitution IV/VII/VIII, independent review and existing foundation
+closure obligations remain binding. This is a reviewed-source/image preparation task;
+no production restart, image publication or automatic update is authorized here. Required live
+upgrade validation is tracked separately in T161 and blocks deployment/release promotion,
+T155 and final reviews; preparing this candidate does not satisfy that gate.
+
+**Security relevance.** Upstream describes memory-safety and client-availability fixes and a
+Conflux stream-isolation correction (TROVE-2026-040). Existing T058 observations must be
+rechecked against the new binary; they do not authorize weaker isolation rules.
+Sources: [official announcement](https://forum.torproject.org/t/security-release-0-4-9-12/22096)
+and [tagged release notes](https://gitlab.torproject.org/tpo/core/tor/-/raw/tor-0.4.9.12/ReleaseNotes).
+
+**Authenticated inputs (resolved 2026-09-12).** The primary signing fingerprint remains
+`A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89`; the fetched key contains exactly one primary key.
+The Bookworm InRelease signature verifies under that key, using signing subkey
+`2265EB4CB2BF88D900AE8D1B74A941BA219EC810`. Signed metadata is dated 2026-09-11 14:20:58 UTC,
+valid until 2026-10-21 14:20:58 UTC. Both uncompressed Packages indexes match the SHA256 and
+size in that signed Release. Actual downloaded package bytes match these authenticated hashes:
+
+| Architecture | Package filename | SHA256 |
+|---|---|---|
+| amd64 | `tor_0.4.9.12-1~d12.bookworm+1_amd64.deb` | `e9fdce1afa50faa36ae1b6df80c004eff24668c245d4667d00e5bdb3d115365c` |
+| arm64 | `tor_0.4.9.12-1~d12.bookworm+1_arm64.deb` | `5b305c8fd942d536bcda9644b716dfb49a424da6dc854aa59116557987144f59` |
+
+Metadata: [Bookworm InRelease](https://deb.torproject.org/torproject.org/dists/bookworm/InRelease),
+[amd64 Packages](https://deb.torproject.org/torproject.org/dists/bookworm/main/binary-amd64/Packages),
+[arm64 Packages](https://deb.torproject.org/torproject.org/dists/bookworm/main/binary-arm64/Packages).
+Packages are under the repository's `pool/main/t/tor/` path. Grounding records and actual
+build/test/review outcomes are retained with T160 delivery evidence, including unavailable checks.
+
+**Enforcement and supersession.** `sidecars/tor/tor-packages.sha256` is an independent,
+reviewed content lock. `install-tor.sh` downloads the exact version through authenticated apt
+metadata into a private cache without unpacking it, checks the selected architecture's
+immutable hash and installs that exact local file with package downloads disabled. After checking
+Tor, dependencies are downloaded into the same cache with only the pinned Debian snapshot source
+enabled; both dependency resolution and final installation exclude all source-parts directories.
+The Tor repository cannot supply replacement libraries even when it offers a higher version or
+different bytes under the same version. Real offline APT fixtures reproduce both source-selection
+cases. A Tor-only hash check with both repositories enabled retained this inherited gap; lowering
+repository priority alone does not isolate same-version download sources. No dependency versions
+are refreshed by this repair. Installation cannot fetch replacements.
+A real APT build demonstrated that naming a local file alone could still trigger a repository
+download. The `--no-download` install phase prevents that bypass; missing cache data fails rather
+than being silently held back (`--ignore-missing` is not used). See the
+[Bookworm apt-get contract](https://manpages.debian.org/bookworm/apt/apt-get.8.en.html).
+A missing pin, unsupported architecture, failed download or changed package bytes prevents
+installation. Download scratch state is removed on exit and the build helper/pin files are
+removed from the final runtime filesystem. The existing base digest, Debian snapshot,
+Debian package versions, upstream key, non-root identity and torrc are preserved.
+
+This supersedes the Tor version/hash selection and the claimed Tor-package immutability in
+the 2026-07-04 entry: a named version plus a hash from a mutable signed index authenticates the
+current publisher's choice, but does not prevent that publisher from replacing same-version
+bytes. The independent content check mitigates finding
+`20260727-002-tor-deb-hash-never-verified` (T140, folded into T160). Closure requires
+the independent T160 reviews and delivered fix commit. The original entry remains
+historical; its other trust decisions and residual risks are retained.
+
+**Update procedure and limits.** A later promotion must verify new signed metadata and actual
+package bytes, then update the selected version and both architecture locks together, with
+negative controls, builds and applicable protocol checks. Do not accept a new hash merely
+because a build failed or upstream removed an old artifact. Signature trust, content identity,
+package-manifest reproducibility and final-image reproducibility are distinct. Native amd64
+execution does not establish arm64 runtime behavior; authenticated arm64 bytes establish only
+selection/integrity. Final release artifact identities remain T081's responsibility. This entry
+does not assert that the remaining topology, observer, browser or isolation repairs are closed
+(THREAT-MODEL §2.6/§5.8; T155).
+
+---
+
 ## 2026-09-07 — Erratum: FR citation corrected in the SC-002 amendment entry (record-only supersession, T061 round-1 review follow-up)
 
 The 2026-09-07 entry "SC-002 corpus measurement mechanism corrected"
@@ -908,6 +983,8 @@ cross-reference" above for the drift reconciliation plan under T018.
 ---
 
 ## 2026-07-04 — Tor sidecar trust rationale (FR-015)
+
+Superseded by: [T160 Tor security promotion](#2026-09-12--tor-04912-security-promotion-and-exact-package-content-pins-t160), for the Tor version/hash selection and same-version content-integrity claim only.
 
 **Decision.** Stargate builds its own Tor sidecar image
 (`sidecars/tor/Dockerfile`) from a digest-pinned `debian:12-slim` base,

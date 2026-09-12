@@ -88,7 +88,9 @@ grep -nEi 'Check-Valid-Until[[:space:]]*"?false' "$TOR_DOCKERFILE" >/dev/null 2>
 # --- B5: tor stays on deb.torproject.org (FR-015 trust rationale) -----------
 # Switching tor to the Debian archive (0.4.9.11-0+deb12u1, a Debian rebuild)
 # would break FR-015's "Tor Project's own distribution" guarantee. The tor
-# repo line must be present; tor must be installed by name from it.
+# repo line must be present. T160 downloads by version through apt, checks an
+# independent content pin and installs the exact local file. Its executable
+# rejection fixtures live in tor_package_integrity_test.sh.
 grep -q 'deb.torproject.org' "$TOR_DOCKERFILE" \
   || bail "B5: $TOR_DOCKERFILE must keep tor on deb.torproject.org (FR-015 — Debian archive rebuild would break the trust rationale)"
 

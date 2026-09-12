@@ -102,3 +102,8 @@ the change. Do not preserve direct CP cookie access merely to satisfy the histor
 Hand-filed by the T059 session (2026-09-07) per the surgical-changes
 doctrine: the flake is real for every full-stack live test and operator
 bring-up, but the healthcheck semantics belong to the sidecar owners.
+
+T160 grounding (2026-09-12): two cold Tor 0.4.9.12 T058 runs exceeded their separate
+five-minute descriptor-loading deadline; T032 bootstrapped in about 17 seconds. T161 owns
+diagnosis and missing live-upgrade evidence. This does not establish that changing this
+healthcheck's start-period or authentication criterion fixes those public-network failures.
