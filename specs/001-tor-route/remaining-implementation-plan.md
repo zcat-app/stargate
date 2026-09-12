@@ -2,12 +2,12 @@
 
 Updated 2026-09-12 after the foundation audit and **T156 constitution strengthening**.
 Ticket frontmatter is executable; this document supplies priority within the runnable set.
-Inventory while T156 is under review: **191 tickets: 128 done, 60 pending, one active
-amendment (T156), two deferred (T037 and T154)**. No runtime fix is delivered by the amendment.
+Inventory after reviewed T156 delivery: **191 tickets: 129 done, 60 pending,
+two deferred (T037 and T154)**. No runtime fix is delivered by the amendment.
 
 ## Decision and implementation boundary
 
-Finish and independently review T156 before runtime implementation. It sets binding listener,
+T156 completed independent review and delivery in commit `3aac431`. It sets binding listener,
 egress, isolation, auth recovery, fail-closed and aggregate-data requirements. The earlier audit
 and constitution evaluation remain historical evidence; the amended constitution and
 `contracts/foundation-boundaries.md` govern new work. T125 is not accepted precedent.
@@ -27,11 +27,11 @@ and live evidence remain blocking. Completed tickets keep their history.
 Each arrow is a preferred execution order, with one focused ticket per implementation/review
 loop. Frontmatter encodes mandatory prerequisites, not every preference in this table. Use
 explicit IDs with `scripts/run-task.sh`; after each completion, consult `scripts/next-task.sh`
-and choose the earliest ready entry here. T156 is the active prerequisite. After its reviewed delivery, T139 is next.
+and choose the earliest ready entry here. T156 is complete; T139 is next and is the only runnable ticket.
 
 | Order | Tickets | Required outcome |
 |---|---|---|
-| 0 — authoritative baseline | T156 | Finish amendment, downstream reconciliation and independent reviews before runtime work. |
+| 0 — completed authoritative baseline | T156 | Amendment, downstream reconciliation and independent reviews delivered in `3aac431`. |
 | 1 — gate integrity | T139 | Required scripts/module coverage and complete reviewed-source snapshots cannot silently disappear. |
 | 2 — definite defects | T135 → T137 → T136 | Fix resumed peer authorization, reload deadlines and complete client/profile/site partitioning, with spec-derived regressions first. |
 | 3 — foundational design | T134 → T138 → T147 | Review compliant topology, enforced observer authority and CONNECT isolation/refusal contract. |
@@ -47,9 +47,9 @@ and choose the earliest ready entry here. T156 is the active prerequisite. After
 | 13 — live acceptance | T034f → T034a → T077 → T080 | Attributed network evidence, reference browser, clean-host quickstart and license/doc sweep. |
 | 14 — final cumulative reviews | T078 → T079 | Completed-candidate security/privacy and performance evidence, then finding closure. |
 
-All 60 pending IDs and the active T156 appear once. T037 stays deferred; T154 is replaced by
+All 60 pending IDs and the completed baseline T156 appear once. T037 stays deferred; T154 is replaced by
 T156. T074 and T068a are done and retain their history. No runtime implementation starts until
-T156 completes normal reviewed delivery; unavailable required evidence does not turn into PASS.
+T156 completes normal reviewed delivery (now satisfied); unavailable required evidence does not turn into PASS.
 
 ## Execution constraints and remaining grounding
 

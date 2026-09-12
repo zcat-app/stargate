@@ -1,7 +1,7 @@
 ---
 id: "T156"
 title: "Strengthen constitution and reconcile implementation prerequisites"
-status: "in-review"
+status: "done"
 created: "2026-09-12"
 last_updated: "2026-09-12"
 source: "specs/001-tor-route/contracts/foundation-boundaries.md"
@@ -19,7 +19,7 @@ decision_refs: []
 remediates: "T133"
 tests_first: []
 decomposed_from: "T154"
-reviews: {}
+reviews: { round: 3, date: 2026-09-12, verdict: APPROVE, findings: 0 }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -62,6 +62,11 @@ and newly discovered document smells, then revising ticket order before runtime 
 Constitution weakening, unrelated feature work, and claiming unavailable tests passed.
 
 ## Notes
+
+Delivered in commit `3aac431151394c00d826c509f460ea6c94f1f7ef` after independent
+codereview and redteam approval. Exact candidate manifest and reviewer verdicts:
+[T156 delivery evidence](../../../reviews/T156/README.md). This lifecycle update
+does not change the reviewed guarantees or close the pending runtime repairs.
 
 Privacy regressions are authored first within this ticket; empty tests_first is not an exemption.
 If decomposed, create concrete children and add them to T155 and affected consumers before closure.
