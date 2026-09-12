@@ -163,11 +163,12 @@ DIFFSTAT_FILE="$RUN_DIR/$TICKET_ID-r$([ -f "$ROUND_FILE" ] && cat "$ROUND_FILE" 
 VERDICT_FILE="$RUN_DIR/$TICKET_ID.verdict"      # codereview verdict (APPROVE|APPROVE-WITH-FIXES|REWORK|ESCALATE)
 REDTEAM_FILE="$RUN_DIR/$TICKET_ID.redteam.verdict"
 REDTEAM_SNAPSHOT="$RUN_DIR/$TICKET_ID.redteam-snapshot"
+CODE_SNAPSHOT="$RUN_DIR/$TICKET_ID.code-snapshot"
 AWF_FILE="$RUN_DIR/$TICKET_ID.awf-applied"      # sentinel: APPROVE-WITH-FIXES items applied (reviewer-prompt.md)
 PROMPT_FILE="$RUN_DIR/$TICKET_ID.prompt"
 
 if [ "$RESET_ROUND" = "1" ]; then
-  rm -f "$ROUND_FILE" "$VERDICT_FILE" "$DIFFSTAT_FILE" "$REDTEAM_FILE" "$REDTEAM_SNAPSHOT" "$AWF_FILE"
+  rm -f "$ROUND_FILE" "$VERDICT_FILE" "$DIFFSTAT_FILE" "$REDTEAM_FILE" "$REDTEAM_SNAPSHOT" "$CODE_SNAPSHOT" "$AWF_FILE"
   echo "run-task: reset round state for $TICKET_ID"
   exit 0
 fi
@@ -281,12 +282,12 @@ PY
     || echo "run-task: WARNING — regen-status.sh failed; STATUS.md may be stale" >&2
 }
 
-# T133: bind the independent approval to the exact tracked worktree, index,
-# baseline, HEAD and codereview output. Including both diffs prevents a staged
+# T133/T139: bind approval to the worktree, index, source inventory,
+# baseline, HEAD and (for redteam) codereview output. Both diffs prevent a staged
 # version different from the reviewed working copy from borrowing approval.
 review_snapshot() {
-  python3 - "$RUN_DIR/$TICKET_ID.start-sha" "$ROUND" "$VERDICT_FILE" <<'SNAPSHOT'
-import hashlib, pathlib, subprocess, sys
+  python3 - "$RUN_DIR/$TICKET_ID.start-sha" "$ROUND" "${1:-$VERDICT_FILE}" <<'SNAPSHOT'
+import hashlib, os, pathlib, subprocess, sys
 
 def git(*args):
     return subprocess.check_output(['git', *args])
@@ -295,8 +296,15 @@ base_file = pathlib.Path(sys.argv[1])
 base = base_file.read_text().strip() if base_file.exists() else git('rev-parse', 'HEAD').decode().strip()
 parts = [base.encode(), sys.argv[2].encode(), git('rev-parse', 'HEAD'),
          git('diff', '--no-ext-diff', '--binary', base, '--'),
-         git('diff', '--no-ext-diff', '--binary', '--cached', base, '--'),
-         pathlib.Path(sys.argv[3]).read_bytes()]
+         git('diff', '--no-ext-diff', '--binary', '--cached', base, '--')]
+if sys.argv[3] != 'source-only':
+    parts.append(pathlib.Path(sys.argv[3]).read_bytes())
+# Ignored build products are outside the candidate; all other new paths are
+# source until explicitly staged. NUL delimiting handles unusual filenames.
+for name in sorted(filter(None, git('ls-files', '--others', '--exclude-standard', '-z').split(b'\0'))):
+    path = pathlib.Path(os.fsdecode(name))
+    parts.extend([name, str(path.lstat().st_mode).encode(),
+                  os.fsencode(path.readlink()) if path.is_symlink() else path.read_bytes()])
 digest = hashlib.sha256()
 for part in parts:
     digest.update(len(part).to_bytes(8, 'big'))
@@ -306,8 +314,45 @@ SNAPSHOT
 }
 
 invalidate_reviews() {
-  rm -f "$VERDICT_FILE" "$REDTEAM_FILE" "$REDTEAM_SNAPSHOT" "$AWF_FILE" "$PROMPT_FILE"
+  rm -f "$VERDICT_FILE" "$REDTEAM_FILE" "$REDTEAM_SNAPSHOT" "$CODE_SNAPSHOT" "$AWF_FILE" "$PROMPT_FILE"
   echo "run-task: reviewed snapshot changed; fresh codereview and redteam required." >&2
+}
+
+# Constitution VII/VIII: the review diff must include every intended new
+# source, and the budget includes the union of working and staged paths.
+# Ignored artifacts stay outside this inventory; intended ignored source must
+# be explicitly force-added before review, as documented in workflow.md.
+check_inventory() {
+  local base
+  base="$(cat "$RUN_DIR/$TICKET_ID.start-sha" 2>/dev/null || git rev-parse HEAD)"
+  if ! python3 - "$base" "$(extract_fm files_budget)" <<'INVENTORY'
+import os, subprocess, sys
+
+def paths(*args):
+    return set(filter(None, subprocess.check_output(['git', *args]).split(b'\0')))
+
+untracked = paths('ls-files', '--others', '--exclude-standard', '-z')
+changed = (paths('diff', '--name-only', '--no-renames', '-z', sys.argv[1], '--') |
+           paths('diff', '--cached', '--name-only', '--no-renames', '-z', sys.argv[1], '--') |
+           untracked)
+if untracked:
+    print('run-task: unstaged new source blocks review/commit; stage intended paths explicitly:', file=sys.stderr)
+    for name in sorted(untracked):
+        print('  ' + repr(os.fsdecode(name)), file=sys.stderr)
+try:
+    budget = int(sys.argv[2])
+    if budget < 1:
+        raise ValueError()
+except ValueError:
+    sys.exit('run-task: missing or invalid files_budget')
+if len(changed) > budget:
+    print(f'run-task: {len(changed)} changed paths exceed files_budget={budget}; STOP', file=sys.stderr)
+sys.exit(1 if untracked or len(changed) > budget else 0)
+INVENTORY
+  then
+    invalidate_reviews
+    return 1
+  fi
 }
 
 # --- dispatch on status -----------------------------------------------------
@@ -427,6 +472,7 @@ EOF
       exit 0
     fi
     rm -f "target/runs/$TICKET_ID.verified"
+    check_inventory || exit 1
 
     # Capture diff stat for must-shrink on later rounds. Scoped to the
     # ticket's base SHA (branch-wide `git diff main` would count every
@@ -437,6 +483,7 @@ EOF
     # Also run verify.sh directly as the safety re-check (workflow.md step 3).
     echo "run-task: re-running scripts/verify.sh as the pre-review gate…"
     if bash scripts/verify.sh >> target/verify.log 2>&1; then
+      check_inventory || exit 1
       echo "run-task: GREEN. Transitioning $TICKET_ID to in-review."
       update_ticket_status "in-review"
     else
@@ -448,6 +495,7 @@ EOF
     ;;
 
   in-review)
+    check_inventory || exit 1
     # Phase: emit codereview handoff OR act on the verdict the caller wrote.
     if [ ! -f "$VERDICT_FILE" ]; then
       # Mechanical report (reviewer-prompt.md §Inputs): script-computed facts
@@ -458,7 +506,14 @@ EOF
       # command substitution would abort the whole driver silently, so each
       # pipeline ends in an explicit fallback.
       STAT_LINE="$( (git diff "$BASE_SHA" --stat 2>/dev/null | tail -1) || echo 'unknown')"
-      FILES_TOUCHED="$(printf '%s' "$STAT_LINE" | grep -oE '[0-9]+ files? changed' | grep -oE '[0-9]+' || true)"
+      FILES_TOUCHED="$(python3 - "$BASE_SHA" <<'COUNT'
+import subprocess, sys
+def paths(*args):
+    return set(filter(None, subprocess.check_output(['git', *args]).split(b'\0')))
+print(len(paths('diff', '--name-only', '--no-renames', '-z', sys.argv[1], '--') |
+          paths('diff', '--cached', '--name-only', '--no-renames', '-z', sys.argv[1], '--')))
+COUNT
+)"
       BUDGET="$(extract_fm files_budget)"
       BUDGET_VERDICT="within budget"
       if [ -n "$FILES_TOUCHED" ] && [ -n "$BUDGET" ] && [ "$FILES_TOUCHED" -gt "$BUDGET" ]; then
@@ -481,6 +536,7 @@ $(printf '%s' "$OOS_BLOCK" | sed 's/^/  /')"
       [ -n "$PRIOR_BLOCK" ] && REPORT_BLOCK="$REPORT_BLOCK
 prior round verdict (items + EVALUATED-AS probes):
 $(printf '%s' "$PRIOR_BLOCK" | sed 's/^/  /')"
+      review_snapshot source-only > "$CODE_SNAPSHOT"
       cat <<EOF | emit_prompt REVIEW
 Spawn \`stargate-codereview\` against $TICKET_ID (workflow.md §"The flow" step 4).
 
@@ -492,9 +548,14 @@ The reviewer runs FRESH CONTEXT, blind to your rationale. Hand it ONLY:
 MECHANICAL REPORT (script-computed — the reviewer trusts these numbers over
 its own counting and flags any mismatch as suspect input, not a finding):
 $REPORT_BLOCK
+Source snapshot: $(cat "$CODE_SNAPSHOT")
 
 The reviewer WRITES ITS OWN VERDICT (Write tool) to:
   $VERDICT_FILE
+Include each of these fields exactly once, copying this handoff's identity:
+  VERDICT: APPROVE | APPROVE-WITH-FIXES | REWORK | ESCALATE
+  SNAPSHOT: $(cat "$CODE_SNAPSHOT")
+  ROUND: $ROUND
 …BEFORE its reply; its chat reply is only a short stub (verdict + finding
 count). You do NOT transcribe, edit, or reformat the verdict. When the file
 exists, just re-invoke: scripts/run-task.sh $TICKET_ID
@@ -507,6 +568,11 @@ EOF
       exit 0
     fi
 
+    if [ ! -f "$CODE_SNAPSHOT" ] || [ "$(review_snapshot source-only)" != "$(cat "$CODE_SNAPSHOT")" ]; then
+      invalidate_reviews
+      exit 1
+    fi
+
     if [ -f "$REDTEAM_SNAPSHOT" ] && [ "$(review_snapshot)" != "$(cat "$REDTEAM_SNAPSHOT")" ]; then
       invalidate_reviews
       exit 1
@@ -514,14 +580,27 @@ EOF
 
     # Verdict is in — act on it.
     VERDICT_BODY="$(cat "$VERDICT_FILE")"
-    if ! CODE_VERDICT="$(python3 - "$VERDICT_FILE" <<'VERDICT'
+    # A delayed reviewer can finish after a newer handoff was emitted. Bind
+    # the response itself, not only the stored request, to source and round.
+    if ! CODE_VERDICT="$(python3 - "$VERDICT_FILE" "$(cat "$CODE_SNAPSHOT")" "$ROUND" <<'VERDICT'
 import re, sys
-values = re.findall(r'^VERDICT:[ \t]*(.*)$', open(sys.argv[1]).read(), re.MULTILINE)
-if len(values) != 1 or values[0].strip() not in ('APPROVE', 'APPROVE-WITH-FIXES', 'REWORK', 'ESCALATE'):
-    sys.exit('run-task: malformed codereview verdict; reviewer must correct it')
-print(values[0].strip())
+text = open(sys.argv[1]).read()
+def field(name):
+    values = re.findall(r'^' + name + r':[ \t]*(.*)$', text, re.MULTILINE)
+    if len(values) != 1:
+        raise ValueError(name)
+    return values[0].strip()
+try:
+    verdict = field('VERDICT')
+    if (verdict not in ('APPROVE', 'APPROVE-WITH-FIXES', 'REWORK', 'ESCALATE')
+            or field('SNAPSHOT') != sys.argv[2] or field('ROUND') != sys.argv[3]):
+        raise ValueError('invalid verdict identity')
+except ValueError:
+    sys.exit('run-task: malformed or mismatched codereview verdict; fresh review required')
+print(verdict)
 VERDICT
 )"; then
+      invalidate_reviews
       exit 1
     fi
     # Archive per round: the NEXT round's reviewer needs this round's
@@ -533,8 +612,9 @@ VERDICT
     # ITEMS applied without burning a review round. Fail-closed via sentinel:
     # first sight emits APPLY-FIXES; only after the caller applies exactly the
     # listed items, re-verifies GREEN, and touches $AWF_FILE does this fall
-    # through to the normal APPROVE path below — freshness re-verify and
-    # focused commit still apply unchanged.
+    # through to the normal APPROVE path below if the snapshot is unchanged.
+    # Actual source corrections invalidate it above and require refreshed
+    # review in the same round (Constitution VIII / workflow.md).
     if [ "$CODE_VERDICT" = APPROVE-WITH-FIXES ]; then
       if [ ! -f "$AWF_FILE" ]; then
         cat <<EOF | emit_prompt APPLY-FIXES
@@ -546,7 +626,7 @@ $VERDICT_FILE — verbatim, nothing else:
 Then:
   bash scripts/verify.sh                    # must be GREEN
   touch target/runs/$TICKET_ID.awf-applied  # signal fixes applied
-  scripts/run-task.sh $TICKET_ID            # driver re-verifies, then commits
+  scripts/run-task.sh $TICKET_ID            # changed snapshot requests fresh review in this round
 
 EOF
         echo "run-task: $TICKET_ID emitted APPLY-FIXES handoff. Apply fix items, re-invoke."
@@ -644,6 +724,11 @@ CHECK
         invalidate_reviews
         exit 1
       fi
+      check_inventory || exit 1
+      if [ "$(review_snapshot source-only)" != "$(cat "$CODE_SNAPSHOT")" ]; then
+        invalidate_reviews
+        exit 1
+      fi
       if [ "$REDTEAM_APPROVED" = 1 ] && [ "$(review_snapshot)" != "$(cat "$REDTEAM_SNAPSHOT")" ]; then
         invalidate_reviews
         exit 1
@@ -688,7 +773,7 @@ txt = re.sub(r'^reviews:\s*\{[^}]*\}\s*$', new, txt, count=1, flags=re.MULTILINE
 open(path, 'w').write(txt)
 PY
       update_ticket_status "done"
-      rm -f "$VERDICT_FILE" "$REDTEAM_FILE" "$REDTEAM_SNAPSHOT" "$AWF_FILE"
+      rm -f "$VERDICT_FILE" "$REDTEAM_FILE" "$REDTEAM_SNAPSHOT" "$CODE_SNAPSHOT" "$AWF_FILE"
       echo "run-task: $TICKET_ID done (committed on '$FEATURE_BRANCH')."
       echo "  Push is your call: git push origin $FEATURE_BRANCH"
       echo "  Milestone squash-merge to main: scripts/run-task.sh $TICKET_ID --merge"

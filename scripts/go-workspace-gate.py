@@ -62,6 +62,10 @@ _CADENCE_TAGS = ("docker", "live", "release")
 _BUILDTAG_RE = re.compile(
     rb"//go:build\s+.*(?<![!\w])(" + b"|".join(t.encode() for t in _CADENCE_TAGS) + rb")\b")
 _REQUIRED_RE = re.compile(rb"//\s*stargate:required\b")
+# Minimum coverage once each substrate exists; discovery still adds modules.
+# Constitution VII forbids removing a present mandatory module via go.work.
+_MANDATORY_MODULES = ("data-plane", "proto", "tests/contract",
+                      "tests/internal/loginvariants", "tests/integration")
 
 
 def say(msg: str) -> None:
@@ -80,25 +84,12 @@ def discover_modules(repo_root: str) -> list[str]:
     gowork = os.path.join(repo_root, "go.work")
     if not os.path.isfile(gowork):
         return []
-    modules: list[str] = []
-    in_block = False
-    with open(gowork, encoding="utf-8") as fh:
-        for raw in fh:
-            line = raw.strip()
-            if line.startswith("use (") or line == "use(":
-                in_block = True
-                continue
-            if in_block and line == ")":
-                in_block = False
-                continue
-            if in_block:
-                if line and not line.startswith("//"):
-                    modules.append(line)
-                continue
-            m = re.match(r"use\s+(.+)$", line)
-            if m and not line.startswith("//"):
-                modules.append(m.group(1).strip())
-    return sorted(set(os.path.normpath(m) for m in modules))
+    # Let Go parse its own quoting, comments and single-line use syntax.
+    proc = run(["go", "work", "edit", "-json", gowork], cwd=repo_root)
+    if proc.returncode:
+        raise ValueError(proc.stdout + proc.stderr)
+    return sorted({os.path.relpath(os.path.join(repo_root, item["DiskPath"]), repo_root)
+                   for item in json.loads(proc.stdout).get("Use", []) or []})
 
 
 def package_meta(pkg_dir: str) -> tuple[str | None, bool, bool]:
@@ -237,7 +228,18 @@ def main() -> int:
     if not shutil.which("go"):
         say("go-workspace: SKIP — go toolchain not installed")
         return 0
-    modules = discover_modules(repo_root)
+    try:
+        modules = discover_modules(repo_root)
+    except (ValueError, OSError) as exc:
+        say(f"go-workspace: FAIL — cannot read workspace: {exc}")
+        return 1
+    missing = [mod for mod in _MANDATORY_MODULES
+               if os.path.isfile(os.path.join(repo_root, mod, "go.mod"))
+               and mod not in modules]
+    if missing:
+        say("go-workspace: FAIL — mandatory module(s) omitted from go.work: "
+            + ", ".join(missing))
+        return 1
     if not modules:
         say("go-workspace: SKIP — no go.work (or no `use` directives)")
         return 0
@@ -261,8 +263,8 @@ def main() -> int:
     for mod in modules:
         mod_abs = os.path.join(repo_root, mod)
         if not os.path.isfile(os.path.join(mod_abs, "go.mod")):
-            say(f"  SKIP  go:{mod} — in go.work but no go.mod (use without module)")
-            skipped += 1
+            say(f"  FAIL  go:{mod} — in go.work but no go.mod (missing coverage)")
+            failed += 1
             continue
 
         env = dict(os.environ)
@@ -376,6 +378,17 @@ def main() -> int:
         # can exit nonzero without "FAIL" in stdout — keep diagnostics).
         if tproc.returncode != 0:
             sys.stderr.write(tproc.stderr)
+            # go test puts assertion text, test names and panic stacks in
+            # JSON Output events on stdout, not stderr (T139 / VII).
+            for line in tproc.stdout.splitlines():
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    say(line)
+                    continue
+                if event.get("Action") == "output":
+                    sys.stderr.write(event.get("Output", ""))
+            failed += 1  # a nonzero module result cannot be masked by events
 
         for ip, _d in pkgs:
             rec = classified[ip]

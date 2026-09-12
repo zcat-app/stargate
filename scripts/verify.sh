@@ -99,21 +99,17 @@ say "Stargate verify — $(git rev-parse --short HEAD 2>/dev/null || echo no-git
 hr
 
 # === Gate 1: license headers (always available) ===========================
-if [ -x scripts/check-license-headers.sh ]; then
-  run_cmd "license-headers" -- scripts/check-license-headers.sh
-else
-  record "license-headers" SKIP "scripts/check-license-headers.sh absent"
-fi
+# Required tooling is invoked through its interpreter: file mode is not a
+# coverage switch (Constitution VII / T139). Missing tooling fails too.
+run_cmd "license-headers" -- bash scripts/check-license-headers.sh
 
 # === Gate 1b: external-fact grounding (pins not covered by consistency) ===
 # Offline by default (fast, surfaces pins, fails only on a broken pin). Set
 # STARGATE_GROUND_ONLINE=1 to additionally resolve digests + check EOL.
 if [ "${STARGATE_SKIP_GROUND:-0}" = "1" ]; then
   record "ground-check" SKIP "STARGATE_SKIP_GROUND=1"
-elif [ -x scripts/ground-check.sh ]; then
-  run_cmd "ground-check" -- scripts/ground-check.sh
 else
-  record "ground-check" SKIP "scripts/ground-check.sh absent"
+  run_cmd "ground-check" -- bash scripts/ground-check.sh
 fi
 
 # === Gate 1c: shell quality (release-critical scripts/) ====================
@@ -191,20 +187,17 @@ fi
 # (tests/contract/workflow/verify_discovery_test.sh).
 if ! have go; then
   record "go-workspace" SKIP "go toolchain not installed"
-elif [ -x scripts/go-workspace-gate.py ]; then
-  run_cmd "go-workspace" -- python3 scripts/go-workspace-gate.py "$(pwd)"
 else
-  record "go-workspace" SKIP "scripts/go-workspace-gate.py absent"
+  run_cmd "go-workspace" -- python3 scripts/go-workspace-gate.py "$(pwd)"
 fi
 
 # === Gate 2b: browser extension tests (discovered) ========================
-# T076 §Acceptance #3: discover the extension test runner rather than
-# enumerate a fixed path. The runner lands with T034b; until then this gate
-# self-SKIPs so verify.sh is green at scaffolding time.
-if [ -x extension/run-tests.sh ]; then
-  run_cmd "extension-tests" -- sh -c 'cd extension && ./run-tests.sh'
+# T139: distinguish an empty scaffold from a missing runner over existing
+# JavaScript substrate. Either an existing runner or source requires execution.
+if [ -f extension/run-tests.sh ] || [ -n "$(find extension -type f -name '*.js' -print -quit 2>/dev/null)" ]; then
+  run_cmd "extension-tests" -- bash -c 'cd extension && bash run-tests.sh'
 elif [ -d extension ]; then
-  record "extension-tests" SKIP "no extension/run-tests.sh (T034b not landed)"
+  record "extension-tests" SKIP "no extension JavaScript sources or test runner yet"
 else
   record "extension-tests" SKIP "no extension/ dir"
 fi
@@ -213,8 +206,8 @@ fi
 java_src=$(find control-plane -name '*.java' 2>/dev/null | wc -l | tr -d ' ')
 if [ "${STARGATE_SKIP_CP:-0}" = "1" ]; then
   record "control-plane" SKIP "STARGATE_SKIP_CP=1"
-elif [ "$java_src" -gt 0 ] && [ -x control-plane/mvnw ]; then
-  run_cmd "mvnw-verify" -- sh -c 'cd control-plane && ./mvnw -B -q verify'
+elif [ "$java_src" -gt 0 ]; then
+  run_cmd "mvnw-verify" -- sh -c 'cd control-plane && sh mvnw -B -q verify'
 else
   record "control-plane" SKIP "no Java sources yet"
 fi

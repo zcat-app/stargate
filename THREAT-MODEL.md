@@ -1194,6 +1194,24 @@ T132/T159 implement and verify this target. Current non-durable success/stale-st
 is a known gap, not an accepted recovery mechanism. Explicit operator rollback recovery has its
 own warned procedure; hostile host/root rollback of all trusted state is outside the guarantee.
 
+### 5.16 Verification coverage and review evidence (T139)
+
+Repository changes can otherwise hide regressions by clearing a gate's executable bit,
+omitting a mandatory Go module from go.work, or adding source outside the reviewed diff.
+Required runners use explicit interpreters; the Go gate cross-checks present mandatory module
+substrates while continuing to discover additional workspace modules. Nonzero Go test runs
+remain failures and retain test names/assertion output in development verification logs.
+These are build/test diagnostics, not permission for deployed per-request logging under III.
+
+The ticket driver refuses non-ignored untracked source before review/commit, counts all changed
+paths against budget, and binds approvals to working and staged content. Later source changes
+require fresh review. Verdicts identify their reviewed snapshot and round; a delayed approval
+for an older handoff cannot authorize a newer candidate. Ignored build products are excluded; intended ignored source must be
+explicitly staged. This guards accidental coverage/evidence omissions, not a malicious actor
+who can replace the gate, Git configuration or verdict files themselves. Genuine absent
+substrate and explicit cadence/tool opt-outs remain reported SKIPs. A local green result does
+not establish omitted live/release properties or replace VIII's external human release review.
+
 ## 6. What Stargate does not protect against
 
 The Non-Goals from the constitution, restated in user-facing terms. Each

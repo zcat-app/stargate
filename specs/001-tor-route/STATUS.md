@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 60 |
+| pending | 59 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 130 |
 | deferred | 3 |
@@ -27,15 +27,15 @@
 
 Tickets where `status: pending` AND every `blocked_by` is `done`.
 
-| ID | Title | Phase | Priv? | Parallel? |
-|---|---|---|---|---|
-| T139 | Prevent required verification coverage from disappearing | Foundation audit remediation | ✓ |  |
+_(none — every pending ticket has unsatisfied `blocked_by`, or no pending tickets.)_
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T139 | Prevent required verification coverage from disappearing | in-review | ✓ | Foundation audit remediation |
 
 ---
 

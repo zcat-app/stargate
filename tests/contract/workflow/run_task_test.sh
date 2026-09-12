@@ -144,6 +144,14 @@ fm_field() { grep -m1 "^$2:" "$1" | sed -E "s/^$2:[[:space:]]*//" | sed -E "s/[[
 # run_task <args...> — capture stdout+stderr + exit code.
 run_task() { rt_out="$(bash scripts/run-task.sh "$@" 2>&1)"; rt_rc=$?; }
 
+# T139: fixture reviewers return the identity of the handoff they inspected.
+code_verdict() {
+  local id="$1" kind="$2" details="${3:-}"
+  printf 'VERDICT: %s\nSNAPSHOT: %s\nROUND: %s\n%s\n' \
+    "$kind" "$(cat "target/runs/$id.code-snapshot")" \
+    "$(cat "target/runs/$id.round")" "$details" > "target/runs/$id.verdict"
+}
+
 # ===========================================================================
 # Scenario 1: pending START — feature-branch creation from main
 # ===========================================================================
@@ -214,7 +222,8 @@ git checkout -q -b 001-testfeat main
 printf 'real impl\n' > src.txt
 git add src.txt specs/001-testfeat/tickets/T303-fixture.md
 mkdir -p target/runs
-printf 'VERDICT: APPROVE\nround 1\n' > target/runs/T303.verdict
+run_task T303  # T139: bind approval to the emitted review candidate.
+code_verdict T303 APPROVE
 PRE_COMMIT="$(git rev-parse HEAD)"
 run_task T303
 assert '[ "$rt_rc" -eq 0 ]' "S4: APPROVE exits 0 (got $rt_rc)"
@@ -233,7 +242,8 @@ write_ticket T304 "approve needs staged paths" false in-review >/dev/null
 commit_all "add T304 ticket"
 git checkout -q -b 001-testfeat main
 mkdir -p target/runs
-printf 'VERDICT: APPROVE\nround 1\n' > target/runs/T304.verdict
+run_task T304
+code_verdict T304 APPROVE
 run_task T304
 assert '[ "$rt_rc" -eq 0 ]' "S5: no-staged-paths emits COMMIT handoff, exits 0 (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T304-fixture.md status)" = in-review ]' \
@@ -252,7 +262,8 @@ privacy_fixture() {
   printf 'first\n' > p.txt
   git add p.txt
   mkdir -p target/runs
-  printf 'VERDICT: APPROVE\n' > target/runs/T305.verdict
+  run_task T305
+  code_verdict T305 APPROVE
 }
 redteam_verdict() {
   local snapshot
@@ -263,7 +274,7 @@ bad_index=0
 for bad in 'APPROVE-BOGUS' $'APPROVE\nVERDICT: REWORK'; do
   bad_index=$((bad_index + 1))
   privacy_fixture "s6-invalid-codereview-$bad_index"
-  printf 'VERDICT: %s\n' "$bad" > target/runs/T305.verdict
+  code_verdict T305 "$bad"
   run_task T305
   assert '[ "$rt_rc" -ne 0 ]' "S6: malformed codereview cannot bypass redteam"
   assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S6: malformed codereview cannot commit"
@@ -316,6 +327,9 @@ for mutation in worktree index head verdict privacy verify; do
   if [ "$mutation" = verify ]; then
     sed -i '/^exit 0$/i [ ! -f target/mutate ] || echo changed >> p.txt' scripts/verify.sh
     git add scripts/verify.sh
+    rm target/runs/T305.verdict
+    run_task T305
+    code_verdict T305 APPROVE
   fi
   run_task T305
   redteam_verdict APPROVE
@@ -337,6 +351,9 @@ done
 for verdict in REWORK ESCALATE; do
   privacy_fixture "s7-cap-$verdict"
   echo 2 > target/runs/T305.round
+  rm target/runs/T305.verdict
+  run_task T305
+  code_verdict T305 APPROVE
   run_task T305
   redteam_verdict "$verdict" 2
   run_task T305
@@ -399,7 +416,8 @@ commit_all "add T309 ticket"
 git checkout -q -b 001-testfeat main
 mkdir -p target/runs
 echo 2 > target/runs/T309.round                      # already at cap
-printf 'VERDICT: REWORK\nfix the thing\n' > target/runs/T309.verdict
+run_task T309
+code_verdict T309 REWORK 'fix the thing'
 run_task T309
 assert '[ "$rt_rc" -ne 0 ]' "S10: REWORK at cap exits non-zero (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T309-fixture.md status)" = escalated ]' \
@@ -411,7 +429,8 @@ commit_all "add T319 ticket"
 git checkout -q -b 001-testfeat main
 mkdir -p target/runs
 echo 1 > target/runs/T319.round
-printf 'VERDICT: REWORK\nfix it\n' > target/runs/T319.verdict
+run_task T319
+code_verdict T319 REWORK 'fix it'
 run_task T319
 assert '[ "$rt_rc" -eq 0 ]' "S10b: REWORK r1 exits 0 (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T319-fixture.md status)" = in-progress ]' \
@@ -431,7 +450,8 @@ git checkout -q -b 001-testfeat main
 printf 'real impl\n' > src.txt
 git add src.txt specs/001-testfeat/tickets/T320-fixture.md
 mkdir -p target/runs
-printf 'VERDICT: APPROVE-WITH-FIXES\nFIX ITEMS:\n  - fix a comment\n' > target/runs/T320.verdict
+run_task T320
+code_verdict T320 APPROVE-WITH-FIXES $'FIX ITEMS:\n  - fix a comment'
 run_task T320   # step 1: no sentinel yet
 assert '[ "$rt_rc" -eq 0 ]' "S10c-1: first sight exits 0 (got $rt_rc)"
 echo "$rt_out" | grep -qi "APPLY-FIXES" || bail "S10c-1: handoff should mention APPLY-FIXES"

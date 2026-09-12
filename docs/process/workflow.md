@@ -143,8 +143,9 @@ feature branch squash-merges to `main` at milestone close.**
    parses it and acts (APPROVE → independent redteam if privacy-critical,
    otherwise commit; APPROVE-WITH-FIXES → APPLY-FIXES
    handoff: caller applies the comment-only FIX ITEMS, re-verifies, touches
-   `target/runs/<id>.awf-applied`, and the driver advances to any required
-   redteam review and commit without a new round; REWORK → bump round; ESCALATE → surface the menu). Verdict:
+   `target/runs/<id>.awf-applied`; source changes invalidate the old snapshot and require
+   renewed review in the same round before redteam/commit (Constitution VIII);
+   REWORK → bump round; ESCALATE → surface the menu). Verdict:
    `APPROVE | APPROVE-WITH-FIXES | REWORK | ESCALATE`.
    For `privacy_critical: true`, the driver emits REDTEAM after approval and
    any comment fixes. The root spawns a second fresh-context reviewer, blind
@@ -152,15 +153,18 @@ feature branch squash-merges to `main` at milestone close.**
    `target/runs/<id>.redteam.verdict` with VERDICT, SNAPSHOT and ROUND fields
    copied from the handoff. No reviewer may delegate. Both approvals are
    required; redteam REWORK/ESCALATE uses the existing shared round budget.
-   The snapshot covers HEAD, baseline, tracked worktree, index, round and
-   codereview output. Changes invalidate both approvals, including changes
+   Code review binds HEAD, baseline, worktree, index, round and the non-ignored
+   source inventory; redteam additionally binds codereview output. Changes invalidate both approvals, including changes
    during final verification. Legacy `.redteam` files cannot approve work.
+   Both reviewer verdicts must copy the handoff's exact `SNAPSHOT` and `ROUND`, each once.
+   Missing, duplicate or mismatched identity is refused, including a delayed response to an
+   older handoff after a newer candidate has been submitted for review.
 6. **Resolve:**
 
    | Verdict | Action |
    |---|---|
    | `APPROVE` | Complete independent redteam when privacy-critical, then commit. |
-   | `APPROVE-WITH-FIXES` | Apply ONLY its comment/doc-only FIX ITEMS; re-`verify`; touch `.awf-applied`; independent redteam if required, then commit — no new review round. |
+   | `APPROVE-WITH-FIXES` | Apply ONLY its comment/doc-only FIX ITEMS; re-`verify`; touch `.awf-applied`; refresh review of the changed snapshot, then redteam if required and commit — no round-counter increment. |
    | `REWORK` (round 1) | Address only the named items; re-`verify`; re-review. |
    | `REWORK` (round 2 = cap) / `ESCALATE` | STOP. Surface the menu (below). **You** decide. |
 
@@ -258,8 +262,14 @@ hashing all input files (including untracked files). Reviewers bind that exact m
 Count every touched path toward files_budget, including specs, the ticket and new files;
 there is no directory exemption. Before driver review, explicitly stage every intended new
 source file so it appears in the diff/snapshot; compare that inventory with the scoped manifest.
-An unstaged intended source file must block review, not silently fall outside its hash. T139
-owns deterministic enforcement where the current driver still relies on caller discipline.
+T139 enforces this before review and commit: every non-ignored untracked path blocks until
+explicitly staged, and the union of worktree/index changed paths counts toward files_budget
+(including ticket/spec/docs paths and staged additions). Ignored build output is excluded;
+intended source matching an ignore rule must be explicitly force-added before review. Review
+hashes cover both staged and working content, HEAD, baseline and round; new source or changed
+content invalidates approvals, including during final verification. This also applies to
+comment/doc corrections: refreshed review uses the same round, so corrections do not consume
+a REWORK round. An approval without a recorded review snapshot cannot authorize commit.
 Lifecycle/verdict records are review outputs, not permission to change reviewed source afterward.
 A pending amendment becomes completed only through the normal reviewed commit/delivery phase;
 recorded approvals do not fabricate a missing commit. The human external review gate in VIII
