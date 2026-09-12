@@ -1,5 +1,12 @@
 # Stargate Threat Model
 
+> **Current compliance status — T156, 2026-09-12.** This document distinguishes required
+> protections from known implementation gaps. The constitution and feature 001
+> [foundation boundary contract](specs/001-tor-route/contracts/foundation-boundaries.md)
+> supersede older topology, operational logging, counter-publication and auth-recovery claims.
+> T125 is not constitutionally accepted. T134/T138/T152/T157–T159 and the other foundation
+> repairs remain pending; no repaired runtime or live pass is claimed by this amendment.
+
 **Status**: Draft
 **Last updated**: 2026-05-17
 **Derives from**:
@@ -227,19 +234,15 @@ imply different trust boundaries. The mode is selected by which
 
 ### 3.1 Local profile (`docker-compose.local.yml`)
 
-**Shape**: All proxy ports (8881–8885) and the admin UI (8443) bind to
-`127.0.0.1`. No WireGuard sidecar. Single device, single user. The browser
-is on the same machine. (T125, 2026-09-07 user-approved amend-spec: the
-loopback-only host guarantee is carried by the host-side publish binding
-(over a dedicated no-masquerade network attachment — Docker discards
-published ports on internal networks, and masquerade-off keeps the data
-plane off the internet) plus the container network namespace; inside
-compose the data plane listens on the container-wide address because a
-container-loopback listener is unreachable through Docker's port
-publishing. Accepted residue: the embedded DNS resolver on that
-non-internal attachment still forwards external names, so a compromised
-data plane retains a DNS side-channel even with IP egress blocked. The
-exposure boundary an external adversary meets is unchanged.)
+**Required topology:** proxy service listeners and host publications are loopback-only
+in their own namespaces. Sidecar endpoints have an enforced caller/port matrix; DP/CP
+cannot use arbitrary public TCP/UDP/DNS. T134 compares compliant designs. Host publication
+alone, `STARGATE_IN_CONTAINER` and no-masquerade are insufficient evidence.
+
+**Current gap:** T125 opened a wildcard proxy listener based on an environment flag.
+That behavior is not authorized by the constitution. Existing multi-network/no-masquerade
+configuration has not proven the required egress boundary. The below protections are target
+properties pending T134/T155, not verified claims for the current stack.
 
 **Protects against**:
 
@@ -249,12 +252,9 @@ exposure boundary an external adversary meets is unchanged.)
 - Network-level adversaries (§2.1, §2.3) seeing *plaintext request
   metadata* for routed traffic — they see only the encrypted outer tunnel
   to the chosen anonymity network's first hop.
-- A compromised application plane (data or control) exfiltrating directly
-  to the public network, the Docker API, or the other plane's surfaces —
-  the Compose network split (T094b) seats both planes on `internal: true`
-  networks with no external connectivity and no shared network between
-  them; only Tor attaches to an egress-capable network, making Tor the
-  sole egress trusted computing base (see §5.8 "Network segmentation").
+- Required target: constrain a compromised application plane to its authorized
+  adapter/IPC capabilities. Current T125/T094b topology and full CP cookie do not
+  establish this property; T134/T138 and §5.8 record the remaining work.
 
 **Does NOT protect against**:
 
@@ -954,56 +954,23 @@ network visibility for its route (§2.6).
   config volume.
 - **Per-sidecar Docker volumes**: cross-sidecar disk visibility is
   prevented by per-volume mounts.
-- **Network segmentation — Tor is the sole egress TCB** (T094b): the
-  local stack is split into three Compose networks so only Tor attaches
-  to an egress-capable network (`stargate-egress`); the data plane and
-  control plane sit on `internal: true` networks (`stargate-internal`,
-  `stargate-cp-tor`) with no external connectivity, and the two
-  application planes share no network with each other. Every service
-  additionally runs `read_only: true` with `cap_drop: [ALL]`,
-  `no-new-privileges`, and explicit memory/PID limits. A compromised
-  application plane therefore has no direct route to the public network,
-  the Docker API, or the other plane's surfaces — Tor is the only path
-  out, and it is the anonymity network's own first hop. Gated statically
-  by `tests/contract/compose/local_compose_test.sh` (M13) and at runtime
-  by `tests/contract/compose/network_hardening_test.go`.
+- **Required network/capability boundary (T156):** enforce DP→route adapter and
+  CP→sanitized observation/lifecycle only. No CP SOCKS egress, full Tor control credentials,
+  arbitrary public TCP/UDP/DNS, or unrestricted container-engine access. Sidecar-native
+  network maintenance is a distinct route TCB, not an exception for application planes.
 
-**Residual risk**: a backdoored sidecar that passes contract tests can
-still leak data through its anonymity-network channel. Docker isolation
-is not a sandbox in the security sense; a sufficiently malicious image
-with kernel-level exploit can break out — the network split above does
-not change that (it constrains a compromised *application* plane, not a
-compromised *kernel*). A second, narrower residue: `tor` binds both
-`SocksPort` and `ControlPort` on `0.0.0.0` and is multi-homed across the
-three networks, so a compromised application plane can additionally
-TCP-reach Tor's *other* port — CP→`tor:9050` (the unauthenticated SOCKS
-surface, a Tor-transiting exfil channel that bypasses the data plane's
-routing authority and per-first-party stream isolation) and DP→`tor:9051`
-(inert without the auth cookie: the cookie file on `stargate-tor-state`
-is mounted read-only into the control plane ONLY as a single-file volume
-subpath — `control_auth_cookie`, GID-aligned to the tor image's GID 5103,
-T039 — while the data plane holds neither the mount nor the group).
-Control-authority note: Tor's control protocol has no per-command ACL —
-whoever holds the cookie commands the full surface (state queries,
-reconfiguration, stream events). The control plane's `SidecarMonitor` is
-constrained in code to a three-command read-only allowlist
-(`AUTHENTICATE`/`GETINFO status/bootstrap-phase`/`QUIT`, T039), but that
-constraint is CP-side policy, not protocol enforcement; a compromised CP
-holding the cookie is not otherwise bounded. This residue is tracked in
-`redteam/findings/open/20260727-001-tor-controlport-unbounded-cp-authority.md`.
-This is wider than the intended
-`DP→{tor:9050}; CP→{tor:9051}` matrix but does **not** breach "Tor is the
-sole egress TCB" (the exfil still transits Tor; there is no clearnet leak
-— `internal:true` removes the default route and Docker's embedded DNS
-returns SERVFAIL for external names on those nets, blocking DNS-tunnel
-side-channels). Closing the cross-plane tor-port residue requires
-per-interface port binds, a torrc byte-contract change owned by T087 and
-deferred; it is accepted v1 residue and pinned as expected-reachable in
-`tests/contract/compose/network_hardening_test.go`. We accept this risk
-and rely on upstream maintainer trust plus reproducibility checks where
-the upstream publishes them. See `SECURITY-DECISIONS.md`
-§"2026-07-04 — Tor sidecar trust rationale (FR-015)" for the per-image
-trust rationale required by architecture spec §7.
+**Current implementation gaps:** T125 added a no-masquerade attachment; its DNS/UDP egress
+properties are not proven by the older three-network structural tests. CP currently receives
+Tor's full cookie and can reach its SOCKS port. An in-process command allowlist cannot constrain
+a compromised CP holding that cookie. These are unresolved T134/T138 findings, not accepted
+conformance. The historical tests/decisions record the old design; T155 requires repaired
+packet/capability evidence. A bridge-visible packet alone does not prove internet exfiltration.
+
+**Residual risks after a compliant repair:** Tor remains trusted for the anonymity protocol,
+and a malicious sidecar can misuse its own network channel. Host/kernel compromise can escape
+application isolation and is out of scope. Do not broaden this residue to excuse a CP capability
+that the deployment is required to deny. Existing accepted decisions remain historical records;
+none can waive a constitutional invariant.
 
 ### 5.9 Update channel compromise
 
@@ -1030,38 +997,22 @@ human security review before tagging `v1.0.0` (Constitution Principle
 VIII) is the human-layer mitigation; downstream verification of
 reproducible builds is the technical mitigation.
 
-### 5.10 Per-first-party-domain stream isolation
+### 5.10 Per-first-party stream isolation
 
-**Concern**: Tor's default behaviour with a shared SOCKS5 client is to
-reuse circuits across many destinations from the same client, allowing
-the exit relay (or any observer of the circuit) to correlate the user's
-visits to different sites.
+**Required property:** distinct authenticated-device/browser-profile/initiating-site partitions
+must not share a Tor circuit. The constitution and feature boundary contract define the scope;
+T136 pins suffix/context derivation and the bounded wire representation; T147 handles CONNECT.
+No general correlation resistance follows from partitioning, and same-partition sharing is
+permitted rather than guaranteed. Missing initiating context must block a protected request.
 
-**Mitigation**: the browser extension sets the SOCKS5 username to the
-first-party domain (architecture spec §14.3). Tor's `IsolateSOCKSAuth`
-directive in `torrc` (architecture spec §8) forces distinct circuits per
-distinct username. Different first-party domains therefore use different
-Tor circuits.
+**Current gaps:** the audit found suffix collisions and a CONNECT path without isolation
+identity. They remain T136/T147 remediation, not proven circuit leakage in every live request.
+T126/T155 supply real same-target/distinct-partition evidence with controls; synthetic
+username assertions alone cannot establish the whole browser-to-Tor path.
 
-**Verified by**: the privacy-critical-paths tests-first discipline
-(Principle VII).
-
-**Residual risk**:
-
-- Two requests from the *same* first-party domain still share a circuit
-  by design. A single hostile site that observes you across many of its
-  resources sees one circuit, exactly as it should.
-- The first-party-domain computation depends on the browser's
-  `documentUrl` / `originUrl` accuracy. Edge cases (about: pages,
-  data: URLs, service workers) may degrade isolation; the
-  privacy-critical test suite covers these (Principle VII).
-
-**Reference**: Constitution Principle III; Tor's SOCKS extensions
-specification [https://spec.torproject.org/socks-extensions.html] defines
-the per-authentication isolation behaviour, and the Tor manual's
-`SocksPort` `IsolateSOCKSAuth` flag is the configuration surface that
-exposes it ("Don't share circuits with streams for which different SOCKS
-authentication was provided. … On by default").
+**Residual limitations:** parties within one defined partition may share circuits. Browser
+context fidelity and installed-profile hardening require the stated tests/preconditions;
+unknown context may not silently degrade to destination-only identity or Direct.
 
 ### 5.11 Tor bridges and pluggable transports
 
@@ -1132,14 +1083,14 @@ inter-plane UDS sockets (`/run/stargate/control.sock` or
   defence that keeps the dial surface small in the local profile; the
   mutual-pin is the load-bearing auth gate.
 
-**Residual risk (operator-visible, T095)**:
+**Current gaps and residual risk (T095 history; T156 requirements)**:
 
-- The in-memory cert validity window is `NotBefore = now − 5 min`,
-  `NotAfter = now + 30 days`. A plane that does not restart for >30 days
-  serves an expired cert; the next peer dial fails. An operator who
-  restarts the stack on a <30-day cadence never sees this. There is no
-  in-process expiry warning in v1; the cadence is operator-managed. See
-  `SECURITY-DECISIONS.md` (2026-07-12, T095) for the acceptance rationale.
+- **Current gap:** certificates use `NotBefore = now − 5 min` and
+  `NotAfter = now + 30 days`, but the audit found expiry and resumed-peer pin checks incomplete.
+  T135/T148 must enforce current identity and validity on full/resumed handshakes,
+  automatically renew certificates before expiry, and specify existing-channel lifecycle.
+  Manual monthly restart is not a conforming renewal policy. This amendment does not
+  claim the checks already work; key rotation and certificate renewal are distinct.
 - **No automated key rotation in v1.** Replacing the on-disk
   `cp.priv`/`cp.pub` / `dp.priv`/`dp.pub` keypairs is operator-manual
   (write-tmp + rename + plane restart, ordered per `wire-auth.md` §6.2).
@@ -1206,6 +1157,24 @@ carries a secret); `wipe` removes it alongside keys and state. T088 wires
 provisioning, export, wipe, and rotation.
 
 ---
+
+### 5.15 Auth state during outages and recovery (T156)
+
+**Required behavior and limit:** a DP with valid last acknowledged auth state continues
+admitting authenticated requests when CP is unavailable; its state has no expiry solely due
+to that outage. A revocation requested while delivery is unavailable remains **pending**, not
+effective. An operator must not be told it succeeded before DP acknowledges application.
+A client revoked only in the unreachable CP can therefore continue authenticating against
+retained DP state until the update arrives. The operator may stop the route to stop access.
+After acknowledged revocation, new admissions using that credential are denied; existing
+byte pipes may finish. Revocation does not claim to terminate established application sessions.
+
+Valid durable snapshots support CP-down restart. Missing/corrupt/incompatible snapshots deny
+new admission. Supported crash/restart must not undo an acknowledged revocation, and ordinary
+reconnect must not relabel credentials restored from a stale CP backup as fresh authority.
+T132/T159 implement and verify this target. Current non-durable success/stale-state renumbering
+is a known gap, not an accepted recovery mechanism. Explicit operator rollback recovery has its
+own warned procedure; hostile host/root rollback of all trusted state is outside the guarantee.
 
 ## 6. What Stargate does not protect against
 

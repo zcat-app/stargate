@@ -3,16 +3,16 @@ id: T123
 title: 'Fresh-host CP start fails: rw child mount under :ro volume parent'
 status: pending
 created: 2026-09-07
-last_updated: 2026-09-07
+last_updated: "2026-09-12"
 source: hand-filed (T120 convention)
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
-blocked_by: []
+blocked_by: ["T139", "T134", "T138", "T156"]
 parallel: true
 files_budget: 4
-privacy_critical: false   # deployment/boot mechanics; the security POSTURE decision it may touch is the owners' call and lands in SECURITY-DECISIONS.md if changed
+privacy_critical: true
 complexity: medium
-risk: low
+risk: "medium"
 round_cap: 2
 spec_refs:
    - specs/001-tor-route/contracts/control-grpc.md §"Socket topology"   # pins /etc/stargate/keys as the contract mount path
@@ -96,6 +96,16 @@ Options (any ONE satisfies acceptance #1):
    contract (local_compose_test.sh M-gates) is extended to pin the new
    shape.
 3. `bash scripts/verify.sh` GREEN.
+
+### Required planning refinement
+
+
+The supported clean-start sequence must be settled after T134/T138. Acceptance #1 means
+empty project volumes followed by the documented operator initialization and Compose startup;
+if initialization is required, raw `compose up` is not an alternative success claim. Test the
+actual operator commands without harness-only mkdir/chown/key seeding. Preserve read-only
+configuration and least privilege. Record the failing fresh-volume regression before fixing it.
+The earlier design options are hypotheses, not permission to weaken the hardening posture.
 
 ## Out-of-scope
 

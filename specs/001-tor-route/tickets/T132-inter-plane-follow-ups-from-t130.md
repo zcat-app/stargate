@@ -3,11 +3,11 @@ id: T132
 title: 'Inter-plane follow-ups from T130 (re-push, ALPN pins, fakecp ALPN)'
 status: pending
 created: 2026-09-07
-last_updated: 2026-09-07
+last_updated: "2026-09-12"
 source: hand-filed (T120 convention; T130 rounds 1–2 review follow-ups + audit plan)
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
-blocked_by: [T130]
+blocked_by: ["T130", "T139", "T135", "T137", "T148", "T156", "T159"]
 parallel: false
 files_budget: 6
 privacy_critical: true   # re-push semantics touch the auth-generation delivery path
@@ -75,6 +75,14 @@ all sit on the same surface.
 3. Bullet 3: fakecp's TLS server offers exactly ["h2"]; the control-grpc
    suite stays green.
 4. `bash scripts/verify.sh` GREEN.
+
+### Required planning refinement
+
+
+Specify cold snapshot delivery, generation monotonicity, revocation and reconnect behavior
+before code. Test DP restart with CP alive, CP outage with DP routing, stale-generation replay,
+and explicit h2 negotiation. A startup-only push or a manually restarted CP is not recovery.
+Any accepted residue requires explicit maintainer disposition; it is not the default plan.
 
 ## Out-of-scope
 

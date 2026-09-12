@@ -3,16 +3,16 @@ id: T124
 title: 'Tor healthcheck bootstrap window shorter than real cold-boot time'
 status: pending
 created: 2026-09-07
-last_updated: 2026-09-07
+last_updated: "2026-09-12"
 source: hand-filed (T120 convention)
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
-blocked_by: []
+blocked_by: ["T139", "T134", "T138", "T156"]
 parallel: true
 files_budget: 3
-privacy_critical: false   # boot-window arithmetic on the sidecar healthcheck; no privacy surface
+privacy_critical: true
 complexity: low
-risk: low
+risk: "medium"
 round_cap: 2
 spec_refs:
    - specs/001-tor-route/spec.md §"User Story 1" acceptance scenario 1   # "Tor sidecar HEALTHY" presupposes the healthcheck is attainable on a normal cold boot
@@ -82,6 +82,14 @@ wait on their own deadlines, not on the healthcheck.
    guarantee is unchanged.
 3. `bash scripts/verify.sh` GREEN (torrc structural contracts
    unaffected; the healthcheck lives in the Dockerfile, not the torrc).
+
+### Required planning refinement
+
+
+Re-ground the proposed healthcheck after T134/T138: readiness must prove the credential
+and observation boundary actually selected, independently of full Tor bootstrap. Keep the
+negative missing/invalid-credential case and delayed-bootstrap positive case as tests before
+the change. Do not preserve direct CP cookie access merely to satisfy the historical wording.
 
 ## Out-of-scope
 

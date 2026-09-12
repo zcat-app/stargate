@@ -1,0 +1,63 @@
+VERDICT: APPROVE
+SNAPSHOT: d9e49aeb1cd00f5ff5433c9ac0c70d7690c75365a889f439743beb30db1a9bc7
+ROUND: 3
+SUMMARY: Both round-two Minor findings are resolved. The release-ticket clarification preserves immutable reviewed source, explicit promotion, candidate-bound evidence and external-human review obligations. No unresolved findings. Approval covers this normative-document candidate, not runtime compliance or publication.
+
+REVIEWER AND LIMITATIONS:
+- Independent Codex review agent, session identity described as based on GPT-6. Exact serving model build/provider is not exposed. The repository role's `model: opus` setting does not establish the actual model used here or external anonymity-systems expertise.
+- Same independent reviewer as round two; reviewed my own round-two verdict and the supplied round-three changes. No delegation, no other reviewer verdicts, no prior review/findings files, no SECURITY-DECISIONS.md and no author rationale content inspected. Rationale input is hash-checked only.
+- This is independent agent reasoning in the same tool environment, not proven methodological diversity or the external human review required for release. Runtime, browser/network, crash and release mechanisms remain unimplemented/unverified where their tickets say so.
+
+EVIDENCE:
+- Verified SHA256 of target/T156/manifest-r3.json equals SNAPSHOT. All 88 input hashes match current source; all 88 current source files match staged bytes. The scoped diff has exactly those 88 paths. No production code, runtime configuration, test or script change is included.
+- Exactly six source paths changed since the round-two manifest: THREAT-MODEL.md; remaining-implementation-plan.md; T081; T110; T111; T112. All other reviewed source hashes, including the constitution, remain unchanged.
+- Diff SHA256: dc17cb0fbc990112b5ce57eaab355fa18c5d2ed39c7b90327b9c6b7df4415bf7.
+- Inspected target/T156/verify-r3.log, SHA256 2702f68a70c8242afc12954adc66f3dcf89ecaac173c5c36364893d8d1a806d7: 20 PASS / 1 reproducibility SKIP / 0 FAIL. Nested live/Docker/runtime skips are not converted into evidence. I inspected the supplied fresh gate log; I did not rerun runtime or release suites.
+- Re-used scripts/lint-ticket.py's exact extract_frontmatter function: 191 tickets, 128 done, 60 pending, two deferred, T156 in-review; zero cycles, missing dependencies or tests_first/dependency mismatches. T078 and T079 depend on T081; T081 does not depend on its final reviewers. No circular preparation/review dependency was introduced.
+- Reviewed source count remains 88 against budget 128, without a specs exemption. Final delivery inventory must include its evidence artifacts and retain the same approved source. This verdict does not approve separately staged prior audit documents or runtime closure.
+
+ROUND-TWO DISPOSITION:
+
+m1 — RESOLVED: pending-ticket scope budgets.
+- Locations: specs/001-tor-route/tickets/T110-hermetic-digest-agreement-assertion-alpine.md:12; specs/001-tor-route/tickets/T111-build-diffs-extension-zip-binary-input.md:12; specs/001-tor-route/tickets/T112-stale-prose-regression-guard-contract-test.md:12.
+- T110/T111 now allow three paths and T112 four, explicitly counting substantive work, ticket and STATUS. These cover the minimum concrete inventories named in the prior finding without reviving the directory exemption.
+- Falsification/closure check: compared the budgets with their substantive deliverables and the unchanged driver lifecycle/STATUS behavior. The earlier unavoidable one-/two-file excess is gone. T124's conditional grounding reminder was not an additional definite finding; its eventual design still needs its ordinary concrete budget check.
+- EVALUATED-AS: document/planning consistency correction; no runtime test or privacy waiver claimed.
+
+m2 — RESOLVED: CP-outage revocation disclosure.
+- Location: THREAT-MODEL.md:1161, new section 5.15.
+- The threat model now explicitly states no auth expiry solely due to CP outage, undelivered revocation remaining pending, no success before DP acknowledgment, surviving established byte pipes, operator stop-access action, valid cold snapshots and rejection of corrupt/incompatible state. It identifies stale-content renumbering and non-durable success as current T132/T159 gaps, not accepted recovery semantics.
+- Falsification/closure check: followed the stolen-credential/disconnected-CP scenario that motivated the finding. The document now directly states that the retained DP generation can continue admitting that client until update delivery, while distinguishing the later acknowledged-revocation behavior. It does not falsely claim the implementation already enforces the strengthened durable-state target.
+- EVALUATED-AS: required threat-model propagation; UI implementation and runtime evidence remain future obligations.
+
+NEW RELEASE-TICKET REVIEW:
+- Locations: specs/001-tor-route/tickets/T081-author-githubworkflowsreleaseyml-ghcr-pu.md:55-89 and remaining-implementation-plan.md:94.
+- Source/artifact substitution: Acceptance 1/3/6 forbid post-review source/tag rewriting, bind generated deployment/provenance manifests and artifact hashes to the source commit, require output/source agreement and refuse reuse of a published tag with different source/artifacts. A separate signed derived manifest avoids embedding an image's own final digest in the source that builds that image. This does not waive source or artifact review.
+- Premature/partial release: Acceptance 2/6/7 require current verification, explicit online grounding and reproducibility, refusal on required skips, no promotion after failed verification, and rejection of stale/missing/mismatched review records. T078/T079 review the workflow implementation first; actual publication separately requires their completed candidate-bound evidence, applicable live tests and Constitution VIII's external review. The task expressly authorizes preparation only, so its position before final reviewers is not a publication bypass.
+- Credential confusion: Acceptance 4 distinguishes registry authentication from signing and requires current primary-source grounding before implementation. Permitted short-lived platform credentials are explicitly scoped per job; long-lived registry/signing secrets remain prohibited. Removing a contradictory zero-match `secrets.*` requirement does not authorize deployed credentials, unbounded privileges or runtime egress.
+- Generated deployment drift: Acceptance 5 requires digest-pinned release Compose with no source-build directives, tested against the topology selected through T134/T138 while preserving listener, volume, identity, capability and egress rules. Missing documentation work must be implemented or assigned blocking children, not silently assigned to completed T018.
+- Unpinned packaging: Acceptance 3 explicitly owns the extension archive tool/environment pin and delivered-byte reproducibility previously left as a caveat. It does not turn BUILD-DIFFS documentation into permission to leave a required executable input unpinned.
+- Falsification method: inspected the contract against a changed tagged source, substituted artifact, stale review record, missing live/repro evidence, registry/signing credential mix-up and altered generated Compose. Each has an explicit refusal/verification obligation. These are acceptance-level checks, not claims that the future workflow fixtures ran. The actual mechanisms and negative fixtures remain mandatory T081 implementation work.
+
+VERIFIED ABSENT / REGRESSION CHECKLIST:
+- DNS: unchanged Constitution I/III and foundation contract still forbid destination resolution by DP/CP; no round-three permission changes. T134's packet-level enforcement remains pending.
+- Headers/payloads: unchanged bounded-negotiation/application-opacity boundary; no application TLS termination or sensitive response echo authorized.
+- Logs/metrics: no current-hour/per-event exception added; completed aggregates, writer/retention cleanup and T152/T158 remain binding.
+- Sidecar contracts: release Compose must preserve the selected actual topology/capabilities; no new sidecar invocation or obsolete socket-proxy authority is delivered.
+- Auth bypass: new threat-model section preserves existing credential requirements and acknowledgment semantics; it creates no outage auth bypass or stale-state authorization exception.
+- Port binding/reachability: namespace, loopback/tunnel lifecycle and effective egress requirements remain unchanged. Generated release topology must be tested, not assumed equivalent.
+- Browser API misuse: no manifest/permission/code/sink change. Hardening API limitations, required blocking behavior and browser evidence remain unchanged.
+- Inter-plane leaks: no per-request CP gate or request-observation permission added. Snapshot continuity and pending revocation are now disclosed without claiming implementation repair.
+- Update integrity: revised T081 closes source/tag write-back and authentication ambiguity while requiring pinned inputs, signed artifact records and final-review-gated publication.
+- Cover/decoy traffic: unchanged prohibition; no new endpoint traffic permission.
+- Outbound origins: development/release retrieval remains within the reviewed build/CI actor, outside deployed runtime; registry credentials do not authorize DP/CP public-network access.
+
+GOVERNANCE:
+- The substantive old/new permission comparison and pre-release governance assessment from my round-two review remain applicable because those source hashes are unchanged. Explicit bounded negotiation/management and sidecar/helper permissions remain disclosed semantic changes; T125's wildcard exception remains withdrawn.
+- The six corrections are conforming refinements within the authorized amendment, not an agent-approved weakened guarantee. No risk acceptance is made. Mandatory independent reviews, unchanged-candidate delivery and external human release review remain required.
+
+FINDINGS:
+None unresolved. No Blocker, Major, Minor or Info finding added in round three.
+
+FINAL CHECK:
+All 88 source input hashes and the manifest hash were rechecked at completion with zero mismatches. Any later source correction invalidates affected evidence and this approval for the resulting changed candidate.

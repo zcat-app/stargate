@@ -1,5 +1,12 @@
 # Contract — Inter-Plane Wire Authentication and Versioning
 
+> **T156 target update (implementation pending T135/T148):** current authorized pins,
+> key possession and certificate validity are mandatory on full and resumed handshakes.
+> Use a verification hook that executes for both; the earlier `VerifyPeerCertificate`
+> explanation does not guarantee resumption checks. T148 must specify renewal before expiry,
+> clock tolerance and existing-channel rotation/revocation before code. See
+> [foundation boundaries](foundation-boundaries.md); monthly manual restart is not renewal.
+
 **Status**: Phase 2 foundational contract document (T095). **Binding on T038,
 T045, T050, and every later feature that adds an inter-plane RPC.**
 
@@ -72,7 +79,7 @@ The derived certificate is a minimal self-signed X.509 v3 leaf. Fields:
 | `SignatureAlgorithm` | `Ed25519` | §1. |
 | `Issuer` / `Subject` | `CN=<plane>` (`CN=stargate-cp` or `CN=stargate-dp`) | Self-signed ⇒ `Issuer == Subject`. The CN is informational only; it is NOT the trust anchor (§3). |
 | `NotBefore` | `now - 5 min` | 5-minute negative skew window absorbs clock drift between the two containers in the compose stack without widening to a permissive "anytime" window. The window is bounded and named here so a future operator changing it lands in a review, not silently. |
-| `NotAfter` | `now + 30 days` | 30-day validity. The cert is re-derived on every plane restart, so the practical lifetime is "until next plane restart, capped at 30 days". Short enough to bound the value of a stolen in-memory cert; long enough that a plane that does not restart for a month still has a valid cert (the §5.5 cold-start path does NOT depend on the CP being up). 30 days < the operator-relevant "I restart my stack roughly monthly" cadence for self-hosted privacy tools. The choice and the rotation residue are recorded in `SECURITY-DECISIONS.md` (T095) and `THREAT-MODEL.md` §5.13. |
+| `NotAfter` | `now + 30 days` | Validity must be checked on full/resumed handshakes. T148 specifies automatic renewal before expiry and clock tolerance; possession of a public certificate alone is not impersonation authority. |
 | `KeyUsage` | `DigitalSignature` | The only usage Ed25519 keys service on this channel. |
 | `ExtKeyUsage` | `ServerAuth, ClientAuth` | Both planes act as TLS client (the dialer) AND TLS server (the listener) on different sockets — each plane's single cert must authorise both roles. |
 | `DNSNames` | empty | UDS peer verification does NOT use DNS. |
@@ -116,7 +123,11 @@ hostname verification. The verifier:
    in T095 §Notes gates this property once impl lands.)
 4. Decodes the PEM-wrapped `SubjectPublicKeyInfo` from `<peer>.pub` to the
    same raw 32-byte Ed25519 public key.
-5. Accepts the handshake **iff** the two raw 32-byte keys are byte-equal.
+5. Accepts the handshake only if the two raw 32-byte keys are byte-equal, the peer
+   proves possession of the matching private key, and its certificate is currently valid
+   under the specified clock-tolerance policy. These conditions apply to full and resumed
+   handshakes. An absent/unreadable pin rejects the peer. T135/T148 implement and prove
+   the required checks; key equality alone is insufficient.
 
 **Encoding pin (avoids DER-vs-PEM comparison ambiguity).** The comparison
 is on the **raw 32-byte Ed25519 public key**, not on the DER
@@ -324,15 +335,11 @@ shared GID.
 
 ### 6.3 Operator visibility
 
-The 30-day cert validity window, the 5-minute negative skew window, and the
-no-automated-rotation residue are operator-visible facts documented in
-`THREAT-MODEL.md` §5.13 and `SECURITY-DECISIONS.md` (T095 entry). An operator
-who restarts the stack on a < 30-day cadence never sees a cert expiry; an
-operator who runs a stack longer than 30 days without a restart MUST restart
-both planes before the oldest in-memory cert expires. There is no in-process
-cert-expiry warning in v1 — a follow-up feature may add a status-table row.
+The lifetime and renewal policy must meet Constitution II and the foundation contract.
+T148 specifies automatic renewal, permitted clock tolerance and established-channel rotation
+before code; manual monthly restart and the old key-equality-only rule are insufficient.
+Existing implementation behavior remains a tracked gap until those probes pass.
 
----
 
 ## 7. Tests (binding)
 

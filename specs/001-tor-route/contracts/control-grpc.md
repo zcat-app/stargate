@@ -1,5 +1,11 @@
 # Contract — Inter-Plane gRPC (subset used by Tor-route v1)
 
+> **T156 normative update:** [foundation boundaries](foundation-boundaries.md) specify
+> snapshot/reconnect/rollback semantics (T132/T159), aggregate-only GetStatus (T158), and
+> sanitized event observation (T138/T152). Current message examples are not permission for
+> changing current-hour counters or per-event persistent logs. Owners record wire transitions
+> and compatibility tests before implementing; both peers must be reviewed together.
+
 **Status**: Phase 1 contract document
 
 **Scope**: this contract document declares the *subset of the
@@ -56,7 +62,7 @@ message TokenVerifier {
 message ReloadTokensResponse {
   uint64 applied_generation = 1;
   ApplyStatus status = 2;
-  uint64 current_generation = 3;      // T092: DP's current generation; set on STALE so the CP can retry with current + 1
+  uint64 current_generation = 3;      // DP current generation; stale content cannot be renumbered into authority (T159)
 }
 
 enum ApplyStatus {
@@ -74,17 +80,18 @@ enum ApplyStatus {
   generation continue against it.
 - If `request.generation <= currentGeneration`, the data plane MUST
   return `APPLY_STATUS_STALE_GENERATION`, set `current_generation` to its
-  current generation (so the CP can retry with `current + 1`), and leave
+  current generation (for authority reconciliation under T159), and leave
   the current generation unchanged.
 - Each `TokenVerifier.verifier` MUST be exactly 32 bytes; mismatch returns
   `APPLY_STATUS_INVALID` with no generation change.
 - On `APPLY_STATUS_OK`, the data plane MUST persist the new
   generation to `dp-snapshot.json` (verifiers only — never the pepper)
-  before returning. If the persist fails, the response is still
-  `APPLY_STATUS_OK` (in-memory truth wins; the snapshot is only a cold-start cache).
+  before reporting durable application. Persistence failure MUST NOT report durable success
+  or allow acknowledged revocation to revert on restart. T159 specifies failure responses,
+  in-memory state and crash recovery with a reviewed peer transition before implementation.
 - The data plane MUST NOT log the verifier bytes, the pepper, or any
   token label (labels are not in the message anyway, by design —
-  labels live only in the control-plane audit log).
+  labels remain auth-configuration state and MUST NOT enter any audit log).
 
 **Tests** (`tests/contract/control-grpc/reload_tokens_test.go`):
 
@@ -96,16 +103,15 @@ enum ApplyStatus {
    reconciliation field).
 3. Invalid verifier length: `request.tokens[i].verifier` is 31 or 33 bytes →
    `APPLY_STATUS_INVALID`, current generation unchanged.
-4. Snapshot persist failure: simulated by mounting `dp-snapshot.json`
-   parent dir read-only → response still `APPLY_STATUS_OK`; data plane
-   logs the snapshot-write failure to the journal.
+4. Snapshot persist failure: inject read-only/full/unavailable storage and crash/restart;
+   no false durable success and no restored acknowledged revocation (T159).
 5. Concurrency: two `ReloadTokens` calls with generations N and N+1 in
    parallel; the data plane converges on generation N+1 and rejects
    the older one as stale on retry.
-6. **Reconciliation retry (T092):** a CP that proposes a generation the
-   DP already has receives `APPLY_STATUS_STALE_GENERATION` +
-   `current_generation = N`, then re-proposes `N + 1` and receives
-   `APPLY_STATUS_OK`. Asserts the reconciliation handshake converges.
+6. **Authority reconciliation (T159):** reconnect current persisted authority automatically,
+   but reject an older restored CP credential set. Verify revoked tokens stay rejected and
+   explicit operator rollback recovery is distinguishable from ordinary reconnect.
+
 
 ### `WatchEvents`
 
@@ -229,10 +235,10 @@ message RouteCounter {
 
 **Contract**:
 
-- The data plane MUST return a snapshot of its in-memory
-  `(route, hour_bucket) → (request_count, byte_count)` aggregates per
-  data-model.md §3. The snapshot is point-in-time; no locking guarantee
-  is offered across multiple `GetStatus` calls.
+- The data plane MUST return only finalized immutable completed-hour aggregates under
+  data-model.md §3 and foundation-boundaries.md. Current-hour counters are private volatile
+  state. Repeated calls must not reveal sub-hour updates, including via alternate fields.
+  T158 updates old point-in-time semantics and their compatibility tests before code.
 - The data plane MUST NOT increment any counter as a side-effect of
   serving `GetStatus` — this is the property T025c's no-traffic
   sandwich verifies; a side-effecting probe would defeat the test's
@@ -355,7 +361,7 @@ keeping the dial surface small in the local profile.
 | Peer plane can `connect(2)` its dial-direction socket                            | Contract test as the *peer-plane UID* (in the `stargate-ipc` group) opens the dial-direction socket — the DP-uid process must succeed connecting `control.sock`; the CP-uid process must succeed connecting `dp.sock`. Regression gate against accidental revert to `0600` (which would silently break inter-plane comms).                                                                                                       |
 | Same-host process outside the `stargate-ipc` group cannot dial either socket    | Contract test as an arbitrary UID outside the group: both `connect(2)` calls fail with `EACCES`. Verifies the mode/group scheme actually narrows the dial surface and isn't equivalent to `0666`.                                                                                                                                |
 | Mutual auth: both planes have ed25519 keys                                      | Contract test verifies the data plane refuses a peer cert it cannot validate against `/etc/stargate/keys/control.pub` (on `control.sock`), and the control plane refuses a peer cert it cannot validate against `/etc/stargate/keys/dp.pub` (on `dp.sock`). Pinned by byte-equal public-key comparison per `contracts/wire-auth.md` §3 (T095; `tests/contract/compose/inter_plane_wire_test.sh`).                                                                     |
-| Schema-version handshake                                                        | Contract test simulates a `stargate.v2` peer offering an unknown major-version marker (gRPC metadata `x-stargate-proto-major`, per `contracts/wire-auth.md` §5) on either socket → the receiving plane logs to journal and exits non-zero (arch §5.5 row 4). Minor-version compatibility (additive minor accepted) is asserted in the same test. Pinned by `tests/contract/compose/inter_plane_wire_test.sh` (T095).                                                                                                                                              |
+| Schema-version handshake                                                        | Contract test simulates a `stargate.v2` peer offering an unknown major-version marker (gRPC metadata `x-stargate-proto-major`, per `contracts/wire-auth.md` §5) on either socket → the receiving service rejects the RPC; CP startup reports failure, while a DP with valid auth state continues routing (T153). No per-event journal is permitted. Minor-version compatibility (additive minor accepted) is asserted in the same test. Pinned by `tests/contract/compose/inter_plane_wire_test.sh` (T095).                                                                                                                                              |
 | Plane-down survival                                                             | Contract test stops the control plane after a successful `ReloadTokens`; the data plane MUST continue accepting proxy requests on port 8881 and authenticating them. (When the CP comes back, it re-dials `dp.sock` and pushes the current generation; the DP re-dials `control.sock` with the §"WatchEvents" backoff schedule.) |
 | v1: production CP MUST NOT invoke `GetStatus` on `/run/stargate/dp.sock`; only the contract-test harness invokes it | Contract test greps the control-plane production source tree (excluding `**/test/**` and `**/*Test.java`) for `GetStatus(` and asserts zero matches. Regression gate against the admin-UI feature silently wiring a production caller before research.md §11's deferral is revisited. |
 

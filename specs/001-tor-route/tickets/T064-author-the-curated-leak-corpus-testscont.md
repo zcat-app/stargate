@@ -3,11 +3,11 @@ id: T064
 title: 'Author the curated leak corpus `tests/contract/error-template/leak-cor'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: "2026-09-12"
 source: tasks.md#T064
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
-blocked_by: [T009, T063]   # manual edge: the leak corpus embeds the 100-domain synthetic corpus authored by T063 (derive-deps missed prose deps; tightened 2026-09-07)
+blocked_by: ["T009", "T063", "T155", "T156"]
 parallel: true
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true

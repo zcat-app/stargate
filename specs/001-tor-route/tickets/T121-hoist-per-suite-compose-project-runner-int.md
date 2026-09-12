@@ -3,11 +3,11 @@ id: T121
 title: 'Hoist per-suite compose project runner into one shared helper'
 status: pending
 created: 2026-09-07
-last_updated: 2026-09-07
+last_updated: "2026-09-12"
 source: hand-filed (T120 convention)
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
-blocked_by: [T058]   # lands when a fourth docker-cadence suite exists; T058 is the third
+blocked_by: ["T058", "T139", "T134", "T138", "T156"]
 parallel: true
 files_budget: 4
 privacy_critical: false   # plumbing only; body's "auth" hit is IsolateSOCKSAuth (a tor directive name), not an auth surface

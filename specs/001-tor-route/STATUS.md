@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 36 |
+| pending | 60 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 128 |
-| deferred | 1 |
-| **total** | **165** |
+| deferred | 2 |
+| **total** | **191** |
 
 ---
 
@@ -27,50 +27,15 @@
 
 Tickets where `status: pending` AND every `blocked_by` is `done`.
 
-| ID | Title | Phase | Priv? | Parallel? |
-|---|---|---|---|---|
-| T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T064 | Author the curated leak corpus `tests/contract/error-templat | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T065 | Contract test `tests/contract/error-template/route_down_test | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T066 | Contract test `tests/contract/error-template/route_refused_t | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T067 | Contract test `tests/contract/error-template/route_timeout_t | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T067a | Contract test for SOCKS5 request-phase failure replies (FR-0 | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T067b | Contract test for the auth-pass + route-failure counter-incr | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T068 | Contract test `tests/contract/error-template/body_byte_match | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T069 | Contract tests `tests/contract/error-template/reference_id_u | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T070 | Integration test `tests/integration/error_template_test.go` | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T070a | Integration test for mid-request Tor circuit drop (Principle | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T070b | Contract test for `WatchEvents` failure transitions (`UNHEAL | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T071 | Extend `data-plane/internal/errortpl/render.go` (from T048)  | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
-| T072 | Extend `data-plane/internal/forward/tor.go` (from T047) to m | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
-| T073 | In `data-plane/internal/controlclient/client.go` (from T045) | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
-| T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
-| T077 | Run the `quickstart.md` walkthrough on a clean Linux x86_64  | 6: Polish & Cross-Cutting Concerns |  |  |
-| T078 | Run the `stargate-redteam` agent against the completed featu | 6: Polish & Cross-Cutting Concerns |  |  |
-| T079 | Run the `stargate-perf` agent against the data plane (Princi | 6: Polish & Cross-Cutting Concerns | ✓ |  |
-| T079a | PR-cadence regression gate for SC-005''s pool-fill + steady- | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
-| T080 | Sweep with `scripts/check-license-headers.sh` (from T006); v | 6: Polish & Cross-Cutting Concerns | ✓ |  |
-| T081 | Author `release.yml` workflow: GHCR push + image digest pin  | 6: Polish & Cross-Cutting Concerns | ✓ |  |
-| T109 | Cross-host JVM reproducibility assertion at release cadence | 6: Polish & Cross-Cutting Concerns |  | ✓ |
-| T110 | Hermetic digest-agreement assertion for alpine:3.20 pins | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
-| T111 | BUILD-DIFFS: document extension zip binary as build input | 6: Polish & Cross-Cutting Concerns |  | ✓ |
-| T112 | Wire the stale-prose regression guard as a contract test | 6: Polish & Cross-Cutting Concerns |  | ✓ |
-| T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
-| T117 | Reconcile arch §14.4 hardening-record example with T091 | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |  | ✓ |
-| T119 | Gate invalid-path field preservation in options.save.test.js | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
-| T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
-| T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
-| T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
-| T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
-| T126 | Pin DP UNAME forwarding: same target, distinct usernames, vi | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
-| T132 | Inter-plane follow-ups from T130 (re-push, ALPN pins, fakecp | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
+_(none — every pending ticket has unsatisfied `blocked_by`, or no pending tickets.)_
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T156 | Strengthen constitution and reconcile implementation prerequ | in-review | ✓ | Foundation audit remediation |
 
 ---
 
@@ -79,6 +44,7 @@ _(nothing in flight)_
 | ID | Title | Reason | Blocked on |
 |---|---|---|---|
 | T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | spec-amend | T089 |
+| T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
 
 ---
 

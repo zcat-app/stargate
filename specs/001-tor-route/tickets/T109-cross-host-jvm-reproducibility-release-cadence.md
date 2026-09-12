@@ -3,11 +3,11 @@ id: T109
 title: 'Cross-host JVM reproducibility assertion at release cadence'
 status: pending
 created: 2026-09-02
-last_updated: 2026-09-02
+last_updated: "2026-09-12"
 source: T098 review rounds 1+2 RECOMMENDED-FOLLOW-UP (carried)
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: [T098, T108]
+blocked_by: ["T098", "T108", "T155", "T156"]
 parallel: true
 files_budget: 6
 privacy_critical: false

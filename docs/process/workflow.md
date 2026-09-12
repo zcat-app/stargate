@@ -204,10 +204,11 @@ the reviewer returns `ESCALATE`, present exactly these options and **stop**:
 5. **amend** — the spec or the Constitution itself is wrong. Two weights:
    - **amend-spec** — revise `specs/NNN-feature/spec.md` (and re-run
      `/speckit-plan`'s Constitution Check). Lighter.
-   - **amend-constitution** — heavyweight governance: a PR modifying
-     `.specify/memory/constitution.md`, a **7-day** public comment period, and
-     for Principles **I, III, or V** (the privacy-critical ones) a passing
-     `stargate-redteam` run against the proposed change. Never casual.
+   - **amend-constitution** — follow the active Governance section in
+     `.specify/memory/constitution.md`. Pre-release session authorization and
+     post-release PR/comment rules differ. Any security/privacy/governance-impacting
+     amendment requires independent redteam wherever it is located. Finding acceptance
+     cannot waive a principle. The maintainer decides an unresolved policy change.
 
 ## Adversarial passes (redteam + perf)
 
@@ -227,6 +228,42 @@ Separate from correctness review and **blind to rationale**.
 
 Findings on `done` tickets become **new remediation tickets** with
 `remediates: T-NNN` set; the original commit is never amended.
+
+## Evidence and atomic tests-first work (T156)
+
+Use the strictest applicable test category, including privacy-sensitive Docker/scripts.
+Preserve the spec-derived falsifier, failing command/result and pre-fix snapshot, then the
+passing result and implemented snapshot. Tooling failure alone is not the intended red result.
+Required unavailable/live checks remain pending; a successful verify with SKIPs is not proof
+of their properties. Every review records actual reviewer/tool identity, scope, candidate hash,
+coverage and limitations. No unsupported model/expertise claims or fabricated historical evidence.
+Normative documentation changes use consistency probes and independent review, not invented
+runtime tests. Existing behavior may be covered retrospectively and must be labelled honestly.
+
+`tests_first` names only separately deliverable test tickets that can pass their own green gate.
+If a new regression must stay red until its implementation, refine before executing it: put the
+regression and fix in one focused implementation ticket, with a required red-before-green
+sequence in Acceptance. Mark replaced standalone tickets deferred/decomposed, link their owner,
+and replace downstream blockers with that owner. Do not require a done red-only test ticket or
+commit disabled/permanently-skipped tests. Record this refinement and preserve scope/review gates.
+
+Before an investigation is marked done, file every required implementation follow-up and add it
+to the foundation/milestone closure tickets AND affected consumers. Put this obligation in
+Acceptance, not non-binding Notes. If required work is unidentified, the investigation is not done.
+A reviewed recommendation does not resolve an implementation finding. Additive graph updates
+must remain acyclic; regenerate STATUS after every lifecycle/dependency change.
+
+For an amendment or uncommitted multi-document review, preserve a scoped diff and manifest
+hashing all input files (including untracked files). Reviewers bind that exact manifest hash.
+Count every touched path toward files_budget, including specs, the ticket and new files;
+there is no directory exemption. Before driver review, explicitly stage every intended new
+source file so it appears in the diff/snapshot; compare that inventory with the scoped manifest.
+An unstaged intended source file must block review, not silently fall outside its hash. T139
+owns deterministic enforcement where the current driver still relies on caller discipline.
+Lifecycle/verdict records are review outputs, not permission to change reviewed source afterward.
+A pending amendment becomes completed only through the normal reviewed commit/delivery phase;
+recorded approvals do not fabricate a missing commit. The human external review gate in VIII
+also binds the released candidate and security-impacting changes since its review.
 
 ## Live end-to-end verification (release-cadence; deferred to Phase 5+)
 

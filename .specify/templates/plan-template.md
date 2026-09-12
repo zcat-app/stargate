@@ -38,7 +38,13 @@
 
 ## Constitution Check
 
-*GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
+For each affected property, name mechanism, falsifier/evidence and state: compliant by evidence,
+pending evidence, or conflicting. Distinguish target design from current implementation.
+No accepted finding can override the constitution. Identify implementation and closure owners.
+
+*GATE: Complete before Phase 0; research may investigate conflicts. Affected implementation
+requires a conforming design or governed amendment. Re-check after Phase 1 and record any
+implementation/live evidence still pending; do not label it PASS.*
 
 [Gates determined based on constitution file]
 
@@ -105,9 +111,9 @@ directories captured above]
 
 ## Complexity Tracking
 
-> **Fill ONLY if Constitution Check has violations that must be justified**
+> **Record unresolved conflicts and the conforming redesign or governed amendment required.**
+> A justification is not a waiver. Mark pending evidence as pending, never PASS (deferred).
 
-| Violation | Why Needed | Simpler Alternative Rejected Because |
-|-----------|------------|-------------------------------------|
-| [e.g., 4th project] | [current need] | [why 3 projects insufficient] |
-| [e.g., Repository pattern] | [specific problem] | [why direct DB access insufficient] |
+| Conflict or pending evidence | Required conforming work / governed decision | Owner and blocking evidence |
+|------------------------------|----------------------------------------------|-----------------------------|
+| [affected principle] | [repair or explicit amendment; no implicit waiver] | [ticket + falsifier] |

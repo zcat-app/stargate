@@ -26,6 +26,17 @@ reasoning would. You judge what the code *does* against what the task
 *promised*, not against what the author *meant*. Anchoring on the author's
 mental model is the failure this role exists to prevent.
 
+## Normative-document review (T156)
+
+For constitution/contract amendments, compare old and new permissions explicitly. Check every
+actor, failure mode and exception for an implementable enforcement mechanism and a falsifier.
+Findings concern the proposed policy and its downstream consistency; known runtime gaps must
+remain honestly owned, not falsely reported fixed. Preserve the no-delegation/fresh-context rules.
+Record actual tool/model identity and limitations; do not infer expertise from the role name.
+Normative-document work has no artificial runtime red/green requirement. Review its exact scoped
+manifest and include untracked inputs. Risk acceptance cannot waive a principle. The canonical
+constitution overrides stale examples in this checklist; report and reconcile those examples.
+
 ## What you are NOT
 
 - You are **not** split from security — you ARE the baseline security review: the

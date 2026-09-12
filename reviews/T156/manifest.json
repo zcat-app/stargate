@@ -1,0 +1,354 @@
+[
+  {
+    "path": ".specify/memory/constitution-history.md",
+    "sha256": "420b23a31fcfc94e9fc165c3c9d525e630eddd540ce4872db9ca8a03fd3a6428"
+  },
+  {
+    "path": "ARCHITECTURE.md",
+    "sha256": "6adef7a0a3898bf315f04b419543744b84ab5a79b3355962a45973c13a134675"
+  },
+  {
+    "path": "specs/001-tor-route/constitution-amendment-plan.md",
+    "sha256": "d780d8ce1c32ed68e85048d1bbfd8d5f5de2f517d16238026031bb8e18323178"
+  },
+  {
+    "path": "specs/001-tor-route/contracts/foundation-boundaries.md",
+    "sha256": "785fbf4b76c1afbf885808052ba46afe92fca55c3969490a88b23fe7846bb4fe"
+  },
+  {
+    "path": "specs/001-tor-route/remaining-implementation-plan.md",
+    "sha256": "fb806bfe7ff79ae1c2d48b03d1bd5e7aab2f15934b392ab0e4a2fe72ad96dd02"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T134-investigate-local-topology.md",
+    "sha256": "257df7fcbcfedaddd372a94ebd13624ad0222f59562458133b775a865188c641"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T135-repin-resumed-tls-peers.md",
+    "sha256": "d25c37d219ee9c54d5872fdbd683a2018591ac843c998ece2e3afbc69fe03ce6"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T136-fix-firstparty-suffix-isolation.md",
+    "sha256": "fda61866db145abf9ebf4454a446e8fdd50555663202fce9b52e2bbb54dd1c1f"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T137-refresh-reload-rpc-deadline.md",
+    "sha256": "2897c1f85b69b64a21885c993f0993b7618525e17d516c6f628cb371ea973ec7"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T138-investigate-tor-observer-authority.md",
+    "sha256": "de278914b4433b3444b9a80e04fa677d8db2d827b7181993734a08fa0de46eb7"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T139-make-required-gates-fail-closed.md",
+    "sha256": "27b82ba3fa4ff39b69237433305fa9b4489a2d8b9d0bd46bcbd62c046566317d"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T140-enforce-tor-package-content-pin.md",
+    "sha256": "646362b61709f83ed77d1d9c37f04d735c02d7478c565b66fc550fe348d89115"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T141-pin-ci-executable-dependencies.md",
+    "sha256": "c470bc36f286639be009026221856526c2453740f0e405e40005e3edfa789bad"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T142-audit-agent-execution-boundary.md",
+    "sha256": "869798296cb9f74d8b51f1a54af695acb72c5f5d429d22b06737f1ccb13ea093"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T143-retire-java-argon2-constants.md",
+    "sha256": "b1eed5e05e608a18bf9b3059d94e4e60bd22fd3d6ee2009cc7b23d7c29924e9b"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T144-record-tests-first-evidence.md",
+    "sha256": "f370e2fa9587e3bfd5bb16a8d16d813fd17851b6488bf9050c18b39f0a3dfc2a"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T145-test-maven-download-integrity.md",
+    "sha256": "6a35e0390e2d289fb0a0d3bb0238f3cdba75e91ac24092a211ed691c0f700916"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T146-fix-init-diagnostics-and-fixture.md",
+    "sha256": "9191e34a34797aea98b036ec049bf267059e5d9f0785fc48f4acd127cb3181b0"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T147-resolve-connect-isolation-contract.md",
+    "sha256": "ddf973ca5d05d91db8a6a587fa7c9351bb0bda2d1b2537f536d204b9bbf7da46"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T148-reconcile-peer-certificate-validity.md",
+    "sha256": "19dccdc1a50baf4e94c79ae83b78281e0aaffa2aafde837ff81711263f9fb0bb"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T149-finalize-forward-byte-accounting.md",
+    "sha256": "969eb60b896591c7a203c9f0912fc31eddd9af703c208996489999af042442b6"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T150-define-mixed-tab-route-indicator.md",
+    "sha256": "6df4d8f993df03678c35c4c4b91db9e4255006a1ab2cf478cc7174ef9fcafc53"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T151-correct-webrtc-remediation-pref.md",
+    "sha256": "457eb813c2aa150edbfe8ea59d34c7a29e991d2746b68da276ded74da9e2d8eb"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T152-resolve-operational-audit-contract.md",
+    "sha256": "c9efbd5adf31cf2ea2dab46fa4d5fce358104a07998ce20dde6fa5e353b1d487"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T153-surface-incompatible-peer-startup.md",
+    "sha256": "a5aaf3baec25582ae083e576174ade5c32d9efc7b75ac0ec5d1c94470d287d9e"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T154-reconcile-reviewer-protocol-guidance.md",
+    "sha256": "6184a1c8cabdfaa526f8bbd7aebbea494cff281466f10a0e4063ab7b0c6f76ad"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T155-validate-repaired-foundation.md",
+    "sha256": "e478fa44fcfcdfe434bf968330e8d2827e46366fc3d4bc0f6edc3aedef52cbbc"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T156-strengthen-constitution-and-reconcile-plan.md",
+    "sha256": "76aed2af6796f411d15ccd94f59c2af9e8578b841fd7d1445069eaaf7469c751"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T157-block-protected-route-fallback.md",
+    "sha256": "122c173e22126d61c7ae734268e073ce2dcd3d6c9bb15f2e6407334d3f3298fb"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T158-publish-only-finalized-aggregate-buckets.md",
+    "sha256": "95af5fe6351ce781452945e29596dbc77644dc26a3a4d91e44ad0150b60c4cd8"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T159-prevent-stale-auth-reauthorization.md",
+    "sha256": "cdee363056463bfac21ddb914c1883f2ad421eb190280632ee9a1dd01b6ac54a"
+  },
+  {
+    "path": ".claude/agents/stargate-codereview.md",
+    "sha256": "22401a412ed4e819352c122124636d5cd25218b6b3bee86b3ee38e419469bb5b"
+  },
+  {
+    "path": ".claude/agents/stargate-redteam.md",
+    "sha256": "d007722addfa1661d154d2b5a4cda403a5b3a786c57cbe4d35d875e8b024c9ed"
+  },
+  {
+    "path": ".opencode/agent/stargate-codereview.md",
+    "sha256": "4a144f881c935dc59e08e1b483ab49fc628567e319dc3124fb349a42060df48d"
+  },
+  {
+    "path": ".opencode/agent/stargate-redteam.md",
+    "sha256": "2af2428f7c1b9a2131a9d492cf202f35f68819760bb6df8b7f56c09a375d1b31"
+  },
+  {
+    "path": ".specify/memory/constitution.md",
+    "sha256": "161689898ef7e594734e7def94a850f2e1b28982017c9d43b0640debf9ca65a1"
+  },
+  {
+    "path": ".specify/memory/review-loop.md",
+    "sha256": "006be61f29d8baae6ad2a13b337040bc58ac63dbfd9e9c80e35685101ce2e95d"
+  },
+  {
+    "path": ".specify/templates/plan-template.md",
+    "sha256": "d63eb80ff5c5bb94c6a606402d0e1b84e7edd3e61f5b7dc6b9449e5de7055567"
+  },
+  {
+    "path": ".specify/templates/tasks-template.md",
+    "sha256": "b200494890b9cb3a9cece85248cc827a51c8e42bb99f2af27644bb02674a4b60"
+  },
+  {
+    "path": "AGENTS.md",
+    "sha256": "dd4b17e854c01b111b38b8057bc93a9e042d9679a4677598542f78dbecc17653"
+  },
+  {
+    "path": "CONTRIBUTING.md",
+    "sha256": "16d7313d533ba8ea16acf2c3a8bd3b46e0569da805324abb43cb45e69d16d61d"
+  },
+  {
+    "path": "THREAT-MODEL.md",
+    "sha256": "81ea88301e8bd67cd4afe769229f9f310432db2b4bae02b2384092d05c14b070"
+  },
+  {
+    "path": "docs/process/ticket-template.md",
+    "sha256": "7565c6383e5658c286e0563bad09e7d5bbc776f13f08b95c76f53de1dcb5590f"
+  },
+  {
+    "path": "docs/process/workflow.md",
+    "sha256": "9cd94dc2727f5948042af44d1f800391ea6e9989146bf54bad36bc0e4a73926d"
+  },
+  {
+    "path": "specs/000-architecture/spec.md",
+    "sha256": "8c77b977f0b78837db161e79781a097dfb4a85f5399b870d60ac8ea005a7720a"
+  },
+  {
+    "path": "specs/001-tor-route/STATUS.md",
+    "sha256": "e6b88d2afcca444278e34c03b12e890a48ca5ec7fa24a0088ec1e7645d48a4fd"
+  },
+  {
+    "path": "specs/001-tor-route/contracts/control-grpc.md",
+    "sha256": "0e635ba8a242c26f040a47fbafc293817c84c1bd63d131b199b8ab325ce87ae6"
+  },
+  {
+    "path": "specs/001-tor-route/contracts/socks5-auth.md",
+    "sha256": "a1b8a0011cdd39f1c393b9e1861690828a3b15d62c799c03c6b6cf1d9413da8a"
+  },
+  {
+    "path": "specs/001-tor-route/contracts/wire-auth.md",
+    "sha256": "2cccd9c069220238e8d2ca238df1f8a9f0dd7461f29b93081f1fef94ed05533d"
+  },
+  {
+    "path": "specs/001-tor-route/data-model.md",
+    "sha256": "97a5fbd04d568b3692958cacd373d1ac48cdd5c2d72c1c1432560e75f8d89b47"
+  },
+  {
+    "path": "specs/001-tor-route/plan.md",
+    "sha256": "26b11ce608b58b833ba07d9bc72a437a240ed8ab1ce0db6654bed9d8b434f4ab"
+  },
+  {
+    "path": "specs/001-tor-route/spec.md",
+    "sha256": "8049a01f0407de5b80225639783cca53965e282deb54915b761b971871844c96"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T034a-hand-driven-sc-003-measurement-on-the-re.md",
+    "sha256": "0b4f202e37dd535cf3e19d1fe6f5bbf1013ac40bb508ef5bf8b05a6f9e867652"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T034f-integration-test-for-us1-acceptance-scen.md",
+    "sha256": "b3eaca7d600481c7f1e63cddecb34969d2ea0b60ac4c84fc5300e2710e915075"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T064-author-the-curated-leak-corpus-testscont.md",
+    "sha256": "441d93eec0cb896f6b62e18321e128a2b5622c066d31fa69d1362253e91c9c60"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T065-contract-test-testscontracterror-templat.md",
+    "sha256": "b6eb387f9953439c8edb3681e227c494e24de448930374485a21fcb5c6ec923e"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T066-contract-test-testscontracterror-templat.md",
+    "sha256": "62ba105bc5796ee795202ec1f683aef44ec0c8c8d42c301934d228a7cff900c5"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T067-contract-test-testscontracterror-templat.md",
+    "sha256": "83c462db441f62e191c27035f1311a0071b93decabe986e1cec632bd9ed6a020"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T067a-contract-test-for-socks5-request-phase-f.md",
+    "sha256": "e473270094acf675e08e86c5ec02997f3e6324efa13530ae376379651bd84df4"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T067b-contract-test-for-the-auth-pass-route-fa.md",
+    "sha256": "b7a0b006b6e7c9877acdc55a6dc1fc8615ff4d2c3f03ec054df7291eb3e818c8"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T068-contract-test-testscontracterror-templat.md",
+    "sha256": "66ddf901a7b888fd6361e2a3045661f186c399d3184a16efadf0dc66bf41ef80"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T069-contract-tests-testscontracterror-templa.md",
+    "sha256": "0878e03eebd380a08d1ad2388b13ef3a5e88af7d783208e14611d4b3ff18af7e"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T070-integration-test-testsintegrationerrorte.md",
+    "sha256": "0bfa05e1e220d8d0dfdbcd6a0c3c1f1d2bf1f15ae05996d4ccc438cd9c8de807"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T070a-integration-test-for-mid-request-tor-cir.md",
+    "sha256": "1b816521149fb12960976d48dcddad26007501c2dfae9fda514ca7cd548e4b19"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T070b-contract-test-for-watchevents-failure-tr.md",
+    "sha256": "2ccfa136bf08ec575fbb03d220f7cef3143d74efdcd9f4884f2778e1af1ffc18"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T071-extend-data-planeinternalerrortplrenderg.md",
+    "sha256": "f97e4b559b15b6f7c9d1705002d392d06e4327f7e69084e059f57c197cbd5987"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T072-extend-data-planeinternalforwardtorgo-fr.md",
+    "sha256": "d994bcad63376f9b2f6276bc43bdc3fce80e40747fd4aa6334636ee558dd8612"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T073-in-data-planeinternalcontrolclientclient.md",
+    "sha256": "27da7558d9176c7073c273da890027b1585095d7895a290e99bd8446e01222d8"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T075-author-testsreproducibilitydataplanetest.md",
+    "sha256": "fe603dbcd894d2f883138ef98ed2ee604885fac55e414109b232495ebf7e3927"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T077-run-the-quickstartmd-walkthrough-on-a-cl.md",
+    "sha256": "b7a85fad665049f0bf8855e6505e76daf47bd2c0af76f0b63b86b473c23ef58e"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T078-run-the-stargate-redteam-agent-against-t.md",
+    "sha256": "11ca3571426114423fdef2a0403a1e87c776f2a6c404a65b4eab1981f55fc2b1"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T079-run-the-stargate-perf-agent-against-the.md",
+    "sha256": "35408ffcbf17838c575091099c01b6cdd4c950a8db2d162d7021230a3a636019"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T079a-pr-cadence-regression-gate-for-sc-005s-p.md",
+    "sha256": "58668b8a1642bdf5048dec6d753719ab58d8a1391530a15386f0d2ff69a91d24"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T080-sweep-with-scriptscheck-license-headerss.md",
+    "sha256": "3376b4da3079882de2da4153029dc5932e001c10c7eef8e8b090ba9021803966"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T081-author-githubworkflowsreleaseyml-ghcr-pu.md",
+    "sha256": "768f2206ce59e363f5ef15e9a01f8b15b4e947f5b88e5578f784b8d2f1635848"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T109-cross-host-jvm-reproducibility-release-cadence.md",
+    "sha256": "e8d3b3cc8483ecae89a780e1d5bcf2e49713218693baf7cfc0875a9cd07a3958"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T110-hermetic-digest-agreement-assertion-alpine.md",
+    "sha256": "86ad9bb518de6ab0816cfa14fc07bee07af9994756d642327dedc9db686c44c5"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T111-build-diffs-extension-zip-binary-input.md",
+    "sha256": "887f3c546c8fbff9c74811603c8742dd0d113353681855bd925b647569fed1b0"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T112-stale-prose-regression-guard-contract-test.md",
+    "sha256": "1caa699684b70f5d29e18ac1640b4d2fbb8bf6beb01b4fc962f6b784ae918c4a"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T114-wire-staticcheck-gosec-into-go-workspace-gate.md",
+    "sha256": "9d3e725f6e5305f2ed776afa6e46b863b80842795dd6f70bf167fc029d68eb1f"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T117-reconcile-arch-14-4-hardening-record-example.md",
+    "sha256": "2209bd920f7d21a94b7c6b7c9cb72f2d090d95bd31d3a1f259e32836e5e24236"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T119-gate-invalid-path-field-preservation.md",
+    "sha256": "4575a8a54c984152513e46436d51fa12ea9ee0b2db35fff168183ff5dbb42936"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T120-make-verifysh-log-writes-concurrency-safe.md",
+    "sha256": "674cc34e5e19482d627d9d82c66091bed0b7ecabf24eb1bf01d2258631491715"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T121-hoist-per-suite-compose-project-runner-int.md",
+    "sha256": "30d47284f91c402b255e5e4ac00e4b45498b50bec6faa369689e66dbe88fc668"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T123-fresh-host-cp-start-fails-rw-child.md",
+    "sha256": "8c6504cd288e7e8204fd96cd31fda808978141be60c5ec30a97b8d44c7984b6e"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T124-tor-healthcheck-bootstrap-window-shor.md",
+    "sha256": "fd12637d1b3b7266513c36b4d40770e9a78f1d6b747c645c1aeb73e511975afe"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T126-pin-dp-uname-forwarding-same-target.md",
+    "sha256": "cbe4827cacfe8bb8b605b3e93c3e33e05ed9a08ca99f592bf3dc8a93f92a9762"
+  },
+  {
+    "path": "specs/001-tor-route/tickets/T132-inter-plane-follow-ups-from-t130.md",
+    "sha256": "b71266048361fb06160f7c2b419b38a3fd3bf67f3af6c83d7abd2a7ac378ccde"
+  }
+]

@@ -3,11 +3,11 @@ id: T117
 title: 'Reconcile arch §14.4 hardening-record example with T091'
 status: pending
 created: 2026-09-06
-last_updated: 2026-09-06
+last_updated: "2026-09-12"
 source: target/runs/T055-r1.verdict RECOMMENDED-FOLLOW-UP (T055 round-1 APPROVE, 0 findings)
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: '-'
-blocked_by: []
+blocked_by: ["T155", "T151", "T156"]
 parallel: true
 files_budget: 4   # specs/000-architecture/spec.md + this ticket + STATUS.md
 privacy_critical: false   # doc-only reconciliation; the authoritative §14.5

@@ -36,6 +36,17 @@ your output against the decision log, not you.
 You do **NOT** write or edit code. Bash is for read-only inspection. Write is
 permitted only to the exact ticket verdict path supplied by the driver.
 
+## Normative-document review (T156)
+
+For constitution/contract amendments, compare old and new permissions explicitly. Check every
+actor, failure mode and exception for an implementable enforcement mechanism and a falsifier.
+Findings concern the proposed policy and its downstream consistency; known runtime gaps must
+remain honestly owned, not falsely reported fixed. Preserve the no-delegation/fresh-context rules.
+Record actual tool/model identity and limitations; do not infer expertise from the role name.
+Normative-document work has no artificial runtime red/green requirement. Review its exact scoped
+manifest and include untracked inputs. Risk acceptance cannot waive a principle. The canonical
+constitution overrides stale examples in this checklist; report and reconcile those examples.
+
 ## Ticket-review mode
 
 When the driver supplies a REDTEAM handoff, review the supplied ticket diff
@@ -130,8 +141,10 @@ not the IP-form. In Go this is `proxy.SOCKS5("tcp", addr, ...).Dial("tcp",
 
 ### 2. Header propagation and payload inspection (Principle I)
 
-The data plane is a dumb router. It must not parse, log, mutate, or copy
-HTTP headers — only the bare minimum CONNECT/SOCKS5 framing.
+Tunneled application headers/payloads must remain opaque. Bounded CONNECT/SOCKS5
+negotiation may parse only contract-authorized fields for auth/destination/isolation.
+Management TLS is separate from prohibited termination of destination TLS. Check limits
+and ensure credentials/unrelated headers are never forwarded or logged.
 
 Search patterns:
 
@@ -145,9 +158,10 @@ Search patterns:
 
 ### 3. Logs and metrics content (Principle III)
 
-Logs may contain only aggregate counters at ≥1 hour resolution. No
-destination hostnames, full URLs, header values, per-request timestamps,
-client IPs, or anything else per-request.
+Logs, operational records and exported metrics contain only finalized immutable
+hour-or-coarser aggregates. No per-event journal, destination, label/token, URL, header,
+request timestamp, client IP or reference ID. Repeated RPC/UI reads must not reveal
+changing current-hour counters. Check stdout/stderr/container capture as well as SQLite.
 
 Search patterns:
 
@@ -176,9 +190,10 @@ Code that calls Tor / i2pd / Nym must rely only on behaviours covered by
 
 ### 5. Auth bypass paths
 
-- Data-plane listening ports must not require auth (the auth boundary is
-  the network — loopback or tunnel interface). But control-plane endpoints
-  must.
+- Data-plane listeners require the bearer authentication in the current SOCKS/CONNECT
+  contract, including loopback clients. A protected request must also carry its required
+  isolation context. Control-plane endpoints and IPC require their role-specific auth.
+  Network isolation does not replace credentials, and valid credentials do not replace isolation.
 - Find every HTTP handler / gRPC method in the control plane. For each,
   identify the auth middleware that gates it. Anything reachable without
   bearer-token validation OR without WebAuthn / ed25519 SSH-key check
@@ -186,22 +201,20 @@ Code that calls Tor / i2pd / Nym must rely only on behaviours covered by
 - Look for accidental admin endpoints behind `dev`, `debug`, `test`,
   `internal`, or feature-flagged routes that skip auth.
 - gRPC: every RPC method on the inter-plane socket must be authenticated
-  via the install-time-generated key pair, and the socket file must be
-  `0600` owned by the stargate user.
+  via current peer-key authorization and private-key possession on full and resumed
+  handshakes, plus contract certificate validity. Check rotation and existing-channel
+  lifecycle. Socket ownership/mode follow each role in control-grpc.md (currently 0660
+  with the dedicated IPC group); private keys remain owner-only. Authenticated inputs
+  are still untrusted at the IPC boundary.
 
-### 6. Port binding (privacy invariant in the architecture section)
+### 6. Port binding and effective reachability
 
-The proxy MUST refuse to start if it would bind a non-loopback interface
-without a corresponding tunnel sidecar in the same compose stack.
-
-- Grep for `net.Listen`, `ListenTCP`, `ListenAndServe`, in both data and
-  control planes.
-- Verify each listener resolves its bind address from config and passes a
-  check that the address is either `127.0.0.1`/`::1` OR matches the name
-  of a tunnel interface (WireGuard `wg0`, Tailscale `tailscale0`) present
-  on the host.
-- Flag `0.0.0.0`, `::`, empty-string bind, or any bind to an interface
-  whose presence isn't verified.
+Apply Constitution Deployment Model to actual listener namespaces AND host publications.
+Local proxy service listeners must be loopback; LAN/VPS must bind the actual access-tunnel
+address in that namespace. A container flag or tunnel elsewhere is not authority. Test
+IPv4/IPv6, startup/restart and tunnel loss for fallback exposure. Sidecar-internal listeners
+have their own enforced caller/port matrix. Check ingress and TCP/UDP/DNS egress independently;
+NAT absence, an internal-network label or one failed connect is not sufficient evidence.
 
 ### 7. Browser extension API misuse
 
@@ -266,9 +279,9 @@ request. Search for:
 
 ### 11. Outbound connections originated by Stargate (Principle III)
 
-Stargate makes no outbound network calls except those a request routes
-through. Status, monitoring, notifications, telemetry, crash reporting,
-and "check for updates" pings are forbidden in v1.
+DP/CP have no independent public-network egress. Use Constitution III's actor matrix
+for fixed adapter forwarding and narrow local management; inspect other actors separately.
+Telemetry, remote crash reports/notifications and background update polling are forbidden.
 
 Search for:
 
@@ -279,7 +292,10 @@ Search for:
 - Extension: any `fetch()`, `XMLHttpRequest`, or `WebSocket` to a non-user
   destination. Particularly look for telemetry SDKs, Sentry, analytics.
 
-Each hit must be either part of a user-routed request path or flagged.
+Classify each hit against Constitution III's exhaustive actor/traffic matrix. Narrow
+local IPC, sidecar-native maintenance and isolated explicitly invoked update retrieval
+are distinct permissions; none grants arbitrary DP/CP or CP-to-SOCKS egress. Flag a
+capability reachable by a compromised actor, even if its ordinary code does not use it.
 
 ---
 

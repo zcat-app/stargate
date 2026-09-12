@@ -3,11 +3,11 @@ id: T079a
 title: 'PR-cadence regression gate for SC-005''s pool-fill + steady-state prope'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-11
+last_updated: "2026-09-12"
 source: tasks.md#T079a
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: [T019a, T044, T047, T049, T050, T092, T093]
+blocked_by: ["T019a", "T044", "T047", "T049", "T050", "T092", "T093", "T155", "T072", "T156"]
 parallel: true
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true

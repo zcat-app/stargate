@@ -3,13 +3,13 @@ id: T110
 title: 'Hermetic digest-agreement assertion for alpine:3.20 pins'
 status: pending
 created: 2026-09-02
-last_updated: 2026-09-02
+last_updated: "2026-09-12"
 source: T107 review round 1 (APPROVE) RECOMMENDED-FOLLOW-UP #1
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: [T107]
+blocked_by: ["T107", "T155", "T156"]
 parallel: true
-files_budget: 1   # tests/contract/stargate-cli/init_docker_test.sh only
+files_budget: 3   # complete change: substantive paths, ticket and STATUS
 privacy_critical: true   # supply-chain pin-integrity surface (Principle IV), mirroring T107: test-only but the pin is the integrity anchor
 complexity: low
 risk: low

@@ -3,7 +3,7 @@ id: T114
 title: 'Wire staticcheck + gosec into the Go workspace gate (data-plane TCB)'
 status: pending
 created: 2026-09-03
-last_updated: 2026-09-03
+last_updated: "2026-09-12"
 source: hand-authored   # Raised by T043's round-1 codereview
                         # (RECOMMENDED-FOLLOW-UP, target/runs/T043.verdict):
                         # no scanner-class gate exists anywhere in the repo.
@@ -11,7 +11,7 @@ source: hand-authored   # Raised by T043's round-1 codereview
                         # this is a code change, so it's a ticket.
 phase: "2: Foundational (Blocking Prerequisites)"
 story: '-'
-blocked_by: []          # T076 (the go-workspace-gate this extends) is done.
+blocked_by: ["T139", "T156"]
 parallel: true          # Extends scripts/go-workspace-gate.py + tool deps;
                         # no other open ticket touches that file.
 files_budget: 8

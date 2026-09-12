@@ -3,11 +3,11 @@ id: T073
 title: 'In `data-plane/internal/controlclient/client.go` (from T045), wire the'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-11
+last_updated: "2026-09-12"
 source: tasks.md#T073
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
-blocked_by: [T009, T090]
+blocked_by: ["T009", "T090", "T155", "T070b", "T156"]
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true
@@ -16,6 +16,7 @@ risk: low
 round_cap: 2
 spec_refs: []   # TODO: cite spec.md § at /start
 decision_refs: []
+tests_first: ["T070b"]
 reviews: {}
 overrides: []
 aborted_attempts: []
@@ -44,6 +45,14 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 
 *(Derive from the spec at `/start` — see `docs/process/ticket-template.md`
 for the preferred shapes: named test, behavioral assertion, runnable command.)*
+
+### Required planning refinement
+
+
+T070b covers the event producer. Additionally author an in-ticket negative regression before
+consumer changes: STOPPED/CRASHED, stale events and CP disconnect must not suppress an
+otherwise successful upstream dial (Principle II). Reconcile journal output with T152 and its
+implementation follow-ups. Existing behavior needs evidence, not an artificial rewrite.
 
 ## Out-of-scope
 

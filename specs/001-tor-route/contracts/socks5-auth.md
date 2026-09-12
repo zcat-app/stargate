@@ -1,5 +1,10 @@
 # Contract — Bearer-Token Auth on Port 8881
 
+> **T156 target update:** all supported ingress requires the isolation partition defined in
+> [foundation boundaries](foundation-boundaries.md). The existing CONNECT path without an
+> isolation credential is pending T147; it is not an authorized exception. New negotiation
+> fields or refusal/migration require a reviewed protocol transition before implementation.
+
 **Status**: Phase 1 contract document
 
 **Scope**: defines the precise byte-level behaviour of the data plane's

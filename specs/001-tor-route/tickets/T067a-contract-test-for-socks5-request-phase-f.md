@@ -3,11 +3,11 @@ id: T067a
 title: 'Contract test for SOCKS5 request-phase failure replies (FR-009 SOCKS5 '
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: "2026-09-12"
 source: tasks.md#T067a
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: ["T009", "T155", "T064", "T156"]
 parallel: true
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true

@@ -1,5 +1,10 @@
 # Feature Specification: Tor Route — v1 Vertical Slice
 
+> **T156 normative update (2026-09-12):** the constitution and
+> [foundation boundary contract](contracts/foundation-boundaries.md) replace older bind,
+> isolation, operational-log, counter-publication and recovery permissions in this spec.
+> Current code is not certified compliant. T134–T159 and T155 track the repairs/evidence.
+
 **Feature Branch**: `001-tor-route`
 
 **Created**: 2026-05-17
@@ -395,27 +400,12 @@ tests-first suite (Principle VII) before implementation lands.
     `contracts/socks5-auth.md` §"SOCKS5 request-phase failures (post-auth)".
   - **Both paths** MUST NOT carry destination, upstream, token, or
     sidecar-derived bytes in any field of the response.
-- **FR-010**: The data plane MUST refuse to start if the bind-safety
-  check would make port 8881 reachable beyond the deployment's
-  sanctioned boundary. (Architecture spec §4 bind-safety paragraph,
-  enforced in `data-plane/internal/bind`.) In the local profile the
-  sanctioned boundary is host loopback: on a bare-metal run the process
-  binds `127.0.0.1` only (FR-005); inside the compose deployment the
-  process binds the container-wide address (`0.0.0.0`) instead, because
-  the container network namespace plus the host-published
-  `127.0.0.1:8881` binding over a dedicated no-masquerade network
-  attachment — not the in-container bind address — is what guarantees
-  loopback-only host exposure while keeping the data plane off the
-  internet (Docker discards published ports on `internal: true`
-  networks, and an unqualified second network would NAT the data plane
-  straight to the internet). A specific non-loopback
-  interface address is refused in both modes. (Amended 2026-09-07,
-  T125, user-approved amend-spec: a container-loopback listener is
-  unreachable through Docker's port publishing, so the literal
-  in-container reading contradicted FR-005; SECURITY-DECISIONS.md has
-  the decision and the live probe evidence.) LAN/VPS are out of scope.
-
-#### Sidecar configuration
+- **FR-010**: Local DP route and CP admin/health listeners MUST bind loopback in
+  their own namespaces and at host publication. LAN/VPS MUST use the actual tunnel
+  interface in each listener namespace and remain closed on tunnel loss. No container
+  environment flag, wildcard bind or tunnel elsewhere in the stack is an exception.
+  T125's permission is superseded. T134 owns a conforming topology and tests; see
+  `contracts/foundation-boundaries.md` §Deployment and authority.
 
 - **FR-011**: The Tor sidecar MUST be configured with the directive set
   pinned byte-for-byte in `contracts/torrc.md §"Rendered file"`:
@@ -464,13 +454,10 @@ tests-first suite (Principle VII) before implementation lands.
   file read by the control plane at startup (no dashboard UI yet; see
   Assumptions). The data plane MUST continue serving port 8881 with
   its last-known token list if the control plane is unreachable
-  (Principle II; architecture spec §5.5). **A `ReloadTokens` proposal
-  whose `generation <= currentGeneration` is rejected with
-  `APPLY_STATUS_STALE_GENERATION` and the data plane's
-  `current_generation` echoed in the response, so a restarted control
-  plane reconciles and retries with `current + 1` rather than
-  accidentally revoking every client (T092 / sol-review M1;
-  data-model.md §1.3 / §1.8).** Admission is never gated on
+  (Principle II; architecture spec §5.5). Stale proposals are rejected. Recovery MUST
+  distinguish current authority from restored stale content; automatically renumbering an
+  older backup to `current + 1` is prohibited by T156. T159 specifies the synchronized
+  transition and durable acknowledgment contract before code. Admission is never gated on
   a control-plane event (data-model.md §2; sol-review B3): a request
   that authenticates against the last-known list reaches the upstream
   dial regardless of `SidecarEvent` state.
@@ -479,14 +466,13 @@ tests-first suite (Principle VII) before implementation lands.
   `RESTARTED` for the Tor sidecar (architecture spec §5.2 events). The
   `detail` field MUST be a fixed-vocabulary token from the enum, not
   free text from Tor logs. The data plane consumes these events as
-  **advisory local status/audit hints** (data-model.md §2; Constitution
+  **advisory local status/aggregate inputs** (data-model.md §2; Constitution
   Principle II): they MUST NOT be a mandatory precondition for listening,
   authenticating, dialing, or forwarding, and they MUST NOT
   short-circuit the upstream dial. The data plane MUST always attempt
   the fixed `tor:9050` dial on every admitted request; the dial result
   alone selects `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`.
-  `SidecarEvent`s feed the audit journal (`sidecar_healthy` /
-  `sidecar_unhealthy` rows) and status reporting only — a stale or
+  `SidecarEvent`s feed the audit journal (completed-hour operational categories under data-model.md §4) and status reporting only — a stale or
   forged event cannot suppress a dial that would succeed (Principle II:
   a compromise of the management UI cannot silently corrupt routing
   decisions). `RESTARTED` is informational.
@@ -548,22 +534,15 @@ tests-first suite (Principle VII) before implementation lands.
   character lowercase-hexadecimal string (128 bits of entropy). The
   README quick-start documents `openssl rand -hex 16` as the canonical
   one-liner. Tokens that do not match the expected format MUST be
-  rejected at config-load time with a privacy-safe log entry (label
-  only, not the offending token bytes).
+  rejected at config-load time with a static redacted error and an operational
+  aggregate update; neither label nor offending token bytes may enter logs.
 - **FR-018**: The control plane reads `tokens.yaml` **once at startup
   only** in v1. On a successful load, it MUST persist the verifiers and
   the bumped generation (from the `token_generation` record,
   data-model.md §1.8), push the verifier list to the data plane via
-  `ReloadTokens` (FR-013), and emit audit-log entries per the diff
-  against the previous load: `enrolled` for each new label, `revoked`
-  for each label present last load but missing now, and `config_error`
-  (with sub-kind `parse` | `validation` | `io`) for load failures other
-  than the legitimate first-boot missing-file case. Full row schema and
-  the missing-file exemption (no audit row; the legitimate first-boot
-  state is also "file does not exist yet") are documented in
-  `data-model.md` §4. **Failure semantics (T092 / sol-review M1):** a
-  missing, unreadable, invalid, or unparseable `tokens.yaml` makes the
-  control plane log a `config_error` and **NOT call `ReloadTokens`** —
+  `ReloadTokens` (FR-013), and aggregate operational categories under data-model.md §4.
+  No labels, per-event timestamps or detail JSON may be journaled. Missing/unreadable/invalid
+  input increments only the permitted category as specified and **does NOT call ReloadTokens** —
   the data plane keeps its last-known list and keeps serving port 8881
   (Principle II "continue routing"). Only a successfully-parsed explicit
   empty list (`tokens: []`) is the revoke-all path: that alone pushes an
@@ -693,9 +672,9 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
 - **Local profile only for this feature.** LAN and VPS profiles
   (architecture spec §3 profiles) are explicitly out of scope here, per
   the user input. They are revisited in a separate feature spec once
-  the local-profile slice is proven. The bind-safety check (FR-010,
-  as amended by T125) still verifies the loopback-only host-exposure
-  invariant.
+  the local-profile slice is proven. FR-010 follows T156's actual-listener and
+  host-publication loopback rule. T134 must replace the withdrawn T125 exception;
+  its current topology is not evidence of compliance.
 - **No bridges.** Tor bridge support (Constitution v1 Scope) is
   delivered as a separate feature spec. The `torrc` baked into the Tor
   image by this feature has `UseBridges 0` and no `Bridge` lines (FR-011).
@@ -758,28 +737,13 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
 
 ---
 
-## Constitution Sanity Check
+## Constitution Sanity Check — T156
 
-Per CLAUDE.md, every spec is verified against constitution principles.
-Where this feature touches a principle, the mechanism that satisfies
-the principle is named explicitly; where a principle is not touched, it
-is recorded as not-applicable.
-
-| Principle                                   | Status in this feature                                            |
-|---------------------------------------------|-------------------------------------------------------------------|
-| I — Dumb Router                             | Met. Data plane parses only SOCKS5/CONNECT framing (FR-007); no TLS termination, no header inspection, no local DNS, no payload logs, no cover traffic. Port 8881 → Tor sidecar binding fixed at startup (FR-005). |
-| II — Plane Separation                       | Met. Control plane is advisor (token loader, sidecar lifecycle); data plane keeps serving on last-known token list if control plane is down (FR-013). Admission is never gated on a control-plane `SidecarEvent` — the upstream dial is the ground truth (FR-009, FR-014, data-model.md §2; sol-review B3). Inter-plane uses gRPC over UDS, authenticated, versioned (`stargate.v1`, architecture spec §5.4). |
-| III — Privacy-Preserving by Construction    | Met (as amended by T091). Non-Direct routing is fail-closed at runtime against WebRTC (FR-004; arch §14.5). SOCKS5h enforced (FR-003, FR-007); per-first-party stream isolation by SOCKS5 username (FR-002, FR-011); no per-request logs, only hour-bucketed counters (FR-008); no outbound channels other than the routed request itself. The extension gates only WebRTC (stable API) and SOCKS5h at runtime; DoH/DoT/HTTP-3 are release-cadence-verified out-of-band (sol-review B4), not runtime-enforced — their post-verification drift is accepted residue (THREAT-MODEL §5.4/§5.5). |
-| IV — Pinned, Tested, Manually Promoted Updates | Met. Tor sidecar pinned by digest (FR-015); contract tests gate updates (FR-016); no background auto-update logic added in this feature. |
-| V — Honest Threat Model                     | Met. Threat statements for the Tor onion route already live in `THREAT-MODEL.md` §4.2; this feature does not add unmodelled claims. Local-profile residual risks (THREAT-MODEL §3.1) are documented and unchanged. |
-| VI — Open and Auditable                     | Met. All artefacts of this feature live in the repo: spec, contract tests (FR-016), image-baked torrc (FR-011 — a test asserts its exact content). |
-| VII — Tests-First                           | Met. Privacy-critical FRs (FR-002 stream isolation; FR-003 DNS leak absence; FR-006 auth; FR-008 logging restraint; FR-009 error template) each carry a "test MUST verify" clause and are gated by Principle VII discipline before implementation. |
-| VIII — Adversarial Review                   | To be exercised at end of implementation. `stargate-redteam` and `stargate-perf` run against the completed feature; findings either resolved or recorded in `SECURITY-DECISIONS.md`. |
-
-No requirement in this spec violates a principle. Where a principle is
-not touched by this feature (e.g., Principle IV's `Renovate` flow is
-not invoked here, only its digest-pinning rule), the table records
-this as "met by the rule the feature does invoke".
+The constitution and `contracts/foundation-boundaries.md` govern this feature. Current
+implementation compliance is **pending remediation**, with known conflicts. See plan.md's
+per-principle Constitution Check and remaining-implementation-plan.md for owners/order.
+The pre-audit “Met”/“Will be met” table is withdrawn; future reviews require mechanism,
+falsifier and actual evidence rather than planned tests presented as passed guarantees.
 
 ---
 

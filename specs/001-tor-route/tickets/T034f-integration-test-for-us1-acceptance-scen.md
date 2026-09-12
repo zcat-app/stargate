@@ -3,11 +3,11 @@ id: T034f
 title: 'Integration test for US1 acceptance-scenario 3 second assertion (no TC'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-11
+last_updated: "2026-09-12"
 source: review/sol-review.md#A5
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
-blocked_by: [T009, T094]
+blocked_by: ["T009", "T094", "T155", "T064", "T071", "T072", "T073", "T126", "T156"]
 parallel: false
 files_budget: 8
 privacy_critical: true

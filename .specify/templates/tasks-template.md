@@ -9,7 +9,7 @@ description: "Task list template for feature implementation"
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/
 
-**Tests**: Test discipline is governed by Constitution Principle VII. Tests are MANDATORY (test-first) for any code path touching DNS resolution, routing decisions, header handling, authentication, or sidecar contracts. Public API surfaces (REST, gRPC) require contract test-first. Bug fixes require a regression test. For other code categories, tests are required at PR time with flexible ordering. Generated task lists MUST reflect these requirements based on the code categories the feature touches.
+**Tests**: Test discipline is governed by Constitution Principle VII. Tests are MANDATORY (test-first) for any code path touching DNS resolution, routing decisions, header handling, authentication, or sidecar contracts. Public API surfaces (REST, gRPC) require contract test-first. Bug fixes require a regression test. Apply the strictest applicable category, including privacy-sensitive infrastructure. All AI-generated implementation is tests-first; other non-critical human implementation requires tests by review time. Normative-document work uses consistency checks and independent review. Generated task lists MUST reflect these requirements based on the code categories the feature touches.
 
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
@@ -179,7 +179,8 @@ Examples of foundational tasks (adjust based on your project):
 
 ### Within Each User Story
 
-- Tests (if included) MUST be written and FAIL before implementation
+- Required tests MUST demonstrate the intended failure before implementation; combine a red regression
+  and its fix in one focused ticket if the test cannot independently pass its green gate
 - Models before services
 - Services before endpoints
 - Core implementation before integration

@@ -3,11 +3,11 @@ id: T126
 title: 'Pin DP UNAME forwarding: same target, distinct usernames, via 8881'
 status: pending
 created: 2026-09-07
-last_updated: 2026-09-07
+last_updated: "2026-09-12"
 source: hand-filed (T120 convention; T059 round-1 review Finding 4 + RECOMMENDED-FOLLOW-UP)
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
-blocked_by: [T059, T125]   # extends T059's harness; no live full-stack run is feasible until the T125 bind/publish conflict is decided
+blocked_by: ["T059", "T125", "T139", "T123", "T124", "T132", "T136", "T156", "T157"]
 parallel: false   # same test file family as T059; lands after it
 files_budget: 3
 privacy_critical: true   # this is the actual FR-002 end-to-end isolation gate — the DP-side credential-fusion failure mode

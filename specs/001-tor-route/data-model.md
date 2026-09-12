@@ -1,5 +1,9 @@
 # Phase 1 — Data Model (Tor Route v1)
 
+> **T156:** `contracts/foundation-boundaries.md` governs auth rollback/recovery and aggregate
+> data. Earlier lifecycle diagrams/SQL field sketches are current implementation history where
+> they describe per-event logging or automatic renumbering of stale auth; T152/T159 replace them.
+
 **Status**: Complete
 
 This document enumerates the entities the data plane and control plane
@@ -59,7 +63,7 @@ maintains the in-memory token list and the data-plane snapshot file.
    │  - drop plaintext from the mutable buffer    │
    │  - persist generation+verifiers to           │
    │    configured_tokens; bump token_generation  │
-   │  - INSERT audit_log row per label diff       │
+   │  - Increment hourly operational counts       │
    └────────────────────────┬─────────────────────┘
                             │ gRPC ReloadTokens(generation, verifiers[])
                             ▼
@@ -108,8 +112,8 @@ Validation rules:
 | `token` | Exactly 32 chars, matching `^[0-9a-f]{32}$`. (FR-017: 128-bit hex from `openssl rand -hex 16`.) | Reject the record. Log a warning **without the offending token bytes** (record index + label only). Continue with other records. |
 | File    | Valid YAML; `tokens` key present and a sequence. A successfully parsed explicit empty list (`tokens: []`) is permitted and is the **revoke-all** path (FR-018). | Log a warning; push an empty generation. Data plane returns `AUTH_REQUIRED` on all requests. |
 | File    | Missing (first-boot: the file does not exist yet).                                   | Log a warning (path only, no token context — there are none); write **no** audit row (the legitimate first-boot state is also "file does not exist yet"); **do NOT call `ReloadTokens`** — the DP keeps its last-known list and keeps serving (Principle II). (T092 / sol-review M1; §1.6; §4 first-boot exemption.) |
-| File    | Unreadable (I/O error other than not-exists, e.g. `AccessDeniedException`).          | Log a `config_error` audit row (`kind=io`, `line=null`); **do NOT call `ReloadTokens`** — the DP keeps its last-known list and keeps serving (Principle II). (T092 / sol-review M1; §1.6.) |
-| File    | Unparseable YAML, or fails validation so no record set can be derived.               | Log a `config_error` audit row (`kind=parse` / `validation`); **do NOT call `ReloadTokens`** — the DP keeps its last-known list and keeps serving. Only a successfully parsed explicit empty list revokes all. (T092 / sol-review M1; §1.6.) |
+| File    | Unreadable (I/O error other than not-exists, e.g. `AccessDeniedException`).          | Increment the hourly `config_error` category; no event/detail row; **do NOT call `ReloadTokens`** — the DP keeps its last-known list and keeps serving (Principle II). (T092 / sol-review M1; §1.6.) |
+| File    | Unparseable YAML, or fails validation so no record set can be derived.               | Increment the hourly `config_error` category; no event/detail row; **do NOT call `ReloadTokens`** — the DP keeps its last-known list and keeps serving. Only a successfully parsed explicit empty list revokes all. (T092 / sol-review M1; §1.6.) |
 
 Plaintext tokens are copied into a mutable `byte[]` the control plane
 allocates for the duration of one HMAC operation, and that `byte[]` is
@@ -168,16 +172,11 @@ requests holding the previous generation pointer complete against it;
 new requests pick up the new pointer. The previous pointer is then
 garbage-collected.
 
-**Reconciliation handshake (T092 / sol-review M1).** `generation` is
-monotonic; the data plane rejects a `ReloadTokens` RPC with
-`generation <= currentGeneration` by returning
-`APPLY_STATUS_STALE_GENERATION` and reporting its `current_generation` in
-the response, so the control plane can re-read its persisted record, propose
-`current + 1`, and retry deterministically. This is the mechanism that lets
-a restarted CP converge without accidentally revoking clients: it never
-restarts at 1 (it reads its persisted record, §1.7), and if its proposal is
-somehow stale (e.g. its DB was restored from an older backup) the DP tells
-it the truth and it retries.
+**Reconciliation handshake (T156 target; T159 implementation).** Stale/equal generations
+remain rejected, but a restored older credential set MUST NOT be silently promoted by adding
+one to the DP's current generation. T159 records authoritative-content reconciliation, durable
+acknowledgment and explicit operator rollback recovery on both peers before code. Automatic
+reconnect remains required; automatic reauthorization from stale state is prohibited.
 
 ### 1.4 `dp-snapshot.json` (data-plane on-disk cache, arch §5.5)
 
@@ -273,7 +272,7 @@ and is a misconfiguration surfaced as "all auth fails" at first boot.
   with `generation <= currentGeneration`, replies with its
   `current_generation`, and leaves the active generation unchanged.
 - **Failure semantics (T092 / sol-review M1).** A missing, unreadable,
-  invalid, or unparseable `tokens.yaml` makes the CP log a `config_error`
+  invalid, or unparseable `tokens.yaml` makes the CP increment the hourly `config_error` aggregate
   audit row (sub-kind `io` | `validation` | `parse`) and **NOT call
   `ReloadTokens`** — the DP keeps its last-known list and keeps serving port
   8881 (Constitution Principle II "continue routing"). Only a
@@ -318,8 +317,8 @@ sol-review M1).
 | Shape              | `token_generation(generation INTEGER PRIMARY KEY)` singleton row in the CP SQLite DB (arch §6.7). The PRIMARY KEY column holds exactly one row, `generation`, the last-assigned value.     |
 | Read               | At CP start, `TokenLoader` reads `generation`. The proposal for this boot is `generation + 1`.                                                                                       |
 | Write              | After a successful `tokens.yaml` parse, the CP writes the new verifiers to `configured_tokens`, bumps `token_generation.generation` to the proposal, then issues `ReloadTokens`.    |
-| Stale recovery     | If the CP's persisted record is older than the DP's current generation (e.g. CP DB restored from an older backup), `ReloadTokens` returns `APPLY_STATUS_STALE_GENERATION` + the DP's `current_generation`; the CP adopts `current + 1`, re-reads its persisted tokens, and retries. |
-| DB-wipe recovery   | If the CP DB is wiped (no `token_generation` row), the CP reconciles against the DP's reported `current_generation` (proposes `current + 1`, or 1 if the DP has none) rather than guessing. |
+| Stale recovery | Refuse stale credential contents; T159 specifies current-authority reconciliation and explicit rollback recovery. No automatic old-content `current + 1` promotion. |
+| DB-wipe recovery | Missing CP authority does not authorize an empty or old list. T159 defines explicit recovery; retain valid DP state meanwhile. |
 | Durability         | The generation is durable state, not a cache. Losing it does NOT revoke clients (the DP keeps serving) but DOES require the reconciliation path above to re-sync.                    |
 
 ### 1.9 `configured_tokens` — the manual-YAML token record (T092 / sol-review M1)
@@ -418,8 +417,10 @@ deferring the CP caller does not relax what the DP records, only where
 the counts ultimately reach. When the admin-UI feature wires its
 caller, the CP writes the pulled rows to SQLite via Hibernate Panache.
 
-**Invariants**:
+**Invariants (T156 target; implemented by T158)**:
 
+- GetStatus/export/storage disclose only completed immutable hour buckets. Never return a changing
+  current-hour count; repeated reads must not reveal fine-grained request activity.
 - No row contains destination, token, or sub-hour data.
 - The data plane never reads from or writes to the SQLite
   `aggregate_counters` table — it holds in-memory counters only and
@@ -429,26 +430,15 @@ caller, the CP writes the pulled rows to SQLite via Hibernate Panache.
 
 ---
 
-## 4. Audit-log entries
+## 4. Operational aggregates (T156; implementation T152)
 
-This feature writes audit-log rows on:
-
-| Trigger                                          | `action`             | `target` (label)           | `detail_json`                                                  |
-|--------------------------------------------------|----------------------|----------------------------|-----------------------------------------------------------------|
-| New token label encountered during file load     | `enrolled`           | `<label>`                  | `{"source": "tokens.yaml", "generation": <gen>}`                |
-| Token label removed (label present in last load but missing now) | `revoked`            | `<label>`                  | `{"source": "tokens.yaml", "generation": <gen>}`                |
-| `tokens.yaml` load failure                       | `config_error`       | `tokens.yaml`              | `{"kind": "parse" \| "validation" \| "io", "line": <int or null>}` — `parse` for YAML syntax errors; `validation` for per-entry format violations (wrong length, non-hex); `io` for unreadable-file conditions other than not-exists (e.g. `AccessDeniedException`). The **missing-file** case writes no row (the legitimate first-boot state is also "file does not exist yet"); per the T092 / sol-review M1 amendment to FR-018, on missing/unreadable/invalid/unparseable input the CP logs a warning or `config_error` row and **does NOT call `ReloadTokens`** — the DP keeps its last-known list and keeps serving (Principle II). Only a successfully parsed explicit `tokens: []` revokes all. Distinguishing missing (first-boot, no row) from misconfigured-permissions (`io` row) is what the `io` kind exists for. |
-| Tor sidecar transition to HEALTHY                | `sidecar_healthy`    | `tor`                      | `{"generation": <gen>}`                                         |
-| Tor sidecar transition to UNHEALTHY/STOPPED/CRASHED | `sidecar_unhealthy` | `tor`                      | `{"kind": "<UNHEALTHY|STOPPED|CRASHED>"}`                       |
-
-`actor` for token actions is the constant `"tokens.yaml"` (the source of
-truth in v1); for sidecar transitions it is the constant `"system"`. No
-user identity is captured because there is no admin UI in this feature.
-
-The detail JSON schema is fixed-vocabulary — the `kind`/`source` values
-are an enum, not free text. This satisfies arch §5.2's
-"`detail` is a fixed-vocabulary token (not free text from a sidecar
-log)" requirement.
+The previous timestamped `audit_log` rows are superseded. Permitted retained fields are
+`hour_bucket`, fixed `category`, and `count`, finalized only after the hour closes; no token
+labels, actor, generation, per-event time, detail JSON or arbitrary text. Categories, retention
+and cleanup are fixed in `contracts/foundation-boundaries.md` §Aggregate data policy.
+The existing code/schema must migrate under T152. A fixed vocabulary alone did not make the
+old per-event journal conform to Constitution III. No browsing-log leak is inferred merely
+from old administrative timestamps; the retention is nevertheless outside the required policy.
 
 ---
 

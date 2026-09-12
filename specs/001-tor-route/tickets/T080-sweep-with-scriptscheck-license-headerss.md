@@ -3,11 +3,11 @@ id: T080
 title: 'Sweep with `scripts/check-license-headers.sh` (from T006); verify Apac'
 status: pending
 created: 2026-07-04
-last_updated: 2026-07-04
+last_updated: "2026-09-12"
 source: tasks.md#T080
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: [T009]   # derived by scripts/derive-deps.sh   # TODO: derive from phase ordering + prose deps
+blocked_by: ["T009", "T155", "T081", "T077", "T156"]
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true

@@ -1,5 +1,11 @@
 # Architecture Specification (Pre-Feature)
 
+> **T156 constitutional reconciliation:** the active constitution and feature 001
+> `contracts/foundation-boundaries.md` supersede historical wildcard binds, CP Tor-cookie
+> access, automatic stale-auth renumbering and per-event audit/metric examples below.
+> These remain implementation gaps, not accepted protections. Concrete toolchain/UI pins
+> stay binding here and change only through reviewed, tested updates (Principles IV/VII/VIII).
+
 **Spec ID**: `000-architecture`
 
 **Status**: Draft
@@ -332,26 +338,17 @@ duplicate the wire shape so a future minor cannot drift the two locations.
 
 ### 5.5 Failure semantics
 
-| Failure                                     | Data plane behaviour                                |
-|---------------------------------------------|-----------------------------------------------------|
-| Control plane down at startup               | Continue with last-known config snapshot from disk  |
-| Control plane down at runtime               | Continue routing; queue counter increments locally  |
-| `ReloadTokens` RPC fails midway             | Atomic swap — old generation remains until success  |
-| Schema-version mismatch (peer is newer)     | Reject handshake, log to journal, exit non-zero     |
+Constitution II's condition/behavior matrix is binding. A valid last acknowledged snapshot
+supports CP-down admission; missing/corrupt/incompatible state cannot authorize clients.
+Automatic reconnect is required, but stale auth content cannot be renumbered into authority.
+T132/T159 specify recovery/durable application and both-peer compatibility tests. Events remain
+advisory and do not gate dial/forwarding. Invalid peer identity rejects IPC; CP startup reports
+failure while a DP with valid auth state continues independent routing. Incompatible CP protocol
+must not cause an otherwise valid DP to abandon routing (T153). No per-event journal is permitted.
 
-The data plane caches the last successful `StatusResponse → token list`
-on disk at `/var/lib/stargate/dp-snapshot.json` so cold-start without
-the control plane still serves the right ports. The snapshot is
-**token-list-only** — no route-admission state is persisted; cold start
-unconditionally attempts the fixed upstream on every admitted request and
-relies on the upstream dial/handshake result alone to decide success or
-the privacy-safe route error (Constitution Principle II; sol-review B3).
-Sidecar `SidecarEvent`s are advisory status/audit hints and MUST NOT be a
-mandatory precondition for listening, authenticating, dialing, or
-forwarding. See `specs/001-tor-route/data-model.md` §1.4 (snapshot
-schema) and §2 (the no-admission-gate rationale) — both are the canonical
-sources; this §5.5 paragraph intentionally does not duplicate them so
-future readers do not re-introduce a control-plane-driven admission gate.
+Snapshots contain auth verifiers/generation, never routing history. GetStatus is an aggregate
+counter response, not a source of auth snapshots. See feature 001 data-model.md and its foundation
+boundary contract for snapshot and completed-hour publication semantics.
 
 ---
 
@@ -426,19 +423,13 @@ CREATE TABLE aggregate_counters (
 -- No destination, no token id, no sub-hour granularity (Principle III).
 ```
 
-### 6.5 `audit_log` — append-only admin action log
+### 6.5 Operational aggregates (T156)
 
-```
-CREATE TABLE audit_log (
-  id           INTEGER PRIMARY KEY,
-  ts           INTEGER NOT NULL,                -- unix seconds (admin action time, not user request time)
-  actor        TEXT    NOT NULL,                -- admin credential label
-  action       TEXT    NOT NULL,                -- enum (v1 baseline; per-feature extensions land via lock-step amendments — see e.g. specs/001-tor-route/data-model.md §4): enrolled, revoked, config_error, sidecar_healthy, sidecar_unhealthy, bridge_toggle, export, import, wipe
-  target       TEXT,                            -- entity affected (e.g. device name)
-  detail_json  TEXT                             -- fixed-schema metadata; never request data
-);
--- Inserts only; no UPDATE/DELETE in code paths. Verified by stargate-redteam.
-```
+Replace the per-event journal with completed-hour aggregates under Constitution III.
+Feature 001 fields, categories, retention and migration are specified in its
+`contracts/foundation-boundaries.md`; T152 owns production migration. No actor, token label,
+request identifier, per-event timestamp or arbitrary `detail_json` is permitted. Current
+static command errors and health enums are responses, not a retained history.
 
 ### 6.6 `configured_tokens` — manual `tokens.yaml` token records (T092)
 
@@ -880,9 +871,9 @@ Excluded from the backup:
 - Requires `--yes` to proceed; otherwise prints the deletion plan and
   exits non-zero.
 
-`wipe` writes an `audit_log` entry **before** destroying the database, so
-the action is recorded in the audit chain (if the user separately exported
-the DB beforehand).
+`wipe` reports a static confirmation directly to the invoking operator. It must not retain
+an identifying per-event journal before or after destroying state. Recovery/export contracts
+must account for legacy logs and backup copies under T152's explicit cleanup limits.
 
 ---
 

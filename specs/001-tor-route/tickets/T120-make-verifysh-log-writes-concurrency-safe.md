@@ -3,11 +3,11 @@ id: T120
 title: 'Make `verify.sh` log writes concurrency-safe for parallel ticket runs'
 status: pending
 created: 2026-09-07
-last_updated: 2026-09-07
+last_updated: "2026-09-12"
 source: T063 run, 2026-09-07 — two sessions ran verify.sh concurrently (T062/T063 parallel by user instruction) and interleaved target/verify.log; 2 false socks5 FAILs burned a driver cycle
 phase: "6: Polish & Cross-Cutting Concerns"
 story: ''
-blocked_by: []
+blocked_by: ["T139", "T156"]
 parallel: false
 files_budget: 4   # raw-diff-path counting (T116 convention): verify.sh and/or
                   # run-task.sh + workflow.md doc line + this ticket + STATUS regen

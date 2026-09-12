@@ -67,11 +67,11 @@ to open a PR / notification for human review rather than to push further.
 5. **amend** — the spec or the constitution itself is wrong. Two weights:
    - **amend-spec** — revise `specs/NNN-*/spec.md` (and re-run `/speckit-plan`'s
      Constitution Check). Lighter.
-   - **amend-constitution** — heavyweight governance: a PR modifying
-     `.specify/memory/constitution.md`, a **7-day** public comment period, and
-     for Principles **I, III, or V** (the privacy-critical ones) a **passing
-     `stargate-redteam` run** against the proposed change. Never a casual
-     side-exit. See the constitution's Governance section.
+   - **amend-constitution** — follow the active Governance section in
+     `.specify/memory/constitution.md`. Pre-release session authorization and
+     post-release PR/comment rules differ. Any security/privacy/governance-impacting
+     amendment requires independent redteam wherever it is located. Finding acceptance
+     cannot waive a principle. The maintainer decides an unresolved policy change.
 
 ## Bypass
 

@@ -3,13 +3,13 @@ id: T111
 title: 'BUILD-DIFFS: document extension zip binary as build input'
 status: pending
 created: 2026-09-02
-last_updated: 2026-09-02
+last_updated: "2026-09-12"
 source: T097 review round 1 (APPROVE) RECOMMENDED-FOLLOW-UP
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: []
+blocked_by: ["T155", "T156"]
 parallel: true
-files_budget: 1   # BUILD-DIFFS.md only
+files_budget: 3   # complete change: substantive paths, ticket and STATUS
 privacy_critical: false
 complexity: low
 risk: low

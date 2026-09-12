@@ -3,13 +3,13 @@ id: T112
 title: 'Wire the stale-prose regression guard as a contract test'
 status: pending
 created: 2026-09-02
-last_updated: 2026-09-02
+last_updated: "2026-09-12"
 source: T083 review round 1 RECOMMENDED-FOLLOW-UP #1
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: [T083]
+blocked_by: ["T083", "T155", "T156"]
 parallel: true
-files_budget: 2
+files_budget: 4   # complete change: substantive paths, ticket and STATUS
 privacy_critical: false
 complexity: low
 risk: low

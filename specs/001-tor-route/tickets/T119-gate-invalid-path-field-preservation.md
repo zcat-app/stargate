@@ -3,11 +3,11 @@ id: T119
 title: 'Gate invalid-path field preservation in options.save.test.js'
 status: pending
 created: 2026-09-06
-last_updated: 2026-09-06
+last_updated: "2026-09-12"
 source: target/runs/T118.verdict finding 1 (round-1 APPROVE-WITH-FIXES, 1 Minor)
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: 'US1'
-blocked_by: []   # T118 is done
+blocked_by: ["T155", "T156"]
 parallel: true
 files_budget: 3   # raw-diff-path counting (run-task.sh, T116 convention):
                   # options.save.test.js + this ticket + STATUS.md regen

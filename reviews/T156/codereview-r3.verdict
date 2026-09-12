@@ -1,0 +1,39 @@
+VERDICT: APPROVE
+SNAPSHOT: d9e49aeb1cd00f5ff5433c9ac0c70d7690c75365a889f439743beb30db1a9bc7
+ROUND: 3
+SUMMARY: Approval renewed for the final candidate. Recovery disclosures, complete-path ticket budgets and release-artifact sequencing are consistent with the amendment.
+REVIEWER: Codex, GPT-6-family agent; exact serving model variant is not exposed to this reviewer. Independent document/code review, not external human anonymity-systems review. No delegation. Read-only shell/Python inspection except this verdict; no Docker/live browser/network capture, crash-recovery execution or external protocol validation performed.
+SCOPE: target/T156/manifest-r3.json, target/T156/amendment-r3.diff, six changed inputs since round 2, my own prior verdict and necessary authoritative context. Other reviewers' verdicts, prior findings, SECURITY-DECISIONS.md and implementer rationale were not read. The constitution-amendment-plan.md input remains hash-checked only.
+
+FINDINGS: []
+
+DISPOSITION:
+  - No unresolved REWORK items from round 2. Original Finding 1 remains SATISFIED: all-path counting is unchanged, source inventory is complete, the 88-path candidate is within T156 files_budget 128, and every reviewed source now also matches its staged blob. Pending T139 still owns deterministic inventory enforcement.
+  - New corrections reviewed: T110/T111/T112 budgets count substantive changes plus lifecycle documents; T081's revised 12-file budget and acceptance preserve focused, tests-first implementation and explicit blocking children if needed.
+
+CHECKLIST:
+  - Acceptance 1 — verified: unchanged constitutional boundaries retain the required listener, egress, isolation, fail-closed, authentication and aggregate-data properties. THREAT-MODEL.md §5.15 now expressly discloses retained auth during CP outage, pending delivery, existing-tunnel continuation and supported cold recovery.
+  - Acceptance 2 — verified: governance and external human release obligations remain unchanged. T081 Acceptance 6-7 binds immutable source, derived artifacts, publication evidence and applicable external human review without treating workflow preparation as publication approval.
+  - Acceptance 3 — verified: target/current distinctions remain honest. §5.15 identifies non-durable acknowledgment and stale-state renumbering as pending T132/T159 gaps. T081 removes contradictory source/tag write-back and zero-secrets instructions while preserving pinned inputs, integrity/provenance and required release evidence. It assigns archive-tool/environment pinning to the executable release-preparation owner.
+  - Acceptance 4 — verified: dependency existence, acyclicity, tests_first subset, complete once-only ordered queue and active prerequisite ordering all passed. T081 remains before both T078/T079; final-review tickets do not block preparation, while actual publication requires their matching evidence. No new work is assigned to completed T018. Previously completed ticket histories and the remaining owners are unchanged by this round.
+  - Acceptance 5 — verified for the current review phase: refreshed scoped manifest and diff agree, working and staged hashes match, fresh green verification evidence inspected, and this durable verdict binds the final snapshot. Independent redteam and normal reviewed delivery remain separate obligations; their completion is not asserted here.
+  - Scope/surgical — verified: six existing Markdown inputs changed since round 2; no source path was added or removed. Changes concern T156's required threat-model disclosure, budget reconciliation and executable release sequencing. No production source/config/test changes.
+  - Test discipline — verified: normative-document review uses consistency checks; no fabricated runtime red/green sequence. T081 explicitly requires failing fixture/workflow tests, missing/stale/mismatched evidence rejection and generated-artifact checks before implementation.
+  - Contract conformance/correctness/security — verified: output/source agreement, immutable digest artifacts, tag-reuse refusal, no partial promotion, separate registry/signing authentication and current-topology checks are explicit. Implementation must ground provider-specific authentication against current primary documentation. Recovery disclosures do not claim instant revocation or protection against hostile rollback of all trusted state.
+  - Security categories — AUTH-BYPASS and AUDIT-EVASION changes checked directly through recovery/publication acceptance. INFO-LEAK, INJECTION, DOS and PERM-ESCAL boundaries remain as reviewed in the unchanged inputs. No surviving finding.
+  - Convergence — verified: manifest stays at 88 paths; no simultaneous file/added-line/deleted-line growth condition. No prior fix regressed.
+
+FALSIFIED-AND-DROPPED:
+  - Generated release digests require replacing the reviewed source commit — defeated by T081 Acceptance 1 and 6: generated manifests refer to the exact immutable source and the tag job does not append source or mutate the tag.
+  - Final reviewer dependencies deadlock workflow preparation — defeated by the actual frontmatter graph and T081 Acceptance 7: T081 precedes T078/T079, while publication separately checks their completed candidate-bound evidence.
+  - The new outage disclosure implies revocation succeeded before delivery — defeated by THREAT-MODEL.md §5.15's explicit pending-delivery and acknowledgment language.
+
+MECHANICAL REVIEW SUMMARY:
+  - Verified manifest-r3.json SHA256 equals SNAPSHOT above.
+  - All 88 working-tree input hashes match; independently hashed all 88 staged blobs via git show :<path> and found zero mismatches.
+  - Exactly six inputs changed since round 2: THREAT-MODEL.md, remaining-implementation-plan.md and T081/T110/T111/T112. No input added or removed.
+  - amendment-r3.diff and the manifest have identical complete path sets; all 88 paths differ from the supplied before-turn base; 88 <= files_budget 128.
+  - Graph references valid, acyclic and tests_first-gated; queue complete exactly once and dependency-ordered. T081 blocks both final review tickets without reciprocal dependencies.
+  - Inspected target/T156/verify-r3.log: PASS=20, SKIP=1, FAIL=0, RESULT GREEN. Reproducibility and nested live/Docker skips remain unexecuted evidence, not live privacy passes. Caller supplied unchanged-tree freshness; this reviewer modified no candidate input.
+  - This approval covers the exact normative candidate, not runtime compliance, external human review, publication, or unreviewed later source edits. Necessary delivery records still count toward the declared total budget.
+

@@ -14,6 +14,22 @@ review. Privacy discipline is non-negotiable: the principles in
 of getting work merged, on the other hand, is meant to be collaborative and
 unintimidating. This document explains how those two things fit together.
 
+## Current constitutional boundaries
+
+Constitution T156 (2026-09-12) is authoritative. Proxy negotiation/IPC authentication does not
+permit inspection of tunneled application bytes. DP/CP network privileges follow its actor
+matrix; sidecar maintenance is not unrestricted proxy egress. Logs and exported metrics contain
+only completed immutable hourly aggregates, including operational diagnostics. Protected-route
+failure must not fall back to Direct. Current implementation gaps are tracked in feature 001's
+foundation contract and ticket plan, not grandfathered by old accepted decisions.
+
+Privacy-critical infrastructure follows the strictest tests-first category. Review evidence
+identifies the exact candidate, actual reviewer capability and executed/skipped checks. Follow
+`docs/process/workflow.md` for combined regression/fix tickets; no red-only dependency deadlock.
+Constitution amendments follow its active pre-release/post-release Governance section. Risk
+acceptance never waives an invariant, and user-authorized reconciliation may repair source drift
+without claiming that the existing implementation already conforms.
+
 ## License & Developer Certificate of Origin
 
 Stargate is licensed under **Apache License 2.0** (see `LICENSE`). New

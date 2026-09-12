@@ -1,0 +1,38 @@
+VERDICT: APPROVE
+SNAPSHOT: 3b43036e47dbd3688d2c2db0ce002c9432e5bef369621594d25686cd8d8fafe3
+ROUND: 2
+SUMMARY: Prior Finding 1 is satisfied. The amendment now declares and consistently documents a complete-path budget; no new Blocker/Major findings survive review.
+REVIEWER: Codex, GPT-6-family agent; exact serving model variant is not exposed to this reviewer. Independent document/code review, not external human anonymity-systems review. No delegation. Read-only shell/Python checks except this verdict. No live browser, Docker/network capture, crash-recovery execution or external protocol validation performed by this reviewer.
+SCOPE: target/T156/manifest-r2.json, target/T156/amendment-r2.diff, the six inputs whose hashes changed since round 1, the supplied rework note, my own prior verdict, and necessary source/contract context. Other reviewers' verdicts, prior findings, SECURITY-DECISIONS.md and the implementer's constitution-amendment-plan.md prose were not read. That rationale file was hash-checked only.
+
+FINDINGS: []
+
+DISPOSITION:
+  - Finding 1: SATISFIED — docs/process/ticket-template.md:22 now counts the ticket, specs and new files. docs/process/workflow.md:258-262 states the same complete-path rule, requires intended new sources to be staged/inventoried before driver review, and identifies the current driver's missing deterministic enforcement. T156 frontmatter declares files_budget: 128 and Acceptance 4 explicitly covers source and necessary delivery evidence. Independently recomputed all 88 source inputs as changed against the supplied before-turn base; 88 <= 128. The scoped diff and manifest contain identical path sets. This removes the former 15-versus-88 directory exemption.
+    EVALUATED-AS: Python read-only comparison of every manifest path against /tmp/stargate-T156-base found 88 changed paths; parsed T156 budget 128; assertion passed. Inspected template/workflow for the replacement of the specs exemption. scripts/run-task.sh's raw git-diff count remains consistent with this policy when its now-explicit new-file staging precondition is satisfied. The present review independently hashes all sources, including untracked ones; it does not rely on the driver's omitted untracked inventory.
+    RELATED GAP OWNERSHIP: T139 Acceptance 5 now requires a failing untracked-source mutation regression, complete inventory/staging enforcement, all-path counting and approval invalidation, plus positive controls for staged sources and exclusion of unrelated ignored build artifacts. T139 is privacy-critical, remains pending, depends on T156 and blocks T155. Documentation identifies the temporary caller requirement; it does not falsely claim a runtime driver repair.
+
+CHECKLIST:
+  - Acceptance 1 — verified in round 1 and unchanged by hash: target boundaries retain loopback/tunnel restrictions, application-byte opacity, explicit actor egress, full isolation partitions, fail-closed routing, acknowledged auth recovery and aggregate-only records.
+  - Acceptance 2 — verified in round 1 and unchanged by hash: honest permission deltas, preserved constitutional history, governance precedence and external human release review remain intact.
+  - Acceptance 3 — verified: the identified template/workflow counting contradiction is resolved. Existing target/current distinctions, toolchain pins and synchronized reviewer bodies are unchanged from the reviewed round-1 inputs.
+  - Acceptance 4 — verified: full reviewed source budget declared; no input added or removed since round 1. Rechecked dependency existence, acyclicity, tests_first subset, complete once-only queue and queue dependency ordering; all passed. The added T139 scope has concrete tests and a foundation closure blocker. Completed ticket histories remain unchanged.
+  - Acceptance 5 — verified for this review phase: new exact manifest hashes match, refreshed verify evidence is green with explicit skips, and this durable codereview verdict binds the new candidate. Independent redteam and normal reviewed delivery remain caller obligations; this verdict does not claim they already occurred.
+  - Scope/surgical — verified: six existing inputs changed between rounds; no new paths. Changes trace to Finding 1 and its directly related source-inventory gap. No production code/config/test changes entered the candidate. All 88 source inputs are Markdown.
+  - Test discipline — verified: this normative amendment uses consistency checks and independent review. T139's future privacy-sensitive implementation requires real spec-derived red-before-green regressions; no existing runtime gap is labeled fixed here.
+  - Contract conformance/correctness/security — verified for the changed normative scope. The all-path rule now includes sources the old template excluded; the documented source-inventory guard and concrete implementation owner prevent the prose from claiming nonexistent enforcement. Round-1 checks of AUTH-BYPASS, INFO-LEAK, INJECTION, DOS, PERM-ESCAL and AUDIT-EVASION remain applicable to the unchanged normative inputs. No new substantive security finding.
+  - Convergence — verified: no file-count growth (88 source inputs in both rounds); the six edited inputs directly address the prior finding and its related omission. The must-shrink non-convergence condition is not met.
+
+FALSIFIED-AND-DROPPED:
+  - The revised budget still excludes specification documents — defeated by docs/process/ticket-template.md:22 and docs/process/workflow.md:258-259, plus the independent 88-path count.
+  - The new workflow text claims untracked-source snapshot enforcement already exists — defeated by docs/process/workflow.md:261-262 and T139 Acceptance 5, which explicitly state caller discipline is currently required and deterministic enforcement is pending.
+
+MECHANICAL REVIEW SUMMARY:
+  - Verified manifest-r2.json SHA256: 3b43036e47dbd3688d2c2db0ce002c9432e5bef369621594d25686cd8d8fafe3.
+  - All 88 file hashes matched on initial and final checks. No manifest path added/removed since round 1; exactly six source hashes changed as supplied.
+  - Scoped amendment-r2.diff path set equals the complete manifest path set.
+  - Complete scoped source count 88 <= files_budget 128. Necessary delivery outputs also count against that limit; this approval does not authorize unrelated extra source or post-review source changes.
+  - Graph references valid and acyclic; tests_first blockers intact; all 60 pending IDs plus active T156 occur exactly once in the queue and respect prerequisites.
+  - Inspected target/T156/verify-r2.log: PASS=20, SKIP=1, FAIL=0; RESULT GREEN. Release reproducibility and nested live/Docker skips remain unexecuted evidence, not privacy passes. Freshness was supplied by the caller; the reviewer changed no candidate input.
+  - No performance review needed for this document-only amendment. This is not external human review, runtime compliance certification, a commit record or release authorization.
+

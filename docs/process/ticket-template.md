@@ -19,7 +19,7 @@ parallel: true                  # `true` mirrors the tasks.md [P] marker; means 
                                 # this in parallel". `false` → serialises.
 files_budget: 8                 # Numeric upper bound on files the diff may touch (incl. tests).
                                 # stargate-codereview FAILs SCOPE-DRIFT-CHECK if exceeded.
-                                # This ticket's own file and anything under specs/ are NOT counted.
+                                # Count every touched path, including this ticket, specs/ and new files.
 files_scope:                    # OPTIONAL path/glob list. When present, the reviewer ALSO runs
                                 # the negative-space check (files in scope NOT touched). Omit when
                                 # the budget is purely numeric.
@@ -48,7 +48,7 @@ tests_first: []                 # Principle-VII directed metadata (T096 / sol-re
                                 # can start. scripts/derive-deps.sh adds them to blocked_by;
                                 # scripts/lint-ticket.py rejects a privacy_critical impl whose
                                 # named test is not a blocker (i.e. runnable before its test).
-                                # Empty for non-impl tickets, or impls with no test-first gate.
+                                # Empty for document tickets or regressions authored first inside the same ticket.
 test_for: []                    # Reverse view: on a TEST ticket, the impl id it gates. Consumed
                                 # by derive-deps.sh the same way as tests_first (adds this test to
                                 # the named impl's blocked_by). Use one or the other, not both.
@@ -170,6 +170,15 @@ this should match, alternatives considered, big-picture concerns. If a sentence
 here describes behavior the diff must implement, move it to §Acceptance.
 
 ---
+
+## Evidence and decision closure
+
+Privacy-critical implementations with empty `tests_first` still require a named spec-derived
+regression and red-before-green evidence in Acceptance. Never make a permanently red standalone
+test ticket a required done dependency; use the workflow's combined regression/fix refinement.
+Design tickets must require implementation children and closure/consumer blockers in Acceptance.
+Document amendments require consistency checks and independent review, not fabricated runtime tests.
+Use current constitution references; acceptance of a finding cannot waive its guarantees.
 
 ## Pre-flight self-check (author-side)
 

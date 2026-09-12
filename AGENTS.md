@@ -4,7 +4,8 @@
 > zcode, Claude Code, or any other. Tool-specific shims (`CLAUDE.md`,
 > `.github/copilot-instructions.md`) point here; they do not duplicate it.
 > **If anything in this file conflicts with the authoritative sources below,
-> those win — flag the drift and stop.**
+> those win — flag the drift and stop the affected implementation. A user-authorized
+> reconciliation/amendment may proceed under Governance; do not treat drift as permission to ship it.**
 
 ## What Stargate is
 
@@ -17,7 +18,7 @@ privacy-first. License: Apache 2.0.
 
 | Source | Authority |
 |---|---|
-| `.specify/memory/constitution.md` | **Binding.** 8 principles; design conflicts are resolved by amending it, not the code. |
+| `.specify/memory/constitution.md` | **Binding.** 8 principles; fix conflicting code/specs first; policy changes require governed amendment. |
 | `THREAT-MODEL.md` | Per-deployment-mode and per-route threat models. A change touching threat-model surfaces updates this **in the same PR**. |
 | `CONTRIBUTING.md` | Workflow, code style per plane, PR norms, AI-assisted-workflow doctrine. |
 | `.specify/memory/review-loop.md` | Per-task review loop: round cap, escalation menu, must-shrink. |
@@ -37,14 +38,16 @@ Two processes, distinct lifecycles, gRPC over Unix socket between them:
 | **Extension** | JS/TS (`extension/`) | Per-request route selection. First-class target: Mullvad Browser. |
 
 The **data plane is a dumb router** (Constitution Principle I): no payload
-parsing, no TLS termination, no local DNS resolution, no header inspection, no
-per-request logs, no cover traffic. It **must keep routing if the control
+inspection, no termination of tunneled application TLS, no destination DNS, no application
+header inspection, no per-request logs, no cover traffic. Narrow proxy negotiation and
+authenticated management TLS follow Principles I/II; they do not authorize payload inspection. It **must keep routing if the control
 plane is unreachable** (Principle II).
 
 Deployment: Docker Compose, three profiles — `local` (loopback-only),
 `lan` (WireGuard sidecar), `vps` (WireGuard/Tailscale tunnel). The proxy
-refuses to bind a non-loopback interface without a corresponding tunnel
-sidecar.
+binds route/admin listeners only to loopback (local) or the actual tunnel interface
+in the listener namespace (LAN/VPS). Container flags and a tunnel elsewhere in the
+stack cannot bypass refusal; tunnel loss must not expose a fallback listener.
 
 ## How work happens (the short version)
 
@@ -89,9 +92,9 @@ menu: `.specify/memory/review-loop.md`.
   those boundaries, internal-to-internal calls are trusted.
 - **Comment the *why*** of non-obvious decisions; link the principle / spec /
   threat-model entry. Skip "what" comments for self-explanatory code.
-- **No outbound network connections** from Stargate except those a request
-  explicitly routes through. Status, monitoring, notifications are local-only
-  in v1.
+- **Enforce Constitution III's actor/traffic matrix.** DP/CP have no independent
+  public-network egress. Sidecar-native maintenance and explicitly invoked isolated
+  update retrieval do not authorize proxy probes, polling, telemetry or remote notifications.
 - **No secrets in prompts.** No bearer tokens, no admin enrollment codes, no
   private keys, no production DB dumps.
 - **Cite the principle when constraining an agent.** "Principle I says the
