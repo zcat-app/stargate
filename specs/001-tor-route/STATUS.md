@@ -15,9 +15,9 @@
 |---|---|
 | pending | 59 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 130 |
+| done | 131 |
 | deferred | 3 |
 | **total** | **193** |
 
@@ -27,15 +27,33 @@
 
 Tickets where `status: pending` AND every `blocked_by` is `done`.
 
-_(none — every pending ticket has unsatisfied `blocked_by`, or no pending tickets.)_
+| ID | Title | Phase | Priv? | Parallel? |
+|---|---|---|---|---|
+| T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
+| T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
+| T134 | Investigate a constitution-compliant local topology | Foundation audit remediation | ✓ |  |
+| T135 | Reject resumed TLS peers after public-key rotation | Foundation audit remediation | ✓ |  |
+| T136 | Prevent cross-site first-party isolation collisions | Foundation audit remediation | ✓ |  |
+| T137 | Create a fresh deadline for each token-reload RPC | Foundation audit remediation | ✓ |  |
+| T141 | Pin CI Actions and agent installation dependencies | Foundation audit remediation | ✓ |  |
+| T142 | Make agent execution-boundary claims demonstrable | Foundation audit remediation | ✓ |  |
+| T143 | Retire obsolete Java token-verifier constants | Foundation audit remediation | ✓ |  |
+| T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
+| T145 | Test Maven wrapper checksum enforcement | Foundation audit remediation |  |  |
+| T146 | Correct init timeout diagnosis and isolate its fixture | Foundation audit remediation |  |  |
+| T147 | Resolve HTTP CONNECT first-party isolation | Foundation audit remediation | ✓ |  |
+| T149 | Finalize byte accounting after both forwarding pumps | Foundation audit remediation | ✓ |  |
+| T150 | Define truthful mixed-tab route indicator semantics | Foundation audit remediation | ✓ |  |
+| T151 | Name the actual WebRTC remediation preference | Foundation audit remediation | ✓ |  |
+| T152 | Replace detailed operational journals with hourly aggregates | Foundation audit remediation | ✓ |  |
+| T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
+| T161 | Resolve Tor upgrade live validation failures before promotio | Urgent security update validation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T139 | Prevent required verification coverage from disappearing | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -51,7 +69,7 @@ _(none — every pending ticket has unsatisfied `blocked_by`, or no pending tick
 
 ## Done
 
-_130 ticket(s) done._
+_131 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -181,5 +199,6 @@ _130 ticket(s) done._
 - T130 — Inter-plane gRPC channel never establishes in the compose stack
 - T131 — Stack smoke test: full-path bring-up acceptance (RED until T130)
 - T133 — Require independent redteam before privacy-critical ticket commits
+- T139 — Prevent required verification coverage from disappearing
 - T156 — Strengthen constitution and reconcile implementation prerequisites
 - T160 — Prepare Tor security upgrade with enforced package content pins
