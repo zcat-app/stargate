@@ -1,0 +1,584 @@
+Script started on 2026-09-13 09:26:30+00:00 [COMMAND="cd /tmp/stargate-t137-red.3OgHLB/control-plane && ./mvnw -B -Dstyle.color=never -pl api -Dtest=InterPlaneWireTest#reloadClientGetsFullDeadlineAfterIdlingPastConstructionDeadline test" <not executed on terminal>]
+[0m[0m[INFO] Scanning for projects...
+[WARNING] 
+[WARNING] Some problems were encountered while building the effective model for app.zcat.stargate:persistence:jar:0.1.0-SNAPSHOT
+[WARNING] 'build.plugins.plugin.version' for io.smallrye:jandex-maven-plugin is missing. @ line 65, column 21
+[WARNING] 
+[WARNING] Some problems were encountered while building the effective model for app.zcat.stargate:ui:jar:0.1.0-SNAPSHOT
+[WARNING] 'build.plugins.plugin.version' for io.smallrye:jandex-maven-plugin is missing. @ line 68, column 21
+[WARNING] 
+[WARNING] It is highly recommended to fix these problems because they threaten the stability of your build.
+[WARNING] 
+[WARNING] For this reason, future Maven versions might no longer support building such malformed projects.
+[WARNING] 
+[INFO] 
+[INFO] -----------------------< app.zcat.stargate:api >------------------------
+[INFO] Building Stargate Control Plane :: api 0.1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The artifact io.quarkus:quarkus-junit5:jar:3.33.1 has been relocated to io.quarkus:quarkus-junit:jar:3.33.1: Update the artifactId in your project build file. Refer to https://github.com/quarkusio/quarkus/wiki/Migration-Guide-3.31 for more information.
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ api ---
+[INFO] skip non existing resourceDirectory /tmp/stargate-t137-red.3OgHLB/control-plane/api/src/main/resources
+[INFO] 
+[INFO] --- quarkus:3.33.1:generate-code (generate-grpc-stubs) @ api ---
+[INFO] [protoc] NOTE: Picked up JDK_JAVA_OPTIONS: -Dsun.stdout.encoding=UTF-8 --sun-misc-unsafe-memory-access=allow
+[INFO] [io.quarkus.grpc.codegen.GrpcCodeGen] Successfully finished generating and post-processing sources from proto files
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ api ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 16 source files with javac [forked debug release 25] to target/classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/api/src/main/java/io/quarkus/stargate/control/grpc/ControlGrpcService.java:[74,30] [ModifyCollectionInEnhancedForLoop] Modifying a collection while iterating over it in a loop may cause a ConcurrentModificationException to be thrown or lead to undefined behavior.
+    (see https://errorprone.info/bugpattern/ModifyCollectionInEnhancedForLoop)
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/api/src/main/java/io/quarkus/stargate/control/grpc/CpTls.java:[404,37] [StringSplitter] String.split(String) has surprising behavior
+    (see https://errorprone.info/bugpattern/StringSplitter)
+  Did you mean 'List<String> parts = Splitter.on('.').splitToList(dotted);'?
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ api ---
+[INFO] skip non existing resourceDirectory /tmp/stargate-t137-red.3OgHLB/control-plane/api/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ api ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 2 source files with javac [forked debug release 25] to target/test-classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[INFO] 
+[INFO] --- surefire:3.5.3:test (default-test) @ api ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running io.quarkus.stargate.control.grpc.InterPlaneWireTest
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by io.netty.util.internal.NativeLibraryUtil in an unnamed module (file:/home/claudia/.m2/repository/io/netty/netty-common/4.1.130.Final/netty-common-4.1.130.Final.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+Sep 13, 2026 9:26:44 AM org.jboss.logmanager.JBossLoggerFinder getLogger
+ERROR: The LogManager accessed before the "java.util.logging.manager" system property was set to "org.jboss.logmanager.LogManager". Results may be unexpected.
+2026-09-13 09:26:55,617 WARN  [io.netty.bootstrap.Bootstrap] (main) Unknown channel option 'SO_KEEPALIVE' for channel '[id: 0xf49501c7]' of type 'class io.netty.channel.epoll.EpollDomainSocketChannel'
+2026-09-13 09:26:55,631 WARN  [io.netty.bootstrap.ServerBootstrap] (epollEventLoopGroup-2-1) Unknown channel option 'SO_KEEPALIVE' for channel '[id: 0x1c4984ab, L:/tmp/junit-5179755316167599447/ipc-aged-reload/dp.sock - R:]' of type 'class io.netty.channel.epoll.EpollDomainSocketChannel'
+[ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0, Time elapsed: 12.01 s <<< FAILURE! -- in io.quarkus.stargate.control.grpc.InterPlaneWireTest
+[ERROR] io.quarkus.stargate.control.grpc.InterPlaneWireTest.reloadClientGetsFullDeadlineAfterIdlingPastConstructionDeadline -- Time elapsed: 11.99 s <<< ERROR!
+io.grpc.StatusRuntimeException: DEADLINE_EXCEEDED: ClientCall started after CallOptions deadline was exceeded -1.117239919 seconds ago. Name resolution delay 0.000000000 seconds.
+	at io.grpc.stub.ClientCalls.toStatusRuntimeException(ClientCalls.java:368)
+	at io.grpc.stub.ClientCalls.getUnchecked(ClientCalls.java:349)
+	at io.grpc.stub.ClientCalls.blockingUnaryCall(ClientCalls.java:174)
+	at stargate.v1.ControlGrpc$ControlBlockingStub.reloadTokens(ControlGrpc.java:242)
+	at io.quarkus.stargate.control.grpc.ReloadTokensClient.reload(ReloadTokensClient.java:115)
+	at io.quarkus.stargate.control.grpc.InterPlaneWireTest.reloadClientGetsFullDeadlineAfterIdlingPastConstructionDeadline(InterPlaneWireTest.java:485)
+
+[INFO] 
+[INFO] Results:
+[INFO] 
+[ERROR] Errors: 
+[ERROR]   InterPlaneWireTest.reloadClientGetsFullDeadlineAfterIdlingPastConstructionDeadline:485 » StatusRuntime DEADLINE_EXCEEDED: ClientCall started after CallOptions deadline was exceeded -1.117239919 seconds ago. Name resolution delay 0.000000000 seconds.
+[INFO] 
+[ERROR] Tests run: 1, Failures: 0, Errors: 1, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  24.255 s
+[INFO] Finished at: 2026-09-13T09:26:55Z
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.3:test (default-test) on project api: 
+[ERROR] 
+[ERROR] See /tmp/stargate-t137-red.3OgHLB/control-plane/api/target/surefire-reports for the individual test results.
+[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[0m[0m
+Script done on 2026-09-13 09:26:55+00:00 [COMMAND_EXIT_CODE="1"]
+Script started on 2026-09-13 09:27:01+00:00 [COMMAND="cd /tmp/stargate-t137-red.3OgHLB/control-plane && ./mvnw -B -Dstyle.color=never -pl runtime -am -Dtest=StargateControlPlaneTest#staleReconciliationGetsFreshDeadlineForTheNextAttempt -Dsurefire.failIfNoSpecifiedTests=false test" <not executed on terminal>]
+[0m[0m[INFO] Scanning for projects...
+[WARNING] 
+[WARNING] Some problems were encountered while building the effective model for app.zcat.stargate:persistence:jar:0.1.0-SNAPSHOT
+[WARNING] 'build.plugins.plugin.version' for io.smallrye:jandex-maven-plugin is missing. @ line 65, column 21
+[WARNING] 
+[WARNING] Some problems were encountered while building the effective model for app.zcat.stargate:ui:jar:0.1.0-SNAPSHOT
+[WARNING] 'build.plugins.plugin.version' for io.smallrye:jandex-maven-plugin is missing. @ line 68, column 21
+[WARNING] 
+[WARNING] It is highly recommended to fix these problems because they threaten the stability of your build.
+[WARNING] 
+[WARNING] For this reason, future Maven versions might no longer support building such malformed projects.
+[WARNING] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] Stargate Control Plane (parent)                                    [pom]
+[INFO] Stargate Control Plane :: api                                      [jar]
+[INFO] Stargate Control Plane :: core                                     [jar]
+[INFO] Stargate Control Plane :: persistence                              [jar]
+[INFO] Stargate Control Plane :: ui (v1 healthcheck stub)                 [jar]
+[INFO] Stargate Control Plane :: runtime                                  [jar]
+[INFO] 
+[INFO] ------------------< app.zcat.stargate:control-plane >-------------------
+[INFO] Building Stargate Control Plane (parent) 0.1.0-SNAPSHOT            [1/6]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] -----------------------< app.zcat.stargate:api >------------------------
+[INFO] Building Stargate Control Plane :: api 0.1.0-SNAPSHOT              [2/6]
+[INFO]   from api/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The artifact io.quarkus:quarkus-junit5:jar:3.33.1 has been relocated to io.quarkus:quarkus-junit:jar:3.33.1: Update the artifactId in your project build file. Refer to https://github.com/quarkusio/quarkus/wiki/Migration-Guide-3.31 for more information.
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ api ---
+[INFO] skip non existing resourceDirectory /tmp/stargate-t137-red.3OgHLB/control-plane/api/src/main/resources
+[INFO] 
+[INFO] --- quarkus:3.33.1:generate-code (generate-grpc-stubs) @ api ---
+[INFO] [protoc] NOTE: Picked up JDK_JAVA_OPTIONS: -Dsun.stdout.encoding=UTF-8 --sun-misc-unsafe-memory-access=allow
+[INFO] [io.quarkus.grpc.codegen.GrpcCodeGen] Successfully finished generating and post-processing sources from proto files
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ api ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 16 source files with javac [forked debug release 25] to target/classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/api/src/main/java/io/quarkus/stargate/control/grpc/ControlGrpcService.java:[74,30] [ModifyCollectionInEnhancedForLoop] Modifying a collection while iterating over it in a loop may cause a ConcurrentModificationException to be thrown or lead to undefined behavior.
+    (see https://errorprone.info/bugpattern/ModifyCollectionInEnhancedForLoop)
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/api/src/main/java/io/quarkus/stargate/control/grpc/CpTls.java:[404,37] [StringSplitter] String.split(String) has surprising behavior
+    (see https://errorprone.info/bugpattern/StringSplitter)
+  Did you mean 'List<String> parts = Splitter.on('.').splitToList(dotted);'?
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ api ---
+[INFO] skip non existing resourceDirectory /tmp/stargate-t137-red.3OgHLB/control-plane/api/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ api ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 2 source files with javac [forked debug release 25] to target/test-classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[INFO] 
+[INFO] --- surefire:3.5.3:test (default-test) @ api ---
+[INFO] 
+[INFO] -----------------------< app.zcat.stargate:core >-----------------------
+[INFO] Building Stargate Control Plane :: core 0.1.0-SNAPSHOT             [3/6]
+[INFO]   from core/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The artifact io.quarkus:quarkus-junit5:jar:3.33.1 has been relocated to io.quarkus:quarkus-junit:jar:3.33.1: Update the artifactId in your project build file. Refer to https://github.com/quarkusio/quarkus/wiki/Migration-Guide-3.31 for more information.
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ core ---
+[INFO] skip non existing resourceDirectory /tmp/stargate-t137-red.3OgHLB/control-plane/core/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ core ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 5 source files with javac [forked debug release 25] to target/classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/core/src/main/java/app/zcat/stargate/auth/TokenLoaderContract.java:[121,51] [ArrayRecordComponent] Record components should not be arrays.
+    (see https://errorprone.info/bugpattern/ArrayRecordComponent)
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/core/src/main/java/app/zcat/stargate/auth/TokenLoader.java:[112,25] [UnusedVariable] The field 'pepper' is never read.
+    (see https://errorprone.info/bugpattern/UnusedVariable)
+  Did you mean to remove this line?
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/core/src/main/java/app/zcat/stargate/sidecar/SidecarMonitor.java:[306,43] [StringSplitter] String.split(String) has surprising behavior
+    (see https://errorprone.info/bugpattern/StringSplitter)
+  Did you mean 'for (String token : Splitter.on(Pattern.compile("\\s+")).split(phase)) {'?
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ core ---
+[INFO] skip non existing resourceDirectory /tmp/stargate-t137-red.3OgHLB/control-plane/core/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ core ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 4 source files with javac [forked debug release 25] to target/test-classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/core/src/test/java/app/zcat/stargate/auth/TokenLoaderTest.java:[813,33] [ArrayRecordComponent] Record components should not be arrays.
+    (see https://errorprone.info/bugpattern/ArrayRecordComponent)
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/core/src/test/java/app/zcat/stargate/auth/TokenLoaderTest.java:[813,51] [ArrayRecordComponent] Record components should not be arrays.
+    (see https://errorprone.info/bugpattern/ArrayRecordComponent)
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/core/src/test/java/app/zcat/stargate/auth/TokenLoaderTest.java:[813,73] [ArrayRecordComponent] Record components should not be arrays.
+    (see https://errorprone.info/bugpattern/ArrayRecordComponent)
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/core/src/test/java/app/zcat/stargate/sidecar/SidecarMonitorTest.java:[45,38] [UnnecessaryLambda] Returning a lambda from a helper method or saving it in a constant is unnecessary; prefer to implement the functional interface method directly and use a method reference instead.
+    (see https://errorprone.info/bugpattern/UnnecessaryLambda)
+  Did you mean 'private static  long generation7(){return 7L;}'?
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/core/src/test/java/app/zcat/stargate/sidecar/SidecarMonitorTest.java:[79,16] [StringConcatToTextBlock] This string literal can be written more clearly as a text block
+    (see https://errorprone.info/bugpattern/StringConcatToTextBlock)
+  Did you mean '"""'?
+[INFO] 
+[INFO] --- surefire:3.5.3:test (default-test) @ core ---
+[INFO] 
+[INFO] -------------------< app.zcat.stargate:persistence >--------------------
+[INFO] Building Stargate Control Plane :: persistence 0.1.0-SNAPSHOT      [4/6]
+[INFO]   from persistence/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The artifact io.quarkus:quarkus-junit5:jar:3.33.1 has been relocated to io.quarkus:quarkus-junit:jar:3.33.1: Update the artifactId in your project build file. Refer to https://github.com/quarkusio/quarkus/wiki/Migration-Guide-3.31 for more information.
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ persistence ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ persistence ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 4 source files with javac [forked debug release 25] to target/classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[INFO] 
+[INFO] --- jandex:3.6.0:jandex (make-index) @ persistence ---
+[INFO] Saving Jandex index: /tmp/stargate-t137-red.3OgHLB/control-plane/persistence/target/classes/META-INF/jandex.idx
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ persistence ---
+[INFO] Copying 1 resource from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ persistence ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 6 source files with javac [forked debug release 25] to target/test-classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/persistence/src/test/java/app/zcat/stargate/persistence/RepositoryShapeContractTest.java:[134,46] [StringCaseLocaleUsage] Specify a `Locale` when calling `String#to{Lower,Upper}Case`. (Note: there are multiple suggested fixes; the third may be most appropriate if you're dealing with ASCII Strings.)
+    (see https://errorprone.info/bugpattern/StringCaseLocaleUsage)
+  Did you mean 'assertTrue(ex.getMessage().toLowerCase(Locale.ROOT).contains("not null"),' or 'assertTrue(ex.getMessage().toLowerCase(Locale.getDefault()).contains("not null"),' or 'assertTrue(Ascii.toLowerCase(ex.getMessage()).contains("not null"),'?
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/persistence/src/test/java/app/zcat/stargate/persistence/SqliteTokenStateTest.java:[121,44] [ArrayRecordComponent] Record components should not be arrays.
+    (see https://errorprone.info/bugpattern/ArrayRecordComponent)
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/persistence/src/test/java/app/zcat/stargate/persistence/SqliteTokenStateTest.java:[128,25] [BadInstanceof] `state` is an instance of SqliteTokenState which is a subtype of TokenLoaderContract.ConfiguredTokenStore, so this is equivalent to a null check.
+    (see https://errorprone.info/bugpattern/BadInstanceof)
+  Did you mean 'assertTrue(state != null,'?
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/persistence/src/test/java/app/zcat/stargate/persistence/SqliteTokenStateTest.java:[130,25] [BadInstanceof] `state` is an instance of SqliteTokenState which is a subtype of TokenLoaderContract.GenerationStore, so this is equivalent to a null check.
+    (see https://errorprone.info/bugpattern/BadInstanceof)
+  Did you mean 'assertTrue(state != null,'?
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/persistence/src/test/java/app/zcat/stargate/persistence/SqliteTokenStateTest.java:[136,40] [BadInstanceof] `store.storedTokens()` is an instance of Collection<TokenLoaderContract.StoredToken> which is a subtype of Collection<?>, so this is equivalent to a null check.
+    (see https://errorprone.info/bugpattern/BadInstanceof)
+  Did you mean 'assertTrue(store.storedTokens() != null);'?
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/persistence/src/test/java/app/zcat/stargate/persistence/V001SchemaContractTest.java:[176,48] [StringCaseLocaleUsage] Specify a `Locale` when calling `String#to{Lower,Upper}Case`. (Note: there are multiple suggested fixes; the third may be most appropriate if you're dealing with ASCII Strings.)
+    (see https://errorprone.info/bugpattern/StringCaseLocaleUsage)
+  Did you mean 'assertFalse(ddl("audit_log").toLowerCase(Locale.ROOT).contains("action") && ddl("audit_log").contains("CHECK"),' or 'assertFalse(ddl("audit_log").toLowerCase(Locale.getDefault()).contains("action") && ddl("audit_log").contains("CHECK"),' or 'assertFalse(Ascii.toLowerCase(ddl("audit_log")).contains("action") && ddl("audit_log").contains("CHECK"),'?
+[INFO] 
+[INFO] --- surefire:3.5.3:test (default-test) @ persistence ---
+[INFO] 
+[INFO] ------------------------< app.zcat.stargate:ui >------------------------
+[INFO] Building Stargate Control Plane :: ui (v1 healthcheck stub) 0.1.0-SNAPSHOT [5/6]
+[INFO]   from ui/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The artifact io.quarkus:quarkus-junit5:jar:3.33.1 has been relocated to io.quarkus:quarkus-junit:jar:3.33.1: Update the artifactId in your project build file. Refer to https://github.com/quarkusio/quarkus/wiki/Migration-Guide-3.31 for more information.
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ ui ---
+[INFO] skip non existing resourceDirectory /tmp/stargate-t137-red.3OgHLB/control-plane/ui/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ ui ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 1 source file with javac [forked debug release 25] to target/classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[INFO] 
+[INFO] --- jandex:3.6.0:jandex (make-index) @ ui ---
+[INFO] Saving Jandex index: /tmp/stargate-t137-red.3OgHLB/control-plane/ui/target/classes/META-INF/jandex.idx
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ ui ---
+[INFO] skip non existing resourceDirectory /tmp/stargate-t137-red.3OgHLB/control-plane/ui/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ ui ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 1 source file with javac [forked debug release 25] to target/test-classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[INFO] 
+[INFO] --- surefire:3.5.3:test (default-test) @ ui ---
+[INFO] 
+[INFO] ---------------------< app.zcat.stargate:runtime >----------------------
+[INFO] Building Stargate Control Plane :: runtime 0.1.0-SNAPSHOT          [6/6]
+[INFO]   from runtime/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The artifact io.quarkus:quarkus-junit5:jar:3.33.1 has been relocated to io.quarkus:quarkus-junit:jar:3.33.1: Update the artifactId in your project build file. Refer to https://github.com/quarkusio/quarkus/wiki/Migration-Guide-3.31 for more information.
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ runtime ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- quarkus:3.33.1:generate-code (default) @ runtime ---
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ runtime ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 2 source files with javac [forked debug release 25] to target/classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[WARNING] /tmp/stargate-t137-red.3OgHLB/control-plane/runtime/src/main/java/app/zcat/stargate/runtime/StargateControlPlane.java:[246,52] [JavaInstantGetSecondsGetNano] instant.getNano() only accesses the underlying nanosecond adjustment from the whole second.
+    (see https://errorprone.info/bugpattern/JavaInstantGetSecondsGetNano)
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ runtime ---
+[INFO] skip non existing resourceDirectory /tmp/stargate-t137-red.3OgHLB/control-plane/runtime/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ runtime ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 1 source file with javac [forked debug release 25] to target/test-classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[INFO] 
+[INFO] --- surefire:3.5.3:test (default-test) @ runtime ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running app.zcat.stargate.runtime.StargateControlPlaneTest
+Sep 13, 2026 9:27:42 AM org.jboss.logmanager.JBossLoggerFinder getLogger
+ERROR: The LogManager accessed before the "java.util.logging.manager" system property was set to "org.jboss.logmanager.LogManager". Results may be unexpected.
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by io.netty.util.internal.NativeLibraryUtil in an unnamed module (file:/home/claudia/.m2/repository/io/netty/netty-common/4.1.130.Final/netty-common-4.1.130.Final.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+2026-09-13 09:27:43,453 WARN  [io.netty.bootstrap.Bootstrap] (main) Unknown channel option 'SO_KEEPALIVE' for channel '[id: 0x147e0db7]' of type 'class io.netty.channel.epoll.EpollDomainSocketChannel'
+2026-09-13 09:27:43,468 WARN  [io.netty.bootstrap.ServerBootstrap] (epollEventLoopGroup-2-1) Unknown channel option 'SO_KEEPALIVE' for channel '[id: 0x6b58fa76, L:/tmp/junit-2070551980587006221/run/dp.sock - R:]' of type 'class io.netty.channel.epoll.EpollDomainSocketChannel'
+Sep 13, 2026 9:27:49 AM app.zcat.stargate.auth.TokenLoader push
+WARN: ReloadTokens generation 1 rejected as stale — reconciling with the data plane's current generation 5 (§1.8)
+Sep 13, 2026 9:27:53 AM app.zcat.stargate.runtime.GrpcReloadChannel push
+WARN: ReloadTokens generation 6 not delivered (DEADLINE_EXCEEDED: CallOptions deadline exceeded after 3.630359552s. Name resolution delay 0.000000000 seconds. [closed=[], open=[[remote_addr=/tmp/junit-2070551980587006221/run/dp.sock]]]) — the data plane keeps its last-known verifier list; the next boot re-syncs (§1.8, Principle II)
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0, Time elapsed: 10.74 s <<< FAILURE! -- in app.zcat.stargate.runtime.StargateControlPlaneTest
+[ERROR] app.zcat.stargate.runtime.StargateControlPlaneTest.staleReconciliationGetsFreshDeadlineForTheNextAttempt -- Time elapsed: 10.73 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: both delayed RPCs complete because the retry receives a fresh deadline ==> expected: <[1, 6]> but was: <[1]>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:158)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:139)
+	at org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:201)
+	at org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:184)
+	at org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:1199)
+	at app.zcat.stargate.runtime.StargateControlPlaneTest.staleReconciliationGetsFreshDeadlineForTheNextAttempt(StargateControlPlaneTest.java:617)
+
+[INFO] 
+[INFO] Results:
+[INFO] 
+[ERROR] Failures: 
+[ERROR]   StargateControlPlaneTest.staleReconciliationGetsFreshDeadlineForTheNextAttempt:617 both delayed RPCs complete because the retry receives a fresh deadline ==> expected: <[1, 6]> but was: <[1]>
+[INFO] 
+[ERROR] Tests run: 1, Failures: 1, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for Stargate Control Plane (parent) 0.1.0-SNAPSHOT:
+[INFO] 
+[INFO] Stargate Control Plane (parent) .................... SUCCESS [  0.007 s]
+[INFO] Stargate Control Plane :: api ...................... SUCCESS [ 11.553 s]
+[INFO] Stargate Control Plane :: core ..................... SUCCESS [  8.213 s]
+[INFO] Stargate Control Plane :: persistence .............. SUCCESS [  8.508 s]
+[INFO] Stargate Control Plane :: ui (v1 healthcheck stub) . SUCCESS [  3.513 s]
+[INFO] Stargate Control Plane :: runtime .................. FAILURE [ 17.968 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  50.139 s
+[INFO] Finished at: 2026-09-13T09:27:53Z
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire-plugin:3.5.3:test (default-test) on project runtime: There are test failures.
+[ERROR] 
+[ERROR] See /tmp/stargate-t137-red.3OgHLB/control-plane/runtime/target/surefire-reports for the individual test results.
+[ERROR] See dump files (if any exist) [date].dump, [date]-jvmRun[N].dump and [date].dumpstream.
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException
+[ERROR] 
+[ERROR] After correcting the problems, you can resume the build with the command
+[ERROR]   mvn <args> -rf :runtime
+[0m[0m
+Script done on 2026-09-13 09:27:53+00:00 [COMMAND_EXIT_CODE="1"]
+Script started on 2026-09-13 09:28:01+00:00 [COMMAND="cd /home/claudia/stargate/control-plane && ./mvnw -B -Dstyle.color=never -pl runtime -am '-Dtest=InterPlaneWireTest#reloadClientGetsFullDeadlineAfterIdlingPastConstructionDeadline,StargateControlPlaneTest#staleReconciliationGetsFreshDeadlineForTheNextAttempt' -Dsurefire.failIfNoSpecifiedTests=false test" <not executed on terminal>]
+[0m[0m[INFO] Scanning for projects...
+[WARNING] 
+[WARNING] Some problems were encountered while building the effective model for app.zcat.stargate:persistence:jar:0.1.0-SNAPSHOT
+[WARNING] 'build.plugins.plugin.version' for io.smallrye:jandex-maven-plugin is missing. @ line 65, column 21
+[WARNING] 
+[WARNING] Some problems were encountered while building the effective model for app.zcat.stargate:ui:jar:0.1.0-SNAPSHOT
+[WARNING] 'build.plugins.plugin.version' for io.smallrye:jandex-maven-plugin is missing. @ line 68, column 21
+[WARNING] 
+[WARNING] It is highly recommended to fix these problems because they threaten the stability of your build.
+[WARNING] 
+[WARNING] For this reason, future Maven versions might no longer support building such malformed projects.
+[WARNING] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO] 
+[INFO] Stargate Control Plane (parent)                                    [pom]
+[INFO] Stargate Control Plane :: api                                      [jar]
+[INFO] Stargate Control Plane :: core                                     [jar]
+[INFO] Stargate Control Plane :: persistence                              [jar]
+[INFO] Stargate Control Plane :: ui (v1 healthcheck stub)                 [jar]
+[INFO] Stargate Control Plane :: runtime                                  [jar]
+[INFO] 
+[INFO] ------------------< app.zcat.stargate:control-plane >-------------------
+[INFO] Building Stargate Control Plane (parent) 0.1.0-SNAPSHOT            [1/6]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO] 
+[INFO] -----------------------< app.zcat.stargate:api >------------------------
+[INFO] Building Stargate Control Plane :: api 0.1.0-SNAPSHOT              [2/6]
+[INFO]   from api/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The artifact io.quarkus:quarkus-junit5:jar:3.33.1 has been relocated to io.quarkus:quarkus-junit:jar:3.33.1: Update the artifactId in your project build file. Refer to https://github.com/quarkusio/quarkus/wiki/Migration-Guide-3.31 for more information.
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ api ---
+[INFO] skip non existing resourceDirectory /home/claudia/stargate/control-plane/api/src/main/resources
+[INFO] 
+[INFO] --- quarkus:3.33.1:generate-code (generate-grpc-stubs) @ api ---
+[INFO] [protoc] NOTE: Picked up JDK_JAVA_OPTIONS: -Dsun.stdout.encoding=UTF-8 --sun-misc-unsafe-memory-access=allow
+[INFO] [io.quarkus.grpc.codegen.GrpcCodeGen] Successfully finished generating and post-processing sources from proto files
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ api ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 16 source files with javac [forked debug release 25] to target/classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[WARNING] /home/claudia/stargate/control-plane/api/src/main/java/io/quarkus/stargate/control/grpc/ControlGrpcService.java:[74,30] [ModifyCollectionInEnhancedForLoop] Modifying a collection while iterating over it in a loop may cause a ConcurrentModificationException to be thrown or lead to undefined behavior.
+    (see https://errorprone.info/bugpattern/ModifyCollectionInEnhancedForLoop)
+[WARNING] /home/claudia/stargate/control-plane/api/src/main/java/io/quarkus/stargate/control/grpc/CpTls.java:[404,37] [StringSplitter] String.split(String) has surprising behavior
+    (see https://errorprone.info/bugpattern/StringSplitter)
+  Did you mean 'List<String> parts = Splitter.on('.').splitToList(dotted);'?
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ api ---
+[INFO] skip non existing resourceDirectory /home/claudia/stargate/control-plane/api/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ api ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 2 source files with javac [forked debug release 25] to target/test-classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[INFO] 
+[INFO] --- surefire:3.5.3:test (default-test) @ api ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running io.quarkus.stargate.control.grpc.InterPlaneWireTest
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by io.netty.util.internal.NativeLibraryUtil in an unnamed module (file:/home/claudia/.m2/repository/io/netty/netty-common/4.1.130.Final/netty-common-4.1.130.Final.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+Sep 13, 2026 9:28:18 AM org.jboss.logmanager.JBossLoggerFinder getLogger
+ERROR: The LogManager accessed before the "java.util.logging.manager" system property was set to "org.jboss.logmanager.LogManager". Results may be unexpected.
+2026-09-13 09:28:29,658 WARN  [io.netty.bootstrap.Bootstrap] (main) Unknown channel option 'SO_KEEPALIVE' for channel '[id: 0xd1b343ad]' of type 'class io.netty.channel.epoll.EpollDomainSocketChannel'
+2026-09-13 09:28:29,674 WARN  [io.netty.bootstrap.ServerBootstrap] (epollEventLoopGroup-2-1) Unknown channel option 'SO_KEEPALIVE' for channel '[id: 0xc2002641, L:/tmp/junit-13334835550411538440/ipc-aged-reload/dp.sock - R:]' of type 'class io.netty.channel.epoll.EpollDomainSocketChannel'
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 12.18 s -- in io.quarkus.stargate.control.grpc.InterPlaneWireTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] 
+[INFO] -----------------------< app.zcat.stargate:core >-----------------------
+[INFO] Building Stargate Control Plane :: core 0.1.0-SNAPSHOT             [3/6]
+[INFO]   from core/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The artifact io.quarkus:quarkus-junit5:jar:3.33.1 has been relocated to io.quarkus:quarkus-junit:jar:3.33.1: Update the artifactId in your project build file. Refer to https://github.com/quarkusio/quarkus/wiki/Migration-Guide-3.31 for more information.
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ core ---
+[INFO] skip non existing resourceDirectory /home/claudia/stargate/control-plane/core/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ core ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ core ---
+[INFO] skip non existing resourceDirectory /home/claudia/stargate/control-plane/core/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ core ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.3:test (default-test) @ core ---
+[INFO] 
+[INFO] -------------------< app.zcat.stargate:persistence >--------------------
+[INFO] Building Stargate Control Plane :: persistence 0.1.0-SNAPSHOT      [4/6]
+[INFO]   from persistence/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The artifact io.quarkus:quarkus-junit5:jar:3.33.1 has been relocated to io.quarkus:quarkus-junit:jar:3.33.1: Update the artifactId in your project build file. Refer to https://github.com/quarkusio/quarkus/wiki/Migration-Guide-3.31 for more information.
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ persistence ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ persistence ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- jandex:3.6.0:jandex (make-index) @ persistence ---
+[INFO] Saving Jandex index: /home/claudia/stargate/control-plane/persistence/target/classes/META-INF/jandex.idx
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ persistence ---
+[INFO] Copying 1 resource from src/test/resources to target/test-classes
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ persistence ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.3:test (default-test) @ persistence ---
+[INFO] 
+[INFO] ------------------------< app.zcat.stargate:ui >------------------------
+[INFO] Building Stargate Control Plane :: ui (v1 healthcheck stub) 0.1.0-SNAPSHOT [5/6]
+[INFO]   from ui/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The artifact io.quarkus:quarkus-junit5:jar:3.33.1 has been relocated to io.quarkus:quarkus-junit:jar:3.33.1: Update the artifactId in your project build file. Refer to https://github.com/quarkusio/quarkus/wiki/Migration-Guide-3.31 for more information.
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ ui ---
+[INFO] skip non existing resourceDirectory /home/claudia/stargate/control-plane/ui/src/main/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ ui ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- jandex:3.6.0:jandex (make-index) @ ui ---
+[INFO] Saving Jandex index: /home/claudia/stargate/control-plane/ui/target/classes/META-INF/jandex.idx
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ ui ---
+[INFO] skip non existing resourceDirectory /home/claudia/stargate/control-plane/ui/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ ui ---
+[INFO] Nothing to compile - all classes are up to date.
+[INFO] 
+[INFO] --- surefire:3.5.3:test (default-test) @ ui ---
+[INFO] 
+[INFO] ---------------------< app.zcat.stargate:runtime >----------------------
+[INFO] Building Stargate Control Plane :: runtime 0.1.0-SNAPSHOT          [6/6]
+[INFO]   from runtime/pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[WARNING] The artifact io.quarkus:quarkus-junit5:jar:3.33.1 has been relocated to io.quarkus:quarkus-junit:jar:3.33.1: Update the artifactId in your project build file. Refer to https://github.com/quarkusio/quarkus/wiki/Migration-Guide-3.31 for more information.
+[INFO] 
+[INFO] --- resources:3.4.0:resources (default-resources) @ runtime ---
+[INFO] Copying 1 resource from src/main/resources to target/classes
+[INFO] 
+[INFO] --- quarkus:3.33.1:generate-code (default) @ runtime ---
+[INFO] 
+[INFO] --- compiler:3.15.0:compile (default-compile) @ runtime ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 2 source files with javac [forked debug release 25] to target/classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[WARNING] /home/claudia/stargate/control-plane/runtime/src/main/java/app/zcat/stargate/runtime/StargateControlPlane.java:[246,52] [JavaInstantGetSecondsGetNano] instant.getNano() only accesses the underlying nanosecond adjustment from the whole second.
+    (see https://errorprone.info/bugpattern/JavaInstantGetSecondsGetNano)
+[INFO] 
+[INFO] --- resources:3.4.0:testResources (default-testResources) @ runtime ---
+[INFO] skip non existing resourceDirectory /home/claudia/stargate/control-plane/runtime/src/test/resources
+[INFO] 
+[INFO] --- compiler:3.15.0:testCompile (default-testCompile) @ runtime ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 1 source file with javac [forked debug release 25] to target/test-classes
+[WARNING] Unable to autodetect 'javac' path, using 'javac' from the environment.
+[INFO] 
+[INFO] --- surefire:3.5.3:test (default-test) @ runtime ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO] 
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running app.zcat.stargate.runtime.StargateControlPlaneTest
+Sep 13, 2026 9:28:37 AM org.jboss.logmanager.JBossLoggerFinder getLogger
+ERROR: The LogManager accessed before the "java.util.logging.manager" system property was set to "org.jboss.logmanager.LogManager". Results may be unexpected.
+WARNING: A restricted method in java.lang.System has been called
+WARNING: java.lang.System::loadLibrary has been called by io.netty.util.internal.NativeLibraryUtil in an unnamed module (file:/home/claudia/.m2/repository/io/netty/netty-common/4.1.130.Final/netty-common-4.1.130.Final.jar)
+WARNING: Use --enable-native-access=ALL-UNNAMED to avoid a warning for callers in this module
+WARNING: Restricted methods will be blocked in a future release unless native access is enabled
+
+2026-09-13 09:28:38,576 WARN  [io.netty.bootstrap.Bootstrap] (main) Unknown channel option 'SO_KEEPALIVE' for channel '[id: 0x3fca71c9]' of type 'class io.netty.channel.epoll.EpollDomainSocketChannel'
+2026-09-13 09:28:38,589 WARN  [io.netty.bootstrap.ServerBootstrap] (epollEventLoopGroup-2-1) Unknown channel option 'SO_KEEPALIVE' for channel '[id: 0x63a76c69, L:/tmp/junit-8154859512373346991/run/dp.sock - R:]' of type 'class io.netty.channel.epoll.EpollDomainSocketChannel'
+Sep 13, 2026 9:28:44 AM app.zcat.stargate.auth.TokenLoader push
+WARN: ReloadTokens generation 1 rejected as stale — reconciling with the data plane's current generation 5 (§1.8)
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 12.14 s -- in app.zcat.stargate.runtime.StargateControlPlaneTest
+[INFO] 
+[INFO] Results:
+[INFO] 
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0
+[INFO] 
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for Stargate Control Plane (parent) 0.1.0-SNAPSHOT:
+[INFO] 
+[INFO] Stargate Control Plane (parent) .................... SUCCESS [  0.003 s]
+[INFO] Stargate Control Plane :: api ...................... SUCCESS [ 24.851 s]
+[INFO] Stargate Control Plane :: core ..................... SUCCESS [  0.078 s]
+[INFO] Stargate Control Plane :: persistence .............. SUCCESS [  0.313 s]
+[INFO] Stargate Control Plane :: ui (v1 healthcheck stub) . SUCCESS [  0.060 s]
+[INFO] Stargate Control Plane :: runtime .................. SUCCESS [ 19.448 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  45.224 s
+[INFO] Finished at: 2026-09-13T09:28:49Z
+[INFO] ------------------------------------------------------------------------
+[0m[0m
+Script done on 2026-09-13 09:28:50+00:00 [COMMAND_EXIT_CODE="0"]

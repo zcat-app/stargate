@@ -256,19 +256,32 @@ class StargateControlPlaneTest {
     private static final class RecordingDp implements AutoCloseable {
 
         final List<ControlOuterClass.ReloadTokensRequest> requests;
+        final List<Long> completedGenerations;
         private final io.grpc.Server server;
         private final EpollEventLoopGroup boss;
         private final EpollEventLoopGroup workers;
 
         private RecordingDp(io.grpc.Server server, EpollEventLoopGroup boss,
-                EpollEventLoopGroup workers, List<ControlOuterClass.ReloadTokensRequest> requests) {
+                EpollEventLoopGroup workers, List<ControlOuterClass.ReloadTokensRequest> requests,
+                List<Long> completedGenerations) {
             this.server = server;
             this.boss = boss;
             this.workers = workers;
             this.requests = requests;
+            this.completedGenerations = completedGenerations;
         }
 
         static RecordingDp start(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub) throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, false);
+        }
+
+        static RecordingDp startWithDelayedStaleThenOk(
+                Path dpSock, Path keysDir, Path dpPubPath, Path cpPub) throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, true);
+        }
+
+        private static RecordingDp start(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub,
+                boolean delayedStaleThenOk) throws Exception {
             // The DP stand-in's identity: a cert carrying the pinned dp keypair,
             // derived through the public file-based path (deriveCpIdentity's CN
             // is cosmetic — §3 pins the public key, not the name).
@@ -276,6 +289,8 @@ class StargateControlPlaneTest {
             var boss = new EpollEventLoopGroup(1);
             var workers = new EpollEventLoopGroup();
             List<ControlOuterClass.ReloadTokensRequest> captured = new CopyOnWriteArrayList<>();
+            List<Long> completed = new CopyOnWriteArrayList<>();
+            var attempts = new java.util.concurrent.atomic.AtomicInteger();
             io.grpc.Server server;
             try {
                 server = NettyServerBuilder
@@ -289,11 +304,27 @@ class StargateControlPlaneTest {
                             public void reloadTokens(ControlOuterClass.ReloadTokensRequest request,
                                     StreamObserver<ControlOuterClass.ReloadTokensResponse> response) {
                                 captured.add(request);
-                                response.onNext(ControlOuterClass.ReloadTokensResponse.newBuilder()
-                                        .setAppliedGeneration(request.getGeneration())
-                                        .setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_OK)
-                                        .build());
+                                int attempt = attempts.incrementAndGet();
+                                if (delayedStaleThenOk) {
+                                    try {
+                                        Thread.sleep(TimeUnit.SECONDS.toMillis(attempt == 1 ? 6 : 5));
+                                    } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
+                                        response.onError(e);
+                                        return;
+                                    }
+                                }
+                                var reply = ControlOuterClass.ReloadTokensResponse.newBuilder();
+                                if (delayedStaleThenOk && attempt == 1) {
+                                    reply.setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_STALE_GENERATION)
+                                            .setCurrentGeneration(5);
+                                } else {
+                                    reply.setAppliedGeneration(request.getGeneration())
+                                            .setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_OK);
+                                }
+                                response.onNext(reply.build());
                                 response.onCompleted();
+                                completed.add(request.getGeneration());
                             }
                         })
                         .intercept(new ServerInterceptor() {
@@ -311,7 +342,7 @@ class StargateControlPlaneTest {
                 workers.shutdownGracefully();
                 throw e;
             }
-            return new RecordingDp(server, boss, workers, captured);
+            return new RecordingDp(server, boss, workers, captured, completed);
         }
 
         @Override
@@ -565,6 +596,28 @@ class StargateControlPlaneTest {
                     "the pepper NEVER crosses the wire (§1.6)");
             assertFalse(new String(verifier, StandardCharsets.US_ASCII).contains(EXAMPLE_HEX),
                     "the plaintext never crosses the wire (§1.6)");
+        }
+    }
+
+    @Test
+    void staleReconciliationGetsFreshDeadlineForTheNextAttempt() throws Exception {
+        Path keys = keysDir();
+        pepperFile(TEST_PEPPER);
+        Path tokens = tokensFile("tokens:\n  - label: laptop\n    token: " + EXAMPLE_HEX + "\n");
+        Path dpSock = runDir().resolve("dp.sock");
+        RecordingState state = new RecordingState();
+        try (RecordingDp dp = RecordingDp.startWithDelayedStaleThenOk(
+                        dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
+                StargateControlPlane.BootHandle handle = StargateControlPlane.bootstrap(
+                        cfg(tokens, keys, dpSock), new RecordingAudit(), state, state)) {
+            assertNotNull(handle);
+            assertEquals(List.of(1L, 6L),
+                    dp.requests.stream().map(ControlOuterClass.ReloadTokensRequest::getGeneration).toList(),
+                    "the loader adopts current_generation + 1 for its bounded stale retry");
+            assertEquals(List.of(1L, 6L), dp.completedGenerations,
+                    "both delayed RPCs complete because the retry receives a fresh deadline");
+            assertEquals(List.of(1L, 6L), state.recorded,
+                    "the existing generation-recording policy is preserved");
         }
     }
 

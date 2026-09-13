@@ -445,6 +445,54 @@ class InterPlaneWireTest {
         }
     }
 
+    @Test
+    void reloadClientGetsFullDeadlineAfterIdlingPastConstructionDeadline() throws Exception {
+        Path keys = Files.createDirectories(tmp.resolve("keys-aged-reload"));
+        var cp = ed25519();
+        var dp = ed25519();
+        writePrivateKey(keys, "cp.priv", cp);
+        Path cpPub = writePublicKey(keys, "cp.pub", cp);
+        writePrivateKey(keys, "dp.priv", dp);
+        writePublicKey(keys, "dp.pub", dp);
+
+        Path dpSock = tmp.resolve("ipc-aged-reload").resolve("dp.sock");
+        Files.createDirectories(dpSock.getParent());
+        AtomicReference<Long> receivedDeadlineMillis = new AtomicReference<>();
+        try (Stack stack = new Stack()) {
+            stack.add(MockServer.start(NettyServerBuilder
+                .forAddress((java.net.SocketAddress) new DomainSocketAddress(dpSock.toString()))
+                .sslContext(CpTls.serverContext(dpIdentity(dp.getPrivate(), dp.getPublic()), cpPub))
+                .addService(new ControlGrpc.ControlImplBase() {
+                    @Override
+                    public void reloadTokens(ControlOuterClass.ReloadTokensRequest request,
+                            StreamObserver<ControlOuterClass.ReloadTokensResponse> response) {
+                        io.grpc.Deadline deadline = io.grpc.Context.current().getDeadline();
+                        receivedDeadlineMillis.set(deadline == null
+                                ? -1L
+                                : deadline.timeRemaining(java.util.concurrent.TimeUnit.MILLISECONDS));
+                        response.onNext(ControlOuterClass.ReloadTokensResponse.newBuilder()
+                                .setAppliedGeneration(request.getGeneration())
+                                .setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_OK)
+                                .build());
+                        response.onCompleted();
+                    }
+                })));
+            try (ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+                // T137 falsifier: the production deadline is ten seconds. An
+                // absolute deadline retained on the stub expires during this
+                // idle, before the reachable authenticated peer is invoked.
+                Thread.sleep(SECONDS.toMillis(11));
+                var response = client.reload(1, List.of());
+                assertEquals(ControlOuterClass.ApplyStatus.APPLY_STATUS_OK, response.getStatus(),
+                        "the first RPC gets a full deadline measured from invocation");
+                Long remaining = receivedDeadlineMillis.get();
+                assertNotNull(remaining, "the reachable DP fixture receives the call deadline");
+                assertTrue(remaining >= SECONDS.toMillis(8),
+                        "the first call retains nearly the full ten-second attempt window: " + remaining);
+            }
+        }
+    }
+
     // --- §4: wrong-key peers rejected at the handshake ------------------------------
 
     @Test

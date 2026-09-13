@@ -57,8 +57,7 @@ public final class ReloadTokensClient implements AutoCloseable {
     private ReloadTokensClient(ManagedChannel channel, EventLoopGroup eventLoopGroup) {
         this.channel = channel;
         this.eventLoopGroup = eventLoopGroup;
-        this.stub = ControlGrpc.newBlockingStub(channel)
-                .withDeadlineAfter(DEADLINE_SECONDS, TimeUnit.SECONDS);
+        this.stub = ControlGrpc.newBlockingStub(channel);
     }
 
     /**
@@ -112,7 +111,8 @@ public final class ReloadTokensClient implements AutoCloseable {
                 .setGeneration(generation)
                 .addAllTokens(tokens)
                 .build();
-        return stub.reloadTokens(request);
+        return stub.withDeadlineAfter(DEADLINE_SECONDS, TimeUnit.SECONDS)
+                .reloadTokens(request);
     }
 
     @Override

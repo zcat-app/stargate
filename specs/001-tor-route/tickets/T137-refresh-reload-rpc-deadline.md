@@ -1,9 +1,9 @@
 ---
 id: "T137"
 title: "Create a fresh deadline for each token-reload RPC"
-status: "pending"
+status: in-progress
 created: "2026-09-12"
-last_updated: "2026-09-12"
+last_updated: 2026-09-13
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
@@ -34,9 +34,22 @@ M4: ReloadTokensClient retains a stub whose absolute deadline begins at construc
 
 ## Analysis
 
-- Must hold: the ticket acceptance and cited constitutional properties.
-- Gated: existing baseline verify is green; it did not catch the audited issue.
-- Residue: the specific missing property in Context; the acceptance probes below must discriminate it. Investigation-only tickets must resolve the design before authorizing production changes.
+- **Must hold** — every `ReloadTokensClient.reload` invocation receives an
+  independent ten-second deadline measured from that invocation. Constructing
+  or idling the retained client must not consume the first RPC's budget, and a
+  delayed stale-generation response must not consume the reconciled attempt's
+  budget. Calls remain bounded; the loader's maximum-attempt, generation
+  adoption and transport-error policies do not change. Mutual TLS, version
+  metadata and opaque verifier handling remain unchanged.
+- **Gated** — a real-UDS, mutually authenticated production-client regression
+  idles beyond ten seconds before its first call. A production loader/channel
+  regression scripts a delayed stale reply followed by a delayed successful
+  reply and observes both generations complete. Java contract tests and
+  `scripts/verify.sh` cover the surrounding client and reconciliation paths.
+- **Residue** — the regressions use deliberate wall-clock margins, so extreme
+  scheduler stalls remain outside deterministic proof. Independent redteam
+  reviews whether any retained or reconciled call can still inherit an aged
+  deadline and whether the existing bounded-failure policy was preserved.
 
 ## Acceptance
 
@@ -57,3 +70,9 @@ regression before the fix; tests_first is empty because the named regression
 is authored within this ticket rather than a separate test ticket. For design
 work, no production implementation is authorized until its stated decision
 boundary is satisfied. Preserve approved historical commits.
+
+Round-2 evidence note: the original red Maven output was overwritten by later
+green Surefire reports. `reviews/T137/README.md` preserves an honestly labelled
+retrospective replay of the unchanged final regressions against the identified
+base production snapshot and repaired candidate; it does not claim recovery of
+the missing original transcript.
