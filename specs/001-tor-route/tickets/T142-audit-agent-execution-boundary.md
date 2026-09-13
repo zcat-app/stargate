@@ -9,7 +9,7 @@ phase: "Foundation audit remediation"
 story: "-"
 blocked_by: ["T096", "T139", "T156"]
 parallel: false
-files_budget: 8
+files_budget: 12
 privacy_critical: true
 complexity: "high"
 risk: "high"
@@ -34,9 +34,35 @@ Existing finding 20260727-010: the OpenCode adapter advertises denies that do no
 
 ## Analysis
 
-- Must hold: the ticket acceptance and cited constitutional properties.
-- Gated: existing baseline verify is green; it did not catch the audited issue.
-- Residue: the specific missing property in Context; the acceptance probes below must discriminate it. Investigation-only tickets must resolve the design before authorizing production changes.
+- **Must hold:**
+  - Each reviewer receives its own immutable candidate copy, mount, process/PID namespace,
+    temporary directory, home, network namespace and verdict channel; no reviewer can read a
+    peer's mutable state or the live checkout (Principle VIII).
+  - The candidate source is kernel-enforced read-only. The only writable persistent mount is that
+    reviewer's private verdict directory; prompt instructions and OpenCode permission maps are
+    defense in depth, not the isolation boundary.
+  - Code review and privacy redteam each run two fresh GLM 5.3 contexts and one fresh Astra
+    context in parallel. Astra effort is `medium` for correctness and `xhigh` for redteam. Every
+    expected verdict is bound to the same driver snapshot and all approvals are required.
+  - The launcher fails closed before model execution when Docker, a configured CLI, credentials,
+    candidate sealing or containment setup is unavailable. It never falls back to the live tree.
+  - Review records identify the actual reviewer id, tool, model, effort, candidate snapshot and
+    capability limits; a role label alone is not evidence of independence (Principle VIII).
+- **Gated:**
+  - `tests/contract/workflow/review_task_test.sh` runs synthetic shell and Python prohibited-action
+    probes in the real container boundary, compares namespace identities, and verifies private
+    verdict import plus all-or-nothing failure behavior without real credentials.
+  - `tests/contract/workflow/run_task_test.sh` requires every configured verdict, rejects stale or
+    misidentified reviewers, and prevents a single canonical approval from advancing the ticket.
+  - `scripts/verify.sh` discovers both workflow regressions; shell-quality and license gates cover
+    the new launcher and configuration surface.
+- **Residue:**
+  - Provider access necessarily gives each CLI outbound network access and its own copy of the
+    provider credential. The same-user CLI can potentially inspect its own credential; this
+    ticket isolates that credential from peers and the host but does not claim a credential broker.
+  - Separate reviewers share the host kernel, immutable host toolchain bytes and semantically
+    identical candidate bytes. Container namespaces and dropped capabilities isolate mutable
+    resources; this is process isolation, not separate hardware or provider-account independence.
 
 ## Acceptance
 
@@ -44,6 +70,16 @@ Existing finding 20260727-010: the OpenCode adapter advertises denies that do no
 2. Define a reviewable containment policy or explicitly remove unsupported containment claims; do not call an arbitrary nonempty deny map a sandbox.
 3. Add an effective-configuration regression and synthetic prohibited-action probes that include interpreter/shell alternatives; never use real credentials.
 4. Require a concrete reviewed policy before changing permissions; preserve reviewer no-delegation/fail-fast rules and run scripts/verify.sh.
+5. Replace conversational review dispatch with a fail-closed launcher that runs, in parallel and
+   in separate Docker containers, two `zai-coding-plan/glm-5.3` reviewers and one
+   `gpt-6-astra` reviewer for both code review and redteam. Pin Astra effort to `medium` for code
+   review and `xhigh` for redteam in one checked-in review matrix.
+6. Give every reviewer a separately materialized candidate, read-only source mount, private home,
+   private temporary/output paths and private network/PID/mount namespace. Import verdict bytes
+   only after all processes exit successfully and the live candidate still matches the handoff.
+7. Make `run-task.sh` require and validate all three reviewer identities and verdicts before the
+   next phase or commit; stale, missing, duplicate, malformed or peer-mismatched results fail
+   closed and are never silently reduced to the legacy single-verdict gate.
 
 ### Required planning refinement
 
