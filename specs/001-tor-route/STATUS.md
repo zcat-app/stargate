@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-12
+**Last updated:** 2026-09-13
 
 ---
 
@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 58 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 131 |
+| done | 132 |
 | deferred | 3 |
 | **total** | **193** |
 
@@ -52,9 +52,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T161 | Resolve Tor upgrade live validation failures before promotio | in-progress | ✓ | Urgent security update validation |
+_(nothing in flight)_
 
 ---
 
@@ -70,7 +68,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_131 ticket(s) done._
+_132 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -203,3 +201,4 @@ _131 ticket(s) done._
 - T139 — Prevent required verification coverage from disappearing
 - T156 — Strengthen constitution and reconcile implementation prerequisites
 - T160 — Prepare Tor security upgrade with enforced package content pins
+- T161 — Resolve Tor upgrade live validation failures before promotion

@@ -1,9 +1,9 @@
 ---
 id: "T161"
 title: "Resolve Tor upgrade live validation failures before promotion"
-status: in-progress
+status: done
 created: "2026-09-12"
-last_updated: 2026-09-12
+last_updated: 2026-09-13
 source: "specs/001-tor-route/tickets/T160-upgrade-tor-security-release.md"
 phase: "Urgent security update validation"
 story: "-"
@@ -18,7 +18,7 @@ spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/contracts/to
 decision_refs: []
 remediates: "T160"
 tests_first: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-13, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
