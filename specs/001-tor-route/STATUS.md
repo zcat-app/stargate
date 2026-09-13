@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 55 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 134 |
+| done | 135 |
 | deferred | 3 |
 | **total** | **193** |
 
@@ -45,15 +45,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T151 | Name the actual WebRTC remediation preference | Foundation audit remediation | ✓ |  |
 | T152 | Replace detailed operational journals with hourly aggregates | Foundation audit remediation | ✓ |  |
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
+| T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T136 | Prevent cross-site first-party isolation collisions | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -69,7 +68,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_134 ticket(s) done._
+_135 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -200,6 +199,7 @@ _134 ticket(s) done._
 - T131 — Stack smoke test: full-path bring-up acceptance (RED until T130)
 - T133 — Require independent redteam before privacy-critical ticket commits
 - T135 — Reject resumed TLS peers after public-key rotation
+- T136 — Prevent cross-site first-party isolation collisions
 - T137 — Create a fresh deadline for each token-reload RPC
 - T139 — Prevent required verification coverage from disappearing
 - T156 — Strengthen constitution and reconcile implementation prerequisites
