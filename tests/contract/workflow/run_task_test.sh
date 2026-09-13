@@ -25,9 +25,11 @@ REPO_ROOT="$(git rev-parse --show-toplevel)"
 RUN_TASK_SRC="$REPO_ROOT/scripts/run-task.sh"
 LINT_SRC="$REPO_ROOT/scripts/lint-ticket.py"
 DERIVE_DEPS_SRC="$REPO_ROOT/scripts/derive-deps.sh"
+REVIEW_MATRIX_SRC="$REPO_ROOT/scripts/review-matrix.json"
 [ -f "$RUN_TASK_SRC" ]     || { echo "FAIL: $RUN_TASK_SRC missing" >&2; exit 1; }
 [ -f "$LINT_SRC" ]        || { echo "FAIL: $LINT_SRC missing" >&2;     exit 1; }
 [ -f "$DERIVE_DEPS_SRC" ] || { echo "FAIL: $DERIVE_DEPS_SRC missing" >&2; exit 1; }
+[ -f "$REVIEW_MATRIX_SRC" ] || { echo "FAIL: $REVIEW_MATRIX_SRC missing" >&2; exit 1; }
 
 errs=()
 bail() { errs+=("$*"); }
@@ -55,6 +57,7 @@ setup_sandbox() {
 
   cp "$RUN_TASK_SRC" scripts/run-task.sh
   cp "$LINT_SRC"    scripts/lint-ticket.py
+  cp "$REVIEW_MATRIX_SRC" scripts/review-matrix.json
   chmod +x scripts/run-task.sh
 
   # verify.sh stub: writes target/verify.log, exits 0 (green). Behaviour under
@@ -145,11 +148,29 @@ fm_field() { grep -m1 "^$2:" "$1" | sed -E "s/^$2:[[:space:]]*//" | sed -E "s/[[
 run_task() { rt_out="$(bash scripts/run-task.sh "$@" 2>&1)"; rt_rc=$?; }
 
 # T139: fixture reviewers return the identity of the handoff they inspected.
-code_verdict() {
+review_manifest() {
+  local id="$1" snapshot="$2" round="$3"; shift 3
+  local manifest="target/runs/$id.review-set" file
+  {
+    printf 'SNAPSHOT: %s\nROUND: %s\nGATE: review\n' "$snapshot" "$round"
+    for file in "$@"; do sha256sum "target/runs/$file" | sed 's#  target/runs/#  #'; done
+  } > "$manifest"
+}
+
+gate_verdict() {
   local id="$1" kind="$2" details="${3:-}"
-  printf 'VERDICT: %s\nSNAPSHOT: %s\nROUND: %s\n%s\n' \
-    "$kind" "$(cat "target/runs/$id.code-snapshot")" \
-    "$(cat "target/runs/$id.round")" "$details" > "target/runs/$id.verdict"
+  local snapshot round
+  if [ ! -s "target/runs/$id.review-snapshot" ]; then
+    run_task "$id" >/dev/null
+  fi
+  snapshot="$(cat "target/runs/$id.review-snapshot")"
+  round="$(cat "target/runs/$id.round")"
+  printf 'VERDICT: %s\nREVIEWER: glm\nTOOL: opencode\nMODEL: zai-coding-plan/glm-5.3\nEFFORT: xhigh\nSNAPSHOT: %s\nROUND: %s\nSUMMARY: fixture gate\nFINDINGS: fixture\n%s\n' \
+    "$kind" "$snapshot" "$round" "$details" > "target/runs/$id.review-glm.verdict"
+  printf 'VERDICT: %s\nREVIEWER: astra\nTOOL: codex\nMODEL: gpt-6-astra\nEFFORT: xhigh\nSNAPSHOT: %s\nROUND: %s\nSUMMARY: fixture gate\nFINDINGS: fixture\n%s\n' \
+    "$kind" "$snapshot" "$round" "$details" > "target/runs/$id.review-astra.verdict"
+  review_manifest "$id" "$snapshot" "$round" \
+    "$id.review-glm.verdict" "$id.review-astra.verdict"
 }
 
 # ===========================================================================
@@ -182,8 +203,33 @@ run_task T321   # no verdict file -> emits REVIEW handoff
 assert '[ "$rt_rc" -eq 0 ]' "S1b: REVIEW handoff exits 0 (got $rt_rc)"
 echo "$rt_out" | grep -qi "MECHANICAL REPORT" || bail "S1b: handoff should contain the mechanical report"
 echo "$rt_out" | grep -q "files touched: 2 of files_budget=" || bail "S1b: files-vs-budget line missing or miscounted"
-echo "$rt_out" | grep -qi "writes its own verdict\|WRITES ITS OWN VERDICT" || bail "S1b: handoff should say the reviewer writes its own verdict"
+echo "$rt_out" | grep -qi "private verdict\|own verdict" || bail "S1b: handoff should say each reviewer writes its own verdict"
 echo "$rt_out" | grep -q "out-of-scope" || bail "S1b: out-of-scope block missing"
+snapshot="$(cat target/runs/T321.review-snapshot)"
+printf 'VERDICT: APPROVE\nSNAPSHOT: %s\nROUND: 1\n' "$snapshot" > target/runs/T321.review-glm.verdict
+before="$(git rev-parse HEAD)"
+run_task T321
+assert '[ "$rt_rc" -ne 0 ]' "S1b: a partial verdict set without the manifest cannot advance"
+assert '[ "$(git rev-parse HEAD)" = "$before" ]' "S1b: incomplete review set cannot commit"
+
+# A complete-looking set is still rejected when one reviewer identity is
+# wrong, even if the canonical reviewer approved.
+setup_sandbox s1c
+write_ticket T322 "review identity binding" false in-review >/dev/null
+commit_all "add T322 ticket"
+git checkout -q -b 001-testfeat main
+printf 'candidate\n' > candidate.txt
+git add candidate.txt
+mkdir -p target/runs
+run_task T322
+gate_verdict T322 APPROVE
+sed -i 's/^REVIEWER: astra$/REVIEWER: glm/' target/runs/T322.review-astra.verdict
+review_manifest T322 "$(cat target/runs/T322.review-snapshot)" 1 \
+  T322.review-glm.verdict T322.review-astra.verdict
+before="$(git rev-parse HEAD)"
+run_task T322
+assert '[ "$rt_rc" -ne 0 ]' "S1c: peer-mismatched review identity is rejected"
+assert '[ "$(git rev-parse HEAD)" = "$before" ]' "S1c: mismatched review cannot commit"
 
 # ===========================================================================
 # Scenario 2: pending START — ambiguous ticket match refused
@@ -212,8 +258,8 @@ echo "$rt_out" | grep -qi "dirty" || bail "S3: stderr should mention dirty"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T302-fixture.md status)" = pending ]' "S3: status stays pending"
 
 # ===========================================================================
-# Scenario 4: APPROVE — focused commit with Reviewed-by trailer
-# (non-privacy ticket: redteam gate skipped)
+# Scenario 4: APPROVE — focused commit with Reviewed-by trailers
+# (the single gate reviews every ticket the same way; no second phase)
 # ===========================================================================
 setup_sandbox s4
 write_ticket T303 "approve commits on feature branch" false in-review >/dev/null
@@ -223,16 +269,42 @@ printf 'real impl\n' > src.txt
 git add src.txt specs/001-testfeat/tickets/T303-fixture.md
 mkdir -p target/runs
 run_task T303  # T139: bind approval to the emitted review candidate.
-code_verdict T303 APPROVE
+gate_verdict T303 APPROVE
 PRE_COMMIT="$(git rev-parse HEAD)"
 run_task T303
 assert '[ "$rt_rc" -eq 0 ]' "S4: APPROVE exits 0 (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T303-fixture.md status)" = done ]' "S4: status -> done"
 assert '[ "$(git rev-parse HEAD)" != "$PRE_COMMIT" ]' "S4: a new commit was created"
-assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-codereview (VERDICT: APPROVE"' \
-  "S4: tip commit carries the Reviewed-by trailer"
+assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3; effort xhigh; VERDICT: APPROVE"' \
+  "S4: tip commit carries the GLM Reviewed-by trailer"
+assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort xhigh; VERDICT: APPROVE"' \
+  "S4: tip commit carries the Astra Reviewed-by trailer"
 assert 'git log -1 --format=%s HEAD | grep -qE "^Implement 001-testfeat: T303 "' \
   "S4: subject is 'Implement <feature>: T303 ...'"
+
+# Mixed APPROVE/AWF sets preserve each reviewer's actual decision in commit
+# evidence rather than stamping the aggregate result onto every identity.
+setup_sandbox s4b
+write_ticket T323 "individual review trailers" false in-review >/dev/null
+commit_all "add T323 ticket"
+git checkout -q -b 001-testfeat main
+printf 'real impl\n' > src.txt
+git add src.txt
+mkdir -p target/runs
+run_task T323
+gate_verdict T323 APPROVE
+sed -i 's/^VERDICT: APPROVE$/VERDICT: APPROVE-WITH-FIXES/' target/runs/T323.review-astra.verdict
+review_manifest T323 "$(cat target/runs/T323.review-snapshot)" 1 \
+  T323.review-glm.verdict T323.review-astra.verdict
+run_task T323
+assert '[ "$rt_rc" -eq 0 ]' "S4b: mixed set emits APPLY-FIXES"
+touch target/runs/T323.awf-applied
+run_task T323
+assert '[ "$rt_rc" -eq 0 ]' "S4b: mixed set commits after sentinel"
+assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3; effort xhigh; VERDICT: APPROVE;"' \
+  "S4b: GLM trailer preserves its APPROVE"
+assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort xhigh; VERDICT: APPROVE-WITH-FIXES;"' \
+  "S4b: Astra trailer preserves its APPROVE-WITH-FIXES"
 
 # ===========================================================================
 # Scenario 5: APPROVE — refuses done with nothing staged (commit invariant)
@@ -243,7 +315,7 @@ commit_all "add T304 ticket"
 git checkout -q -b 001-testfeat main
 mkdir -p target/runs
 run_task T304
-code_verdict T304 APPROVE
+gate_verdict T304 APPROVE
 run_task T304
 assert '[ "$rt_rc" -eq 0 ]' "S5: no-staged-paths emits COMMIT handoff, exits 0 (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T304-fixture.md status)" = in-review ]' \
@@ -252,63 +324,67 @@ echo "$rt_out" | grep -qi "COMMIT" || bail "S5: handoff should mention COMMIT"
 assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S5: no commit created on feature branch"
 
 # ===========================================================================
-# Scenario 6/7 (T133): independent redteam gates privacy-critical commits.
-# Each fixture starts with codereview approval and staged implementation.
+# Scenario 6/7 (T142): the single gate reviews privacy-critical tickets in
+# the same ONE pass as ordinary tickets; malformed, partial, stale or
+# tampered inputs never commit.
 privacy_fixture() {
   setup_sandbox "$1"
-  write_ticket T305 "independent review" true in-review >/dev/null
+  write_ticket T305 "single gate" true in-review >/dev/null
   commit_all "add ticket"
   git checkout -q -b 001-testfeat main
   printf 'first\n' > p.txt
   git add p.txt
   mkdir -p target/runs
   run_task T305
-  code_verdict T305 APPROVE
-}
-redteam_verdict() {
-  local snapshot
-  snapshot="$(cat target/runs/T305.redteam-snapshot 2>/dev/null || true)"
-  printf 'VERDICT: %s\nSNAPSHOT: %s\nROUND: %s\nSUMMARY: Fixture review\nFINDINGS: []\n' "$1" "$snapshot" "${2:-1}" > target/runs/T305.redteam.verdict
 }
 bad_index=0
 for bad in 'APPROVE-BOGUS' $'APPROVE\nVERDICT: REWORK'; do
   bad_index=$((bad_index + 1))
-  privacy_fixture "s6-invalid-codereview-$bad_index"
-  code_verdict T305 "$bad"
+  privacy_fixture "s6-invalid-verdict-$bad_index"
+  gate_verdict T305 "$bad"
   run_task T305
-  assert '[ "$rt_rc" -ne 0 ]' "S6: malformed codereview cannot bypass redteam"
-  assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S6: malformed codereview cannot commit"
+  assert '[ "$rt_rc" -ne 0 ]' "S6: malformed gate verdict cannot advance"
+  assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S6: malformed gate verdict cannot commit"
 done
 privacy_fixture s6
 run_task T305
 assert '[ "$rt_rc" -eq 0 ]' "S6: emits handoff"
-assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = in-review ]' "S6: waits for independent review"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = in-review ]' "S6: waits for the gate"
 assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S6: no premature commit"
-echo "$rt_out" | grep -q '(REDTEAM,' || bail "S6: missing REDTEAM handoff"
-redteam_verdict APPROVE
+echo "$rt_out" | grep -q '(REVIEW,' || bail "S6: missing REVIEW handoff"
+echo "$rt_out" | grep -qi 'review-task.sh T305$' || bail "S6: handoff must name the single-gate launcher"
+gate_verdict T305 APPROVE
 run_task T305
-assert '[ "$rt_rc" -eq 0 ]' "S6: two approvals commit"
-assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = done ]' "S6: done after redteam"
-assert 'git log -1 --format=%B | grep -q "Reviewed-by: stargate-redteam"' "S6: redteam trailer"
+assert '[ "$rt_rc" -eq 0 ]' "S6: gate approval commits a privacy-critical ticket"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = done ]' "S6: done after one gate pass"
+assert 'git log -1 --format=%B | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3; effort xhigh; VERDICT: APPROVE"' "S6: GLM trailer"
+assert 'git log -1 --format=%B | grep -q "Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort xhigh; VERDICT: APPROVE"' "S6: Astra trailer"
 
 privacy_fixture s7
-printf 'VERDICT: CLEAN\n' > target/runs/T305.redteam
+printf 'VERDICT: CLEAN\n' > target/runs/T305.review-glm.verdict
 run_task T305
 assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S7: legacy output cannot approve"
 for bad in 'VERDICT: APPROVE-BOGUS' $'VERDICT: APPROVE\nVERDICT: REWORK' 'VERDICT: APPROVE'; do
-  printf '%s\nSNAPSHOT: wrong\nROUND: 1\n' "$bad" > target/runs/T305.redteam.verdict
+  run_task T305 >/dev/null
+  gate_verdict T305 APPROVE
+  printf '%s\nSNAPSHOT: wrong\nROUND: 1\n' "$bad" > target/runs/T305.review-glm.verdict
+  review_manifest T305 "$(cat target/runs/T305.review-snapshot)" 1 \
+    T305.review-glm.verdict T305.review-astra.verdict
   run_task T305
   assert '[ "$rt_rc" -ne 0 ]' "S7: invalid verdict rejected"
   assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S7: invalid output cannot commit"
 done
 for field in SUMMARY FINDINGS; do
   for malformed in missing duplicate; do
-    redteam_verdict APPROVE
+    run_task T305 >/dev/null
+    gate_verdict T305 APPROVE
     if [ "$malformed" = missing ]; then
-      sed -i "/^$field:/d" target/runs/T305.redteam.verdict
+      sed -i "/^$field:/d" target/runs/T305.review-glm.verdict
     else
-      printf '%s: duplicate\n' "$field" >> target/runs/T305.redteam.verdict
+      printf '%s: duplicate\n' "$field" >> target/runs/T305.review-glm.verdict
     fi
+    review_manifest T305 "$(cat target/runs/T305.review-snapshot)" 1 \
+      T305.review-glm.verdict T305.review-astra.verdict
     before="$(git rev-parse HEAD)"
     run_task T305
     assert '[ "$rt_rc" -ne 0 ]' "S7: $malformed $field rejected"
@@ -316,28 +392,28 @@ for field in SUMMARY FINDINGS; do
     assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = in-review ]' "S7: $malformed $field retains review state"
   done
 done
-redteam_verdict REWORK
+run_task T305 >/dev/null
+gate_verdict T305 REWORK
 run_task T305
-assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = in-progress ]' "S7: redteam rework"
-assert '[ "$(cat target/runs/T305.round)" = 2 ]' "S7: shared round increment"
-assert '[ ! -e target/runs/T305.verdict ] && [ ! -e target/runs/T305.redteam.verdict ]' "S7: both approvals removed"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = in-progress ]' "S7: gate rework"
+assert '[ "$(cat target/runs/T305.round)" = 2 ]' "S7: round increment"
+assert '[ ! -e target/runs/T305.review-glm.verdict ] && [ ! -e target/runs/T305.review-astra.verdict ]' "S7: both approvals removed"
 
 for mutation in worktree index head verdict privacy verify; do
   privacy_fixture "s7-$mutation"
   if [ "$mutation" = verify ]; then
+    # The booby-trapped stub is part of the reviewed candidate; it fires only
+    # when target/mutate appears, changing p.txt during the APPROVE verify.
     sed -i '/^exit 0$/i [ ! -f target/mutate ] || echo changed >> p.txt' scripts/verify.sh
     git add scripts/verify.sh
-    rm target/runs/T305.verdict
-    run_task T305
-    code_verdict T305 APPROVE
   fi
   run_task T305
-  redteam_verdict APPROVE
+  gate_verdict T305 APPROVE
   case "$mutation" in
     worktree) echo changed >> p.txt ;;
     index) printf 'second\n' > p.txt; git add p.txt; printf 'first\n' > p.txt ;;
     head) git commit -q -m 'intervening commit' ;;
-    verdict) echo 'changed review' >> target/runs/T305.verdict ;;
+    verdict) echo 'changed review' >> target/runs/T305.review-glm.verdict ;;
     privacy) sed -i 's/privacy_critical: true/privacy_critical: false/' specs/001-testfeat/tickets/T305-fixture.md ;;
     verify) touch target/mutate ;;
   esac
@@ -345,19 +421,18 @@ for mutation in worktree index head verdict privacy verify; do
   run_task T305
   assert '[ "$rt_rc" -ne 0 ]' "S7-$mutation: changed snapshot rejected"
   assert '[ "$(git rev-parse HEAD)" = "$before" ]' "S7-$mutation: no commit"
-  assert '[ ! -e target/runs/T305.verdict ] && [ ! -e target/runs/T305.redteam.verdict ]' "S7-$mutation: fresh reviews required"
+  assert '[ ! -e target/runs/T305.review-glm.verdict ] && [ ! -e target/runs/T305.review-astra.verdict ]' "S7-$mutation: fresh review required"
 done
 
 for verdict in REWORK ESCALATE; do
   privacy_fixture "s7-cap-$verdict"
   echo 2 > target/runs/T305.round
-  rm target/runs/T305.verdict
+  rm -f target/runs/T305.review-set target/runs/T305.review-glm.verdict \
+    target/runs/T305.review-astra.verdict target/runs/T305.review-snapshot
   run_task T305
-  code_verdict T305 APPROVE
+  gate_verdict T305 "$verdict"
   run_task T305
-  redteam_verdict "$verdict" 2
-  run_task T305
-  assert '[ "$rt_rc" -ne 0 ]' "S7-cap: redteam $verdict stops"
+  assert '[ "$rt_rc" -ne 0 ]' "S7-cap: gate $verdict stops"
   assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = escalated ]' "S7-cap: escalated"
   assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S7-cap: no commit"
 done
@@ -417,7 +492,7 @@ git checkout -q -b 001-testfeat main
 mkdir -p target/runs
 echo 2 > target/runs/T309.round                      # already at cap
 run_task T309
-code_verdict T309 REWORK 'fix the thing'
+gate_verdict T309 REWORK 'fix the thing'
 run_task T309
 assert '[ "$rt_rc" -ne 0 ]' "S10: REWORK at cap exits non-zero (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T309-fixture.md status)" = escalated ]' \
@@ -430,7 +505,7 @@ git checkout -q -b 001-testfeat main
 mkdir -p target/runs
 echo 1 > target/runs/T319.round
 run_task T319
-code_verdict T319 REWORK 'fix it'
+gate_verdict T319 REWORK 'fix it'
 run_task T319
 assert '[ "$rt_rc" -eq 0 ]' "S10b: REWORK r1 exits 0 (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T319-fixture.md status)" = in-progress ]' \
@@ -451,7 +526,7 @@ printf 'real impl\n' > src.txt
 git add src.txt specs/001-testfeat/tickets/T320-fixture.md
 mkdir -p target/runs
 run_task T320
-code_verdict T320 APPROVE-WITH-FIXES $'FIX ITEMS:\n  - fix a comment'
+gate_verdict T320 APPROVE-WITH-FIXES $'FIX ITEMS:\n  - fix a comment'
 run_task T320   # step 1: no sentinel yet
 assert '[ "$rt_rc" -eq 0 ]' "S10c-1: first sight exits 0 (got $rt_rc)"
 echo "$rt_out" | grep -qi "APPLY-FIXES" || bail "S10c-1: handoff should mention APPLY-FIXES"
@@ -463,7 +538,7 @@ run_task T320   # step 2: sentinel present -> commit path
 assert '[ "$rt_rc" -eq 0 ]' "S10c-2: post-sentinel exits 0 (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T320-fixture.md status)" = done ]' \
   "S10c-2: status -> done"
-assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-codereview (VERDICT: APPROVE-WITH-FIXES"' \
+assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3; effort xhigh; VERDICT: APPROVE-WITH-FIXES; round"' \
   "S10c-2: trailer carries the AWF verdict kind"
 assert '[ ! -e target/runs/T320.awf-applied ]' "S10c-2: awf sentinel cleaned up at done"
 
@@ -515,11 +590,84 @@ assert '! grep -Eq "re.compile.*Pairs with" "$DERIVE_DEPS_SRC"' \
 assert 'grep -q "Pairs with" "$DERIVE_DEPS_SRC" && grep -q "REMOVED" "$DERIVE_DEPS_SRC"' \
   "S12: derive-deps documents 'Pairs with' removal"
 
+# ===========================================================================
+# Scenario 11 (T142 round 2): a concurrent review-set replacement during the
+# driver's final verification must not be outrun by the cached APPROVE —
+# the commit decision consumes the set that exists AFTER verification.
+setup_sandbox s11race
+write_ticket T324 "replacement race" false in-review >/dev/null
+commit_all "add T324 ticket"
+git checkout -q -b 001-testfeat main
+printf 'impl\n' > r.txt
+git add r.txt
+mkdir -p target/runs
+run_task T324
+gate_verdict T324 APPROVE
+# Booby-trapped verify: holds while target/hold exists until target/release.
+cat > scripts/verify.sh <<'VSTUB'
+#!/bin/bash
+mkdir -p target
+echo "RESULT: GREEN" > target/verify.log
+if [ -f target/hold ]; then
+  : > target/holding
+  while [ ! -e target/release ]; do sleep 0.05; done
+fi
+exit 0
+VSTUB
+chmod +x scripts/verify.sh
+git add scripts/verify.sh
+run_task T324                 # candidate changed -> fresh handoff
+gate_verdict T324 APPROVE     # approved set for the trapped candidate
+touch target/hold
+bash scripts/run-task.sh T324 > target/race.log 2>&1 &
+race_pid=$!
+for i in $(seq 1 200); do
+  [ -f target/holding ] && break
+  sleep 0.05
+done
+assert '[ -f target/holding ]' "S11: driver reached final verification"
+# While the driver is blocked in verify, a concurrent launcher invocation
+# retires the approved set and imports a REWORK replacement for the SAME
+# candidate (review-task.sh does exactly this before launching reviewers).
+rm -f target/runs/T324.review-set target/runs/T324.review-glm.verdict target/runs/T324.review-astra.verdict
+gate_verdict T324 REWORK
+touch target/release
+wait "$race_pid"; race_rc=$?
+assert '[ "$race_rc" -ne 0 ]' "S11: replacement during verification must refuse commit (got $race_rc)"
+assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S11: no commit on a replaced approval"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T324-fixture.md status)" != done ]' "S11: ticket not done on a replaced approval"
+assert '[ ! -e target/runs/T324.review-set ]' "S11: refused advance clears the replaced set"
+
+# ===========================================================================
+# Scenario 12 (T142 round 3): approval consumption is serialized with the
+# launcher through the gate lock — while a (re)launch holds it, the driver
+# must refuse to commit; once released, the same approval is consumable.
+setup_sandbox s12
+write_ticket T325 "approval lock" false in-review >/dev/null
+commit_all "add T325 ticket"
+git checkout -q -b 001-testfeat main
+printf 'impl\n' > l.txt
+git add l.txt
+mkdir -p target/runs
+run_task T325
+gate_verdict T325 APPROVE
+mkdir target/runs/T325.review.lock   # a concurrent review-task.sh is mid-flight
+before="$(git rev-parse HEAD)"
+run_task T325
+assert '[ "$rt_rc" -ne 0 ]' "S12: driver must not consume approval while a (re)launch holds the gate lock"
+assert '[ "$(git rev-parse HEAD)" = "$before" ]' "S12: no commit under a held gate lock"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T325-fixture.md status)" = in-review ]' "S12: refusal retains review state for retry"
+assert '[ -s target/runs/T325.review-set ]' "S12: refusal preserves the approved set"
+rmdir target/runs/T325.review.lock
+run_task T325
+assert '[ "$rt_rc" -eq 0 ]' "S12: approval is consumable after the launch finishes (got $rt_rc)"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T325-fixture.md status)" = done ]' "S12: done after lock release"
+
 # --- report ----------------------------------------------------------------
 if [ "${#errs[@]}" -gt 0 ]; then
   echo "FAIL: T096 run-task harness (${#errs[@]} finding(s)):" >&2
   for e in "${errs[@]}"; do echo "  - $e" >&2; done
   exit 1
 fi
-echo "OK: T096 workflow-driver regression harness (12 scenarios) — start, approve, redteam, commit, merge, dirty refusal, rework, lint"
+echo "OK: T096 workflow-driver regression harness (14 scenarios) — start, approve, single-gate review, commit, merge, dirty refusal, rework, lint, replacement race, gate lock"
 exit 0

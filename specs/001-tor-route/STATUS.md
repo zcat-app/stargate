@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 55 |
-| in-progress | 0 |
+| pending | 54 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 135 |
@@ -33,7 +33,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
 | T134 | Investigate a constitution-compliant local topology | Foundation audit remediation | ✓ |  |
 | T141 | Pin CI Actions and agent installation dependencies | Foundation audit remediation | ✓ |  |
-| T142 | Make agent execution-boundary claims demonstrable | Foundation audit remediation | ✓ |  |
 | T143 | Retire obsolete Java token-verifier constants | Foundation audit remediation | ✓ |  |
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
 | T145 | Test Maven wrapper checksum enforcement | Foundation audit remediation |  |  |
@@ -52,7 +51,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T142 | Make agent execution-boundary claims demonstrable | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

@@ -4,6 +4,7 @@
 # T139: exercise real entrypoints in isolated repositories; never mutate this checkout.
 set -euo pipefail
 python3 - "$(git rev-parse --show-toplevel)" <<'PY'
+import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -141,6 +142,7 @@ class Coverage(unittest.TestCase):
 
     def driver(self, privacy=True, budget=8):
         self.copy('scripts/run-task.sh')
+        self.copy('scripts/review-matrix.json')
         self.write('scripts/verify.sh', '#!/bin/bash\necho "RESULT: GREEN"\n')
         self.write('scripts/regen-status.sh', '#!/bin/bash\nexit 0\n')
         self.write('.specify/feature.json', '{"feature_directory":"specs/001-fixture"}\n')
@@ -158,26 +160,41 @@ class Coverage(unittest.TestCase):
     def drive(self):
         return self.run_cmd('bash', 'scripts/run-task.sh', 'T999')
 
-    def code_approve(self):
+    def review_manifest(self, snapshot, files):
+        lines = [f'SNAPSHOT: {snapshot}', 'ROUND: 1', 'GATE: review']
+        for name in files:
+            data = (self.root / 'target/runs' / name).read_bytes()
+            lines.append(f'{hashlib.sha256(data).hexdigest()}  {name}')
+        self.write('target/runs/T999.review-set', '\n'.join(lines) + '\n')
+
+    def reviewer_verdict(self, name, verdict, reviewer, tool, model, effort,
+                         snapshot):
+        body = (f'VERDICT: {verdict}\nREVIEWER: {reviewer}\nTOOL: {tool}\n'
+                f'MODEL: {model}\nEFFORT: {effort}\nSNAPSHOT: {snapshot}\nROUND: 1\n'
+                'SUMMARY: fixture\nFINDINGS: none\n')
+        self.write('target/runs/' + name, body)
+
+    def gate_approve(self, verdict='APPROVE'):
         result = self.drive()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('REVIEW', result.stdout)
-        snapshot = (self.root / 'target/runs/T999.code-snapshot').read_text().strip()
-        self.write('target/runs/T999.verdict',
-                   f'VERDICT: APPROVE\nSNAPSHOT: {snapshot}\nROUND: 1\n')
+        self.assertNotIn('REDTEAM', result.stdout)
+        snapshot = (self.root / 'target/runs/T999.review-snapshot').read_text().strip()
+        files = ('T999.review-glm.verdict', 'T999.review-astra.verdict')
+        self.reviewer_verdict(files[0], verdict, 'glm', 'opencode',
+                              'zai-coding-plan/glm-5.3', 'xhigh', snapshot)
+        self.reviewer_verdict(files[1], verdict, 'astra', 'codex',
+                              'gpt-6-astra', 'xhigh', snapshot)
+        self.review_manifest(snapshot, files)
+        return files
 
-    def red_approve(self):
-        result = self.drive()
-        self.assertIn('REDTEAM', result.stdout)
-        snapshot = (self.root / 'target/runs/T999.redteam-snapshot').read_text().strip()
-        self.write('target/runs/T999.redteam.verdict',
-                   f'VERDICT: APPROVE\nSNAPSHOT: {snapshot}\nROUND: 1\n'
-                   'SUMMARY: fixture\nFINDINGS: none\n')
+    def code_approve(self):
+        self.gate_approve()
 
     def assert_refused(self, result):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertEqual(self.before, self.run_cmd('git', 'rev-parse', 'HEAD').stdout)
-        self.assertFalse((self.root / 'target/runs/T999.verdict').exists(), result.stdout)
+        self.assertFalse((self.root / 'target/runs/T999.review-glm.verdict').exists(), result.stdout)
 
     def test_untracked_blocks_review(self):
         self.driver()
@@ -186,23 +203,18 @@ class Coverage(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn('new-source.go', result.stdout)
 
-    def test_untracked_after_each_review_invalidates(self):
-        for phase in ('code', 'redteam'):
-            with self.subTest(phase=phase):
-                # Each subcase has its own repository and approvals.
-                self.setUp()
-                self.driver()
-                self.code_approve()
-                if phase == 'redteam':
-                    self.red_approve()
-                self.write('new-source.go', 'package source\n')
-                self.assert_refused(self.drive())
-                self.write('new-source.go', 'package changed\n')
-                self.assert_refused(self.drive())
+    def test_untracked_after_review_invalidates(self):
+        self.setUp()
+        self.driver()
+        self.gate_approve()
+        self.write('new-source.go', 'package source\n')
+        self.assert_refused(self.drive())
+        self.write('new-source.go', 'package changed\n')
+        self.assert_refused(self.drive())
 
-    def test_tracked_change_after_code_review_invalidates(self):
+    def test_tracked_change_after_review_invalidates(self):
         self.driver(privacy=False)
-        self.code_approve()
+        self.gate_approve()
         self.write('tracked.txt', 'changed after review\n')
         self.run_cmd('git', 'add', 'tracked.txt')
         self.assert_refused(self.drive())
@@ -211,8 +223,7 @@ class Coverage(unittest.TestCase):
         self.driver()
         self.write('new-source.go', 'package source\n')
         self.run_cmd('git', 'add', 'new-source.go')
-        self.code_approve()
-        self.red_approve()
+        self.gate_approve()
         self.write('target/build-output', 'ignored generated output\n')
         result = self.drive()
         self.assertEqual(result.returncode, 0, result.stdout)
@@ -227,33 +238,38 @@ class Coverage(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn('budget', result.stdout.lower())
 
-    def test_delayed_codereview_cannot_authorize_new_candidate(self):
+    def test_delayed_reviewer_cannot_authorize_new_candidate(self):
         self.driver(privacy=False)
         self.assertEqual(self.drive().returncode, 0)
-        snapshot_a = (self.root / 'target/runs/T999.code-snapshot').read_text().strip()
+        snapshot_a = (self.root / 'target/runs/T999.review-snapshot').read_text().strip()
         self.write('tracked.txt', 'candidate B\n')
         self.run_cmd('git', 'add', 'tracked.txt')
         self.assertEqual(self.drive().returncode, 0)
-        snapshot_b = (self.root / 'target/runs/T999.code-snapshot').read_text().strip()
+        snapshot_b = (self.root / 'target/runs/T999.review-snapshot').read_text().strip()
         self.assertNotEqual(snapshot_a, snapshot_b)
-        # Reviewer A finishes only after the new handoff for B was issued.
-        self.write('target/runs/T999.verdict',
-                   f'VERDICT: APPROVE\nSNAPSHOT: {snapshot_a}\nROUND: 1\n')
+        # Reviewer A finishes only after the new handoff for B was issued: a
+        # complete set bound to the stale snapshot cannot authorize B.
+        files = ('T999.review-glm.verdict', 'T999.review-astra.verdict')
+        self.reviewer_verdict(files[0], 'APPROVE', 'glm', 'opencode',
+                              'zai-coding-plan/glm-5.3', 'xhigh', snapshot_a)
+        self.reviewer_verdict(files[1], 'APPROVE', 'astra', 'codex',
+                              'gpt-6-astra', 'xhigh', snapshot_a)
+        self.review_manifest(snapshot_a, files)
         self.assert_refused(self.drive())
-        self.code_approve()
+        self.gate_approve()
         result = self.drive()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('status: done', (self.root / self.ticket).read_text())
         self.assertEqual(self.run_cmd('git', 'show', 'HEAD:tracked.txt').stdout, 'candidate B\n')
 
-    def test_codereview_rejects_invalid_snapshot_and_round(self):
+    def test_gate_rejects_invalid_snapshot_and_round(self):
         for field in ('SNAPSHOT', 'ROUND'):
             for fault in ('missing', 'duplicate', 'wrong'):
                 with self.subTest(field=field, fault=fault):
                     self.setUp()
                     self.driver(privacy=False)
-                    self.code_approve()
-                    path = self.root / 'target/runs/T999.verdict'
+                    self.gate_approve()
+                    path = self.root / 'target/runs/T999.review-glm.verdict'
                     lines = path.read_text().splitlines()
                     original = next(line for line in lines if line.startswith(field + ':'))
                     if fault == 'missing':
@@ -263,7 +279,19 @@ class Coverage(unittest.TestCase):
                     else:
                         lines[lines.index(original)] = field + ': ' + ('2' if field == 'ROUND' else '0' * 64)
                     path.write_text('\n'.join(lines) + '\n')
+                    self.review_manifest(
+                        (self.root / 'target/runs/T999.review-snapshot').read_text().strip(),
+                        ('T999.review-glm.verdict', 'T999.review-astra.verdict'))
                     self.assert_refused(self.drive())
+
+    def test_authoritative_docs_require_isolated_review_launcher(self):
+        for name in ('.specify/memory/review-loop.md',
+                     '.specify/memory/autopilot.md', 'CONTRIBUTING.md'):
+            with self.subTest(path=name):
+                text = (SOURCE / name).read_text()
+                self.assertIn('scripts/review-task.sh', text)
+                self.assertIn('one GLM', text)
+                self.assertIn('one Codex', text)
 
 
 unittest.main(verbosity=2)

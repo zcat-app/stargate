@@ -257,9 +257,12 @@ the human pair or the AI agent is doing the typing.
   *before* it writes implementation. Then drive the implementation to
   green. Do not accept code without tests. This is Constitution
   Principle VII; it has no AI exception.
-- **AI-generated code carries the same review burden.** A `stargate-redteam`
-  pass is required on every feature spec and every release, regardless of
-  who authored the code. Principle VIII has no AI exception either.
+- **AI-generated code carries the same review burden.** Per-ticket review runs
+  through `scripts/review-task.sh`: one GLM and one Codex reviewer, each
+  covering correctness and adversarial security in the same single-gate pass.
+  A cumulative redteam pass is also required on every feature spec and
+  release, regardless of who authored the code. Principle VIII has no AI
+  exception either.
 - **Suggested model usage.** Long-context planning, spec authoring, threat
   modelling, and adversarial review benefit from an Opus-class model.
   Routine implementation, refactoring, and test-writing once the spec is
@@ -299,10 +302,11 @@ every change, large or small — they are what keep autonomous runs honest.
   mechanical: Error Prone + NullAway gate the nullness contract at compile
   time (§"Code style / Java" — Nullness contract).
 
-The per-task review loop these feed into — the fresh-context
-`stargate-codereview` gate, the round cap, and the escalation menu — is
-documented at `.specify/memory/review-loop.md`. The single green gate every
-"done" depends on is `scripts/verify.sh`.
+The per-task review loop these feed into—the isolated one GLM/one Codex
+`stargate-review` single gate launched only by `scripts/review-task.sh`, the
+round cap, and the escalation menu—is documented at
+`.specify/memory/review-loop.md`. The single green gate every "done" depends on
+is `scripts/verify.sh`.
 
 ## PR norms
 
@@ -318,9 +322,10 @@ documented at `.specify/memory/review-loop.md`. The single green gate every
   - `refactor: short description` — no behaviour change
 - **Required checks before merge**:
   - All relevant contract tests pass.
-  - `stargate-redteam` review has run and either passed clean or its
-    Blocker/Major findings are resolved or accepted (with a rationale
-    entry in `SECURITY-DECISIONS.md`).
+  - The ticket's single-gate reviewer set passed clean or its Blocker/Major
+    findings are resolved or accepted (with a rationale entry in
+    `SECURITY-DECISIONS.md`); milestone redteam has swept the cumulative
+    diff where the milestone requires it.
   - Reproducibility tests pass (where touched).
   - Plan's Constitution Check section is filled in and accurate.
 - **Squash-merge** is the default. The squashed commit message ends with

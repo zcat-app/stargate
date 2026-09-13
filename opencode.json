@@ -97,8 +97,8 @@
     "websearch": "ask"
   },
   "agent": {
-    "stargate-codereview": {
-      "description": "Fresh-context correctness + scope + security review of a single implemented task against its acceptance criteria and the constitution. Blind to the implementer's rationale. Writes ONLY its own verdict file.",
+    "stargate-review": {
+      "description": "The single merged review gate of the ticket workflow — one fresh-context pass covering correctness, scope, test discipline, contract conformance AND the adversarial security/privacy checklist. Spawned only by scripts/review-task.sh. Writes ONLY its own verdict file.",
       "mode": "subagent",
       "model": "zai-coding-plan/glm-5.3",
       "permission": {
@@ -108,11 +108,11 @@
       }
     },
     "stargate-redteam": {
-      "description": "Adversarial security/privacy review of Stargate code against the constitution and threat model. Invoke before privacy-critical ticket commits and at feature/release milestones.",
+      "description": "Cumulative privacy/security sweep at feature milestones and before releases. Per-ticket review is owned by the stargate-review single gate.",
       "mode": "subagent",
       "model": "zai-coding-plan/glm-5.3",
       "permission": {
-        "edit": { "*": "deny", "target/runs/*.redteam.verdict": "allow" },
+        "edit": "deny",
         "task": "deny",
         "bash": { "*": "deny", "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "git rev-parse*": "allow" }
       }

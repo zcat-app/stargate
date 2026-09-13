@@ -1241,6 +1241,25 @@ who can replace the gate, Git configuration or verdict files themselves. Genuine
 substrate and explicit cadence/tool opt-outs remain reported SKIPs. A local green result does
 not establish omitted live/release properties or replace VIII's external human release review.
 
+### 5.17 Native reviewer context separation (T142)
+
+Ticket reviews run as ONE single gate: one fresh OpenCode full GLM-5.3 session
+at xhigh (provider max) and one fresh Codex Astra session at xhigh, both
+covering correctness and adversarial security/privacy in the same pass —
+there is no second phase. Separate candidate copies and verdict paths prevent
+accidental interference; no implementation chat or peer verdict is supplied.
+Source checks and complete, identity-bound verdict imports protect against
+stale approvals.
+
+These native same-user processes are not an OS containment boundary. They use
+existing host provider authentication. OpenCode uses reviewer deny maps;
+Codex runs without an OS sandbox under read-only inspection instructions.
+Neither establishes host credential, process or network isolation.
+Ordinary OpenCode --auto execution can approve ask rules and is not
+constrained by reviewer-role denies. A malicious process with host access or a
+write-and-restore attack is outside the snapshot checks' guarantee. No Docker
+or replacement containment infrastructure is required for review.
+
 ## 6. What Stargate does not protect against
 
 The Non-Goals from the constitution, restated in user-facing terms. Each

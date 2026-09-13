@@ -75,7 +75,7 @@ feature branch squash-merges to `main` at milestone close.**
 |---|---|
 | `pending` | Drafted, not yet started. May be `blocked_by` other tickets. |
 | `in-progress` | Branch exists; developer is implementing. |
-| `in-review` | `verify.sh` green; `stargate-codereview` is running or has returned a verdict. |
+| `in-review` | `verify.sh` green; the isolated single-gate reviewer set is pending or complete. |
 | `escalated` | Round cap hit, or an immediate-escalation trigger fired. Awaiting user resolution via the menu. |
 | `done` | Reviewer returned `APPROVE` (or `OVERRIDE-APPROVE`); commit landed on the branch. Squash-merge into `main` is a separate step. |
 | `deferred` | Paused — out-of-scope discovered, blocked on new work, or waiting on a spec amendment. |
@@ -90,7 +90,7 @@ feature branch squash-merges to `main` at milestone close.**
 1. **Drive** — `scripts/run-task.sh <id>` is the state machine. It performs
    the deterministic phases directly (verify, status transitions, merge) and
    emits structured handoff prompts at the non-deterministic phases (ground,
-   implement, codereview). The caller — a human at the terminal, or an
+   implement, review). The caller — a human at the terminal, or an
    external agent driver, or a future `/run` autopilot — reads the prompt,
    does the work, signals ready via a sentinel file, and re-invokes
    `run-task.sh` to advance. Resume-aware: enters at the right phase based on
@@ -114,7 +114,7 @@ feature branch squash-merges to `main` at milestone close.**
      — what must hold · which `verify.sh` gates already catch it · the
      **residue** no gate catches. Required when `privacy_critical: true` OR
      `complexity: high`; a quick pass otherwise. The residue scopes the
-     `stargate-redteam` pass and the tests to write.
+     security lane of the review gate and the tests to write.
    - **Clarity pre-flight** — `python3 scripts/lint-ticket.py` runs the
      mechanical subset. A full fresh-context `clarity-reviewer` subagent
      (future) adds the judgment layer; `lint-ticket.py` is the floor.
@@ -132,39 +132,42 @@ feature branch squash-merges to `main` at milestone close.**
    test change. A green run stays valid only while the tree is unchanged;
    `run-task.sh` re-runs verify as the safety re-check before transitioning
    to in-review.
-5. **Review** (the run-task `in-review` phase) — emit a handoff that asks
-   the caller to spawn `stargate-codereview` (fresh context, blind to your
-   rationale). Give it ONLY: the diff (`git diff <base-sha>`), the ticket
-   file, and the MECHANICAL REPORT run-task precomputes into the handoff
-   (base SHA, diffstat, files-vs-budget, verify freshness, §Out-of-scope,
-   prior-round verdict on round ≥ 2). **The reviewer writes its own verdict
-   block to `target/runs/<id>.verdict`** (its single writable path) before
-   replying; the caller never transcribes it. Re-invoking run-task.sh
-   parses it and acts (APPROVE → independent redteam if privacy-critical,
-   otherwise commit; APPROVE-WITH-FIXES → APPLY-FIXES
+5. **Review** (the run-task `in-review` phase) — emit a handoff for
+   `scripts/review-task.sh <id>` — the single gate. ONE invocation, ONE pass:
+   the launcher runs one OpenCode GLM reviewer and one Codex Astra reviewer
+   concurrently; each covers correctness AND adversarial security/privacy in
+   the same pass (there is no second redteam phase). Each receives a
+   separately materialized candidate, fresh context and separate temporary/output
+   paths. The two native CLI sessions receive no implementation chat or peer
+   verdicts. OpenCode uses reviewer permissions; Codex runs without an OS sandbox
+   under read-only inspection instructions. Separate copies are not a host security boundary. Reviewers receive the
+   source candidate and the driver handoff: diff base, staged candidate,
+   ticket, files-vs-budget, verify freshness, §Out-of-scope and prior-round
+   verdict on round ≥ 2. They do not receive live run state, peer verdicts or
+   implementation chat/rationale.
+   The launcher validates reviewer/tool/model/effort/snapshot/round fields,
+   imports both reviewer-written verdicts, then writes the set manifest
+   last; the caller never transcribes them. Re-invoking run-task.sh requires
+   the manifest and every hash/identity before acting (APPROVE → commit;
+   APPROVE-WITH-FIXES → APPLY-FIXES
    handoff: caller applies the comment-only FIX ITEMS, re-verifies, touches
    `target/runs/<id>.awf-applied`; source changes invalidate the old snapshot and require
-   renewed review in the same round before redteam/commit (Constitution VIII);
+   renewed review in the same round before commit (Constitution VIII);
    REWORK → bump round; ESCALATE → surface the menu). Verdict:
-   `APPROVE | APPROVE-WITH-FIXES | REWORK | ESCALATE`.
-   For `privacy_critical: true`, the driver emits REDTEAM after approval and
-   any comment fixes. The root spawns a second fresh-context reviewer, blind
-   to implementation rationale and the current codereview findings. It writes
-   `target/runs/<id>.redteam.verdict` with VERDICT, SNAPSHOT and ROUND fields
-   copied from the handoff. No reviewer may delegate. Both approvals are
-   required; redteam REWORK/ESCALATE uses the existing shared round budget.
-   Code review binds HEAD, baseline, worktree, index, round and the non-ignored
-   source inventory; redteam additionally binds codereview output. Changes invalidate both approvals, including changes
-   during final verification. Legacy `.redteam` files cannot approve work.
-   Both reviewer verdicts must copy the handoff's exact `SNAPSHOT` and `ROUND`, each once.
-   Missing, duplicate or mismatched identity is refused, including a delayed response to an
-   older handoff after a newer candidate has been submitted for review.
+   `APPROVE | APPROVE-WITH-FIXES | REWORK | ESCALATE`; the strongest verdict
+   in the set wins and every verdict carries `SUMMARY` and `FINDINGS`.
+   The gate binds HEAD, baseline, worktree, index, round and the non-ignored
+   source inventory. Changes invalidate all approvals, including changes
+   during final verification. Legacy or partial verdict files cannot approve work.
+   Every reviewer verdict must copy the handoff's exact `SNAPSHOT` and `ROUND`,
+   each once. Missing, duplicate or mismatched identity, a partial set, or a
+   delayed response to an older handoff is refused.
 6. **Resolve:**
 
    | Verdict | Action |
    |---|---|
-   | `APPROVE` | Complete independent redteam when privacy-critical, then commit. |
-   | `APPROVE-WITH-FIXES` | Apply ONLY its comment/doc-only FIX ITEMS; re-`verify`; touch `.awf-applied`; refresh review of the changed snapshot, then redteam if required and commit — no round-counter increment. |
+   | `APPROVE` | Commit — the single gate already covered security for privacy-critical tickets. |
+   | `APPROVE-WITH-FIXES` | Apply ONLY its comment/doc-only FIX ITEMS; re-`verify`; touch `.awf-applied`; refresh review of the changed snapshot and commit — no round-counter increment. |
    | `REWORK` (round 1) | Address only the named items; re-`verify`; re-review. |
    | `REWORK` (round 2 = cap) / `ESCALATE` | STOP. Surface the menu (below). **You** decide. |
 
@@ -175,7 +178,8 @@ feature branch squash-merges to `main` at milestone close.**
 7. **Commit** — `run-task.sh` creates the focused commit on the feature
    branch at APPROVE (one commit per ticket: `Implement <feature>: T-NNN:
    <imperative summary ≤72 chars>` + the §Context paragraph + a
-   `Reviewed-by: stargate-codereview (VERDICT: APPROVE|APPROVE-WITH-FIXES; round <r>)` trailer).
+   one `Reviewed-by:` trailer per reviewer recording its role, identity, tool,
+   model, effort, actual verdict and round).
    It commits ONLY paths the developer staged during IMPLEMENT — never
    `git add -A` — and refuses to flip `done` if nothing is staged. Flip
    `status: done`.
@@ -214,19 +218,30 @@ the reviewer returns `ESCALATE`, present exactly these options and **stop**:
      amendment requires independent redteam wherever it is located. Finding acceptance
      cannot waive a principle. The maintainer decides an unresolved policy change.
 
-## Adversarial passes (redteam + perf)
+## Adversarial passes (milestone redteam + perf)
 
-Separate from correctness review and **blind to rationale**.
+Separate from the per-ticket single gate and **blind to rationale**.
 
-- **`stargate-redteam`** — security/privacy fresh-eyes pass. Sees
+- **`stargate-redteam`** — cumulative security/privacy fresh-eyes pass. Sees
   `THREAT-MODEL.md` + the cumulative diff, NOT the design notes or ticket
   bodies. Hunts the gap between Constitution promise and shipped bytes.
-  **Mandatory before commit** when `privacy_critical: true`; the root driver
-  requests a ticket-scoped verdict independently of codereview. Also runs at
+  Per-ticket security review is owned by the single gate (both its reviewers
+  run the adversarial checklist every pass); this role runs at
   feature boundaries and before release tags against cumulative changes.
   Ticket Blocker/Major findings prevent commit; human acceptance follows the
   existing override process and SECURITY-DECISIONS.md. Milestone findings on
   completed tickets become remediation tickets.
+- **Context and capability boundary** — `scripts/review-task.sh` starts exactly
+  two native CLI child sessions, one full GLM-5.3 at xhigh (provider `max`) and
+  one Astra at xhigh, both running the single merged gate in one pass. No Docker
+  or replacement containment infrastructure is required. Separate source copies,
+  temporary directories and verdict paths avoid accidental interference. Both
+  copies are checked against the driver snapshot before and after review.
+  Reviewers use the invoking user's existing provider authentication and retain
+  same-user host access subject to their tool controls. OpenCode deny maps are
+  not an OS sandbox; Codex explicitly runs without one. No host credential, filesystem,
+  process or network isolation is claimed. Deterministic native CLI stand-ins
+  test orchestration, efforts, source-mutation rejection and complete verdict import.
 - **`stargate-perf`** — performance and resource pass. Runs at milestone
   boundaries. Identifies hot-path allocations, blocking-on-event-loop, leaks.
 
@@ -318,11 +333,11 @@ tracker ahead of the substrate.
 
 ## Autonomous runs
 
-The green path carries no human decision — each gate (`verify.sh`, the
-fresh-context `stargate-codereview`, the fresh-context `stargate-redteam`) is
-an *independent* check, not the agent grading itself. So a clean run executes
+The green path carries no human decision — each gate (`verify.sh` and the
+two isolated single-gate reviewer contexts) is an *independent* check, not
+the agent grading itself. So a clean run executes
 **unattended**: the autopilot drives start → implement → verify → review →
-(independent redteam if `privacy_critical`) → commit-on-feature, stopping on
+commit-on-feature, stopping on
 **bright-line conditions**:
 
 - **Front** — analyze finds acceptance blank or diverges from ground truth, or
@@ -337,8 +352,9 @@ an *independent* check, not the agent grading itself. So a clean run executes
 <sha>`); a push is outward and irreversible — keeping it manual is what makes
 auto-merge safe.
 
-`privacy_critical: true` tickets run redteam before commit even on the green
-path; `privacy_critical: false` tickets skip it. **No separate autonomy
+Every ticket — `privacy_critical` or not — passes the same single gate
+before commit on the green path; the privacy flag sharpens the reviewers'
+security lane, it does not add a second dispatch. **No separate autonomy
 dial** — the flag is the dial, the residue map is its input.
 
 The `/run` skill follows driver handoffs through local completion. Push and

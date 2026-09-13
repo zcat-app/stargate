@@ -34,8 +34,12 @@ gate):
 2. **Run the inner loop** (`review-loop.md` steps 1–5) for this task: ground on
    the full task text + cited spec scenarios + named contract; implement
    tests-first for every privacy-critical category (Principle VII, no
-   exception); gate `scripts/verify.sh` green; invoke `stargate-codereview`
-   (blind); act on `APPROVE | REWORK | ESCALATE`.
+   exception); gate `scripts/verify.sh` green; run
+   `scripts/review-task.sh <id>` once — the single gate (one GLM and
+   one Codex reviewer per pass, each covering correctness and security
+   together); act on `APPROVE | REWORK | ESCALATE`.
+   A missing CLI, failed authentication or incomplete verdict manifest is a stop,
+   never permission to invoke one reviewer directly against the live tree.
 3. **On APPROVE:** mark the task `[X]` in `tasks.md`, commit it as one focused
    commit (one task = one commit; **never** bundle a failing test with its
    implementation — the failing-test signal is part of the audit trail), then

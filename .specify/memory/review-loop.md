@@ -23,13 +23,17 @@ For one task `[ID]` from `specs/NNN-*/tasks.md`:
 3. **Gate green.** Run `scripts/verify.sh`. It must be GREEN (exit 0) before
    review. A green run is valid only while the tree is unchanged — do not edit
    after gating and before committing without re-running.
-4. **Review.** The root invokes `stargate-codereview` in fresh context for
-   every ticket. For `privacy_critical: true`, after codereview approval and
-   any APPROVE-WITH-FIXES corrections, the driver requests independent
-   `stargate-redteam`. Both must approve before commit; neither delegates.
-   Redteam returns APPROVE, REWORK, or ESCALATE and shares the round cap.
-   A changed reviewed snapshot invalidates both approvals. Milestone redteam
-   remains an additional cumulative review.
+4. **Review.** Run `scripts/review-task.sh <id>` for every ticket — the
+   single gate. ONE invocation, ONE pass: the fail-closed launcher concurrently
+   runs two fresh contexts — one GLM and one Codex Astra — in native CLI
+   sessions against separately materialized copies of one candidate. Each
+   reviewer covers correctness AND adversarial security/privacy in that pass;
+   there is no second phase. Every expected reviewer must approve before
+   commit; none delegates. A missing/partial set, failed CLI session, or
+   changed reviewed snapshot invalidates the approvals rather than falling
+   back to the live checkout. The strongest verdict wins
+   (ESCALATE > REWORK > APPROVE-WITH-FIXES > APPROVE) and shares the round
+   cap. Milestone redteam remains an additional cumulative review.
 5. **Act on the verdict:**
    - `APPROVE` → commit the task (one task = one focused commit; squash-merge
      folds a feature's task-commits into `main` per CONTRIBUTING PR norms).

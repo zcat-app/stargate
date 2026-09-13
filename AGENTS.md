@@ -62,7 +62,7 @@ Every non-trivial change is **spec-driven** and **ticket-driven**:
    `scripts/run-task.sh <id>` is the loop driver — does the deterministic
    phases directly (verify, status transitions, squash-merge), emits
    structured handoff prompts at the non-deterministic phases (ground,
-   implement, codereview). Resume-aware: enters at the right phase based on
+   implement, review). Resume-aware: enters at the right phase based on
    ticket `status:`. `scripts/handoff.sh <id>` writes a session handoff
    (gitignored, under `specs/<feature>/.handoffs/`) for cross-session resume.
    `scripts/regen-status.sh` regenerates the STATUS board from frontmatter.
@@ -130,26 +130,29 @@ editing any `.claude/agents/*.md`.
   Opus-class (the `stargate-redteam` and `stargate-perf` subagents default here).
 - **Routine implementation / refactoring / test-writing** (once the spec is
   stable): Sonnet-class.
-- **Per-task code review** (`stargate-codereview`): Opus-class, fresh context,
-  blind to the implementer's rationale.
+- **Per-ticket single review gate** (`stargate-review`): Opus-class, fresh
+  context, blind to the implementer's rationale, covering correctness AND
+  adversarial security in one pass.
 
-> **Known drift (2026-07-16).** The Opus-class guidance above is aspirational:
-> no Opus-capable provider is configured in opencode (the only provider is
-> `zai-coding-plan`, serving `glm-*`). The opencode review agents are now
-> explicitly pinned to `zai-coding-plan/glm-5.2` in `opencode.json` so their
-> model is deterministic rather than inherited — still not Opus-class. The
-> Claude Code path is unaffected and already correct: `.claude/agents/*.md`
-> pin `model: opus` (codereview, redteam) and `model: sonnet` (perf), which
-> Claude Code resolves natively. To fully close this on the opencode side: add
-> an Opus-class provider and repoint the three `model` fields.
+Ticket review uses `scripts/review-matrix.json`: exactly one OpenCode full
+`zai-coding-plan/glm-5.3` context at `xhigh` (native GLM `max`) and one
+Codex `gpt-6-astra` context at `xhigh`, both running the same merged gate in
+one pass — there is no separate redteam dispatch. `scripts/review-task.sh`
+launches fresh native CLI child sessions concurrently with separate candidate
+copies and verdict paths. No containers are required. This is context
+separation, not a claim of host filesystem, credential or process
+containment. Both verdicts must match the candidate and reviewer identities
+before the driver advances.
 
-The review agents (`stargate-codereview`, `stargate-redteam`, `stargate-perf`)
+The review agents (`stargate-review`, `stargate-redteam`, `stargate-perf`)
 are `task: deny` in `opencode.json` **on purpose**: they must not spawn child
 subagents. A child resolves permissions against the global config (whose bash
 catch-all is `"ask"`), and an `"ask"` inside a non-interactive subagent hangs
 silently until interrupted — the root cause of the 2026-07-16 review freezes.
 These agents receive the diff in their prompt and inspect it with their own
-allow-listed, fail-fast (`"deny"`, never `"ask"`) git tools. Do not remove
-`task: deny` without first making every subagent safe under `"ask"` (e.g.
-running autopilot with `--auto`, which auto-approves anything not explicitly
-`"deny"`). See `.claude/skills/run/SKILL.md` "Cross-cutting rules".
+allow-listed, fail-fast (`"deny"`, never `"ask"`) git tools in their separate
+candidate copies. Keep `task: deny` under Principle VIII's no-delegation rule.
+The native launcher makes the two reviewer roles CLI-selectable with a local
+`mode: all` override; their permission denies remain intact. Codex runs without
+an OS sandbox, under read-only review instructions and source-copy checks.
+See `.claude/skills/run/SKILL.md` "Tool bindings".
