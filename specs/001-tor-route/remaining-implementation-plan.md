@@ -32,9 +32,9 @@ and choose the earliest ready entry here. T156 and T160 are complete; T139 is no
 | Order | Tickets | Required outcome |
 |---|---|---|
 | 0 — completed authoritative baseline | T156 | Amendment, downstream reconciliation and independent reviews delivered in `3aac431`. |
-| 0a — completed security update | T160 | Tor 0.4.9.12 candidate and exact package/dependency-source enforcement delivered in `55c5677`; T161 still blocks promotion. |
+| 0a — completed security update | T160 | Tor 0.4.9.12 candidate and exact package/dependency-source enforcement delivered in `55c5677`; live validation is recorded by T161. |
 | 1 — gate integrity | T139 | Required scripts/module coverage and complete reviewed-source snapshots cannot silently disappear. |
-| 1a — live security-upgrade validation | T161 | Resolve actual Tor bootstrap/isolation evidence gaps before deployment/release promotion; keep failed cold runs visible. |
+| 1a — live security-upgrade validation | T161 | Preserve the failed cold runs and record current cold configuration/control, fusion-control and distinct-credential evidence for the exact candidate. |
 | 2 — definite defects | T135 → T137 → T136 | Fix resumed peer authorization, reload deadlines and complete client/profile/site partitioning, with spec-derived regressions first. |
 | 3 — foundational design | T134 → T138 → T147 | Review compliant topology, enforced observer authority and CONNECT isolation/refusal contract. |
 | 4 — implement selected designs | Children created by row 3 | Implement tests-first repairs; add each child to closure AND affected consumer dependencies. Additional IDs are assigned when the design is concrete. |
@@ -56,11 +56,13 @@ T156 completes normal reviewed delivery (now satisfied); unavailable required ev
 The Tor 0.4.9.12 security announcement added an urgent upstream dependency repair. T160 is
 delivered and absorbs T140's package-integrity work. No constitutional exception was made.
 Its live rechecks revisit the old T058 assumptions, including the upstream Conflux isolation fix.
-Two cold T058 attempts failed before circuit evidence; a separate cold configuration run,
-live control checks and T058a's distinct-username calibration passed. T161 follows T139 to
-diagnose the failed runs and complete required live validation. T160 prepared
-the upgraded candidate; T161 blocks actual deployment/release promotion and T155/T078/T079.
-No failed run is converted to PASS and no timeout/constitutional guarantee is relaxed.
+Two T160 cold T058 attempts failed before circuit evidence; those results remain failures with no
+attributed root cause. T161 ran the unchanged exact candidate twice more from cold state and both
+distinct-credential probes passed, alongside independent cold configuration/control and a
+fusion-sensitive username-less control. A separate cold start spent about 130 seconds loading
+descriptors before completing, demonstrating run-to-run variability without diagnosing the earlier
+timeouts. No failed run is converted to PASS and no deadline, fixture or constitutional guarantee
+is relaxed. T126/T155 and T134/T138 retain their integrated partition and foundation obligations.
 
 ## Execution constraints and remaining grounding
 

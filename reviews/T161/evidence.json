@@ -1,0 +1,138 @@
+{
+  "ticket": "T161",
+  "captured_date": "2026-09-12",
+  "candidate": {
+    "validation_start_commit": "40c1f6a2af274e0525f7ef118d53fd09ae808c29",
+    "t160_delivery_commit": "55c567783a084354ba6321b6ecd0f7b88651f574",
+    "sidecar_tree": "f01f86d88192aff1b592d54d7602fba199ee0f9b",
+    "t058_test_blob": "2e71cd185295da9034411f8d61a0ba7659b5101b",
+    "t058a_test_blob": "23c82d41a76ab616fc94a79f21e1f0188972be13",
+    "image_id": "sha256:ceb3ba3d6aa1e73f5b1848ce3a3697d6664fdc9575414beaa69455506b9bbcb8",
+    "platform": "linux/amd64",
+    "image_user": "tor (uid=5103 gid=5103)",
+    "tor_version": "0.4.9.12",
+    "package": "tor=0.4.9.12-1~d12.bookworm+1",
+    "tor_binary_sha256": "545238fd854875ee02adaf29134496255689bc73bceb6e700420f78406887cb2",
+    "torrc_sha256": "54bb4222c6a447f09511ccba4e6ddc1ee839bfc1f5bdd72f3261e79c04024d51",
+    "package_lock_sha256": "ff33561b23561678818c3e057ae20863c1e748d28939ee1c01a3f391d7ec53ae",
+    "dockerfile_sha256": "7fc0e1dbe92d0fcd13efda33627b9b7c24ce0bcd03f36ca7f12779a6eca7d327",
+    "installer_sha256": "e39be643d26c70b15b076a8ce9ed57cc378b75df03261edc251c1dadecfc9805"
+  },
+  "environment": {
+    "host": "Linux 6.8.0-124-generic x86_64",
+    "docker_client": "29.1.3",
+    "docker_server": "29.1.3",
+    "docker_compose": "5.1.4",
+    "clock_check": "host and container UTC timestamps differed by less than one second",
+    "cold_precondition": "each named compose project and its volumes were absent before its run; no mounts, keys or state were preseeded",
+    "cleanup": "all named test/observation projects and volumes were absent after the runs"
+  },
+  "commands": {
+    "T058": "cd tests/contract && go test -count=1 -tags docker ./torrc/ -run '^TestIsolateSOCKSAuthDistinctCircuits$' -v -timeout 20m",
+    "T032": "cd tests/contract && go test -count=1 -tags docker ./torrc/ -run '^TestLiveSidecarGETCONFSocksPort$' -v -timeout 15m",
+    "T062": "cd tests/contract && go test -count=1 -tags docker ./tor/ -run '^TestControlPortLive$' -v -timeout 20m",
+    "T058a": "cd tests/contract && go test -count=1 -tags docker ./tor/ -run '^TestUsernameLessIsolation$' -v -timeout 20m"
+  },
+  "results": {
+    "T058_cold_1": {
+      "started_utc": "2026-09-12T23:40:07.671816618Z",
+      "ended_utc": "2026-09-12T23:42:15.172910123Z",
+      "result": "PASS",
+      "test_duration_seconds": 126.10,
+      "bootstrap_seconds": 6.21,
+      "first_stream": "stream 50, circuit 11, username first-party-a.t058.invalid",
+      "second_stream": "stream 56, circuit 16, username first-party-b.t058.invalid",
+      "same_target": "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion:443"
+    },
+    "T032_cold": {
+      "started_utc": "2026-09-12T23:42:50.877211540Z",
+      "ended_utc": "2026-09-12T23:43:06.642504289Z",
+      "result": "PASS",
+      "test_duration_seconds": 14.95,
+      "bootstrap_seconds": 6.73,
+      "outcome": "healthy; image torrc matched golden; cookie path and every GETCONF invariant passed"
+    },
+    "T062_cold": {
+      "started_utc": "2026-09-12T23:43:13.094733391Z",
+      "ended_utc": "2026-09-12T23:43:29.829586226Z",
+      "result": "PASS",
+      "test_duration_seconds": 15.97,
+      "outcome": "cookie auth, GETCONF, bootstrap, built-circuit parsing and invalid-auth redaction passed"
+    },
+    "T058a_cold": {
+      "started_utc": "2026-09-12T23:43:36.287485007Z",
+      "ended_utc": "2026-09-12T23:44:45.421033451Z",
+      "result": "PASS",
+      "test_duration_seconds": 68.48,
+      "fusion_control": "two NO_AUTH streams shared circuit 17",
+      "distinct_username_calibration": "circuits 23 and 19"
+    },
+    "T058_cold_2": {
+      "started_utc": "2026-09-12T23:45:01.739349900Z",
+      "ended_utc": "2026-09-12T23:45:14.461994060Z",
+      "result": "PASS",
+      "test_duration_seconds": 11.02,
+      "bootstrap_seconds": 6.33,
+      "first_stream": "stream 50, circuit 12, username first-party-a.t058.invalid",
+      "second_stream": "stream 53, circuit 14, username first-party-b.t058.invalid",
+      "same_target": "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion:443"
+    },
+    "cold_observation": {
+      "started_utc": "2026-09-12T23:45:52.816150362Z",
+      "bootstrap_100_utc": "2026-09-12T23:48:07.060532675Z",
+      "health_pass_utc": "2026-09-12T23:48:24.517307721Z",
+      "result": "PASS",
+      "phases_percent": [0, 5, 10, 14, 15, 20, 25, 30, 40, 45, 50, 55, 62, 69, 75, 90, 95, 100],
+      "topology": "fresh stargate-tor-state volume; stargate-egress, stargate-internal and stargate-cp-tor attachments; no other mounts",
+      "interpretation": "descriptor loading varied materially across cold runs; this observation does not attribute T160's failures"
+    },
+    "cookie_mode_control": {
+      "started_utc": "2026-09-12T23:49:22.305773545Z",
+      "result": "PASS",
+      "mode": "0640",
+      "owner": "5103:5103",
+      "size_bytes": 32,
+      "outcome": "cookie authentication and GETCONF CookieAuthFileGroupReadable=1 succeeded; no new defect filed"
+    }
+  },
+  "preserved_t160_failures": {
+    "T058_attempt_1": {
+      "result": "FAIL",
+      "last_bootstrap_percent": 54,
+      "proxy_outcome": "EOF before CONNECT reply",
+      "circuit_evidence": "none",
+      "raw_log_sha256": "713d952402c2a423f362ead8c4bce26e405abc8e30c2e46e7de4d1290841c7ae"
+    },
+    "T058_attempt_2": {
+      "result": "FAIL",
+      "last_bootstrap_percent": 53,
+      "proxy_outcome": "SOCKS REP=6",
+      "circuit_evidence": "none",
+      "raw_log_sha256": "201e99554f044662d8ead5e049a4ee200381037e79b99380cb75b7e959cf34bd"
+    },
+    "disposition": "preserved failures; neither relabeled nor attributed to a root cause"
+  },
+  "raw_logs": [
+    {"path": "target/T161/environment-before.log", "sha256": "42b5a988b82f1e4f83009aa6fc1574529d7872905964f5c38a22c423a0abbe2e"},
+    {"path": "target/T161/t058-cold-1.log", "sha256": "b5c587b1e7ab03568d6acb1c1cbfcdb39bd0c872e95177d008ab227c0e6aa597"},
+    {"path": "target/T161/t058-cold-1-identity.log", "sha256": "de134110a2f4c37f0a84a64cb6ac0205a859062c4b718729fd6ee5fbecd71a60"},
+    {"path": "target/T161/t058-cold-1-package.log", "sha256": "eff5b9c45045131d4c956b26caa2bbd4032c0286df9032b3317e286741f0f7c7"},
+    {"path": "target/T161/t032-cold.log", "sha256": "c2a6a3b019ad0968f7b9d0cdd6dfe67678d4ad9e40f4e9da2042e092fd73fa6b"},
+    {"path": "target/T161/t062-cold.log", "sha256": "9cfac0112acbcbd8e4094dbd30590e99bd5c090b98506793ad87ab833dbe530e"},
+    {"path": "target/T161/t058a-cold.log", "sha256": "da0afd68bbf6d60f6369326d6aa7b8212cd1cd061e285bb5e44197c24a46d3e6"},
+    {"path": "target/T161/t058-cold-2.log", "sha256": "d9f1fe1c23c0e042bcf8709903b4d99a7e44317fdd024ffff19bb30489069308"},
+    {"path": "target/T161/runtime-observation-cold.log", "sha256": "84c807db3b7aad52742215fb923f8571122e482b18cb94147f13ac01b98c071c"},
+    {"path": "target/T161/cookie-mode-cold.log", "sha256": "5b094d9f1cfadf263ba45fc8ae8d8e013d7ab7a81fb64dcad824eaaaf0a6fb55"}
+  ],
+  "conclusion": {
+    "established": "current cold native Tor configuration/control and distinct-credential same-target isolation, with a fusion-sensitive observation control",
+    "not_established": [
+      "root cause of the two preserved T160 failures",
+      "future public-network availability or a zero-flake readiness claim",
+      "native arm64 execution",
+      "DP forwarding of the full client/profile/site isolation partition",
+      "closure of T126, T134, T138 or T155"
+    ],
+    "code_or_fixture_change": "none; the existing reviewed probes passed without changed deadlines, targets, assertions, mounts or preseeded state"
+  }
+}

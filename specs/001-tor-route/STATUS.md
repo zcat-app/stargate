@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 59 |
-| in-progress | 0 |
+| pending | 58 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 131 |
@@ -47,13 +47,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T151 | Name the actual WebRTC remediation preference | Foundation audit remediation | ✓ |  |
 | T152 | Replace detailed operational journals with hourly aggregates | Foundation audit remediation | ✓ |  |
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
-| T161 | Resolve Tor upgrade live validation failures before promotio | Urgent security update validation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T161 | Resolve Tor upgrade live validation failures before promotio | in-progress | ✓ | Urgent security update validation |
 
 ---
 

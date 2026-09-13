@@ -178,12 +178,17 @@ executable closure. This also prevents a compromised Tor publisher from bypassin
 through replacement dependencies; repository priority alone is insufficient for same-version
 source isolation. The key, base and Debian snapshot trust remain;
 malicious reviewed upstream code and the remaining foundation defects are not solved by
-a version/hash check. Protocol/build results and their limits belong to T160 evidence. Cold live isolation
-checks failed before circuit evidence, while separate control/configuration and T058a
-distinct-username calibration checks passed. T161 blocks deployment/release promotion
-until the failed runs and their preconditions are resolved. T155 still owns integrated
-constitutional validation. See the dated T160 entry in
-SECURITY-DECISIONS.md and the [official release announcement](https://forum.torproject.org/t/security-release-0-4-9-12/22096).
+a version/hash check. Protocol/build results and their limits belong to T160 evidence. Its two
+cold T058 attempts remain preserved failures: both stopped during descriptor loading and produced
+no circuit evidence. T161 subsequently ran the unchanged exact candidate twice from cold state;
+both same-target, distinct-credential probes reached bootstrap and attached to distinct circuits.
+Independent cold configuration/control probes and a fusion-sensitive username-less control also
+passed. A separate cold start lingered during descriptor loading before completing, demonstrating
+run-to-run network variability without establishing the earlier failures' root cause. This clears
+only the Tor-side upgrade validation gate. T126/T155 still own integrated partition forwarding and
+constitutional validation, and T134/T138 still own topology/observer authority. See
+[T161 evidence](reviews/T161/README.md), the dated T160 entry in SECURITY-DECISIONS.md and the
+[official release announcement](https://forum.torproject.org/t/security-release-0-4-9-12/22096).
 
 ### 2.7 Malicious browser extension
 
@@ -1434,9 +1439,11 @@ Remaining obligations:
   release-tag time with the release workflow (T081). Until then the
   supply chain is base-pinned + snapshot-pinned + key-verified, not
   fully image-pinned.
-- T161 blocks deployment/release promotion until the failed cold T058 runs and required live
-  behavior have attributable evidence. Passing package/build checks do not close this gate or
-  T155's integrated foundation validation and final security/performance review obligations.
+- T161 preserves the two failed cold T058 runs and supplies current attributable evidence from
+  two new cold distinct-credential passes plus independent configuration/control and fusion
+  controls. The earlier failures remain unattributed rather than relabeled. These native Tor
+  results do not close T155's integrated foundation validation, final security/performance review,
+  final image pinning or native arm64 obligations.
 
 Update-channel compromise of a sidecar is §5.9; the wider sidecar-in-TCB
 residuals are §5.8.

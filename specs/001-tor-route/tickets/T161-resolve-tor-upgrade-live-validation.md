@@ -1,9 +1,9 @@
 ---
 id: "T161"
 title: "Resolve Tor upgrade live validation failures before promotion"
-status: "pending"
+status: in-progress
 created: "2026-09-12"
-last_updated: "2026-09-12"
+last_updated: 2026-09-12
 source: "specs/001-tor-route/tickets/T160-upgrade-tor-security-release.md"
 phase: "Urgent security update validation"
 story: "-"
@@ -77,3 +77,14 @@ T160 evidence and candidate identity, and reuse unaffected passing evidence hone
 
 Treating a successful package build as live validation, automatic publication/deployment,
 or inferring that an upstream security release fixes the remaining Stargate foundation defects.
+
+## Evidence
+
+The exact-candidate identities, environment, commands, raw-log hashes and cold results are retained
+in [T161 live-validation evidence](../../../reviews/T161/README.md). T160's two cold failures remain
+unchanged and unattributed. Two new cold T058 runs passed the same-target distinct-credential
+property without changing the harness, and independent cold T032/T062/T058a controls established
+configuration, control access, observable fusion and distinct-username discrimination. A separate
+cold start lingered at descriptor loading before completing, so public-network variability remains
+an explicit limitation rather than a claimed root cause. No code/fixture defect was proven and no
+deadline, target, mount, key or assertion was changed.
