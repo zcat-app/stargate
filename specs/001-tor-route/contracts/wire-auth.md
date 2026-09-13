@@ -1,9 +1,9 @@
 # Contract — Inter-Plane Wire Authentication and Versioning
 
-> **T156 target update (implementation pending T135/T148):** current authorized pins,
+> **T156 target update (implemented for current pins by T135; validity pending T148):** current authorized pins,
 > key possession and certificate validity are mandatory on full and resumed handshakes.
-> Use a verification hook that executes for both; the earlier `VerifyPeerCertificate`
-> explanation does not guarantee resumption checks. T148 must specify renewal before expiry,
+> T135 uses a verification hook that executes for both; `VerifyPeerCertificate` alone does not
+> guarantee resumption checks. T148 must specify renewal before expiry,
 > clock tolerance and existing-channel rotation/revocation before code. See
 > [foundation boundaries](foundation-boundaries.md); monthly manual restart is not renewal.
 
@@ -126,8 +126,9 @@ hostname verification. The verifier:
 5. Accepts the handshake only if the two raw 32-byte keys are byte-equal, the peer
    proves possession of the matching private key, and its certificate is currently valid
    under the specified clock-tolerance policy. These conditions apply to full and resumed
-   handshakes. An absent/unreadable pin rejects the peer. T135/T148 implement and prove
-   the required checks; key equality alone is insufficient.
+   handshakes. An absent/unreadable pin rejects the peer. T135 implements the current-pin check
+   for full and resumed handshakes; T148 implements validity and renewal. Key equality alone is
+   insufficient.
 
 **Encoding pin (avoids DER-vs-PEM comparison ambiguity).** The comparison
 is on the **raw 32-byte Ed25519 public key**, not on the DER
@@ -143,10 +144,11 @@ mismatches → all handshakes fail) or of SPKI wrappers that differ in
 tag/length encoding (false mismatch) is an implementation bug.
 
 CA-chain validation (`x509.Verify` with a root pool) is **not** used. Each
-side configures its TLS peer verifier with a custom `VerifyPeerCertificate`
-hook that performs the byte-equal pin check and ignores system roots
-entirely. The single-self-signed-cert design means there is no chain to
-build.
+side configures a custom verifier that performs the byte-equal pin check and
+ignores system roots entirely. The Go DP uses `VerifyConnection`, which runs
+for both full and resumed handshakes; `VerifyPeerCertificate` alone is not
+resumption-safe. The single-self-signed-cert design means there is no chain
+to build.
 
 ### 3.2 Why pin the key, not the cert
 
@@ -180,8 +182,8 @@ The dial/listen address is the literal UDS path (`unix:///run/stargate/dp.sock`,
 
 | Setting | Value | Why |
 |---|---|---|
-| `ServerName` / `VerifyPeerCertificate` | custom hook (§3); `ServerName` is NOT used for DNS/hostname verification | UDS has no DNS name. The peer-pin hook is the sole trust decision. |
-| `InsecureSkipVerify` (Go `crypto/tls`) | **`true`** AND a `VerifyPeerCertificate` (or `VerifyConnection`) callback installed as the sole verifier. In Go's `crypto/tls`, `InsecureSkipVerify=true` disables normal CA-chain + hostname verification **but still invokes `VerifyPeerCertificate`** — that is precisely why the self-signed-no-DNS-SAN design works. The correct configuration is therefore `InsecureSkipVerify=true` + custom verifier, NOT `InsecureSkipVerify=false` (which would reject the self-signed cert at the system-roots check before the custom hook runs). A configuration with `InsecureSkipVerify=true` and **no** `VerifyPeerCertificate`/`VerifyConnection` callback is a **contract violation** — it accepts any in-`stargate-ipc`-group peer without pin validation (silent auth bypass). T038/T045 cite this paragraph verbatim in the TLS-config comment; the structural test gate (§7) asserts every `InsecureSkipVerify` literal in the Go/Java impl source is co-located with a custom-verifier assignment once impl lands (content-gated under the R1-R9 runtime tier). |
+| `ServerName` / custom verifier | custom hook (§3); `ServerName` is NOT used for DNS/hostname verification | UDS has no DNS name. The peer-pin hook is the sole trust decision. The Go DP uses `VerifyConnection` so the hook also runs on resumed handshakes. |
+| `InsecureSkipVerify` (Go `crypto/tls`) | **`true`** AND a `VerifyConnection` callback installed as the sole production verifier. In Go's `crypto/tls`, `InsecureSkipVerify=true` disables normal CA-chain + hostname verification **but still invokes `VerifyPeerCertificate` and `VerifyConnection`** — that is precisely why the self-signed-no-DNS-SAN design works. Only `VerifyConnection` is guaranteed on resumed connections. The correct configuration is therefore `InsecureSkipVerify=true` + resumption-safe custom verifier, NOT `InsecureSkipVerify=false` (which would reject the self-signed cert at the system-roots check before the custom hook runs). A configuration with `InsecureSkipVerify=true` and **no** `VerifyPeerCertificate`/`VerifyConnection` callback is a **contract violation** — it accepts any in-`stargate-ipc`-group peer without pin validation (silent auth bypass). T038/T045 cite this requirement in their TLS-config comments; the structural test gate (§7) asserts every `InsecureSkipVerify` literal in the Go/Java impl source is co-located with a custom-verifier assignment once impl lands (content-gated under the R1-R9 runtime tier). |
 | Min TLS version | TLS 1.3 | arch §5.4 implies modern TLS; pinning to 1.3 removes the TLS 1.2 downgrade surface and the suite-negotiation complexity. |
 | Client auth | REQUIRED on both sockets (mTLS) | arch §5.4 "mutual auth". A server that does not request a client cert is a contract violation. |
 | ALPN | **exactly `h2`**, offered by every TLS endpoint (client and server, both planes) | gRPC over TLS requires a negotiated `h2` via ALPN. A Go `tls.Config` without `NextProtos` never negotiates a protocol: Go↔Go pairs pass (both sides skip ALPN — mutually consistent, mutually underspecified), while the Java plane (grpc-netty) negotiates ALPN strictly and the handshake dies protocol-less. Pinned by T130 (2026-09-07): the first-ever Java↔Go execution failed exactly here. A config offering anything other than exactly `["h2"]` is a contract violation. |

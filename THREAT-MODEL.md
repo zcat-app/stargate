@@ -1108,12 +1108,14 @@ inter-plane UDS sockets (`/run/stargate/control.sock` or
 
 **Current gaps and residual risk (T095 history; T156 requirements)**:
 
-- **Current gap:** certificates use `NotBefore = now − 5 min` and
-  `NotAfter = now + 30 days`, but the audit found expiry and resumed-peer pin checks incomplete.
-  T135/T148 must enforce current identity and validity on full/resumed handshakes,
+- **Current state:** T135 makes the Go DP's production verifier re-read the authorized peer pin
+  on both full and resumed TLS handshakes; a real-UDS regression proves an old CP session cannot
+  invoke `ReloadTokens` after `cp.pub` rotation while the newly pinned identity can reconnect.
+  Certificates retain the specified `NotBefore = now − 5 min` and `NotAfter = now + 30 days`
+  fields, but expiry enforcement and renewal remain incomplete: T148 must enforce the validity policy,
   automatically renew certificates before expiry, and specify existing-channel lifecycle.
-  Manual monthly restart is not a conforming renewal policy. This amendment does not
-  claim the checks already work; key rotation and certificate renewal are distinct.
+  Manual monthly restart is not a conforming renewal policy, and current-pin enforcement does
+  not claim that rotation terminates an already-established channel.
 - **No automated key rotation in v1.** Replacing the on-disk
   `cp.priv`/`cp.pub` / `dp.priv`/`dp.pub` keypairs is operator-manual
   (write-tmp + rename + plane restart, ordered per `wire-auth.md` §6.2).

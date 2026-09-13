@@ -152,6 +152,9 @@ func LoadPeerPublicKey(path string) (ed25519.PublicKey, error) {
 // the peer cert's leaf, re-read the pinned key fresh from disk, accept iff
 // the two 32-byte keys are byte-equal. CA-chain validation is NOT used
 // (§3) — the single-self-signed-cert design has no chain to build.
+// This hook is not invoked on resumed TLS 1.3 handshakes and MUST NOT be
+// used in production TLS configs; use PeerPinConnectionVerifier instead
+// (T135) so the current pin is enforced on both full and resumed handshakes.
 //
 // The pinned file is read on EVERY invocation, never cached (§3.1 step 3).
 // A chain of more than one cert is a contract violation (§1: chain length
@@ -165,21 +168,39 @@ func PeerPinVerifier(peerPubPath string) func(rawCerts [][]byte, _ [][]*x509.Cer
 		if err != nil {
 			return fmt.Errorf("tls: parsing peer cert: %w", err)
 		}
-		peerKey, ok := cert.PublicKey.(ed25519.PublicKey)
-		if !ok {
-			return fmt.Errorf("tls: peer cert key is %T, want ed25519 (wire-auth.md §1)", cert.PublicKey)
-		}
-		pinned, err := LoadPeerPublicKey(peerPubPath) // fresh from disk, every handshake (§3.1 step 3)
-		if err != nil {
-			return err
-		}
-		if !peerKey.Equal(pinned) {
-			// §3.3: the handshake aborts (Go surfaces this as an
-			// unknown-ca-class alert); no application RPC is dispatched.
-			return errors.New("tls: peer public key does not match the pinned key (wire-auth.md §3.1)")
-		}
-		return nil
+		return verifyPeerPin(cert, peerPubPath)
 	}
+}
+
+// PeerPinConnectionVerifier returns the VerifyConnection hook used by the
+// production TLS configs. Unlike VerifyPeerCertificate, VerifyConnection is
+// invoked for resumed TLS 1.3 connections as well as full handshakes. The
+// restored peer certificate is therefore checked against the current on-disk
+// pin before either connection can dispatch an RPC (T135; wire-auth.md §3.1).
+func PeerPinConnectionVerifier(peerPubPath string) func(tls.ConnectionState) error {
+	return func(state tls.ConnectionState) error {
+		if len(state.PeerCertificates) != 1 {
+			return fmt.Errorf("tls: peer presented %d certs, want exactly 1 (wire-auth.md §1)", len(state.PeerCertificates))
+		}
+		return verifyPeerPin(state.PeerCertificates[0], peerPubPath)
+	}
+}
+
+func verifyPeerPin(cert *x509.Certificate, peerPubPath string) error {
+	peerKey, ok := cert.PublicKey.(ed25519.PublicKey)
+	if !ok {
+		return fmt.Errorf("tls: peer cert key is %T, want ed25519 (wire-auth.md §1)", cert.PublicKey)
+	}
+	pinned, err := LoadPeerPublicKey(peerPubPath) // fresh from disk, every handshake (§3.1 step 3)
+	if err != nil {
+		return err
+	}
+	if !peerKey.Equal(pinned) {
+		// §3.3: the handshake aborts (Go surfaces this as an
+		// unknown-ca-class alert); no application RPC is dispatched.
+		return errors.New("tls: peer public key does not match the pinned key (wire-auth.md §3.1)")
+	}
+	return nil
 }
 
 // ClientTLSConfig is the §4 client configuration for the control.sock dial:
@@ -188,23 +209,22 @@ func PeerPinVerifier(peerPubPath string) func(rawCerts [][]byte, _ [][]*x509.Cer
 //
 // InsecureSkipVerify=true is required and load-bearing here: Go's
 // crypto/tls couples the knob to the custom hook — with it false, the
-// self-signed cert is rejected at the system-roots check BEFORE
-// VerifyPeerCertificate runs; with it true, normal CA/hostname
-// verification is skipped AND VerifyPeerCertificate still runs (§4). A
+// self-signed cert is rejected at the system-roots check BEFORE the custom
+// verifier runs; with it true, normal CA/hostname verification is skipped
+// AND VerifyConnection still runs (§4). A
 // configuration setting InsecureSkipVerify=true with no
-// VerifyPeerCertificate callback is a contract violation (silent auth
+// VerifyConnection callback is a contract violation (silent auth
 // bypass) — the invariant test TestTLSConfigInvariants pins the pair.
 func ClientTLSConfig(cert tls.Certificate, peerPubPath string) *tls.Config {
 	return &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		// wire-auth.md §4 (cited verbatim — see the comment above):
 		// InsecureSkipVerify=true disables normal CA-chain + hostname
-		// verification but STILL invokes VerifyPeerCertificate, which is
-		// the sole trust decision here. Never unset, never shipped without
-		// the pin hook alongside.
-		InsecureSkipVerify:    true, //nolint:gosec // pinned peer public key IS the verifier (wire-auth.md §4)
-		VerifyPeerCertificate: PeerPinVerifier(peerPubPath),
-		MinVersion:            tls.VersionTLS13,
+		// verification but STILL invokes VerifyConnection on full and
+		// resumed handshakes. Never unset, never ship without the pin hook.
+		InsecureSkipVerify: true, //nolint:gosec // pinned peer public key IS the verifier (wire-auth.md §4)
+		VerifyConnection:   PeerPinConnectionVerifier(peerPubPath),
+		MinVersion:         tls.VersionTLS13,
 		// T130: gRPC over TLS requires ALPN h2 (wire-auth.md §4 as
 		// amended). The Java CP (grpc-netty) negotiates ALPN strictly; a
 		// protocol-less handshake dies against it. Go↔Go only ever passed

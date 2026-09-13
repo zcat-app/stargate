@@ -353,9 +353,10 @@ func TestTLSConfigInvariants(t *testing.T) {
 			t.Errorf("%s: InsecureSkipVerify = false — §4: Go rejects the self-signed cert at the system-roots check before the custom hook runs unless ISV=true", name)
 		}
 		// §4: ISV=true with NO custom verifier is a contract violation
-		// (silent auth bypass). The two must always be co-located.
-		if cfg.InsecureSkipVerify && cfg.VerifyPeerCertificate == nil {
-			t.Errorf("%s: InsecureSkipVerify=true without a VerifyPeerCertificate verifier — §4 contract violation", name)
+		// (silent auth bypass). VerifyConnection is required because it is
+		// invoked on resumed TLS 1.3 handshakes as well as full ones (T135).
+		if cfg.InsecureSkipVerify && cfg.VerifyConnection == nil {
+			t.Errorf("%s: InsecureSkipVerify=true without a VerifyConnection verifier — §4 contract violation", name)
 		}
 		if len(cfg.Certificates) != 1 {
 			t.Errorf("%s: %d certificates presented, want exactly 1 (§1: cert chain length exactly 1)", name, len(cfg.Certificates))
@@ -369,8 +370,9 @@ func TestTLSConfigInvariants(t *testing.T) {
 	if srv.ClientAuth != tls.RequireAnyClientCert {
 		t.Errorf("server ClientAuth = %v, want RequireAnyClientCert (§4: a server that does not request a client cert is a contract violation)", srv.ClientAuth)
 	}
-	// The pin verifier is installed against the pinned peer pub on BOTH.
-	if srv.VerifyPeerCertificate == nil || ClientTLSConfig(cert, pin).VerifyPeerCertificate == nil {
+	// The resumption-safe pin verifier is installed against the pinned peer
+	// pub on BOTH client and server configs.
+	if srv.VerifyConnection == nil || ClientTLSConfig(cert, pin).VerifyConnection == nil {
 		t.Error("custom pin verifier missing on a config (§4: the hook is the sole trust decision)")
 	}
 }
@@ -1397,6 +1399,100 @@ func TestGRPCServerServesMTLSOverUDS(t *testing.T) {
 	t.Cleanup(func() { _ = pt.Close() })
 	if _, err := grpcpb.NewControlClient(pt).ReloadTokens(ctx, &grpcpb.ReloadTokensRequest{Generation: 2}); err == nil {
 		t.Error("PLAINTEXT ReloadTokens over dp.sock succeeded — the server is unauthenticated (pre-T130 defect)")
+	}
+}
+
+// TestGRPCServerReauthorizesResumedPeerAfterPinRotation is T135's real-UDS
+// regression. TLS 1.3 omits the certificate message on a resumed handshake,
+// so VerifyPeerCertificate alone is not invoked. The production dp.sock
+// server must still re-read cp.pub and reject the old CP identity before an
+// RPC dispatches (wire-auth.md §3.1; Constitution Principle II).
+func TestGRPCServerReauthorizesResumedPeerAfterPinRotation(t *testing.T) {
+	dir := t.TempDir()
+	dpKey, _ := newEd25519Key(t)
+	oldCPKey, _ := newEd25519Key(t)
+	newCPKey, _ := newEd25519Key(t)
+	writePubFile(t, filepath.Join(dir, "dp.pub"), dpKey)
+	writePubFile(t, filepath.Join(dir, "cp.pub"), oldCPKey)
+
+	rec := &snapshotRecorder{}
+	s := newTestServer(t, rec)
+	serverTLS := ServerTLSConfig(mustDerive(t, dpKey), filepath.Join(dir, "cp.pub"))
+	handshakes := make(chan bool, 8)
+	verifyConnection := serverTLS.VerifyConnection
+	serverTLS.VerifyConnection = func(state tls.ConnectionState) error {
+		handshakes <- state.DidResume
+		if verifyConnection != nil {
+			return verifyConnection(state)
+		}
+		return nil
+	}
+
+	gs, err := NewGRPCServer(s, serverTLS)
+	if err != nil {
+		t.Fatalf("NewGRPCServer: %v", err)
+	}
+	sock := filepath.Join(dir, "dp.sock")
+	lis, err := Listen(dir)
+	if err != nil {
+		t.Fatalf("Listen: %v", err)
+	}
+	t.Cleanup(func() { _ = lis.Close(); gs.Stop() })
+	go func() { _ = gs.Serve(lis) }()
+
+	cache := tls.NewLRUClientSessionCache(1)
+	oldClientTLS := ClientTLSConfig(mustDerive(t, oldCPKey), filepath.Join(dir, "dp.pub"))
+	oldClientTLS.ClientSessionCache = cache
+	callReload := func(clientTLS *tls.Config, generation uint64) (*grpcpb.ReloadTokensResponse, error) {
+		conn, err := grpc.NewClient("unix://"+sock,
+			grpc.WithTransportCredentials(credentials.NewTLS(clientTLS)))
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		ctx = metadata.AppendToOutgoingContext(ctx, protoversion.MetaMajor, "1")
+		return grpcpb.NewControlClient(conn).ReloadTokens(ctx,
+			&grpcpb.ReloadTokensRequest{Generation: generation})
+	}
+
+	if _, err := callReload(oldClientTLS, 1); err != nil {
+		t.Fatalf("initial ReloadTokens full handshake: %v", err)
+	}
+	if resumed := <-handshakes; resumed {
+		t.Fatal("initial TLS connection unexpectedly resumed")
+	}
+	// Reconnect once before rotation to prove the client received and can
+	// use the server's session ticket; this is not inferred from config.
+	if _, err := callReload(oldClientTLS, 1); err != nil {
+		t.Fatalf("pre-rotation ReloadTokens resumption: %v", err)
+	}
+	if resumed := <-handshakes; !resumed {
+		t.Fatal("pre-rotation reconnect did not resume — regression never exercised a session ticket")
+	}
+
+	writePubFile(t, filepath.Join(dir, "cp.pub"), newCPKey)
+	if _, err := callReload(oldClientTLS, 2); err == nil {
+		t.Error("old CP identity invoked ReloadTokens after cp.pub rotation on a resumed connection")
+	}
+	if resumed := <-handshakes; !resumed {
+		t.Fatal("post-rotation old-identity attempt was not resumed — wrong path exercised")
+	}
+	if got := s.tokens.Current().Generation; got != 1 {
+		t.Fatalf("generation = %d after rejected old peer, want 1 (RPC must not dispatch)", got)
+	}
+
+	newClientTLS := ClientTLSConfig(mustDerive(t, newCPKey), filepath.Join(dir, "dp.pub"))
+	resp, err := callReload(newClientTLS, 2)
+	if err != nil {
+		t.Fatalf("newly pinned CP identity fresh handshake: %v", err)
+	}
+	if resp.GetAppliedGeneration() != 2 {
+		t.Errorf("new CP applied_generation = %d, want 2", resp.GetAppliedGeneration())
+	}
+	if resumed := <-handshakes; resumed {
+		t.Fatal("new CP identity unexpectedly reused the old identity's TLS session")
 	}
 }
 

@@ -1,9 +1,9 @@
 ---
 id: "T135"
 title: "Reject resumed TLS peers after public-key rotation"
-status: "pending"
+status: in-review
 created: "2026-09-12"
-last_updated: "2026-09-12"
+last_updated: 2026-09-13
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
@@ -34,9 +34,21 @@ M2: production server TLS session resumption skips the current cp.pub pin; the i
 
 ## Analysis
 
-- Must hold: the ticket acceptance and cited constitutional properties.
-- Gated: existing baseline verify is green; it did not catch the audited issue.
-- Residue: the specific missing property in Context; the acceptance probes below must discriminate it. Investigation-only tickets must resolve the design before authorizing production changes.
+- Must hold: every full or resumed TLS connection to `dp.sock` must prove possession of the
+  key currently pinned by `cp.pub` before `ReloadTokens` dispatch. Replacing that pin without
+  restarting the DP must reject the old CP identity while a fresh handshake from the newly pinned
+  identity succeeds. TLS 1.3, mutual authentication, protocol-version rejection, and the existing
+  wrong-key behavior remain unchanged.
+- Gated: a production-server regression over a real Unix socket obtains and reuses a TLS 1.3
+  session ticket, observes that resumption was attempted after the pin replacement, and checks the
+  server generation to prove the rejected peer dispatched no RPC. Existing controlclient tests pin
+  full-handshake wrong-key rejection, TLS 1.3/ALPN configuration, and protocol-version handling;
+  `scripts/verify.sh` runs the Go workspace containing them.
+- Residue: the hermetic regression proves the Go DP server and gRPC handler boundary, not the
+  Java/Go compose path or the separate certificate validity/renewal policy owned by T148. Review
+  must therefore confirm the verification hook executes on resumed handshakes and still re-reads
+  `cp.pub` for each connection; no claim is made that rotation terminates already-established
+  channels.
 
 ## Acceptance
 
