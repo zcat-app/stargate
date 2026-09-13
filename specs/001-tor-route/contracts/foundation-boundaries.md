@@ -40,6 +40,72 @@ Test same destination under different sites/devices/profiles and unknown-context
 A destination hostname is not a fallback identity; same-partition circuit reuse is permitted,
 not guaranteed. No claim of general cross-site anonymity follows from circuit isolation alone.
 
+### Browser SOCKS isolation identity — T136
+
+The browser extension derives one versioned opaque SOCKS username for the tuple
+`(authenticated device, browser profile, browser context, initiating top-level site)`:
+
+- Firefox 153's native `publicSuffix.getDomain()` is the sole DNS suffix authority. Its default
+  punycode result includes ICANN and PRIVATE rules (including `github.io`) and returns `null` for
+  IP addresses, plain suffixes and unknown suffixes; Stargate never enables `allowPlainSuffix` or
+  `allowUnknownSuffix`. The browser ships and updates that data without extension runtime network
+  I/O. `manifest.json` pins `browser_specific_settings.gecko.strict_min_version` to `153.0`
+  and declares the `publicSuffix` API permission — Firefox injects the namespace only when the
+  permission is declared, so omitting it makes every DNS-site derivation fail closed in the
+  real browser regardless of the version pin.
+  Development is grounded against Mullvad Browser Alpha 16.0a11 / Gecko 153.2.0; v1 release is
+  gated until the stable Mullvad Browser channel uses Gecko 153 or newer and still supports MV2.
+- A DNS site is its registrable domain. A hostname that is itself a public suffix or has no
+  registrable label is unavailable. HTTP and HTTPS schemes share a site; explicit/default ports,
+  paths, queries, fragments and user information do not enter it. Unsupported schemes and
+  hostless/opaque top-level URLs are unavailable. Complete normalized `.onion` hosts and canonical
+  IPv4 or bracketed IPv6 literals remain whole and type-distinct; no local DNS lookup occurs.
+  These scheme restrictions apply to the initiating site only. Destination selection uses the
+  requested hostname: a `.onion` WebSocket request is Tor-routed just like HTTP(S), without a
+  scheme-based downgrade.
+- A top-level `main_frame` navigation uses its requested URL, including a redirect target. A
+  frame-zero subresource uses a present valid `documentUrl` and binds that result to its
+  browser-provided `documentId`. `webNavigation.onCommitted` binds each top-level `documentId` to
+  its site and lets a child document inherit only through a known `parentDocumentId`; nested-frame
+  and tab-associated-worker requests must match that exact document ancestry. A new top-level
+  commit retires the tab's older bindings. Bindings are bounded; eviction is identity-unavailable.
+  `documentUrl` remains higher precedence than `originUrl`, but `originUrl` alone is insufficient
+  because Firefox may report an intermediate CSS resource there. Subresource redirects retain the
+  committed top-level site. Detached workers, absent committed context and opaque top-level parents
+  return identity-unavailable. T157 owns cancellation and packet-level no-fallback proof for that
+  result; T136 does not represent a Direct descriptor as a block. An asynchronous HMAC completion
+  rechecks the exact document binding and becomes unavailable if navigation replaced it.
+- `storage.local.isolationProfileId` is 32 random bytes encoded as 64 lowercase hex characters,
+  generated once per browser profile and stable across background restarts. Missing state is
+  initialized through one serialized write; malformed or unwritable state is unavailable, never
+  silently rotated. The request context includes normal/private mode and the browser-provided
+  `cookieStoreId`, so those contexts do not share an identity.
+- The HMAC key is the exact bearer-token string. The UTF-8 message is
+  `JSON.stringify(["stargate-isolation-v1", profileId, mode, cookieStoreId, typedSite])`, where
+  `mode` is `normal` or `private` and `typedSite` begins `dns:`, `onion:`, `ipv4:` or `ipv6:`.
+  The username is `sg1:` followed by the full 64-character lowercase hex HMAC-SHA-256 tag: exactly
+  68 ASCII bytes, within RFC 1929's 255-byte limit. A request snapshots token generation and all
+  tuple inputs; an asynchronous completion after token change is identity-unavailable. The browser
+  still sends the bearer only as the DP-facing password. The DP forwards the username intact and
+  an empty password to Tor, so neither the bearer nor its literal bytes cross that boundary.
+
+The fixed reference vector is derived independently of the extension with Python's standard
+library. It uses `token = '0f1e2d3c' * 4`, `profileId = '11' * 32`, normal mode,
+`firefox-default`, and `typedSite = 'onion:' + ('abcd2345' * 7) + '.onion'`:
+
+```bash
+python3 -c "import hashlib,hmac,json; token=('0f1e2d3c'*4).encode(); profile='11'*32; onion='abcd2345'*7+'.onion'; message=json.dumps(['stargate-isolation-v1',profile,'normal','firefox-default','onion:'+onion],separators=(',',':')).encode(); print('sg1:'+hmac.new(token,message,hashlib.sha256).hexdigest())"
+```
+
+The required output is
+`sg1:1940cde7068246610f120ee0926ad88113942aa2e83d71ba649deab843077a06`.
+
+Different valid tuples must produce different usernames subject to HMAC-SHA-256 collision
+resistance; equal tuples are stable but Tor is not required to reuse a circuit. Token rotation
+starts a new authenticated-device partition. Reusing one token on multiple devices identifies them
+as one authenticated device, and copying a browser profile can copy its profile id; onboarding and
+T155 evidence must state those limits.
+
 ## Auth state, recovery and peer identity — T132/T135/T148/T159
 
 A valid last acknowledged DP snapshot authorizes cold-start admission while CP is down. Missing,

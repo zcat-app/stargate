@@ -1,182 +1,359 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// router.js — the extension's per-request routing authority: the
-// `browser.proxy.onRequest` listener implementing the canonical
-// `.onion`→127.0.0.1:8881 SOCKS5 rule (FR-001) with the FR-002
-// username/password wiring, the FR-003 `proxyDNS` flag, and the
-// FR-004(b) fail-closed gate (as amended by T091) — plus the background
-// half of the T034c-pinned per-tab indicator transport: the
-// `webRequest.onBeforeRequest` decision cache and the `runtime.onMessage`
-// responder the popup (T057) queries with
-// `{type:'stargate:getRoute', tabId}`.
-//
-// Fail-closed matrix (FR-004(b); Constitution III): the SOCKS descriptor
-// requires ALL of — the hardening gate open (`hardeningOk === true`,
-// T055's flag; manifest M4 pins hardening.js loads before this script),
-// an `.onion` request host, a non-throwing `firstPartyDomain`
-// computation (a FirstPartyError governing URL never yields a guessed or
-// empty username — the shared-circuit collapse T034d finding 3 forbids),
-// and a present mirrored bearer token. Every unmet condition returns
-// `{type:'direct'}` and records the tab as `unrouted`, so the popup's
-// fail-closed label is the truth (the wrong-positive case T034c forbids).
-//
-// Non-`.onion` hosts get no proxy in this feature (FR-001 scope clause).
-// `failoverTimeout` is intentionally NOT set — Firefox's default applies;
-// pinning it would create a magic number with no spec-level rationale
-// (tasks.md T054; spec assumption "proxy.onRequest failover timeout").
-//
-// The bearer token is MIRRORED into memory: read once at script
-// evaluation (hardening.js load-time-async precedent) and refreshed on
-// `storage.onChanged` for the device key. The sync mirror is what lets
-// the T034c-pinned cache write happen in the synchronous onBeforeRequest
-// listener — a per-request storage read could not know token presence
-// synchronously, and an onion tab with no token configured would cache
-// `tor` and the popup would lie. Descriptor and cache entry always read
-// the same memory cell, so they can never disagree. Token FORMAT
-// validation stays at the options edge (T052 §Analysis, data-model.md §5);
-// the router checks only presence.
-//
-// Surface (T034g doctrine — firstparty.js / storage.js / hardening.js /
-// router.js share ONE background-page global scope): this module
-// contributes ZERO new globals — everything lives inside this IIFE; its
-// surface is its four browser registrations, pinned by router.test.js.
+// router.js — per-request `.onion` routing plus the T136
+// authenticated-device/browser-profile/top-level-site isolation tuple.
+// Unknown identity remains an unrouted descriptor here; T157 owns browser
+// cancellation and packet-level no-fallback proof.
 
 'use strict';
 
 (function stargateRouter() {
-  // FR-001/FR-005: port 8881 is fixed to the Tor route in this feature.
   const TOR_HOST = '127.0.0.1';
   const TOR_PORT = 8881;
   const DIRECT = { type: 'direct' };
   const GET_ROUTE = 'stargate:getRoute';
+  const PROFILE_KEY = 'isolationProfileId';
+  const PROFILE_PATTERN = /^[0-9a-f]{64}$/;
+  const textEncoder = new TextEncoder();
 
-  // The mirrored bearer token (FR-002 password). `null` = no token —
-  // genuine unconfigured state, never fabricated (T052 storage.js
-  // contract); `null` fails the gate closed.
   let mirroredToken = null;
+  let mirroredKey = null;
+  let tokenGeneration = 0;
 
-  function refreshMirror() {
+  const tabDecisions = new Map();
+  const documentSites = new Map();
+  const tabDocuments = new Map();
+  const topDocuments = new Map();
+  const MAX_DOCUMENTS_PER_TAB = 64;
+
+  function validTabId(tabId) {
+    return typeof tabId === 'number' && Number.isInteger(tabId) && tabId >= 0;
+  }
+
+  function validDocumentId(documentId) {
+    return typeof documentId === 'string' && documentId !== '';
+  }
+
+  function forgetDocument(documentId) {
+    const record = documentSites.get(documentId);
+    if (!record) return;
+    documentSites.delete(documentId);
+    const documents = tabDocuments.get(record.tabId);
+    if (!documents) return;
+    documents.delete(documentId);
+    if (documents.size === 0) tabDocuments.delete(record.tabId);
+  }
+
+  function forgetTabDocuments(tabId) {
+    const documents = tabDocuments.get(tabId);
+    if (!documents) return;
+    for (const documentId of documents) documentSites.delete(documentId);
+    tabDocuments.delete(tabId);
+  }
+
+  function bindDocument(tabId, documentId, site) {
+    if (!validTabId(tabId) || !validDocumentId(documentId)) {
+      throw new Error('missing document identity');
+    }
+    const existing = documentSites.get(documentId);
+    if (existing) {
+      if (existing.tabId !== tabId || existing.site !== site) {
+        throw new Error('inconsistent document identity');
+      }
+      return { documentId, record: existing };
+    }
+
+    const record = Object.freeze({ tabId, site });
+    documentSites.set(documentId, record);
+    let documents = tabDocuments.get(tabId);
+    if (!documents) {
+      documents = new Set();
+      tabDocuments.set(tabId, documents);
+    }
+    documents.add(documentId);
+    while (documents.size > MAX_DOCUMENTS_PER_TAB) {
+      forgetDocument(documents.values().next().value);
+    }
+    return { documentId, record };
+  }
+
+  function tokenFromDevice(device) {
+    return (
+      device !== null &&
+      typeof device === 'object' &&
+      typeof device.bearerToken === 'string' &&
+      device.bearerToken !== ''
+    ) ? device.bearerToken : null;
+  }
+
+  function replaceMirror(device) {
+    tokenGeneration += 1;
+    mirroredToken = tokenFromDevice(device);
+    mirroredKey = null;
+    if (mirroredToken === null) return;
+    try {
+      mirroredKey = crypto.subtle.importKey(
+        'raw',
+        textEncoder.encode(mirroredToken),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+    } catch {
+      return;
+    }
+    if (mirroredKey !== null) mirroredKey.catch(() => {});
+  }
+
+  const tokenReady = (() => {
+    const startingGeneration = tokenGeneration;
     return StargateStorage.getDevice()
       .then((device) => {
-        mirroredToken =
-          device !== null && typeof device === 'object' &&
-          typeof device.bearerToken === 'string' && device.bearerToken !== ''
-            ? device.bearerToken
-            : null;
+        if (tokenGeneration === startingGeneration) replaceMirror(device);
       })
       .catch(() => {
-        // A broken storage read must degrade to fail-closed, never to a
-        // rejection on the background page.
-        mirroredToken = null;
+        if (tokenGeneration === startingGeneration) replaceMirror(null);
       });
+  })();
+
+  function randomProfileId() {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
   }
 
-  // The complete routing decision for one request. Pure over (details,
-  // hardeningOk, mirroredToken) — evaluated by BOTH the cache writer and
-  // the descriptor producer so the popup feed and the proxy can never
-  // disagree on the same state.
-  function route(details) {
-    if (hardeningOk !== true) return { routed: false };
-    let host;
+  function loadProfile() {
+    return browser.storage.local.get(PROFILE_KEY).then((bag) => {
+      if (Object.prototype.hasOwnProperty.call(bag, PROFILE_KEY)) {
+        const stored = bag[PROFILE_KEY];
+        if (typeof stored !== 'string' || !PROFILE_PATTERN.test(stored)) {
+          throw new Error('invalid isolation profile id');
+        }
+        return stored;
+      }
+      const created = randomProfileId();
+      return browser.storage.local.set({ [PROFILE_KEY]: created }).then(() => created);
+    });
+  }
+
+  const profileReady = loadProfile();
+  profileReady.catch(() => {});
+
+  function requestSite(details) {
+    if (details.type === 'main_frame' && details.frameId === 0) {
+      return { site: firstPartyDomain(details), document: null };
+    }
+
+    if (details.frameId === 0 && typeof details.documentUrl !== 'undefined') {
+      if (!validTabId(details.tabId) || !validDocumentId(details.documentId)) {
+        throw new Error('missing document identity');
+      }
+      const currentTop = topDocuments.get(details.tabId);
+      if (typeof currentTop !== 'undefined' && currentTop !== details.documentId) {
+        throw new Error('retired document identity');
+      }
+      const site = firstPartyDomain(details);
+      return {
+        site,
+        document: bindDocument(details.tabId, details.documentId, site),
+      };
+    }
+
+    if (validTabId(details.tabId)) {
+      const own = validDocumentId(details.documentId)
+        ? documentSites.get(details.documentId)
+        : null;
+      const parent = validDocumentId(details.parentDocumentId)
+        ? documentSites.get(details.parentDocumentId)
+        : null;
+      if (
+        own && parent &&
+        (own.tabId !== parent.tabId || own.site !== parent.site)
+      ) {
+        throw new Error('inconsistent document ancestry');
+      }
+      const known = own || parent;
+      if (known && known.tabId === details.tabId) {
+        const document = own
+          ? { documentId: details.documentId, record: own }
+          : bindDocument(details.tabId, details.documentId, known.site);
+        return { site: known.site, document };
+      }
+    }
+
+    // Invoke the helper so origin-only and missing-context failures keep
+    // the same FirstPartyError boundary as malformed document metadata.
+    return firstPartyDomain(details);
+  }
+
+  function onionDestination(details) {
     try {
-      host = new URL(details.url).hostname;
+      const parsed = new URL(details.url);
+      return parsed.hostname.replace(/\.$/, '').toLowerCase().endsWith('.onion');
+    } catch {
+      return false;
+    }
+  }
+
+  function requestContext(details) {
+    if (typeof details.incognito !== 'boolean') {
+      throw new Error('missing private-browsing context');
+    }
+    if (typeof details.cookieStoreId !== 'string' || details.cookieStoreId === '') {
+      throw new Error('missing contextual identity');
+    }
+    return {
+      mode: details.incognito ? 'private' : 'normal',
+      cookieStoreId: details.cookieStoreId,
+    };
+  }
+
+  async function isolationUsername(key, profileId, context, site) {
+    const message = JSON.stringify([
+      'stargate-isolation-v1',
+      profileId,
+      context.mode,
+      context.cookieStoreId,
+      site,
+    ]);
+    const tag = new Uint8Array(await crypto.subtle.sign(
+      'HMAC',
+      await key,
+      textEncoder.encode(message)
+    ));
+    return 'sg1:' + Array.from(
+      tag,
+      (value) => value.toString(16).padStart(2, '0')
+    ).join('');
+  }
+
+  async function route(details) {
+    if (hardeningOk !== true || !onionDestination(details)) {
+      return { routed: false };
+    }
+
+    await tokenReady;
+    const token = mirroredToken;
+    const key = mirroredKey;
+    const tokenSnapshot = tokenGeneration;
+    if (token === null || key === null) return { routed: false };
+
+    try {
+      const initiating = requestSite(details);
+      const context = requestContext(details);
+      const profileId = await profileReady;
+      const username = await isolationUsername(
+        key, profileId, context, initiating.site
+      );
+      if (
+        tokenSnapshot !== tokenGeneration ||
+        token !== mirroredToken ||
+        (
+          initiating.document !== null &&
+          documentSites.get(initiating.document.documentId) !==
+            initiating.document.record
+        )
+      ) {
+        return { routed: false };
+      }
+      return { routed: true, username, token };
     } catch {
       return { routed: false };
     }
-    // One trailing dot is the FQDN form of a legal host; strip it so it
-    // can neither evade the suffix check nor leak into the username
-    // (mirrors firstparty.js normalization).
-    host = host.replace(/\.$/, '');
-    if (!host.endsWith('.onion')) return { routed: false };
-    let username;
-    try {
-      username = firstPartyDomain(details);
-    } catch {
-      return { routed: false };
-    }
-    if (mirroredToken === null) return { routed: false };
-    return { routed: true, username };
   }
 
-  browser.proxy.onRequest.addListener(function proxyOnRequest(details) {
-    const decision = route(details);
+  browser.proxy.onRequest.addListener(async function proxyOnRequest(details) {
+    const decision = await route(details);
+    if (validTabId(details.tabId)) {
+      tabDecisions.set(details.tabId, decision.routed ? 'tor' : 'unrouted');
+    }
     if (!decision.routed) return DIRECT;
     return {
       type: 'socks',
       host: TOR_HOST,
       port: TOR_PORT,
       username: decision.username,
-      password: mirroredToken,
+      password: decision.token,
       proxyDNS: true,
     };
   });
 
-  // Per-tab decision cache (T034c §Analysis finding 1: "written by the
-  // router's webRequest.onBeforeRequest listener"). Keyed by tabId;
-  // non-tab requests (tabId -1) have no indicator and are not recorded.
-  // The cache is bounded by the event-page lifetime: Firefox tears down
-  // the non-persistent background page on idle, resetting script state.
-  const tabDecisions = new Map();
-
   browser.webRequest.onBeforeRequest.addListener(
     function stargateOnBeforeRequest(details) {
-      if (
-        typeof details.tabId === 'number' &&
-        Number.isInteger(details.tabId) &&
-        details.tabId >= 0
-      ) {
-        tabDecisions.set(details.tabId, route(details).routed ? 'tor' : 'unrouted');
+      if (validTabId(details.tabId)) {
+        route(details).then((decision) => {
+          tabDecisions.set(
+            details.tabId,
+            decision.routed ? 'tor' : 'unrouted'
+          );
+        });
       }
       return {};
     },
     { urls: ['<all_urls>'] }
   );
 
-  // The popup's query (T034c pinned protocol): `{route:'tor'}` iff the
-  // cache holds a confirmed Tor decision; `{route:'unrouted'}` for a
-  // recorded non-Tor decision; a Promise resolving `undefined` for an
-  // unknown tab (cold start — "nothing meaningful"). The answer leaves
-  // via the RESPONSE CHANNEL — a Promise return — because Firefox's
-  // runtime.onMessage discards any other listener return value
-  // ("The listener function can return either a Boolean or a Promise",
-  // MDN; round-1 review Major): a plain object would make every popup
-  // render its fail-closed label. Non-owned or malformed messages get a
-  // plain `undefined` — not handled — so other listeners may answer
-  // (the MDN multi-listener pattern: Promise only for messages this
-  // listener handles).
+  browser.webNavigation.onCommitted.addListener(
+    function stargateDocumentCommitted(details) {
+      if (!validTabId(details.tabId) || !validDocumentId(details.documentId)) {
+        return;
+      }
+      if (details.frameId === 0) {
+        // Keep the browser's current top-level identity after retiring its
+        // site record. Otherwise a late request carrying the old documentId
+        // could recreate that retired authority from documentUrl.
+        topDocuments.set(details.tabId, details.documentId);
+        forgetTabDocuments(details.tabId);
+        try {
+          const site = firstPartyDomain({
+            url: details.url,
+            type: 'main_frame',
+            frameId: 0,
+          });
+          bindDocument(details.tabId, details.documentId, site);
+        } catch {
+          // Opaque or malformed top-level documents remain unbound.
+        }
+        return;
+      }
+
+      if (!validDocumentId(details.parentDocumentId)) return;
+      const parent = documentSites.get(details.parentDocumentId);
+      if (!parent || parent.tabId !== details.tabId) return;
+      try {
+        bindDocument(details.tabId, details.documentId, parent.site);
+      } catch {
+        forgetDocument(details.documentId);
+      }
+    }
+  );
+
+  browser.tabs.onRemoved.addListener(function stargateTabRemoved(tabId) {
+    tabDecisions.delete(tabId);
+    topDocuments.delete(tabId);
+    forgetTabDocuments(tabId);
+  });
+
   browser.runtime.onMessage.addListener(function stargateGetRoute(message) {
     if (message === null || typeof message !== 'object') return undefined;
     if (message.type !== GET_ROUTE) return undefined;
     const tabId = message.tabId;
-    if (
-      typeof tabId !== 'number' ||
-      !Number.isInteger(tabId) ||
-      tabId < 0
-    ) {
-      return undefined;
-    }
+    if (!validTabId(tabId)) return undefined;
     const decision = tabDecisions.get(tabId);
     if (decision === 'tor') return Promise.resolve({ route: 'tor' });
     if (decision === 'unrouted') return Promise.resolve({ route: 'unrouted' });
     return Promise.resolve(undefined);
   });
 
-  // Token mirror upkeep: re-read when the device record changes (options
-  // page save/removal, T056) and once at evaluation, below.
   browser.storage.onChanged.addListener(function stargateOnStorageChanged(
     changes,
     area
   ) {
-    if (
-      area === 'local' &&
-      changes !== null &&
-      typeof changes === 'object' &&
-      Object.prototype.hasOwnProperty.call(changes, 'device')
-    ) {
-      refreshMirror();
+    if (area !== 'local' || changes === null || typeof changes !== 'object') {
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(changes, 'device')) {
+      replaceMirror(changes.device.newValue);
     }
   });
-
-  refreshMirror();
 })();

@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 56 |
-| in-progress | 0 |
+| pending | 55 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 134 |
@@ -32,7 +32,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
 | T134 | Investigate a constitution-compliant local topology | Foundation audit remediation | ✓ |  |
-| T136 | Prevent cross-site first-party isolation collisions | Foundation audit remediation | ✓ |  |
 | T141 | Pin CI Actions and agent installation dependencies | Foundation audit remediation | ✓ |  |
 | T142 | Make agent execution-boundary claims demonstrable | Foundation audit remediation | ✓ |  |
 | T143 | Retire obsolete Java token-verifier constants | Foundation audit remediation | ✓ |  |
@@ -52,7 +51,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T136 | Prevent cross-site first-party isolation collisions | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

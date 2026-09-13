@@ -30,8 +30,8 @@
 // hardening.js / router.js all evaluate into ONE background-page global
 // scope. router.js contributes ZERO new property globals — everything
 // lives inside one IIFE; its surface is its browser registrations
-// (`proxy.onRequest`, `webRequest.onBeforeRequest`, `runtime.onMessage`,
-// `storage.onChanged`), not scope bindings.
+// (`proxy.onRequest`, `webRequest.onBeforeRequest`, `webNavigation.onCommitted`,
+// `tabs.onRemoved`, `runtime.onMessage`, `storage.onChanged`), not scope bindings.
 //
 // Node built-ins only; vm.runInNewContext loader (research.md §10) — no
 // third-party deps, no package.json. Fixtures are syntactic only (32-hex
@@ -45,6 +45,8 @@ const { test } = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { webcrypto } = require('node:crypto');
+const { TextEncoder } = require('node:util');
 
 const ROUTER_PATH = path.join(__dirname, 'router.js');
 const FIRSTPARTY_PATH = path.join(__dirname, '..', 'lib', 'firstparty.js');
@@ -57,6 +59,12 @@ const STORAGE_PATH = path.join(__dirname, '..', 'lib', 'storage.js');
 // literals, while every assertion still sees a full 32-hex string.
 const TOKEN_A = '0f1e2d3c'.repeat(4);
 const TOKEN_B = 'a1b2c3d4'.repeat(4);
+const PROFILE_A = '11'.repeat(32);
+const PROFILE_B = '22'.repeat(32);
+// Independently derived with Python's standard-library HMAC implementation;
+// the exact command and inputs are pinned in foundation-boundaries.md.
+const ONION_A_USERNAME =
+  'sg1:1940cde7068246610f120ee0926ad88113942aa2e83d71ba649deab843077a06';
 
 // 56 base32 chars (a-z, 2-7) + `.onion` — v3-shaped addresses (T034c/
 // T034d fixture style).
@@ -69,11 +77,36 @@ const GET_ROUTE = 'stargate:getRoute';
 // The shared background scope as the loader seeds it. firstparty.js adds
 // `firstPartyDomain`, storage.js adds `StargateStorage`; router.js must
 // add NOTHING beyond these (§Surface pin).
-const SEEDED = ['URL', 'browser', 'console', 'hardeningOk'];
-const LIB_GLOBALS = ['StargateStorage', 'firstPartyDomain'].sort();
+const SEEDED = [
+  'TextEncoder', 'URL', 'browser', 'console', 'crypto', 'hardeningOk',
+];
+const LIB_GLOBALS = [
+  'StargateStorage', 'firstPartyDomain',
+].sort();
+
+function nativeRegistrableDomain(host) {
+  const labels = host.split('.');
+  if (host === 'co.uk') return null;
+  if (host.endsWith('.co.uk') && labels.length >= 3) {
+    return labels.slice(-3).join('.');
+  }
+  if (host.endsWith('.github.io') && labels.length >= 3) {
+    return labels.slice(-3).join('.');
+  }
+  if (host.endsWith('.com') && labels.length >= 2) {
+    return labels.slice(-2).join('.');
+  }
+  return null;
+}
 
 function makeBrowser(state, recorded) {
   return {
+    publicSuffix: {
+      getDomain(host) {
+        recorded.publicSuffix.push(host);
+        return nativeRegistrableDomain(host);
+      },
+    },
     proxy: {
       onRequest: {
         addListener(fn) {
@@ -89,6 +122,20 @@ function makeBrowser(state, recorded) {
         },
       },
     },
+    webNavigation: {
+      onCommitted: {
+        addListener(fn) {
+          recorded.committed.push(fn);
+        },
+      },
+    },
+    tabs: {
+      onRemoved: {
+        addListener(fn) {
+          recorded.tabRemoved.push(fn);
+        },
+      },
+    },
     runtime: {
       onMessage: {
         addListener(fn) {
@@ -101,11 +148,25 @@ function makeBrowser(state, recorded) {
         // Mirrors storage.js's read contract: the whole bag, `device` key
         // present iff configured. Read live off `state` so tests can move
         // the stored device between phases; `null` is the absent sentinel.
-        get() {
+        get(key) {
           recorded.localGets.push(1);
-          return Promise.resolve(
-            state.device === null ? {} : { device: state.device }
-          );
+          if (key === 'device' && state.deviceGet !== null) {
+            return state.deviceGet();
+          }
+          const bag = {};
+          if (state.device !== null) bag.device = state.device;
+          if (state.isolationProfileId !== null) {
+            bag.isolationProfileId = state.isolationProfileId;
+          }
+          return Promise.resolve(bag);
+        },
+        set(values) {
+          recorded.localSets.push(plain(values));
+          if (state.localSetError) return Promise.reject(state.localSetError);
+          if ('isolationProfileId' in values) {
+            state.isolationProfileId = values.isolationProfileId;
+          }
+          return Promise.resolve();
         },
       },
       onChanged: {
@@ -127,6 +188,10 @@ function loadRouter(options) {
     hardeningOk = false, // hardening.js's initial state: fail-closed until
                          // the first audit completes
     device = { name: 'test-device', bearerToken: TOKEN_A, tokenStoredAt: 1 },
+    isolationProfileId = PROFILE_A,
+    localSetError = null,
+    deviceGet = null,
+    crypto = null,
   } = options || {};
   const recorded = {
     proxy: [],
@@ -135,11 +200,26 @@ function loadRouter(options) {
     message: [],
     onChanged: [],
     localGets: [],
+    localSets: [],
+    committed: [],
+    tabRemoved: [],
+    publicSuffix: [],
   };
-  const state = { device, hardeningOk };
+  const state = {
+    device, hardeningOk, isolationProfileId, localSetError, deviceGet,
+  };
+  const cryptoImpl = crypto || {
+    subtle: webcrypto.subtle,
+    getRandomValues(values) {
+      values.fill(0x33);
+      return values;
+    },
+  };
   const sandbox = {
+    TextEncoder,
     URL,
     console,
+    crypto: cryptoImpl,
     browser: makeBrowser(state, recorded),
     hardeningOk: state.hardeningOk,
   };
@@ -212,10 +292,15 @@ function loadHardenedTokened() {
     'router.js must register exactly one runtime.onMessage responder at ' +
       'evaluation'
   );
+  assert.strictEqual(
+    loaded.recorded.committed.length, 1,
+    'router.js must register one committed-navigation context listener'
+  );
   return {
     onRequest: loaded.recorded.proxy[0],
     onBeforeRequest: loaded.recorded.webRequest[0],
     onMessage: loaded.recorded.message[0],
+    onCommitted: loaded.recorded.committed[0],
     ...loaded,
   };
 }
@@ -228,8 +313,57 @@ async function drain(turns = 10) {
   }
 }
 
+async function waitForCachedRoute(onMessage, tabId, route) {
+  let reply;
+  for (let turn = 0; turn < 100; turn += 1) {
+    reply = await onMessage({ type: GET_ROUTE, tabId });
+    if (reply && reply.route === route) return reply;
+    await drain(1);
+  }
+  return reply;
+}
+
 function mainFrame(url, extra) {
-  return { url, type: 'main_frame', tabId: 7, ...extra };
+  return {
+    url,
+    type: 'main_frame',
+    frameId: 0,
+    parentFrameId: -1,
+    tabId: 7,
+    incognito: false,
+    cookieStoreId: 'firefox-default',
+    documentId: 'top-document-7',
+    ...extra,
+  };
+}
+
+function subresource(url, documentUrl, extra) {
+  return {
+    url,
+    documentUrl,
+    type: 'image',
+    frameId: 0,
+    parentFrameId: -1,
+    tabId: 7,
+    incognito: false,
+    cookieStoreId: 'firefox-default',
+    documentId: 'top-document-7',
+    ...extra,
+  };
+}
+
+function assertNoRoutableIdentity(descriptor, message) {
+  assert.notStrictEqual(descriptor && descriptor.type, 'socks', message);
+  assert.strictEqual(
+    JSON.stringify(descriptor || {}).includes('username'),
+    false,
+    message + ' (no username)'
+  );
+  assert.strictEqual(
+    JSON.stringify(descriptor || {}).includes(TOKEN_A),
+    false,
+    message + ' (no bearer)'
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -239,19 +373,19 @@ function mainFrame(url, extra) {
 test('onionTopLevelNavigationReturnsCanonicalSocksDescriptor', async () => {
   const { onRequest } = loadHardenedTokened();
   await drain();
-  const descriptor = onRequest(mainFrame(`https://${ONION_A}/page`));
+  const descriptor = await onRequest(mainFrame(`https://${ONION_A}/page`));
   assert.deepStrictEqual(
     plain(descriptor),
     {
       type: 'socks',
       host: '127.0.0.1',
       port: 8881,
-      username: ONION_A,
+      username: ONION_A_USERNAME,
       password: TOKEN_A,
       proxyDNS: true,
     },
     'FR-001/002/003: the .onion descriptor is socks/127.0.0.1:8881 with ' +
-      'the full onion host as username, the bearer token as password, and ' +
+      'the fixed-vector opaque identity as username, the bearer token as password, and ' +
       'proxyDNS true (SOCKS5h)'
   );
   assert.strictEqual(
@@ -264,10 +398,10 @@ test('onionTopLevelNavigationReturnsCanonicalSocksDescriptor', async () => {
 test('distinctOnionFirstPartiesGetDistinctUsernames', async () => {
   const { onRequest } = loadHardenedTokened();
   await drain();
-  const a = onRequest(mainFrame(`https://${ONION_A}/`));
-  const b = onRequest(mainFrame(`https://${ONION_B}/`));
-  assert.strictEqual(a.username, ONION_A, 'onion hosts are not reduced');
-  assert.strictEqual(b.username, ONION_B, 'onion hosts are not reduced');
+  const a = await onRequest(mainFrame(`https://${ONION_A}/`));
+  const b = await onRequest(mainFrame(`https://${ONION_B}/`));
+  assert.match(a.username, /^sg1:[0-9a-f]{64}$/);
+  assert.match(b.username, /^sg1:[0-9a-f]{64}$/);
   assert.notStrictEqual(
     a.username, b.username,
     'FR-002/Constitution III: distinct first parties MUST isolate — ' +
@@ -280,31 +414,490 @@ test('onionSubresourceUsernameFollowsGoverningDocument', async () => {
   await drain();
   // Subresource of an onion page: governing URL is the parent document,
   // username is the parent's onion address (FR-002 .onion rule).
-  const sameOrigin = onRequest(
-    mainFrame(`https://${ONION_A}/img.png`, {
-      documentUrl: `https://${ONION_A}/page`,
-    })
+  const sameOrigin = await onRequest(
+    subresource(
+      `https://${ONION_A}/img.png`,
+      `https://${ONION_A}/page`,
+      { documentId: 'onion-document-a' }
+    )
   );
-  assert.strictEqual(sameOrigin.username, ONION_A);
+  assert.strictEqual(sameOrigin.username, ONION_A_USERNAME);
   assert.strictEqual(sameOrigin.type, 'socks');
 
   // An onion subresource requested BY a clearnet page still routes via
   // Tor (FR-001 keys on the request host — the bytes are going to an
   // onion service), with the governing document's first party as the
   // username (FR-002 precedence: documentUrl wins).
-  const crossOrigin = onRequest(
-    mainFrame(`https://${ONION_B}/pixel.gif`, {
-      documentUrl: 'https://example.com/page',
+  const crossOrigin = await onRequest(
+    subresource(
+      `https://${ONION_B}/pixel.gif`,
+      'https://example.com/page',
+      { documentId: 'clearnet-document-a' }
+    )
+  );
+  assert.match(crossOrigin.username, /^sg1:[0-9a-f]{64}$/);
+  assert.notStrictEqual(crossOrigin.username, ONION_A_USERNAME);
+  assert.strictEqual(crossOrigin.type, 'socks');
+});
+
+test('sameOnionDestinationSeparatesPublicAndPrivateSuffixSites', async () => {
+  const { onRequest } = loadHardenedTokened();
+  await drain();
+
+  async function usernameFor(documentUrl, documentId) {
+    const descriptor = await onRequest({
+      url: `https://${ONION_A}/same-target.gif`,
+      documentUrl,
+      type: 'image',
+      frameId: 0,
+      parentFrameId: -1,
+      tabId: 7,
+      incognito: false,
+      cookieStoreId: 'firefox-default',
+      documentId,
+    });
+    assert.strictEqual(descriptor.type, 'socks');
+    return descriptor.username;
+  }
+
+  const aliceUK = await usernameFor('https://alice.co.uk/page', 'alice-uk');
+  const bobUK = await usernameFor('https://bob.co.uk/page', 'bob-uk');
+  assert.notStrictEqual(
+    aliceUK,
+    bobUK,
+    'same onion destination under distinct co.uk registrable sites must ' +
+      'produce distinct Tor isolation usernames (T136/M3)'
+  );
+
+  const alicePages = await usernameFor(
+    'https://alice.github.io/page', 'alice-pages'
+  );
+  const bobPages = await usernameFor(
+    'https://bob.github.io/page', 'bob-pages'
+  );
+  assert.notStrictEqual(
+    alicePages,
+    bobPages,
+    'the PRIVATE github.io suffix must separate tenant sites for one ' +
+      'onion destination (T136/M3)'
+  );
+});
+
+test('usernameVectorIsBoundedOpaqueAndStableForOnePartition', async () => {
+  const { onRequest } = loadHardenedTokened();
+  await drain();
+  const first = await onRequest(mainFrame(`https://${ONION_A}/one`));
+  const second = await onRequest(mainFrame(`http://${ONION_A}:80/two`));
+
+  assert.strictEqual(first.username, ONION_A_USERNAME);
+  assert.strictEqual(second.username, ONION_A_USERNAME);
+  assert.strictEqual(first.username.length, 68, 'RFC 1929 username is 68 bytes');
+  assert.ok(!first.username.includes(TOKEN_A), 'username excludes bearer bytes');
+  assert.ok(!first.username.includes(ONION_A), 'username excludes literal site bytes');
+});
+
+test('deviceProfilePrivateAndContainerInputsSeparatePartitions', async () => {
+  const a = loadRouter({ hardeningOk: true });
+  const otherDevice = loadRouter({
+    hardeningOk: true,
+    device: { name: 'other', bearerToken: TOKEN_B, tokenStoredAt: 1 },
+  });
+  const otherProfile = loadRouter({
+    hardeningOk: true,
+    isolationProfileId: PROFILE_B,
+  });
+  await drain();
+
+  const normal = await a.recorded.proxy[0](mainFrame(`https://${ONION_A}/`));
+  const device = await otherDevice.recorded.proxy[0](
+    mainFrame(`https://${ONION_A}/`)
+  );
+  const profile = await otherProfile.recorded.proxy[0](
+    mainFrame(`https://${ONION_A}/`)
+  );
+  const privateMode = await a.recorded.proxy[0](
+    mainFrame(`https://${ONION_A}/`, {
+      incognito: true,
+      cookieStoreId: 'firefox-private',
     })
   );
-  assert.strictEqual(crossOrigin.username, 'example.com');
-  assert.strictEqual(crossOrigin.type, 'socks');
+  const container = await a.recorded.proxy[0](
+    mainFrame(`https://${ONION_A}/`, { cookieStoreId: 'firefox-container-1' })
+  );
+
+  const usernames = [normal, device, profile, privateMode, container]
+    .map((descriptor) => descriptor.username);
+  assert.strictEqual(new Set(usernames).size, usernames.length);
+  for (const username of usernames) assert.match(username, /^sg1:[0-9a-f]{64}$/);
+});
+
+test('profileIdentityInitializesOnceAndInvalidStateIsUnavailable', async () => {
+  const firstInstall = loadRouter({
+    hardeningOk: true,
+    isolationProfileId: null,
+  });
+  const onRequest = firstInstall.recorded.proxy[0];
+  const [one, two] = await Promise.all([
+    onRequest(mainFrame(`https://${ONION_A}/one`)),
+    onRequest(mainFrame(`https://${ONION_A}/two`)),
+  ]);
+  assert.strictEqual(one.username, two.username);
+  assert.deepStrictEqual(firstInstall.recorded.localSets, [
+    { isolationProfileId: '33'.repeat(32) },
+  ]);
+
+  for (const loaded of [
+    loadRouter({ hardeningOk: true, isolationProfileId: 'not-a-profile-id' }),
+    loadRouter({
+      hardeningOk: true,
+      isolationProfileId: null,
+      localSetError: new Error('synthetic storage failure'),
+    }),
+  ]) {
+    const descriptor = await loaded.recorded.proxy[0](
+      mainFrame(`https://${ONION_A}/`)
+    );
+    assertNoRoutableIdentity(
+      descriptor,
+      'malformed or unwritable browser-profile state is unavailable'
+    );
+  }
+});
+
+test('nativeSuffixOrCryptoFailureHasNoRoutableIdentity', async () => {
+  const suffixFailure = loadRouter({ hardeningOk: true });
+  suffixFailure.sandbox.browser.publicSuffix.getDomain = () => {
+    throw new Error('synthetic native suffix failure');
+  };
+  assertNoRoutableIdentity(
+    await suffixFailure.recorded.proxy[0](mainFrame(`https://${ONION_A}/`, {
+      type: 'image',
+      documentUrl: 'https://www.example.com/page',
+    })),
+    'native suffix failure is identity-unavailable'
+  );
+
+  const cryptoFailure = loadRouter({
+    hardeningOk: true,
+    crypto: {
+      getRandomValues: webcrypto.getRandomValues.bind(webcrypto),
+      subtle: {
+        importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
+        sign() {
+          return Promise.reject(new Error('synthetic HMAC failure'));
+        },
+      },
+    },
+  });
+  assertNoRoutableIdentity(
+    await cryptoFailure.recorded.proxy[0](mainFrame(`https://${ONION_A}/`)),
+    'HMAC failure is identity-unavailable'
+  );
+});
+
+test('documentBoundContextGovernsFramesWorkersAndRedirects', async () => {
+  const loaded = loadHardenedTokened();
+  await drain();
+  const { onRequest, onCommitted } = loaded;
+  onCommitted({
+    tabId: 9, frameId: 0, url: 'https://alice.co.uk/page',
+    documentId: 'top-alice',
+  });
+  onCommitted({
+    tabId: 9, frameId: 4, url: 'https://third-party-frame.example/page',
+    documentId: 'frame-alice', parentDocumentId: 'top-alice',
+  });
+
+  const top = await onRequest(subresource(
+    `https://${ONION_A}/top.gif`,
+    'https://alice.co.uk/page',
+    { tabId: 9, documentId: 'top-alice' }
+  ));
+  const nested = await onRequest(subresource(
+    `https://${ONION_A}/nested.gif`,
+    'https://third-party-frame.example/page',
+    {
+      tabId: 9, frameId: 4, parentFrameId: 0,
+      documentId: 'frame-alice', parentDocumentId: 'top-alice',
+    }
+  ));
+  const worker = await onRequest({
+    url: `https://${ONION_A}/worker-fetch`,
+    type: 'xmlhttprequest',
+    frameId: 4,
+    parentFrameId: 0,
+    tabId: 9,
+    incognito: false,
+    cookieStoreId: 'firefox-default',
+    documentId: 'frame-alice',
+    parentDocumentId: 'top-alice',
+  });
+  assert.strictEqual(nested.username, top.username);
+  assert.strictEqual(worker.username, top.username);
+
+  const redirectedMain = await onRequest(mainFrame(
+    `https://${ONION_B}/redirect-target`, {
+      tabId: 9,
+      documentId: 'top-bob-pending',
+      documentUrl: 'https://alice.co.uk/stale-document-metadata',
+      originUrl: 'https://alice.co.uk/stale-origin-metadata',
+    }
+  ));
+  const redirectedControl = await onRequest(mainFrame(
+    `https://${ONION_B}/clean-navigation`, {
+      tabId: 10, documentId: 'top-bob-control',
+    }
+  ));
+  assert.strictEqual(redirectedMain.type, 'socks');
+  assert.strictEqual(redirectedControl.type, 'socks');
+  assert.strictEqual(redirectedMain.username, redirectedControl.username);
+  assert.notStrictEqual(redirectedMain.username, top.username);
+  const afterUncommittedRedirect = await onRequest(subresource(
+    `https://${ONION_A}/still-old-document.gif`,
+    'https://alice.co.uk/page',
+    { tabId: 9, documentId: 'top-alice' }
+  ));
+  assert.strictEqual(afterUncommittedRedirect.username, top.username);
+});
+
+test('retiredTopDocumentCannotBeReboundAfterReplacement', async () => {
+  let releaseDevice;
+  const deviceRead = new Promise((resolve) => {
+    releaseDevice = () => resolve({
+      device: {
+        name: 'test-device', bearerToken: TOKEN_A, tokenStoredAt: 1,
+      },
+    });
+  });
+  const loaded = loadRouter({
+    hardeningOk: true,
+    deviceGet() {
+      return deviceRead;
+    },
+  });
+  await drain();
+  const onRequest = loaded.recorded.proxy[0];
+  const onCommitted = loaded.recorded.committed[0];
+  onCommitted({
+    tabId: 13, frameId: 0, url: 'https://alice.co.uk/',
+    documentId: 'old-top',
+  });
+  const pending = onRequest(subresource(
+    `https://${ONION_A}/delayed`,
+    'https://alice.co.uk/',
+    { tabId: 13, documentId: 'old-top' }
+  ));
+  onCommitted({
+    tabId: 13, frameId: 0, url: 'https://bob.co.uk/',
+    documentId: 'new-top',
+  });
+  releaseDevice();
+
+  assertNoRoutableIdentity(
+    await pending,
+    'a request delayed before context resolution must not resurrect a ' +
+      'document retired by navigation'
+  );
+  assertNoRoutableIdentity(
+    await onRequest(subresource(
+      `https://${ONION_A}/late-old`,
+      'https://alice.co.uk/',
+      { tabId: 13, documentId: 'old-top' }
+    )),
+    'a late request must not rebind a retired top-level document'
+  );
+  assert.strictEqual(
+    (await onRequest(subresource(
+      `https://${ONION_A}/current`,
+      'https://bob.co.uk/',
+      { tabId: 13, documentId: 'new-top' }
+    ))).type,
+    'socks',
+    'the current committed document remains routable'
+  );
+  loaded.recorded.tabRemoved[0](13);
+  assert.strictEqual(
+    (await onRequest(subresource(
+      `https://${ONION_A}/reused-tab`,
+      'https://alice.co.uk/',
+      { tabId: 13, documentId: 'reused-tab-top' }
+    ))).type,
+    'socks',
+    'tab teardown must release the current-document guard before ID reuse'
+  );
+});
+
+test('documentReplacementInvalidatesInFlightNestedContext', async () => {
+  let releaseSign;
+  const delayedCrypto = {
+    getRandomValues(values) {
+      values.fill(0x44);
+      return values;
+    },
+    subtle: {
+      importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
+      sign(...args) {
+        return new Promise((resolve, reject) => {
+          releaseSign = () => webcrypto.subtle.sign(...args).then(resolve, reject);
+        });
+      },
+    },
+  };
+  const loaded = loadRouter({ hardeningOk: true, crypto: delayedCrypto });
+  await drain();
+  loaded.recorded.committed[0]({
+    tabId: 12, frameId: 0, url: 'https://alice.co.uk/',
+    documentId: 'old-top',
+  });
+  loaded.recorded.committed[0]({
+    tabId: 12, frameId: 2, url: 'https://frame.example/',
+    documentId: 'old-frame', parentDocumentId: 'old-top',
+  });
+  const pending = loaded.recorded.proxy[0]({
+    url: `https://${ONION_A}/nested`, type: 'image', frameId: 2,
+    parentFrameId: 0, tabId: 12, incognito: false,
+    cookieStoreId: 'firefox-default', documentId: 'old-frame',
+    parentDocumentId: 'old-top',
+  });
+  while (!releaseSign) await drain(1);
+  loaded.recorded.committed[0]({
+    tabId: 12, frameId: 0, url: 'https://bob.co.uk/',
+    documentId: 'new-top',
+  });
+  releaseSign();
+  assertNoRoutableIdentity(
+    await pending,
+    'a navigation that retires a document must invalidate its pending HMAC'
+  );
+});
+
+test('unknownDetachedOpaqueAndOriginOnlyContextsHaveNoIdentity', async () => {
+  const loaded = loadHardenedTokened();
+  await drain();
+  const onRequest = loaded.onRequest;
+  const cases = [
+    {
+      url: `https://${ONION_A}/nested`, type: 'image', frameId: 3,
+      parentFrameId: 0, tabId: 99, incognito: false,
+      cookieStoreId: 'firefox-default', documentId: 'unknown-frame',
+      parentDocumentId: 'unknown-top',
+    },
+    {
+      url: `https://${ONION_A}/worker`, type: 'xmlhttprequest', frameId: -1,
+      parentFrameId: -1, tabId: -1, incognito: false,
+      cookieStoreId: 'firefox-default', documentId: 'detached-worker',
+    },
+    {
+      url: `https://${ONION_A}/css-image`, type: 'image', frameId: 0,
+      parentFrameId: -1, tabId: 98, incognito: false,
+      cookieStoreId: 'firefox-default', documentId: 'origin-only',
+      originUrl: 'https://cdn.example/style.css',
+    },
+  ];
+  loaded.onCommitted({
+    tabId: 10, frameId: 0, url: 'about:blank', documentId: 'opaque-top',
+  });
+  cases.push({
+    url: `https://${ONION_A}/opaque`, type: 'image', frameId: 2,
+    parentFrameId: 0, tabId: 10, incognito: false,
+    cookieStoreId: 'firefox-default', documentUrl: 'about:blank',
+    documentId: 'opaque-frame', parentDocumentId: 'opaque-top',
+  });
+
+  for (const details of cases) {
+    assertNoRoutableIdentity(
+      await onRequest(details),
+      'untrustworthy top-level context must not use the onion destination'
+    );
+  }
+});
+
+test('tokenRotationInvalidatesAnInFlightHmacCompletion', async () => {
+  let releaseSign;
+  const delayedCrypto = {
+    getRandomValues(values) {
+      values.fill(0x44);
+      return values;
+    },
+    subtle: {
+      importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
+      sign(...args) {
+        return new Promise((resolve, reject) => {
+          releaseSign = () => webcrypto.subtle.sign(...args).then(resolve, reject);
+        });
+      },
+    },
+  };
+  const loaded = loadRouter({ hardeningOk: true, crypto: delayedCrypto });
+  await drain();
+  const pending = loaded.recorded.proxy[0](mainFrame(`https://${ONION_A}/`));
+  while (!releaseSign) await drain(1);
+
+  loaded.state.device = {
+    name: 'rotated', bearerToken: TOKEN_B, tokenStoredAt: 2,
+  };
+  loaded.recorded.onChanged[0](
+    { device: { newValue: loaded.state.device } },
+    'local'
+  );
+  await drain();
+  releaseSign();
+  assertNoRoutableIdentity(
+    await pending,
+    'a HMAC completed under a stale token generation must not route'
+  );
+});
+
+test('synchronousKeyImportFailureDuringRotationFailsClosed', async () => {
+  let imports = 0;
+  const failingRotationCrypto = {
+    getRandomValues: webcrypto.getRandomValues.bind(webcrypto),
+    subtle: {
+      importKey(...args) {
+        imports += 1;
+        if (imports > 1) throw new Error('synthetic synchronous import failure');
+        return webcrypto.subtle.importKey(...args);
+      },
+      sign: webcrypto.subtle.sign.bind(webcrypto.subtle),
+    },
+  };
+  const loaded = loadRouter({ hardeningOk: true, crypto: failingRotationCrypto });
+  await drain();
+  assert.strictEqual(
+    (await loaded.recorded.proxy[0](mainFrame(`https://${ONION_A}/`))).type,
+    'socks'
+  );
+  const rotated = {
+    name: 'rotated', bearerToken: TOKEN_B, tokenStoredAt: 2,
+  };
+  assert.doesNotThrow(() => loaded.recorded.onChanged[0](
+    { device: { newValue: rotated } }, 'local'
+  ));
+  assertNoRoutableIdentity(
+    await loaded.recorded.proxy[0](mainFrame(`https://${ONION_A}/`)),
+    'a failed key import must not pair an old HMAC key with a new bearer'
+  );
+});
+
+test('missingPrivateOrCookieStoreMetadataFailsClosed', async () => {
+  const { onRequest } = loadHardenedTokened();
+  await drain();
+  for (const details of [
+    mainFrame(`https://${ONION_A}/`, { incognito: undefined }),
+    mainFrame(`https://${ONION_A}/`, { cookieStoreId: undefined }),
+    mainFrame(`https://${ONION_A}/`, { cookieStoreId: '' }),
+  ]) {
+    assertNoRoutableIdentity(
+      await onRequest(details),
+      'missing browser context metadata must not collapse partitions'
+    );
+  }
 });
 
 test('clearnetRequestsAreDirectAndNeverCarryTheTokenOrPort', async () => {
   const { onRequest } = loadHardenedTokened();
   await drain();
-  const descriptor = onRequest(
+  const descriptor = await onRequest(
     mainFrame('https://example.com/page', {
       documentUrl: 'https://example.com/',
     })
@@ -321,10 +914,36 @@ test('clearnetRequestsAreDirectAndNeverCarryTheTokenOrPort', async () => {
   );
 });
 
+test('webSocketOnionDestinationUsesTheInitiatingSitePartition', async () => {
+  const { onRequest } = loadHardenedTokened();
+  await drain();
+  const httpsDescriptor = await onRequest(subresource(
+    `https://${ONION_A}/control`,
+    'https://alice.co.uk/page',
+    { tabId: 14, documentId: 'alice-websocket-document' }
+  ));
+  const webSocketDescriptor = await onRequest(subresource(
+    `wss://${ONION_A}/socket`,
+    'https://alice.co.uk/page',
+    {
+      tabId: 14,
+      documentId: 'alice-websocket-document',
+      type: 'websocket',
+    }
+  ));
+  assert.strictEqual(webSocketDescriptor.type, 'socks');
+  assert.deepStrictEqual(
+    plain(webSocketDescriptor),
+    plain(httpsDescriptor),
+    'destination scheme must not downgrade an onion request or change its ' +
+      'initiating-site isolation partition'
+  );
+});
+
 test('trailingDotFqdnOnionHostStillRoutesAsOnion', async () => {
   const { onRequest } = loadHardenedTokened();
   await drain();
-  const descriptor = onRequest(mainFrame(`https://${ONION_A}./page`));
+  const descriptor = await onRequest(mainFrame(`https://${ONION_A}./page`));
   assert.strictEqual(
     descriptor.type, 'socks',
     'the FQDN-dot form of an onion host must not evade the FR-001 ' +
@@ -332,8 +951,8 @@ test('trailingDotFqdnOnionHostStillRoutesAsOnion', async () => {
       'mirrors that normalization)'
   );
   assert.strictEqual(
-    descriptor.username, ONION_A,
-    'the username is the dot-stripped onion host — no degenerate label'
+    descriptor.username, ONION_A_USERNAME,
+    'the dot-stripped onion host reaches the same canonical HMAC vector'
   );
 });
 
@@ -355,7 +974,7 @@ test('closedHardeningGateFailsClosedAndRecordsUnrouted', async () => {
     };
   })();
   const details = mainFrame(`https://${ONION_A}/page`);
-  const descriptor = onRequest(details);
+  const descriptor = await onRequest(details);
   assert.deepStrictEqual(
     plain(descriptor), { type: 'direct' },
     'FR-004(b): no SOCKS descriptor leaves the module while the gate is ' +
@@ -374,6 +993,7 @@ test('closedHardeningGateFailsClosedAndRecordsUnrouted', async () => {
       (webRequestResult && webRequestResult.cancel === undefined),
     'the cache-writing listener must not cancel or redirect'
   );
+  await drain();
   const blockedReply = onMessage({ type: GET_ROUTE, tabId: 7 });
   assert.ok(
     isResponseChannel(blockedReply),
@@ -392,7 +1012,7 @@ test('missingOrEmptyTokenFailsClosed', async () => {
   const noDevice = loadRouter({ hardeningOk: true, device: null });
   await drain();
   assert.deepStrictEqual(
-    plain(noDevice.recorded.proxy[0](mainFrame(`https://${ONION_A}/`))),
+    plain(await noDevice.recorded.proxy[0](mainFrame(`https://${ONION_A}/`))),
     { type: 'direct' },
     'FR-002: without a bearer token the password clause cannot be ' +
       'satisfied — routing to 8881 would violate FR-002, so fail closed'
@@ -400,6 +1020,7 @@ test('missingOrEmptyTokenFailsClosed', async () => {
   // The cache write must agree with the descriptor: fire the
   // cache-writing listener for the tab, then ask via the pinned protocol.
   noDevice.recorded.webRequest[0](mainFrame(`https://${ONION_A}/`));
+  await drain();
   const blockedReply = noDevice.recorded.message[0]({
     type: GET_ROUTE,
     tabId: 7,
@@ -421,7 +1042,7 @@ test('missingOrEmptyTokenFailsClosed', async () => {
   });
   await drain();
   assert.deepStrictEqual(
-    plain(emptyToken.recorded.proxy[0](mainFrame(`https://${ONION_A}/`))),
+    plain(await emptyToken.recorded.proxy[0](mainFrame(`https://${ONION_A}/`))),
     { type: 'direct' },
     'an empty-string token is no token — presence means a non-empty string'
   );
@@ -434,8 +1055,8 @@ test('firstPartyErrorFailsClosedWithoutGuessedUsername', async () => {
   // router must surface the failure as a DIRECT decision — never swallow
   // the sentinel into a guessed, empty, or shared username (the one-
   // routable-string collapse T034d finding 3 forbids).
-  const descriptor = onRequest(
-    mainFrame(`https://${ONION_A}/x`, { documentUrl: 'not a url' })
+  const descriptor = await onRequest(
+    subresource(`https://${ONION_A}/x`, 'not a url')
   );
   assert.deepStrictEqual(plain(descriptor), { type: 'direct' });
   assert.strictEqual(
@@ -463,6 +1084,7 @@ test('getRouteResponderPinnedSemantics', async () => {
   // Non-tab request (tabId -1: devtools/service-worker/extension traffic)
   // has no indicator to feed and must not poison the cache.
   onBeforeRequest(mainFrame(`https://${ONION_B}/`, { tabId: -1 }));
+  await drain();
 
   const torReply = onMessage({ type: GET_ROUTE, tabId: 3 });
   assert.ok(
@@ -474,13 +1096,14 @@ test('getRouteResponderPinnedSemantics', async () => {
       'the suite green while the popup transport was inert on the platform)'
   );
   assert.deepStrictEqual(
-    plain(await torReply), { route: 'tor' },
+    plain(await waitForCachedRoute(onMessage, 3, 'tor')), { route: 'tor' },
     'confirmed Tor decision → {route:"tor"} (the iff pin)'
   );
   const unroutedReply = onMessage({ type: GET_ROUTE, tabId: 4 });
   assert.ok(isResponseChannel(unroutedReply), 'owned messages get the channel');
   assert.deepStrictEqual(
-    plain(await unroutedReply), { route: 'unrouted' },
+    plain(await waitForCachedRoute(onMessage, 4, 'unrouted')),
+    { route: 'unrouted' },
     'recorded non-Tor decision → {route:"unrouted"} (T034c case (b))'
   );
   const unknownReply = onMessage({ type: GET_ROUTE, tabId: 99 });
@@ -534,7 +1157,7 @@ test('storageOnChangedRefreshesMirroredToken', async () => {
   onChanged[0]({ device: { newValue: loaded.state.device } }, 'local');
   await drain();
   assert.strictEqual(
-    onRequest(mainFrame(`https://${ONION_A}/`)).password, TOKEN_B,
+    (await onRequest(mainFrame(`https://${ONION_A}/`))).password, TOKEN_B,
     'a storage.onChanged event for the device key must refresh the ' +
       'mirrored token — descriptors must never serve a stale credential'
   );
@@ -544,7 +1167,7 @@ test('storageOnChangedRefreshesMirroredToken', async () => {
   onChanged[0]({ device: { oldValue: { bearerToken: TOKEN_B } } }, 'local');
   await drain();
   assert.deepStrictEqual(
-    plain(onRequest(mainFrame(`https://${ONION_A}/`))), { type: 'direct' },
+    plain(await onRequest(mainFrame(`https://${ONION_A}/`))), { type: 'direct' },
     'device removal fail-closes the router'
   );
 
@@ -553,7 +1176,7 @@ test('storageOnChangedRefreshesMirroredToken', async () => {
   onChanged[0]({ hardening: { newValue: {} } }, 'local');
   await drain();
   assert.deepStrictEqual(
-    plain(onRequest(mainFrame(`https://${ONION_A}/`))), { type: 'direct' },
+    plain(await onRequest(mainFrame(`https://${ONION_A}/`))), { type: 'direct' },
     'a non-device change event must not resurrect the mirror from ' +
       'current storage state it was not refreshed against'
   );

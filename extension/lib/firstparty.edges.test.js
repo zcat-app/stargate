@@ -12,10 +12,9 @@
 // (T034d frontmatter: "must NOT edit this test") or the runner —
 // run-tests.sh auto-discovers every *.test.js.
 //
-// The sandbox mirrors T034d's pinned environment minus the recording
-// proxy: purity (zero browser.* touches) is already pinned by the frozen
-// suite's firstPartyModuleNeverTouchesBrowserApis; this file's subject
-// is reachability of the guards, not purity. If firstparty.js is absent
+// The sandbox supplies deterministic native-suffix results; the main suite
+// separately pins that this is the only browser API touched. This file's
+// subject is reachability of the guards. If firstparty.js is absent
 // the read below fails loudly — correct: this suite ships in the same
 // commit as the impl, unlike the tests-first frozen suite.
 
@@ -34,7 +33,26 @@ const FIRSTPARTY_PATH = path.join(__dirname, 'firstparty.js');
 const ONION_A = 'abcd2345'.repeat(7) + '.onion';
 
 function loadFirstParty() {
-  const sandbox = { browser: {}, URL, console };
+  const domains = new Map([
+    ['www.alice.co.uk', 'alice.co.uk'],
+    ['alice.github.io', 'alice.github.io'],
+    ['bob.github.io', 'bob.github.io'],
+    ['a.b.ck', 'a.b.ck'],
+    ['x.www.ck', 'www.ck'],
+    ['co.uk', null],
+    ['www.xn--85x722f.xn--55qx5d.cn', 'xn--85x722f.xn--55qx5d.cn'],
+  ]);
+  const sandbox = {
+    browser: {
+      publicSuffix: {
+        getDomain(host) {
+          return domains.has(host) ? domains.get(host) : null;
+        },
+      },
+    },
+    URL,
+    console,
+  };
   vm.runInNewContext(
     fs.readFileSync(FIRSTPARTY_PATH, 'utf8'),
     sandbox,
@@ -67,6 +85,8 @@ test('hostlessGoverningUrlThrowsSentinelNeverRoutableFallback', () => {
       () => firstPartyDomain({
         url: `http://${ONION_A}/`,
         documentUrl: governing,
+        type: 'image',
+        frameId: 0,
       }),
       // Duck-typed on `name`, not `instanceof Error`: the sentinel is
       // thrown from inside the vm context, whose Error is another
@@ -85,15 +105,19 @@ test('ipv4LiteralGoverningHostsReturnWholeAndStayDistinct', () => {
   // the two-label reduction → both '2.3': distinct addresses on one
   // shared circuit, the collision the ticket Analysis documents. No
   // frozen-suite input is an IP literal, so only this test bites.
-  const a = firstPartyDomain({ url: 'http://10.1.2.3/x' });
-  const b = firstPartyDomain({ url: 'http://10.9.2.3/y' });
+  const a = firstPartyDomain({
+    url: 'http://10.1.2.3/x', type: 'main_frame', frameId: 0,
+  });
+  const b = firstPartyDomain({
+    url: 'http://10.9.2.3/y', type: 'main_frame', frameId: 0,
+  });
   assert.strictEqual(
-    a, '10.1.2.3',
+    a, 'ipv4:10.1.2.3',
     'an IPv4-literal governing host is flat — returned whole, like .onion ' +
       '(all-numeric labels can never carry a public suffix)'
   );
   assert.strictEqual(
-    b, '10.9.2.3',
+    b, 'ipv4:10.9.2.3',
     'an IPv4-literal governing host is flat — returned whole, like .onion'
   );
   assert.notStrictEqual(
@@ -116,10 +140,80 @@ test('multiLabelOnionGoverningHostReturnsWholeAddress', () => {
   assert.strictEqual(
     firstPartyDomain({
       url: `http://${host}/`,
-      documentUrl: `http://${host}/page`,
+      type: 'main_frame',
+      frameId: 0,
     }),
-    host,
+    `onion:${host}`,
     'a multi-label .onion governing host returns whole — onion addresses ' +
       'are flat, no eTLD reduction (FR-002 .onion rule)'
   );
+});
+
+test('nativePublicPrivateWildcardAndExceptionResultsAreTypeTagged', () => {
+  const { firstPartyDomain } = loadFirstParty();
+  const top = (url) => firstPartyDomain({
+    url, type: 'main_frame', frameId: 0,
+  });
+
+  assert.strictEqual(top('https://www.alice.co.uk/'), 'dns:alice.co.uk');
+  assert.strictEqual(top('https://alice.github.io/'), 'dns:alice.github.io');
+  assert.strictEqual(top('https://bob.github.io/'), 'dns:bob.github.io');
+  assert.strictEqual(top('https://a.b.ck/'), 'dns:a.b.ck');
+  assert.strictEqual(top('https://x.www.ck/'), 'dns:www.ck');
+  assert.throws(
+    () => top('https://a.example.unknown-t136/'),
+    (err) => !!err && err.name === 'FirstPartyError',
+    'unknown suffixes remain unavailable; allowUnknownSuffix is never enabled'
+  );
+  assert.throws(
+    () => top('https://co.uk/'),
+    (err) => !!err && err.name === 'FirstPartyError',
+    'a public suffix without a registrable label is not an initiating site'
+  );
+});
+
+test('idnaSchemePortAndIpCanonicalizationIsDeterministic', () => {
+  const { firstPartyDomain } = loadFirstParty();
+  const top = (url) => firstPartyDomain({
+    url, type: 'main_frame', frameId: 0,
+  });
+
+  assert.strictEqual(
+    top('https://www.食狮.公司.cn:8443/path?x=1'),
+    'dns:xn--85x722f.xn--55qx5d.cn'
+  );
+  assert.strictEqual(
+    top('http://WWW.食狮.公司.CN./other'),
+    'dns:xn--85x722f.xn--55qx5d.cn',
+    'scheme, port, case and one terminal FQDN dot do not change the site'
+  );
+  assert.strictEqual(top('http://0300.0x0.0.1/'), 'ipv4:192.0.0.1');
+  assert.strictEqual(top('https://[2001:0db8:0:0::1]:444/'), 'ipv6:[2001:db8::1]');
+  for (const url of ['ftp://example.com/x', 'about:blank', 'data:text/plain,x']) {
+    assert.throws(
+      () => top(url),
+      (err) => !!err && err.name === 'FirstPartyError',
+      `unsupported or opaque top-level URL ${url} has no routable site`
+    );
+  }
+});
+
+test('nativeSuffixFailureAndUnexpectedResultAreUnavailable', () => {
+  for (const getDomain of [
+    () => undefined,
+    () => { throw new Error('synthetic native suffix failure'); },
+  ]) {
+    const sandbox = {
+      browser: { publicSuffix: { getDomain } },
+      URL,
+      console,
+    };
+    vm.runInNewContext(fs.readFileSync(FIRSTPARTY_PATH, 'utf8'), sandbox);
+    assert.throws(
+      () => sandbox.firstPartyDomain({
+        url: 'https://www.example.com/', type: 'main_frame', frameId: 0,
+      }),
+      (err) => !!err && err.name === 'FirstPartyError'
+    );
+  }
 });

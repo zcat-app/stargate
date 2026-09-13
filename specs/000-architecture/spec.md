@@ -881,14 +881,13 @@ must account for legacy logs and backup copies under T152's explicit cleanup lim
 
 ### 14.1 Manifest
 
-- **Manifest version**: **v2** (Firefox-ESR / Mullvad Browser still
-  support MV2 and the `proxy.onRequest` API used here is well-supported
-  there; MV3 in Firefox does not expose an equivalent blocking
-  proxy.onRequest at time of writing).  
-  `NEEDS CLARIFICATION`: maintainer to confirm MV2 remains supported on
-  Mullvad Browser at the v1 release window; if not, the extension moves to
-  MV3 and the proxy logic relocates to `proxy.settings` + DNS-leak hardening
-  via `dns.setMode` (Firefox-specific).
+- **Manifest version**: **v2**, with Gecko `strict_min_version: "153.0"`. Firefox 153 adds the
+  native `publicSuffix` API and document-bound metadata on `proxy.onRequest` and
+  `webNavigation`; both are required for T136's isolation guarantee. Older Mullvad Browser builds
+  reject the extension instead of receiving a weaker compatibility path. Mullvad Browser Alpha
+  16.0a11 / Gecko 153.2.0 is the development reference, but v1 release is gated until the stable
+  Mullvad Browser channel uses Gecko 153 or newer and still supports MV2. If that release drops
+  MV2, the proxy decision path requires a new design and Constitution-level review.
 
 ### 14.2 Permissions and justifications
 
@@ -896,8 +895,10 @@ must account for legacy logs and backup copies under T152's explicit cleanup lim
 |-----------------------------------------|---------------------------------------------------------------------|
 | `proxy`                                 | Set per-request proxy via `proxy.onRequest` listener (core function)|
 | `<all_urls>` (host permission)          | The proxy listener must see all outbound URLs to apply mapping      |
-| `storage`                               | Persist per-domain route preferences and blocklist in `storage.local` |
+| `storage`                               | Persist per-domain route preferences, blocklist and the random browser-profile isolation id in `storage.local` |
 | `webRequest`, `webRequestBlocking`      | Block known DoH/DoT endpoints pre-proxy (defense-in-depth; the primary DoH/DoT/HTTP-3 guarantee is the externally verified profile per §14.5, not this rule) |
+| `webNavigation`                         | Bind committed top-level and child `documentId` values through `parentDocumentId`; avoids destination, iframe-site and tab-reuse fallbacks |
+| `publicSuffix`                          | Firefox gates the `browser.publicSuffix` namespace behind this permission; without it the native `publicSuffix.getDomain()` registrable-domain authority for the isolation site (§14.3, Firefox 153+) is not injected and every DNS-site derivation fails closed |
 | `privacy`                               | Read WebRTC state via `privacy.network.peerConnectionEnabled` — the only hardening surface Firefox's stable WebExtensions API exposes (sol-review B4; §14.5) |
 | `management` (optional)                 | Enumerate foreign extensions for the §14.5 allowlist inventory. Retained for v1 per the foreign-extension decision (THREAT-MODEL §2.7); detection, not prevention. If a future release drops the inventory, this permission is removed. |
 | `notifications` (optional)              | Local desktop notifications only (Constitution Notifications scope) |
@@ -909,9 +910,9 @@ these are not required and would be additional privacy attack surface.
 
 For each request:
 
-1. Compute first-party domain (use the `requestDetails.documentUrl` /
-   `originUrl` when available; otherwise fall back to the request URL's
-   eTLD+1).
+1. Classify the requested destination. A requested `.onion` hostname selects the Tor route in this
+   feature regardless of whether its initiating top-level site is clearnet or onion; the initiating
+   site never replaces the destination for route classification.
 2. Look up routing decision in this order:
    - Anti-pattern blocklist (e.g., `.onion.to`, `.onion.ws` clearnet
      gateways): if matched, return an explicit block decision and surface
@@ -922,11 +923,24 @@ For each request:
      "Tor" for Mullvad Browser, "ask" for first-encounter domains —
      `NEEDS CLARIFICATION` whether v1 prompts on first-encounter or
      applies the default silently).
-3. Return the SOCKS5 proxy descriptor pointing at the chosen port
-   (`127.0.0.1:888x`) with `username` set to the first-party domain (Tor
-   stream isolation — Principle III) and `password` set to the device's
-   bearer token. **`proxyDNS: true`** in the returned descriptor (Firefox
-   SOCKS5h equivalent) — no local DNS, ever.
+3. Resolve the initiating top-level site under
+   `specs/001-tor-route/contracts/foundation-boundaries.md` §“Browser SOCKS isolation identity —
+   T136”. Top-level navigation uses its request URL; frame-zero subresources use a valid present
+   `documentUrl` bound to `documentId`; nested frames and tab-associated workers use only exact
+   ancestry established by `webNavigation.onCommitted` `documentId`/`parentDocumentId` values.
+   `documentUrl` precedes `originUrl`, but `originUrl` alone is not
+   sufficient because it can identify an intermediate stylesheet. There is no subresource
+   destination fallback. Unknown/detached/opaque context produces identity-unavailable; T157 owns
+   cancelling the protected request and proving no browser/system fallback.
+4. Build the authenticated-device/browser-profile/site isolation tuple. DNS sites use Firefox
+   153's native ICANN-and-PRIVATE `publicSuffix.getDomain()` result with unknown/plain suffixes
+   refused; complete onion and canonical IP identities remain whole. Scheme and port do not enter
+   the site. The exact tuple and HMAC encoding are the T136
+   boundary contract; the fixed 68-byte `sg1:` username reveals neither the site nor bearer.
+5. Return the SOCKS5 proxy descriptor pointing at the chosen port (`127.0.0.1:888x`) with the
+   derived isolation username and the device bearer token as password. **`proxyDNS: true`** in the
+   returned descriptor (Firefox SOCKS5h equivalent) — no local DNS, ever. Snapshot asynchronous
+   derivation against token changes; a stale completion is identity-unavailable.
 
 ### 14.4 `storage.local` layout
 

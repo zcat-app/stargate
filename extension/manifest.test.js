@@ -7,15 +7,15 @@
 //
 //   M1  Manifest V2 with identity keys (arch §14.1; research.md §2 — MV2 is
 //       the carrier of the per-request SOCKS5 username, FR-002)
-//   M2  permission set EXACTLY arch §14.2 + T091 — bidirectional set
+//   M2  permission set EXACTLY arch §14.2 + T091/T136 — bidirectional set
 //       equality, so none missing AND none extra (§14.2: no tabs, history,
 //       bookmarks, cookies, identity; `management` is the T091-amended
 //       contract, T091 acceptance #5: "T051 must request management")
 //   M3  non-persistent MV2 event page (task body)
-//   M4  background script list exact, hardening.js BEFORE router.js —
+//   M4  background script list exact; hardening.js BEFORE router.js —
 //       proxy.onRequest must not be registered before the FR-004 gate flag
 //       exists (arch §14.5 Part 2)
-//   M5  browser_specific_settings.gecko.id well-formed (task body)
+//   M5  browser_specific_settings.gecko.id well-formed and Firefox 153+
 //   M6  options_ui / browser_action registered at the T056/T057 pinned
 //       paths (registration lives here so the sibling tickets never amend
 //       this file — T051 §Analysis W2)
@@ -50,16 +50,18 @@ test('M1: manifest_version is 2 with name/version identity keys', () => {
   assert.match(manifest.version, /^\d+(\.\d+){0,3}$/);
 });
 
-test('M2: permission set is exactly §14.2 + T091 management (bidirectional)', () => {
+test('M2: permission set is exactly §14.2 + T091/T136 (bidirectional)', () => {
   // Sorted both sides: deepStrictEqual over sorted arrays is set equality —
   // a dropped permission fails (body/T091 contract) and a sneaked one fails
   // too (§14.2 exclusion clause; a permission is unbounded privacy surface).
   const required = [
     'proxy',
     'storage',
+    'webNavigation',
     'webRequest',
     'webRequestBlocking',
     'privacy',
+    'publicSuffix',
     'notifications',
     'management',
     '<all_urls>',
@@ -90,8 +92,9 @@ test('M4: background scripts exact; hardening.js before router.js', () => {
   );
 });
 
-test('M5: browser_specific_settings.gecko.id is well-formed', () => {
-  const id = manifest.browser_specific_settings?.gecko?.id;
+test('M5: gecko id is well-formed and Firefox 153 is the minimum', () => {
+  const gecko = manifest.browser_specific_settings?.gecko;
+  const id = gecko?.id;
   assert.strictEqual(typeof id, 'string');
   assert.ok(id.length > 0, 'gecko id must be non-empty');
   // Firefox accepts a GUID in braces or an email-like identifier.
@@ -101,6 +104,11 @@ test('M5: browser_specific_settings.gecko.id is well-formed', () => {
     ) ||
       /^[a-zA-Z0-9-._]+@[a-zA-Z0-9-._]+$/.test(id),
     `gecko id must be a GUID or email-like string, got ${JSON.stringify(id)}`
+  );
+  assert.strictEqual(
+    gecko.strict_min_version,
+    '153.0',
+    'publicSuffix and document-bound proxy metadata require Firefox 153+'
   );
 });
 

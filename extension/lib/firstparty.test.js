@@ -2,17 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // firstparty.test.js — Principle-VII unit test for the extension's
-// first-party-domain computation (`lib/firstparty.js`, FR-002;
-// architecture spec §14.3 step 1 as extended by this feature's
-// `.onion` rules).
+// initiating-site computation (`lib/firstparty.js`, FR-002 and T136).
 //
 // Boundary under test (T034d §Analysis — the pinned surface): the module
-// is a pure string function. It takes a `requestDetails`-shaped object
+// is a synchronous canonicalizer. It takes a `requestDetails`-shaped object
 // (`url`; optional `documentUrl` / `originUrl`, absent keys meaning
-// missing) and returns the SOCKS5 username string FR-002 mandates:
-// the onion address verbatim for `.onion` (onion addresses are flat —
-// no eTLD reduction), otherwise the governing URL's eTLD+1, with
-// `documentUrl` governing over the request `url`. Present-but-
+// missing) and returns a type-tagged canonical site. Router.js combines
+// that site with device and browser-profile identity before deriving the
+// opaque SOCKS username. Onion addresses stay whole; DNS sites use Firefox
+// 153's native ICANN-and-PRIVATE publicSuffix API. Present-but-
 // unparseable `documentUrl`/`originUrl` throws the `FirstPartyError`
 // sentinel — never a silent fallback to a wrong first-party, because a
 // routable wrong string collapses unrelated origins onto one Tor
@@ -20,16 +18,12 @@
 // this signal drives is T058/T059/T061's, deliberately not duplicated
 // here.
 //
-// The empty `browser` global the body prescribes is itself an
-// assertion: the sandbox's `browser` is an access-recording empty
-// object, and firstPartyModuleNeverTouchesBrowserApis pins zero touches
-// — router.js (T054) owns all API access; if firstparty.js ever reads
-// `browser.storage` rules directly, the router-composition assumption
-// is false and this suite catches it.
+// The recording `browser.publicSuffix.getDomain` stub pins the only browser
+// API this canonicalizer may use. Router.js still owns stateful APIs.
 //
 // MV2 lib scripts load as browser global scripts, not ES modules, so
 // the test loads firstparty.js via vm.runInNewContext() with a
-// synthesized sandbox (`browser` recording-empty, plus the host's
+// synthesized sandbox (a recording native suffix authority, plus the host's
 // WHATWG `URL` — spec-identical to the browser's — and `console`).
 // No UMD wrapper or module shim is added to the extension (research.md
 // §10). Node built-ins only — no third-party deps, no package.json.
@@ -43,7 +37,6 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const FIRSTPARTY_PATH = path.join(__dirname, 'firstparty.js');
-
 const IMPL_ABSENT =
   'T053 not landed: extension/lib/firstparty.js does not exist yet ' +
   '(Principle-VII tests-first state; these cases lift and gate T053 ' +
@@ -52,30 +45,30 @@ const IMPL_ABSENT =
 const implPresent = () => fs.existsSync(FIRSTPARTY_PATH);
 
 // 56 base32 chars (a-z, 2-7) + `.onion` — syntactically plausible v3
-// addresses; checksum validity is irrelevant to this pure-logic
+// addresses; checksum validity is irrelevant to this canonicalization
 // contract (T034d §Acceptance 3).
 const ONION_A = 'abcd2345'.repeat(7) + '.onion';
 const ONION_B = 'efgh6527'.repeat(7) + '.onion';
 
 // ---------------------------------------------------------------------------
 // Loader. Evaluates firstparty.js in a fresh context whose globals are
-// exactly what T034d §Analysis pins: a recording-empty `browser`, the
-// host `URL`, and `console`. Nothing else — any further global the impl
+// exactly what T136 pins: a recording `browser.publicSuffix`, the host
+// `URL`, and `console`. Nothing else — any further global the impl
 // reaches for is a loud ReferenceError, which is the conformance signal.
 // ---------------------------------------------------------------------------
 
 function makeSandbox() {
   const browserTouches = [];
-  const browser = new Proxy({}, {
-    get(_target, prop) {
-      browserTouches.push(String(prop));
-      return undefined;
+  const browser = {
+    publicSuffix: {
+      getDomain(...args) {
+        const host = args[0];
+        browserTouches.push(['publicSuffix.getDomain', ...args]);
+        if (host === 'news.example.com') return 'example.com';
+        return null;
+      },
     },
-    has() {
-      browserTouches.push('[[has]]');
-      return false;
-    },
-  });
+  };
   return { sandbox: { browser, URL, console }, browserTouches };
 }
 
@@ -108,8 +101,8 @@ function requireConformance(sandbox) {
   assert.deepStrictEqual(
     extraGlobals.sort(),
     ['firstPartyDomain'],
-    'pinned surface violated: expected exactly one new context global, ' +
-      "['firstPartyDomain']; got [" + extraGlobals.join(', ') + '] ' +
+    'pinned surface violated: expected exactly one function; got [' +
+      extraGlobals.join(', ') + '] ' +
       '(T034d §Analysis "Pinned surface"; FR-002; MV2 classic scripts ' +
       'share one background-page global scope — an extra top-level ' +
       'global is a namespace-collision surface)'
@@ -125,10 +118,11 @@ test('onionTopLevelNavigationReturnsOnionAddressVerbatim', { skip: skip() }, () 
   // absent (body case (a)).
   const details = {
     url: `http://${ONION_A}/`,
-    documentUrl: `http://${ONION_A}/`,
+    type: 'main_frame',
+    frameId: 0,
   };
   assert.strictEqual(
-    sandbox.firstPartyDomain(details), ONION_A,
+    sandbox.firstPartyDomain(details), `onion:${ONION_A}`,
     'a top-level .onion navigation returns the onion address itself — ' +
       'no eTLD reduction on .onion (FR-002 .onion rule; onion addresses are flat)'
   );
@@ -142,9 +136,11 @@ test('onionSubresourceBindsToParentDocumentOnion', { skip: skip() }, () => {
   const details = {
     url: `http://${ONION_B}/cdn/jquery.js`,
     documentUrl: `http://${ONION_A}/page`,
+    type: 'script',
+    frameId: 0,
   };
   assert.strictEqual(
-    sandbox.firstPartyDomain(details), ONION_A,
+    sandbox.firstPartyDomain(details), `onion:${ONION_A}`,
     'a subresource of a .onion document carries the document\'s onion as ' +
       'its first-party, never the subresource\'s own host (FR-002 subresource rule)'
   );
@@ -158,24 +154,36 @@ test('clearnetDocumentUrlReducesToEtldPlusOne', { skip: skip() }, () => {
   const details = {
     url: 'https://news.example.com/img.png',
     documentUrl: 'https://news.example.com/article',
+    type: 'image',
+    frameId: 0,
   };
   assert.strictEqual(
-    sandbox.firstPartyDomain(details), 'example.com',
+    sandbox.firstPartyDomain(details), 'dns:example.com',
     'a clearnet documentUrl host reduces to its eTLD+1 (arch §14.3 step 1)'
   );
 });
 
-test('missingDocumentAndOriginUrlsFallBackToRequestEtldPlusOne', { skip: skip() }, () => {
+test('onlyMainFrameMayUseRequestUrlAsInitiatingSite', { skip: skip() }, () => {
   const { sandbox } = loadFirstParty();
   requireConformance(sandbox);
-  // documentUrl and originUrl keys ABSENT — the (d) fallback; contrast
-  // with present-but-malformed in
-  // malformedDocumentUrlThrowsSentinelNeverSilentFallback.
-  const details = { url: 'https://news.example.com/assets/app.js' };
   assert.strictEqual(
-    sandbox.firstPartyDomain(details), 'example.com',
-    'with documentUrl and originUrl both absent, the request url\'s ' +
-      'eTLD+1 is the fallback (arch §14.3 step 1)'
+    sandbox.firstPartyDomain({
+      url: 'https://news.example.com/',
+      type: 'main_frame',
+      frameId: 0,
+    }),
+    'dns:example.com',
+    'a top-level navigation defines its new initiating site'
+  );
+  assert.throws(
+    () => sandbox.firstPartyDomain({
+      url: `https://${ONION_A}/asset.js`,
+      type: 'script',
+      frameId: 0,
+    }),
+    (err) => !!err && err.name === 'FirstPartyError',
+    'a subresource with no top-level document context must not use its ' +
+      'destination as the isolation site (Constitution III/T136)'
   );
 });
 
@@ -184,11 +192,13 @@ test('distinctOnionsYieldDistinctFirstPartyStrings', { skip: skip() }, () => {
   requireConformance(sandbox);
   const firstA = sandbox.firstPartyDomain({
     url: `http://${ONION_A}/`,
-    documentUrl: `http://${ONION_A}/`,
+    type: 'main_frame',
+    frameId: 0,
   });
   const firstB = sandbox.firstPartyDomain({
     url: `http://${ONION_B}/`,
-    documentUrl: `http://${ONION_B}/`,
+    type: 'main_frame',
+    frameId: 0,
   });
   assert.strictEqual(typeof firstA, 'string', 'the first-party is a string (the SOCKS5 username FR-002 mandates)');
   assert.notStrictEqual(
@@ -207,10 +217,14 @@ test('sameOnionAcrossRequestsYieldsEqualFirstPartyStrings', { skip: skip() }, ()
   const first1 = sandbox.firstPartyDomain({
     url: `http://${ONION_A}/assets/x.png`,
     documentUrl: `http://${ONION_A}/page`,
+    type: 'image',
+    frameId: 0,
   });
   const first2 = sandbox.firstPartyDomain({
     url: `http://${ONION_A}/assets/y.png`,
     documentUrl: `http://${ONION_A}/other`,
+    type: 'image',
+    frameId: 0,
   });
   assert.strictEqual(
     first1, first2,
@@ -233,6 +247,8 @@ test('malformedDocumentUrlThrowsSentinelNeverSilentFallback', { skip: skip() }, 
       () => sandbox.firstPartyDomain({
         url: `http://${ONION_A}/`,
         documentUrl: bad,
+        type: 'image',
+        frameId: 0,
       }),
       // Duck-typed on `name`, deliberately NOT `instanceof Error`: the
       // sentinel is thrown from inside the vm context, whose Error is a
@@ -247,19 +263,18 @@ test('malformedDocumentUrlThrowsSentinelNeverSilentFallback', { skip: skip() }, 
   }
 });
 
-test('firstPartyModuleNeverTouchesBrowserApis', { skip: skip() }, () => {
+test('firstPartyModuleUsesOnlyNativePublicSuffixApiForDns', { skip: skip() }, () => {
   const { sandbox, browserTouches } = loadFirstParty();
   requireConformance(sandbox);
   // Every canonical input from cases (a)-(g) through one fresh context;
-  // the recording `browser` must report zero property touches. Malformed
-  // inputs throw — swallowing here is fine: the purity property is about
-  // API access, not about the outcome.
+  // Only the clearnet DNS case reaches the native suffix authority. Onion,
+  // missing and malformed contexts are handled locally.
   const canonical = [
-    { url: `http://${ONION_A}/`, documentUrl: `http://${ONION_A}/` },
-    { url: `http://${ONION_B}/cdn/jquery.js`, documentUrl: `http://${ONION_A}/page` },
-    { url: 'https://news.example.com/img.png', documentUrl: 'https://news.example.com/article' },
-    { url: 'https://news.example.com/assets/app.js' },
-    { url: `http://${ONION_A}/`, documentUrl: '' },
+    { url: `http://${ONION_A}/`, type: 'main_frame', frameId: 0 },
+    { url: `http://${ONION_B}/cdn/jquery.js`, documentUrl: `http://${ONION_A}/page`, type: 'script', frameId: 0 },
+    { url: 'https://news.example.com/img.png', documentUrl: 'https://news.example.com/article', type: 'image', frameId: 0 },
+    { url: 'https://news.example.com/assets/app.js', type: 'script', frameId: 0 },
+    { url: `http://${ONION_A}/`, documentUrl: '', type: 'image', frameId: 0 },
   ];
   for (const details of canonical) {
     try {
@@ -269,8 +284,7 @@ test('firstPartyModuleNeverTouchesBrowserApis', { skip: skip() }, () => {
     }
   }
   assert.deepStrictEqual(
-    browserTouches, [],
-    'firstparty.js must be a pure string function — zero browser.* API ' +
-      'touches (T034d §Analysis finding 5; router.js T054 owns all API access)'
+    browserTouches, [['publicSuffix.getDomain', 'news.example.com']],
+    'firstparty.js may touch only the Firefox 153 native suffix authority'
   );
 });

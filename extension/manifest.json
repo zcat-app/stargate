@@ -5,15 +5,18 @@
   "description": "Per-request privacy routing (Tor, I2P, Nym mixnet, Direct) through the Stargate proxy.",
   "browser_specific_settings": {
     "gecko": {
-      "id": "stargate@stargate.local"
+      "id": "stargate@stargate.local",
+      "strict_min_version": "153.0"
     }
   },
   "permissions": [
     "proxy",
     "storage",
+    "webNavigation",
     "webRequest",
     "webRequestBlocking",
     "privacy",
+    "publicSuffix",
     "notifications",
     "management",
     "<all_urls>"

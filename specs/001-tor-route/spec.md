@@ -271,25 +271,26 @@ tests-first suite (Principle VII) before implementation lands.
 #### Extension behaviour
 
 - **FR-001**: The browser extension MUST route any request whose
-  effective hostname (after the extension's first-party-domain
-  computation) ends in `.onion` to the proxy at `127.0.0.1:8881` via
+  requested destination hostname ends in `.onion` to the proxy at `127.0.0.1:8881` via
   SOCKS5. Other hostnames are out of scope for this feature; the
   extension MAY fall back to direct browser behaviour or to "ask user"
   for non-`.onion` hosts (UI surface for that is deferred to a later
   feature spec). For non-`.onion` requests in this feature, the
   extension simply does not invoke port 8881.
-- **FR-002**: The extension MUST set the SOCKS5 username on each request
-  to the first-party domain string used by the request, computed per
-  architecture spec §14.3 (prefer `requestDetails.documentUrl` /
-  `originUrl` eTLD+1), **extended by this feature with `.onion`-specific
-  rules** that arch §14.3 does not carry: for a top-level `.onion`
-  navigation the document URL is the onion address itself; for first-
-  party `.onion` subresources the document URL is the parent page's
-  onion address. The SOCKS5
-  password MUST be set to the device's bearer token. **A privacy-critical
-  test MUST verify that distinct first-party domains produce distinct
-  Tor circuits in the running stack** (US2 acceptance scenarios 1 & 2
-  encode this).
+- **FR-002**: Every protected request with trustworthy context MUST carry the isolation identity
+  defined by `contracts/foundation-boundaries.md` §“Browser SOCKS isolation identity — T136”. The
+  partition contains authenticated device, browser profile and initiating top-level site, plus its
+  normal/private and contextual-identity mode. DNS sites use Firefox 153's native
+  ICANN-and-PRIVATE `publicSuffix.getDomain()` result with unknown/plain suffixes refused, never a
+  last-two-label guess; complete onion identities and canonical IP literals remain distinct.
+  Nested contexts bind through `documentId`/`parentDocumentId`, not a tab-only cache.
+  Missing/untrustworthy top-level context has no destination fallback
+  and MUST produce no routable identity. T157 owns browser cancellation for that result.
+  The SOCKS5 username is the exact 68-byte `sg1:` HMAC representation from the boundary contract;
+  the password is the device bearer token. The data plane forwards the username unchanged and an
+  empty upstream password, so Tor never receives the bearer. Privacy-critical tests MUST prove
+  distinct usernames for the same destination under distinct site/device/profile partitions;
+  T126/T155 separately prove the same-target circuit outcome in the running stack.
 - **FR-003**: The extension MUST set `proxyDNS: true` (Firefox
   WebExtensions `proxy.ProxyInfo`) in the descriptor it returns from
   `proxy.onRequest` so that DNS resolution is delegated to the
@@ -577,13 +578,13 @@ tests-first suite (Principle VII) before implementation lands.
   config file the user creates manually; stored as an HMAC-SHA-256
   verifier under the install-time pepper (T092) in the control-plane
   DB and the data plane's in-memory list.
-- **First-party domain** — a string computed by the extension from the
-  browser-supplied `documentUrl` / `originUrl` (preferred) or the
-  request URL's eTLD+1 (fallback). Used as the SOCKS5 username on each
-  routed request to drive Tor's `IsolateSOCKSAuth` circuit selection.
-  Never persisted by the data plane; the extension stores per-domain
-  routing preferences in `storage.local` (out of scope here beyond the
-  reference in architecture spec §14.4).
+- **Isolation partition / initiating site** — the authenticated-device, browser-profile and
+  initiating-top-level-site tuple defined by the foundation boundary contract. Trustworthy
+  browser navigation/document metadata selects the site; the destination is never a missing-context
+  fallback. The extension sends only a fixed-length HMAC representation as the SOCKS5 username.
+  Neither the clear site nor the isolation username is persisted by the data plane. Per-domain
+  routing preferences remain a separate `storage.local` concern (out of scope here beyond
+  architecture spec §14.4).
 - **Tor circuit** — Tor's internal abstraction for an end-to-end path.
   Not directly observable by Stargate; queried only by the contract
   test against the sidecar's control port for verification. In normal
@@ -719,13 +720,13 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
   plane build twice and `cmp`s. Native-image reproducibility for the
   control plane is best-effort and is not load-bearing for this
   feature's success criteria.
-- **Mullvad Browser Manifest V2 support.** The extension uses
-  WebExtensions MV2 `proxy.onRequest` as documented in architecture
-  spec §14.1 (`NEEDS CLARIFICATION` there is carried forward). If
-  Mullvad Browser drops MV2 before this feature ships, the extension
-  design migrates per the open question in architecture spec §15 #6 —
-  this feature's spec does not foreclose either path, but the v1
-  delivery assumes MV2 remains available.
+- **Mullvad Browser / Firefox floor.** The extension uses WebExtensions MV2
+  `proxy.onRequest`, native `publicSuffix.getDomain()` and document-bound request metadata as
+  documented in architecture spec §14.1. The manifest sets Gecko `strict_min_version` to `153.0`,
+  so older Mullvad Browser builds reject the extension rather than running a weaker isolation
+  path. Alpha builds are development evidence only: v1 does not release until stable Mullvad
+  Browser uses Gecko 153 or newer and retains MV2. If that stable release drops MV2, redesign and
+  constitutional review replace this assumption; there is no silent legacy fallback.
 - **`proxy.onRequest` failover timeout: Firefox default.** The router
   does not set `failoverTimeout` on the returned `proxy.ProxyInfo`
   descriptor; Firefox's 5-second default applies. Pinning the value

@@ -1028,14 +1028,36 @@ T136 pins suffix/context derivation and the bounded wire representation; T147 ha
 No general correlation resistance follows from partitioning, and same-partition sharing is
 permitted rather than guaranteed. Missing initiating context must block a protected request.
 
-**Current gaps:** the audit found suffix collisions and a CONNECT path without isolation
-identity. They remain T136/T147 remediation, not proven circuit leakage in every live request.
-T126/T155 supply real same-target/distinct-partition evidence with controls; synthetic
-username assertions alone cannot establish the whole browser-to-Tor path.
+**Browser SOCKS mechanism:** on Firefox 153 or newer, the extension uses the browser's native
+ICANN-and-PRIVATE `publicSuffix.getDomain()` authority to canonicalize DNS sites; unknown and plain
+suffixes are unavailable and no list is fetched by the extension at runtime. The manifest rejects
+older Gecko versions. Main navigations establish the site directly; frame-zero metadata binds it
+to `documentId`, and nested frames or tab-associated workers may inherit only through committed
+`documentId`/`parentDocumentId` ancestry. A new top-level commit retires older tab bindings and an
+in-flight derivation rechecks its exact binding before returning. Detached workers,
+opaque top-level parents and absent state yield no isolation identity; the destination never fills
+that gap. A per-profile random id, normal/private and contextual-identity mode, and the site are
+encoded under the device bearer with full HMAC-SHA-256 as a fixed 68-byte `sg1:` username. The
+bearer remains the DP-facing password and the DP sends Tor an empty password. The pseudonymous
+username is stable within the tuple but is not a general unlinkability claim.
+
+**Current evidence and gaps:** T136's Node tests cover native-suffix adapter and browser-event
+decisions but do not prove Mullvad Browser's metadata or timing. Mullvad Browser Alpha 16.0a11 /
+Gecko 153.2.0 grounds API availability; a stable Gecko-153-or-newer Mullvad release is a v1 release
+gate, not an inferred promise. Existing DP tests prove that an opaque username is
+forwarded intact and that the bearer/password is not sent upstream. T126/T155 still supply real
+same-target/distinct-partition circuit evidence with credential-fusion controls; synthetic
+username assertions alone cannot establish the whole browser-to-Tor path. CONNECT remains T147.
+Identity-unavailable browser cancellation and no-fallback packets remain T157 rather than being
+inferred from a non-SOCKS descriptor.
 
 **Residual limitations:** parties within one defined partition may share circuits. Browser
-context fidelity and installed-profile hardening require the stated tests/preconditions;
-unknown context may not silently degrade to destination-only identity or Direct.
+context fidelity and installed-profile hardening require the stated tests/preconditions. A copied
+profile can copy its local profile id, and devices configured with the same bearer represent the
+same authenticated-device identity. A browser update can update its suffix authority and thereby
+start a new isolation identity for an affected site; that is safer than retaining a stale
+delegation, but equality is only promised within one browser suffix-data version. Unknown context
+may not silently degrade to destination-only identity or Direct.
 
 ### 5.11 Tor bridges and pluggable transports
 
