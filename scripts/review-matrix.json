@@ -21,7 +21,7 @@
       "tool": "codex",
       "role": "stargate-review",
       "model": "gpt-6-astra",
-      "effort": "xhigh",
+      "effort": "low",
       "output": "{ticket}.review-astra.verdict"
     }
   ]

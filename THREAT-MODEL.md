@@ -1244,7 +1244,7 @@ not establish omitted live/release properties or replace VIII's external human r
 ### 5.17 Native reviewer context separation (T142)
 
 Ticket reviews run as ONE single gate: one fresh OpenCode full GLM-5.3 session
-at xhigh (provider max) and one fresh Codex Astra session at xhigh, both
+at xhigh (provider max) and one fresh Codex Astra session at low, both
 covering correctness and adversarial security/privacy in the same pass —
 there is no second phase. Separate candidate copies and verdict paths prevent
 accidental interference; no implementation chat or peer verdict is supplied.

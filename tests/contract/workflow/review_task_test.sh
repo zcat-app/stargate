@@ -34,7 +34,7 @@ matrix = json.load(open(sys.argv[1]))
 expected = [
     ("glm", "opencode", "stargate-review", "zai-coding-plan/glm-5.3", "xhigh",
      lambda t: f"{t}.review-glm.verdict"),
-    ("astra", "codex", "stargate-review", "gpt-6-astra", "xhigh",
+    ("astra", "codex", "stargate-review", "gpt-6-astra", "low",
      lambda t: f"{t}.review-astra.verdict"),
 ]
 rows = matrix.get("reviewers")
@@ -161,7 +161,7 @@ output=""
 model=""
 args="$*"
 [[ " $* " = *" -s danger-full-access "* && " $* " = *" --ephemeral "* ]] || exit 64
-[[ " $* " = *'model_reasoning_effort="xhigh"'* ]] || exit 64
+[[ " $* " = *'model_reasoning_effort="low"'* ]] || exit 64
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -o) output="$2"; shift 2 ;;
@@ -434,7 +434,7 @@ MUT
     git -C "$case_dir" log -1 --format=%B > "$SANDBOX/$tag-msg"
     grep -q 'Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3; effort xhigh; VERDICT: APPROVE' "$SANDBOX/$tag-msg" ||
       bail "$tag: commit trailers do not match the authorizing APPROVE set (glm)"
-    grep -q 'Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort xhigh; VERDICT: APPROVE' "$SANDBOX/$tag-msg" ||
+    grep -q 'Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort low; VERDICT: APPROVE' "$SANDBOX/$tag-msg" ||
       bail "$tag: commit trailers do not match the authorizing APPROVE set (astra)"
   fi
 }

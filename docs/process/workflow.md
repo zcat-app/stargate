@@ -233,7 +233,7 @@ Separate from the per-ticket single gate and **blind to rationale**.
   completed tickets become remediation tickets.
 - **Context and capability boundary** — `scripts/review-task.sh` starts exactly
   two native CLI child sessions, one full GLM-5.3 at xhigh (provider `max`) and
-  one Astra at xhigh, both running the single merged gate in one pass. No Docker
+  one Astra at low, both running the single merged gate in one pass. No Docker
   or replacement containment infrastructure is required. Separate source copies,
   temporary directories and verdict paths avoid accidental interference. Both
   copies are checked against the driver snapshot before and after review.

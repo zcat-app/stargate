@@ -136,7 +136,7 @@ editing any `.claude/agents/*.md`.
 
 Ticket review uses `scripts/review-matrix.json`: exactly one OpenCode full
 `zai-coding-plan/glm-5.3` context at `xhigh` (native GLM `max`) and one
-Codex `gpt-6-astra` context at `xhigh`, both running the same merged gate in
+Codex `gpt-6-astra` context at `low`, both running the same merged gate in
 one pass — there is no separate redteam dispatch. `scripts/review-task.sh`
 launches fresh native CLI child sessions concurrently with separate candidate
 copies and verdict paths. No containers are required. This is context
