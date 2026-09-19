@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-13
+**Last updated:** 2026-09-19
 
 ---
 
@@ -15,9 +15,9 @@
 |---|---|
 | pending | 55 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 136 |
+| done | 137 |
 | deferred | 3 |
 | **total** | **195** |
 
@@ -31,6 +31,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
+| T138 | Define an enforced Tor observation boundary | Foundation audit remediation | ✓ |  |
 | T141 | Pin CI Actions and agent installation dependencies | Foundation audit remediation | ✓ |  |
 | T143 | Retire obsolete Java token-verifier constants | Foundation audit remediation | ✓ |  |
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
@@ -50,9 +51,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T134 | Investigate a constitution-compliant local topology | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -68,7 +67,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_136 ticket(s) done._
+_137 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -198,6 +197,7 @@ _136 ticket(s) done._
 - T130 — Inter-plane gRPC channel never establishes in the compose stack
 - T131 — Stack smoke test: full-path bring-up acceptance (RED until T130)
 - T133 — Require independent redteam before privacy-critical ticket commits
+- T134 — Investigate a constitution-compliant local topology
 - T135 — Reject resumed TLS peers after public-key rotation
 - T136 — Prevent cross-site first-party isolation collisions
 - T137 — Create a fresh deadline for each token-reload RPC

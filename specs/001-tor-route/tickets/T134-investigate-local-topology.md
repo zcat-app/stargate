@@ -1,9 +1,9 @@
 ---
 id: "T134"
 title: "Investigate a constitution-compliant local topology"
-status: in-review
+status: done
 created: "2026-09-12"
-last_updated: 2026-09-13
+last_updated: 2026-09-19
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
@@ -18,7 +18,7 @@ spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md"]
 decision_refs: []
 remediates: "T125"
 tests_first: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-19, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
