@@ -39,21 +39,15 @@ services:
       - stargate-dp-state:/var/lib/stargate
     restart: "no"
 
-  # Mirrors the real stargate-control: just needs to be RUNNING for init's
-  # health loop. Mounts the volume set the real CP does, EXCEPT the real
-  # compose's `stargate-control-config:/etc/stargate:ro` parent mount (which
-  # would shadow the `stargate-keys:/etc/stargate/keys` child in an alpine
-  # image that has no pre-created /etc/stargate/keys dir — the real CP image
-  # pre-creates it; the fixture need not, and that nesting is not load-bearing
-  # for what this test asserts: init's provisioning). control-config stays
-  # declared in the volumes set below for 7-volume parity; init does not
-  # initialise it (operator-authored, :ro).
+  # T167: keep the real CP's overlapping read-only config / writable keys
+  # mounts so this fixture exercises the installer's mountpoint provisioning.
   stargate-control:
     image: *alpine
     command: ["sleep", "3600"]
     volumes:
       - stargate-ipc:/run/stargate
       - stargate-keys:/etc/stargate/keys
+      - stargate-control-config:/etc/stargate:ro
       - stargate-control-state:/var/lib/stargate
       - stargate-tor-config:/etc/tor
     restart: "no"
@@ -67,11 +61,12 @@ services:
     restart: "no"
 
 volumes:
-  # The seven named volumes from data-model.md §6 (the real compose's exact
-  # set). init initialises the roots of the five UID-5101/5102-writable ones
-  # (keys + ipc + control-state + dp-state + tor-config); control-config
-  # (operator-authored, :ro) and tor-state (written by the tor user, not
-  # 5101/5102) are declared for set parity but not chowned by init.
+  # The seven named volumes from data-model.md §6; the real Compose adds
+  # two T162 Tor fabric volumes. init initialises the roots of the five
+  # UID-5101/5102-writable ones (keys, ipc, control-state, dp-state,
+  # tor-config); control-config
+  # is operator-authored and :ro at runtime, with only its keys mountpoint
+  # created by init. Tor-state is written by the tor user, not 5101/5102.
   stargate-keys: {}
   stargate-ipc: {}
   stargate-control-config: {}

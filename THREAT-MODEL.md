@@ -279,6 +279,15 @@ running DP remains live is outside this installer-only admission check and
 must be exercised by T163. No claim of production packet-level closure is
 made until T162's behavioral gate and T163's capture matrix pass.
 
+**T167 mount repair (2026-09-20):** the installer now creates the
+`/etc/stargate/keys` child mountpoint inside the project-scoped config volume
+before Compose mounts that volume read-only in CP. A real-image Docker test
+observed the pre-fix nested-mount refusal (exit 125) while a keys-only
+control reached Quarkus startup, then observed the full effective Compose
+mount set start with the intended sources, targets and modes. This closes
+the CP startup blocker only; T163's production-namespace packet, resolver
+and rule-absence evidence remains pending.
+
 **Protects against**:
 
 - Other devices on the same LAN observing Stargate-routed traffic — they

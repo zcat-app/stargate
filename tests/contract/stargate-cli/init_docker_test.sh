@@ -148,6 +148,10 @@ case "$keys_a" in
 esac
 [ "$keys_a" != "stargate-keys" ] \
   || bail "A: keys volume resolved to literal 'stargate-keys' (B1 regression)"
+config_a="$(phys_of "$PROJ_A" stargate-control-config)"
+[ -n "$config_a" ] || bail "A: stargate-control-config volume missing"
+vol_exists "$config_a" keys \
+  || bail "A: read-only config volume lacks the CP keys child mountpoint (T167)"
 
 # keys present with correct ownership/mode (acceptance #4 + T016 M4 literals).
 for f in cp.priv dp.priv; do

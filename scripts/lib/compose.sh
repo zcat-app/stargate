@@ -82,6 +82,7 @@ PEPPER_MODE=0640     # data-model §1.7: pepper is group-readable by stargate-ip
 KEYS_VOLUME="stargate-keys"
 IPC_VOLUME="stargate-ipc"
 CONTROL_STATE_VOLUME="stargate-control-state"
+CONTROL_CONFIG_VOLUME="stargate-control-config"
 DP_STATE_VOLUME="stargate-dp-state"
 TOR_CONFIG_VOLUME="stargate-tor-config"
 PEPPER_FILE="pepper.key"   # co-located with the keypairs in stargate-keys
@@ -190,6 +191,23 @@ init_volume_root() {
   docker run --rm --network none --cap-drop ALL --cap-add CHOWN --cap-add FOWNER \
     --read-only --tmpfs /tmp -v "${vol}:/v" "$STARGATE_KEYGEN_IMAGE" \
     sh -c "chown '${uid}:${gid}' /v && chmod '${mode}' /v" >/dev/null 2>&1
+}
+
+# T167 / Principle VII: the keys volume is mounted below the read-only
+# control-config volume. Docker cannot create that child mountpoint once the
+# parent has been mounted read-only, so provision the directory in the named
+# config volume before Compose starts CP. The helper sees no keys or network.
+init_control_config_mountpoint() {
+  local vol="$1"
+  case "$STARGATE_KEYGEN_IMAGE" in
+    *@sha256:*) : ;;
+    *) _compose_note "init_control_config_mountpoint: STARGATE_KEYGEN_IMAGE must be digest-pinned"
+       return 1 ;;
+  esac
+  docker run --rm --network none --cap-drop ALL --cap-add DAC_OVERRIDE \
+    --read-only --tmpfs /tmp -v "${vol}:/v" "$STARGATE_KEYGEN_IMAGE" \
+    sh -c 'if [ -L /v/keys ]; then exit 1; fi; if [ -e /v/keys ]; then test -d /v/keys; else mkdir -m 0755 /v/keys; fi' \
+    >/dev/null 2>&1
 }
 
 # compose_health_ids <service...> — echo each service's container id (via

@@ -17,9 +17,9 @@
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 140 |
+| done | 141 |
 | deferred | 3 |
-| **total** | **198** |
+| **total** | **199** |
 
 ---
 
@@ -69,7 +69,7 @@ _(nothing in flight)_
 
 ## Done
 
-_140 ticket(s) done._
+_141 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -211,3 +211,4 @@ _140 ticket(s) done._
 - T161 — Resolve Tor upgrade live validation failures before promotion
 - T162 — Implement host-loopback DP with unix-socket sidecar fabric
 - T166 — Remove shrink escalation and preserve review evidence
+- T167 — Repair overlapping read-only control-plane mounts

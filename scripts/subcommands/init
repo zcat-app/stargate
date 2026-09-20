@@ -275,11 +275,12 @@ supply_chain_guard() {
 # their roots for the non-root service UIDs — empty named-volume roots are
 # root-owned, so UID 5101/5102 cannot create their UDS / SQLite / snapshot
 # files there. stargate-keys root is chowned before the key+pepper install
-# step; the four state volumes to their owning plane.
+# step; the four state volumes to their owning plane. T167 also prepares
+# the config volume's child mountpoint before Compose mounts it read-only.
 ensure_volumes() {
   local vol phys
   for vol in "$KEYS_VOLUME" "$IPC_VOLUME" "$CONTROL_STATE_VOLUME" \
-             "$DP_STATE_VOLUME" "$TOR_CONFIG_VOLUME"; do
+             "$CONTROL_CONFIG_VOLUME" "$DP_STATE_VOLUME" "$TOR_CONFIG_VOLUME"; do
     phys="$(ensure_project_volume "$vol")"
     [ -n "$phys" ] || { note "ensure_project_volume failed for $vol"; return "$EXIT_KEYGEN"; }
   done
@@ -301,6 +302,8 @@ ensure_volumes() {
   init_volume_root "$(ensure_project_volume "$TOR_CONFIG_VOLUME")" \
     "$CP_UID" "$IPC_GID" 0750 \
     || { note "init_volume_root failed for $TOR_CONFIG_VOLUME"; return "$EXIT_KEYGEN"; }
+  init_control_config_mountpoint "$(ensure_project_volume "$CONTROL_CONFIG_VOLUME")" \
+    || { note "init_control_config_mountpoint failed for $CONTROL_CONFIG_VOLUME"; return "$EXIT_KEYGEN"; }
   return 0
 }
 
