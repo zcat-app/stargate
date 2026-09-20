@@ -15,9 +15,9 @@
 |---|---|
 | pending | 54 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 141 |
+| done | 142 |
 | deferred | 4 |
 | **total** | **200** |
 
@@ -52,9 +52,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T168 | Keep data-plane egress closed across owner-rule loss | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -71,7 +69,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_141 ticket(s) done._
+_142 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -214,3 +212,4 @@ _141 ticket(s) done._
 - T162 — Implement host-loopback DP with unix-socket sidecar fabric
 - T166 — Remove shrink escalation and preserve review evidence
 - T167 — Repair overlapping read-only control-plane mounts
+- T168 — Keep data-plane egress closed across owner-rule loss

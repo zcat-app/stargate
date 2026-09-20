@@ -1,7 +1,7 @@
 ---
 id: "T168"
 title: "Keep data-plane egress closed across owner-rule loss"
-status: in-review
+status: done
 created: "2026-09-20"
 last_updated: 2026-09-20
 source: "T163 RuleAbsentStartup live failure"
@@ -23,7 +23,7 @@ decision_refs:
   - "specs/001-tor-route/analysis/T134-local-topology.md"
 remediates: "T162"
 tests_first: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-20, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
