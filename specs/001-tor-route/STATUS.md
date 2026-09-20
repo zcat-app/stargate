@@ -15,9 +15,9 @@
 |---|---|
 | pending | 55 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 139 |
+| done | 140 |
 | deferred | 3 |
 | **total** | **198** |
 
@@ -46,14 +46,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
+| T163 | Verify packet-level topology boundaries with capture control | Foundation audit remediation | ✓ |  |
+| T164 | Enforce the sanitized Tor observer boundary | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T162 | Implement host-loopback DP with unix-socket sidecar fabric | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -69,7 +69,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_139 ticket(s) done._
+_140 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -209,4 +209,5 @@ _139 ticket(s) done._
 - T156 — Strengthen constitution and reconcile implementation prerequisites
 - T160 — Prepare Tor security upgrade with enforced package content pins
 - T161 — Resolve Tor upgrade live validation failures before promotion
+- T162 — Implement host-loopback DP with unix-socket sidecar fabric
 - T166 — Remove shrink escalation and preserve review evidence

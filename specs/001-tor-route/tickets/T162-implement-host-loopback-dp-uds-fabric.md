@@ -1,7 +1,7 @@
 ---
 id: "T162"
 title: "Implement host-loopback DP with unix-socket sidecar fabric"
-status: in-review
+status: done
 created: "2026-09-13"
 last_updated: 2026-09-20
 source: "specs/001-tor-route/analysis/T134-local-topology.md"
@@ -23,7 +23,7 @@ decision_refs:
   - "specs/001-tor-route/analysis/T134-local-topology.md"
 remediates: "T134"
 tests_first: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-20, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
