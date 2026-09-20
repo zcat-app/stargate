@@ -155,6 +155,7 @@ func startDPWithSeed(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir s
 		}
 		builtDPPath = filepath.Join(dir, "stargate-proxy")
 		cmd := exec.Command("go", "build", "-o", builtDPPath, "./cmd/stargate-proxy")
+		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		cmd.Dir = filepath.Join(repoRoot, "data-plane")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			builtDPErr = fmt.Errorf("go build ./cmd/stargate-proxy: %w\n%s", err, out)
@@ -198,7 +199,7 @@ func startDPWithSeed(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir s
 		"STARGATE_LISTEN_ADDR="+proxyAddr,
 	)
 	if upstreamAddr != "" {
-		cmd.Env = append(cmd.Env, "STARGATE_TOR_SOCKS_ADDR="+upstreamAddr)
+		cmd.Env = append(cmd.Env, "STARGATE_TOR_SOCKS_ADDR="+dpharness.UnixUpstream(t, upstreamAddr))
 	}
 	cmd.Stderr = journal
 	cmd.Stdout = journal

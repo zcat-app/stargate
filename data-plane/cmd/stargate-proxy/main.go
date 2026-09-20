@@ -6,15 +6,16 @@
 // sol-review B3):
 //
 //  1. FR-010 bind-safety check (bind/check.go) — fatal before ANY listener
-//  2. token store + cold-start snapshot restore (T046) — never fatal
-//  3. inter-plane TLS material (T045 tls.go; wire-auth.md §2) — degraded
+//  2. ordinary TCP listener + all-thread kernel confinement (T168) — fail closed
+//  3. token store + cold-start snapshot restore (T046) — never fatal
+//  4. inter-plane TLS material (T045 tls.go; wire-auth.md §2) — degraded
 //     mode on failure: the DP keeps routing port 8881 without the
 //     inter-plane surface (never an unauthenticated inter-plane socket)
-//  4. DP gRPC server on dp.sock (T045 server.go; bind(2) role separation)
-//  5. WatchEvents client dialed at control.sock (T045 client.go) — the
+//  5. DP gRPC server on dp.sock (T045 server.go; bind(2) role separation)
+//  6. WatchEvents client dialed at control.sock (T045 client.go) — the
 //     backoff loop runs concurrently; its events are advisory
-//  6. port-8881 listener + listener.Deps wiring (T042/T043)
-//  7. accept loop — forwarding begins immediately, gated on nothing
+//  7. listener.Deps wiring (T042/T043)
+//  8. accept loop — authentication gates admission; CP health remains advisory
 //
 // Configuration surface: the test-defined env contract pinned in
 // tests/contract/control-grpc/dpharness_test.go §header (STARGATE_IPC_DIR,
@@ -29,6 +30,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -37,6 +39,7 @@ import (
 	"github.com/zcat-app/stargate/data-plane/internal/audit"
 	"github.com/zcat-app/stargate/data-plane/internal/auth"
 	"github.com/zcat-app/stargate/data-plane/internal/bind"
+	"github.com/zcat-app/stargate/data-plane/internal/confinement"
 	"github.com/zcat-app/stargate/data-plane/internal/controlclient"
 	"github.com/zcat-app/stargate/data-plane/internal/errortpl"
 	"github.com/zcat-app/stargate/data-plane/internal/forward"
@@ -49,7 +52,7 @@ import (
 const (
 	defaultIPCDir     = "/run/stargate"
 	defaultStateDir   = "/var/lib/stargate"
-	defaultListenAddr = "127.0.0.1:8881" // FR-005; FR-010's bind check still applies
+	defaultListenAddr = "127.0.0.1:8881"                          // FR-005; FR-010's bind check still applies
 	defaultTorSOCKS   = "unix:///run/stargate-tor/tor-socks.sock" // FR-007
 )
 
@@ -92,6 +95,27 @@ func run() int {
 		// The startup class vocabulary has no fatal-boot line; the shutdown
 		// class (reason field) is the journal-visible exit record.
 		log.Error("shutdown", "reason", err.Error())
+		return 1
+	}
+
+	// T168 / Constitution III: no serving or adapter dial occurs before the
+	// process boundary is installed. Ordinary TCP is required: MPTCP listeners
+	// can expose connection paths outside older Landlock TCP mediation.
+	upstream := envOr("STARGATE_TOR_SOCKS_ADDR", defaultTorSOCKS)
+	if !strings.HasPrefix(upstream, "unix://") || !filepath.IsAbs(strings.TrimPrefix(upstream, "unix://")) || strings.ContainsRune(upstream, 0) {
+		log.Error("shutdown", "reason", "invalid Unix adapter configuration")
+		return 1
+	}
+	lc := net.ListenConfig{}
+	lc.SetMultipathTCP(false)
+	proxyLis, err := lc.Listen(ctx, "tcp", listenAddr)
+	if err != nil {
+		log.Error("shutdown", "reason", "listener unavailable")
+		return 1
+	}
+	defer proxyLis.Close()
+	if err := confinement.Apply(proxyLis.(*net.TCPListener)); err != nil {
+		log.Error("shutdown", "reason", "network confinement unavailable")
 		return 1
 	}
 
@@ -186,18 +210,8 @@ func run() int {
 		}
 	}
 
-	// --- (6) the port-8881 proxy listener (FR-005). The bind check (step
-	// 1) already proved the address is an IP literal — loopback, or the
-	// wildcard behind the container boundary (T125) — so net.Listen
-	// performs no name resolution (Principle I/FR-007).
-	proxyLis, err := net.Listen("tcp", listenAddr)
-	if err != nil {
-		log.Error("shutdown", "reason", err.Error())
-		return 1
-	}
-
 	verifier := auth.NewTokenVerifier(pepper, store)
-	forwarder := forward.New(envOr("STARGATE_TOR_SOCKS_ADDR", defaultTorSOCKS), counters)
+	forwarder := forward.New(upstream, counters)
 	renderer := &errortpl.Renderer{}
 	deps := &listener.Deps{
 		Auth:    verifier,

@@ -440,3 +440,52 @@ func TestColdStartSnapshotRestore(t *testing.T) {
 			[]byte(t020aPlaintextP1), []byte(t020aPlaintextP2))
 	})
 }
+
+func TestT168SandboxUnixRestart(t *testing.T) {
+	dir, err := os.MkdirTemp("", "t168restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	target := "unix://" + filepath.Join(dir, "tor.sock")
+	upstream := integration.NewServer(integration.AcceptAndRelay, integration.WithUnixSocket(filepath.Join(dir, "tor.sock")))
+	if _, err := upstream.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = upstream.Close() }()
+	h := startDPWithSeed(t, target, nil, func(stateDir, _ string) {
+		seedV2Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
+	})
+	roundtrip := func() {
+		c := t020aDialAuthenticatedConnect(t, h, t020aPlaintextP1)
+		defer c.Close()
+		reply := make([]byte, 10)
+		if _, err := io.ReadFull(c, reply); err != nil {
+			t.Fatal(err)
+		}
+		if reply[1] != 0 {
+			t.Fatalf("route reply=%d", reply[1])
+		}
+		payload := []byte("t168-reconnect-control")
+		if _, err := c.Write(payload); err != nil {
+			t.Fatal(err)
+		}
+		got := make([]byte, len(payload))
+		if _, err := io.ReadFull(c, got); err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != string(payload) {
+			t.Fatal("payload mismatch")
+		}
+	}
+	roundtrip()
+	if err := upstream.Close(); err != nil {
+		t.Fatal(err)
+	}
+	upstream = integration.NewServer(integration.AcceptAndRelay, integration.WithUnixSocket(filepath.Join(dir, "tor.sock")))
+	if _, err := upstream.Start(); err != nil {
+		t.Fatal(err)
+	}
+	roundtrip()
+	t.Log("authenticated forwarding survives Unix upstream recreation with CP absent")
+}

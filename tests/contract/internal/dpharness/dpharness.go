@@ -189,8 +189,8 @@ func Start(t *testing.T, opts ...Option) *Harness {
 	if cfg.upstream != "" {
 		// Test-defined env-var interface: T047 / T050 must read this
 		// and override the production tor:9050 default when set.
-		// Production deploys leave it unset (compose DNS resolves tor).
-		env = append(env, "STARGATE_TOR_SOCKS_ADDR="+cfg.upstream)
+		// The Unix adapter matches production; no DP destination DNS or TCP dial.
+		env = append(env, "STARGATE_TOR_SOCKS_ADDR="+UnixUpstream(t, cfg.upstream))
 	}
 	cmd.Env = env
 	cmd.Stderr = journal
@@ -277,6 +277,7 @@ func buildDPOnce(t *testing.T) string {
 		binPath = filepath.Join(dir, "stargate-proxy")
 		repoRoot := FindRepoRoot(t)
 		cmd := exec.Command("go", "build", "-o", binPath, "./cmd/stargate-proxy")
+		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		cmd.Dir = filepath.Join(repoRoot, "data-plane")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			binErr = fmt.Errorf("go build ./cmd/stargate-proxy: %w\n%s", err, out)

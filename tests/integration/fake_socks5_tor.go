@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -84,6 +85,12 @@ func WithListenAddr(addr string) Option {
 	return func(c *config) { c.listenAddr = addr }
 }
 
+// WithUnixSocket uses the same pathname transport as the deployed Tor sidecar.
+// Closing and recreating Server at this path models Tor's socket recreation.
+func WithUnixSocket(path string) Option {
+	return WithListenAddr("unix://" + path)
+}
+
 // WithLatency sets the first-upstream-write delay for Slow mode
 // (default 250 ms). The value MUST exceed the consumer's read deadline
 // for the slow path to be observable. Ignored in other modes.
@@ -112,7 +119,11 @@ func NewServer(m Mode, opts ...Option) *Server {
 // Returns the dialable address ("host:port") the data plane (or a test
 // SOCKS5 client) should target.
 func (s *Server) Start() (string, error) {
-	ln, err := net.Listen("tcp", s.cfg.listenAddr)
+	network, address := "tcp", s.cfg.listenAddr
+	if strings.HasPrefix(address, "unix://") {
+		network, address = "unix", strings.TrimPrefix(address, "unix://")
+	}
+	ln, err := net.Listen(network, address)
 	if err != nil {
 		return "", fmt.Errorf("fake_socks5_tor: listen %s: %w", s.cfg.listenAddr, err)
 	}
@@ -135,6 +146,9 @@ func (s *Server) Start() (string, error) {
 			}(conn)
 		}
 	}()
+	if network == "unix" {
+		return "unix://" + address, nil
+	}
 	return ln.Addr().String(), nil
 }
 

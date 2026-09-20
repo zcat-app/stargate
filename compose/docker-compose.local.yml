@@ -5,6 +5,8 @@
 # 127.0.0.1 bind is the browser-facing listener. Host owner-match rules and a
 # DP AppArmor profile must be installed before this stack starts; see
 # scripts/stargate init and THREAT-MODEL.md §3.1. Tor alone has bridge egress.
+# T168 also requires Landlock ABI >= 4 and seccomp TSYNC in the static Go DP.
+# It installs process confinement before serving; owner rules are defense in depth.
 # The CP observer fabric is reserved for T164; CP has no Tor cookie or raw
 # control socket during this transition.
 

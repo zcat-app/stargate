@@ -65,7 +65,13 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 - **Extension JS units**: Node 20 LTS + built-in `node:test` runner; MV2 background scripts are loaded into the test via `vm.runInNewContext()` with a synthesized `browser` global, so production code stays in idiomatic browser-script style (no UMD wrapper, no test-only export branch). Used in this feature for the FR-004 hardening-audit test (research.md §10).
 - **Browser-level**: Mullvad Browser integration tests are run manually for the SC-001 walkthrough in this feature; automation is deferred (no headless privacy-safe Mullvad Browser harness exists in v1).
 
-**Target Platform**: Linux x86_64 (the local Compose profile). Mullvad Browser on Linux desktop for the user-facing walkthrough. `arm64` data-plane builds are produced by CI for distribution but not exercised by this feature's integration harness.
+**Target Platform**: Linux x86_64 (the local Compose profile), with AppArmor, Landlock
+ABI >= 4 (upstream Linux 6.7+) and seccomp thread synchronization. The DP is built
+with `CGO_ENABLED=0`; confinement failure refuses serving. Mullvad Browser on Linux
+desktop is the user-facing walkthrough. `arm64` data-plane builds use native kernel
+constants but cross-compilation alone is not runtime verification; they are not
+exercised by this feature's integration harness. T168's mechanism and supported
+restart behavior are normative in `contracts/foundation-boundaries.md`.
 
 **Project Type**: Multi-language monorepo — three language planes (Go data plane, Quarkus control plane, JS extension) + Docker-orchestrated sidecars + cross-cutting contract tests. Layout is defined in architecture spec §3; this feature populates a vertical slice through that layout.
 
@@ -105,7 +111,14 @@ sol-review B5) hold regardless of wall-clock numbers.
 - No per-request metadata logging at finer than 1-hour resolution (FR-008).
 - Privacy-safe error template — exactly four response headers, byte-for-byte body match modulo permitted substitutions (FR-009 + arch §10).
 - All sidecar images digest-pinned in `compose/docker-compose.local.yml` (FR-015, Principle IV); contract tests block merge on a digest bump that breaks the Tor surface (FR-016).
-- No outbound network from running Stargate components except routed requests (Principle III); the control plane's gRPC server is UDS-only, the data plane's listener is loopback-only, and there are no telemetry/update-check channels. Test-time outbound fetches needed to construct gold-standard inputs (e.g., T034f's HTTPS GET to `collector.torproject.org` for the live Tor consensus, used as the allowlist for the egress-consensus regression gate) are exempt — they execute in the CI runner's namespace, never inside a Stargate container, and are gated to release-tag cadence. The data-plane source-level review at T078 verifies no outbound `net.Dial`/`http.Get` to non-`tor:9050` destinations exists in the *production* binary.
+- Enforce Constitution III's actor matrix: DP has only the fixed pathname Unix
+  adapter and authenticated Unix IPC; CP has narrow local management and no
+  independent IP egress. T168 confines DP origins in the kernel before serving;
+  source-level dial review alone is insufficient against process compromise.
+  Tor's native maintenance is a separate sidecar permission. No telemetry or
+  background update checks. Explicit test-time fetches for release evidence
+  (such as T034f's Tor consensus fixture) run in the test runner's namespace,
+  outside the deployed proxy services.
 
 **Scale/Scope**:
 
@@ -129,7 +142,7 @@ The constitution amended on 2026-09-12 and `contracts/foundation-boundaries.md` 
 | VI — reproducibility | Obligations remain pending T075/T109/T081; no empty comparison is PASS. |
 | VII — tests-first | Required-coverage/evidence repairs T139/T144; implementations preserve real failing-before-fix evidence. |
 | VIII — independent reviews | Amendment review in T156; foundation T155 and final T078/T079 remain required. |
-| Deployment | T125 wildcard exception withdrawn; T134 must prove a conforming namespace/egress topology. |
+| Deployment | T162 enforces loopback and Unix fabrics; T168 adds irreversible all-thread IP confinement before serving. Owner rules remain installer-required defense in depth. T163 owns cumulative/physical-host evidence. |
 
 **Verdict: IMPLEMENTATION BLOCKED ON REMEDIATION**, not PASS (deferred). This plan specifies
 work to reach compliance; it does not waive current defects. Use `remaining-implementation-plan.md`

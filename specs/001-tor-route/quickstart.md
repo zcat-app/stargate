@@ -11,7 +11,8 @@ in **under 5 minutes**.
 
 ## Prerequisites
 
-- Linux x86_64.
+- Linux x86_64 with AppArmor and Landlock ABI 4 or newer (upstream Linux 6.7+;
+  the distribution must enable Landlock), plus seccomp thread synchronization.
 - Docker Engine ≥ 25 with `docker compose v2`.
 - Mullvad Browser installed (https://mullvad.net/en/browser).
 - About 1 GB free disk (Tor image + state + control DB).
@@ -55,6 +56,15 @@ COMPOSE="docker compose -p stargate -f compose/docker-compose.local.yml --env-fi
 6. Runs a bounded TCP-connect check on `127.0.0.1:8881`.
 7. Prints a status table. Tor health observation from CP remains unavailable
    until T164 adds the sanitized observer; it cannot gate DP admission.
+
+The data plane installs its own kernel network restriction before serving.
+`network confinement unavailable` means that the required kernel feature or
+deployment setting is unavailable; the proxy exits without admitting requests.
+Use a host meeting the prerequisites and rerun `init`. The shipped image is a
+static Go build; custom cgo builds are unsupported. Do not disable the restriction.
+After successful installation, `$COMPOSE restart stargate-dp` reapplies it on
+every start. A firewall flush does not remove it from an existing process;
+rerunning `init` also restores the additional owner rules.
 
 Expected output (truncated):
 

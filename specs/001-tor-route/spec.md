@@ -406,7 +406,8 @@ tests-first suite (Principle VII) before implementation lands.
   interface in each listener namespace and remain closed on tunnel loss. No container
   environment flag, wildcard bind or tunnel elsewhere in the stack is an exception.
   T125's permission is superseded. T134 selected the topology; T162 implements it and
-  T163 verifies production namespaces; see
+  T168 adds mandatory process confinement before admission, independent of auxiliary
+  owner-rule persistence; T163 verifies production namespaces and packet outcomes. See
   `contracts/foundation-boundaries.md` §Deployment and authority.
 
 - **FR-011**: The Tor sidecar MUST be configured with the directive set

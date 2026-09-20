@@ -262,7 +262,7 @@ in their own namespaces. Sidecar endpoints have an enforced caller/port matrix; 
 cannot use arbitrary public TCP/UDP/DNS. T134 compares compliant designs. Host publication
 alone, `STARGATE_IN_CONTAINER` and no-masquerade are insufficient evidence.
 
-**T162 mechanism (deployment evidence pending T163):** the local DP now uses the host
+**T162 deployment mechanism (cumulative evidence pending T163):** the local DP uses the host
 network namespace and binds `127.0.0.1:8881` through the strict loopback check;
 the T125 wildcard exception is removed. The CP has `network_mode: none`; Tor alone
 has bridge egress. The installer stops a previously running DP before replacing
@@ -273,11 +273,39 @@ all other DP-owned IP packets hit a silent DROP, with no LOG target. The
 profile mediates AF_UNIX and denies abstract socket peers, closing the
 host abstract-forwarder channel shown in T134 A.12. An install/load/verify
 failure refuses DP startup; the DP has no automatic restart policy. The
-host administrator and Docker daemon are trusted to retain these rules and
-profile; a privileged host firewall flush or profile unload while an already
-running DP remains live is outside this installer-only admission check and
-must be exercised by T163. No claim of production packet-level closure is
-made until T162's behavioral gate and T163's capture matrix pass.
+host administrator and Docker daemon are trusted to retain the profile and
+Unix fabric policy. T168 adds the process boundary below; owner rules remain
+installer-required defense in depth. Cumulative packet-level closure still
+requires T163's complete capture matrix.
+
+**T168 process mechanism:** before proxy or IPC serving, the static pure-Go DP
+binds an ordinary TCP loopback listener with MPTCP disabled. It rejects other
+inherited sockets (including standard descriptors), unexpected anonymous handles
+and devices. Landlock ABI >= 4 denies TCP bind/connect on every Go thread; a
+seccomp TSYNC filter denies creation of non-Unix sockets, message-send Fast Open,
+descriptor-import and io_uring paths. This prevents independent IP origins even
+through reset/reused listeners or a host-loopback forwarder. Accepted stream
+replies and pathname Unix adapter/IPC read/write remain available; AppArmor and
+fabric ownership constrain Unix peers. Future threads and descendants inherit
+the restrictions. ABI >= 7 disables this domain's configurable denial auditing.
+
+Missing/unsupported features, a cgo build, unexpected descriptors or partial
+installation cause a fixed startup failure before serving. There is no bypass
+flag or CP dependency. The running process cannot remove these restrictions;
+removing either/both owner jumps must preserve safe admission, including a
+Compose DP restart. Re-init restores the extra owner rules. Overriding the
+container's AppArmor/security policy is unsupported. Linux amd64/arm64 paths use
+native constants; cross-compilation is not evidence of runtime conformance.
+
+**T163 initial measured status (2026-09-20):** no production packet result was claimed.
+Disposable deployments built the checked-in images but `scripts/stargate init`
+stopped at Compose startup (exit 30) before DP/CP admission or capture. The
+CP's read-only `/etc/stargate` config volume covers the nested keys mount;
+Docker could not create `/etc/stargate/keys` inside that parent. A direct
+two-volume `docker run --read-only --network none` on the workstation daemon
+reproduced exit 125, while a keys-only mount reached CP application startup.
+This measurement established a startup blocker, not egress closure or a
+runtime fail-closed result.
 
 **T167 mount repair (2026-09-20):** the installer now creates the
 `/etc/stargate/keys` child mountpoint inside the project-scoped config volume
@@ -285,8 +313,41 @@ before Compose mounts that volume read-only in CP. A real-image Docker test
 observed the pre-fix nested-mount refusal (exit 125) while a keys-only
 control reached Quarkus startup, then observed the full effective Compose
 mount set start with the intended sources, targets and modes. This closes
-the CP startup blocker only; T163's production-namespace packet, resolver
-and rule-absence evidence remains pending.
+the CP startup blocker only; T163 must rerun its production-namespace packet,
+resolver and rule-absence matrix.
+
+**T163 resumed measurement (2026-09-20, disposable nested Docker host):** the
+repaired Local Compose deployment started. A `tcpdump` recorder on `any` and
+the actual IPv4 egress interface saw unrestricted-UID TCP, UDP and UDP/53
+positive controls; it saw zero DP-UID packets to the marked documentation
+targets, with the owner DROP counter rising by three. A controlled loopback
+forwarder and dummy resolver admitted the unrestricted identity and refused
+the DP identity. The browser-facing SOCKS listener admitted only on
+`127.0.0.1:8881`; IPv6 had no egress route and `::1:8881` refused admission.
+The Tor socket caller matrix passed before and after socket recreation.
+**The overall suite failed:** removing both host OUTPUT owner jumps while
+the DP was running left SOCKS5 method admission working under the then-current
+installer-only boundary. T168 replaces that dependency with mandatory process
+confinement and refines the corresponding T163 acceptance. These are real packets in the nested host's
+deployment namespace, but not physical-host evidence; no complete T163 or
+DNS-side-channel closure is claimed.
+
+**T168 scoped measured result (2026-09-20):** the complete live sequence passed
+in a disposable nested Docker 29.8.1 host on Linux 6.8.0-124-generic, amd64,
+Landlock ABI 4. After removing IPv4 only, IPv6 only and both owner jumps,
+loopback admission continued while the production confinement helper emitted
+zero marked TCP/UDP/DNS/reuse/Fast Open traffic; positive capture controls were
+visible and owner DROP delta was zero. Loopback forwarder/resolver mediation
+was denied. Compose DP restart with both jumps absent repeated the result;
+re-init restored the extra rules. Denying each required Landlock/seccomp
+installation syscall caused the actual DP to exit before serving, with recovery
+after each fault was removed. All 29 capture summaries record zero kernel drops.
+The host had no routed IPv6 path; IPv6 loopback/kernel denial tests passed and
+`::1:8881` refused admission. No routed IPv6, physical-host, arm64 runtime or
+ABI >= 7 runtime result is claimed. Contract tests separately prove authenticated
+Unix forwarding from retained state with CP absent and Unix socket recreation.
+Evidence and earlier failed fixture attempts are recorded in T168. T163's
+cumulative/physical-host obligation and the human release review remain open.
 
 **Protects against**:
 
@@ -321,7 +382,9 @@ and rule-absence evidence remains pending.
   network namespaces).
 - The installer and host administrator who own the DP UID's firewall rules
   and AppArmor profile. Docker or another host-root actor can remove either;
-  the policy is not self-healing or enforced by Compose alone.
+  the policy is not self-healing or enforced by Compose alone. Owner-rule removal
+  cannot remove T168's restrictions from a confined process. Host/root compromise
+  can still replace its executable, deployment policy or kernel and remains excluded.
 
 **Residual risks**:
 
@@ -334,6 +397,10 @@ and rule-absence evidence remains pending.
 - Clock skew on the host causes Tor circuits to fail silently (see §5.1).
 - Browser sandbox escape compromises everything Stargate sees from that
   browser.
+- T134's prototype saw on-link ARP while filtering IP egress. Owner-match
+  OUTPUT rules do not gate L2 ARP; the TCP/UDP/IP packet claim does not
+  include ARP or claim to suppress neighbor discovery. The physical-host
+  capture remains pending (T163).
 
 **Concrete attacks not mitigated**:
 
@@ -1010,10 +1077,13 @@ network visibility for its route (§2.6).
   network maintenance is a distinct route TCB, not an exception for application planes.
 
 **Current implementation gaps:** T162 withdraws T125's no-masquerade and wildcard
-posture, and removes CP's full Tor cookie and raw-control path. The new host
-owner-match/AppArmor mechanism still needs T163's production namespace packet
-and startup/restart evidence; an unsupported direct Docker restart or a host
-administrator removing live rules is not a proven fail-closed path. T138's
+posture, and removes CP's full Tor cookie and raw-control path. T163's first
+deployment attempts measured a CP startup mount failure, not packet isolation;
+T167 repaired the mount and confirmed application-start reachability. T163's
+nested-host packet probes passed, but its original rule-absence probe measured
+continued SOCKS5 admission. T168 implements mandatory process confinement;
+its measured scope is recorded in §3.1 and its ticket. Physical-host packet
+evidence remains pending under T163. T138's
 sanitized observer remains absent: CP cannot observe Tor health until T164
 adds it, and T165 validates the caller matrix. These pending items are not
 accepted conformance. T155 consumes their closure. A bridge-visible packet

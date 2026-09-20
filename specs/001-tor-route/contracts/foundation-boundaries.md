@@ -16,6 +16,30 @@ compromise of the CP process. A health helper may not become a generic command p
 T134 compares designs satisfying both listener and egress requirements. Shared networking
 is not pre-approved: shared egress without independent process controls fails the contract.
 
+**T168 Local IP boundary:** before proxy or IPC serving, the pure-Go DP binds an
+ordinary TCP loopback listener (MPTCP disabled), rejects other inherited sockets,
+anonymous capabilities and devices, then installs Landlock ABI >= 4 TCP bind/connect
+denial on every Go thread and a synchronized seccomp filter. The filter permits new
+AF_UNIX sockets only and denies message-send/import and io_uring paths; stream
+read/write preserves accepted TCP replies and pathname Unix adapter/IPC traffic.
+Restrictions are inherited by future threads and descendants. Required feature,
+descriptor inventory or installation failure refuses startup with a fixed error.
+There is no runtime bypass. Builds with cgo or unsupported architectures refuse;
+Linux amd64/arm64 use native syscall numbers. ABI >= 7 disables the domain's
+configurable denial auditing, including descendants. Runtime evidence on amd64
+does not establish arm64 or newer-kernel conformance.
+
+The installer still requires its IPv4/IPv6 owner rules and enforcing AppArmor
+profile. Owner rules are defense in depth: deleting either or both after startup
+must preserve safe Unix-adapter service, including Compose DP restart. Re-init
+reinstalls them. Missing process confinement instead requires observable refusal
+before a SOCKS method or management response. AppArmor and the existing Unix fabric
+caller matrix remain required; overriding Docker security policy is unsupported.
+Neither the CP nor a per-request host verifier participates in this boundary.
+T168 refines T163's former owner-rule-loss admission requirement without expanding
+Constitution III's actor/traffic permissions. T163 retains the cumulative and
+physical-host packet evidence obligation.
+
 **T138 authority refinement (T162 fabric landed; observer pending T164):** the CP MUST NOT hold the
 Tor control cookie, the Tor-cookie supplementary group, or a network path to raw Tor control.
 A separate observer owns the Tor-facing credential and raw control session. Its CP-facing
