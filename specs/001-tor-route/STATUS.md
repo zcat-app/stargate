@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 54 |
+| pending | 55 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 142 |
 | deferred | 4 |
-| **total** | **200** |
+| **total** | **201** |
 
 ---
 
@@ -47,6 +47,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
 | T164 | Enforce the sanitized Tor observer boundary | Foundation audit remediation | ✓ |  |
+| T169 | Make topology probe launch independent of checkout depth | Foundation audit remediation | ✓ |  |
 
 ---
 
