@@ -1,13 +1,13 @@
 ---
 id: "T163"
 title: "Verify packet-level topology boundaries with capture controls"
-status: deferred
+status: pending
 created: "2026-09-13"
 last_updated: 2026-09-20
 source: "specs/001-tor-route/analysis/T134-local-topology.md"
 phase: "Foundation audit remediation"
 story: "-"
-blocked_by: ["T162", "T167", "T168"]
+blocked_by: ["T162", "T167", "T168", "T169"]
 parallel: false
 files_budget: 10
 privacy_critical: true
@@ -22,8 +22,6 @@ decision_refs:
   - "specs/001-tor-route/analysis/T134-local-topology.md"
 remediates: "T134"
 tests_first: []
-deferred_on: "T168"
-deferred_reason: "blocked-on-new-ticket"
 reviews: {}
 overrides: []
 aborted_attempts: []
