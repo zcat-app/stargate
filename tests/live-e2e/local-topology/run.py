@@ -23,7 +23,9 @@ import time
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[3]
+# Stdin-fed probes have no source path and never use repository resources.
+# Keep their setup independent of the caller's working-directory depth.
+ROOT = Path.cwd() if __file__ == "<stdin>" else Path(__file__).resolve().parents[3]
 COMPOSE = ROOT / "compose/docker-compose.local.yml"
 PROFILE = ROOT / "compose/apparmor/stargate-dp"
 DP_UID = 5102
@@ -179,10 +181,10 @@ def probe(uid: int, kind: str, family: int, address: str, port: int, timeout: fl
         # Feed the same source through stdin; a launcher failure is not denial.
         input=Path(__file__).read_bytes(),
         user=uid, group=DP_GID if uid == DP_UID else uid, extra_groups=[],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout + 2,
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=timeout + 2,
     )
-    if result.returncode not in (0, 1):
-        raise CaptureFailure(f"socket probe did not execute: exit {result.returncode}")
+    if result.returncode not in (0, 1) or result.stderr != b"T163-PROBE-EXECUTED\n":
+        raise CaptureFailure(f"socket probe did not complete: exit {result.returncode}")
     return result.returncode == 0
 
 
@@ -607,7 +609,9 @@ def run_live() -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) == 6 and sys.argv[1] == "--probe":
-        sys.exit(probe_main(sys.argv[2], int(sys.argv[3]), sys.argv[4], int(sys.argv[5])))
+        probe_exit = probe_main(sys.argv[2], int(sys.argv[3]), sys.argv[4], int(sys.argv[5]))
+        print("T163-PROBE-EXECUTED", file=sys.stderr, flush=True)
+        sys.exit(probe_exit)
     if len(sys.argv) != 1:
         sys.exit("usage: python3 tests/live-e2e/local-topology/run.py")
     try:

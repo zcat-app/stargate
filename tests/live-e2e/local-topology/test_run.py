@@ -6,6 +6,8 @@
 import tempfile
 import os
 import socket
+import subprocess
+import sys
 import threading
 import time
 import unittest
@@ -17,6 +19,41 @@ import run
 
 
 class CaptureEvidenceTest(unittest.TestCase):
+    def test_stdin_probe_reaches_udp_fixture_from_shallow_and_normal_cwd(self):
+        with tempfile.TemporaryDirectory() as fixture_root, \
+             tempfile.TemporaryDirectory(dir="/tmp") as shallow, \
+             socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as receiver:
+            private_parent = Path(fixture_root) / "private"
+            private_parent.mkdir(mode=0o700)
+            source_path = private_parent / "runner.py"
+            source_path.write_bytes(Path(run.__file__).read_bytes())
+            source = source_path.read_bytes()
+            private_parent.chmod(0)
+            receiver.bind(("127.0.0.1", 0))
+            receiver.settimeout(2)
+            try:
+                for cwd in (shallow, str(run.ROOT)):
+                    with self.subTest(cwd=cwd):
+                        result = subprocess.run(
+                            [sys.executable, "-", "--probe", "udp", "4", "127.0.0.1",
+                             str(receiver.getsockname()[1])],
+                            input=source, cwd=cwd, capture_output=True, timeout=3,
+                        )
+                        self.assertEqual(result.returncode, 0, result.stderr.decode(errors="replace"))
+                        self.assertEqual(result.stderr, b"T163-PROBE-EXECUTED\n")
+                        self.assertEqual(receiver.recvfrom(32)[0], b"t163")
+            finally:
+                private_parent.chmod(0o700)
+
+    def test_probe_launch_error_cannot_be_classified_as_denial(self):
+        failed = subprocess.CompletedProcess([], 1, b"", b"Traceback: launch failed\n")
+        with patch.object(run.subprocess, "run", return_value=failed):
+            with self.assertRaises(CaptureFailure):
+                run.probe(run.CONTROL_UID, "udp", 4, "127.0.0.1", 9)
+        denied = subprocess.CompletedProcess([], 1, b"", b"T163-PROBE-EXECUTED\n")
+        with patch.object(run.subprocess, "run", return_value=denied):
+            self.assertFalse(run.probe(run.CONTROL_UID, "udp", 4, "127.0.0.1", 9))
+
     def test_recorder_reads_preface_and_ready_from_one_pipe_write(self):
         reader, writer = os.pipe()
         os.write(writer, b"tcpdump: data link type LINUX_SLL2\nlistening on synthetic\n")

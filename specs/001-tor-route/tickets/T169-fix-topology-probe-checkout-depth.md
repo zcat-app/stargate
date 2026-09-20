@@ -1,9 +1,9 @@
 ---
 id: "T169"
 title: "Make topology probe launch independent of checkout depth"
-status: pending
+status: in-review
 created: "2026-09-20"
-last_updated: "2026-09-20"
+last_updated: 2026-09-20
 source: "T168 finalization: shallow-working-directory falsifier"
 phase: "Foundation audit remediation"
 story: "-"
@@ -82,3 +82,20 @@ cumulative live sweep.
 
 Production confinement or routing changes, new operator prerequisites, and
 closing T163's remaining physical-host or release evidence.
+
+## Execution record (2026-09-20)
+
+Against pre-fix source `ac66f69`, the new subprocess and launcher-classification
+tests ran first: `bash tests/contract/compose/topology_capture_test.sh` exited 1
+with three failures. The shallow-cwd UDP control exited 1 with
+`IndexError: 3` before sending a packet; the ordinary-cwd process did not
+emit a completion marker; and a simulated Python launch error was accepted
+as network denial. The source is now fed from a mode-000 fixture parent in
+the real subprocess test, so the child cannot rely on traversing its source
+path. Both shallow and normal cwd controls receive the UDP marker.
+
+The runner now avoids checkout-root derivation in stdin probe mode and emits
+a fixed completion marker only after `probe_main` returns. The caller
+requires that marker for both success and denial exits; a traceback or setup
+failure invalidates the result. The 11-test contract gate passed after the
+repair. T163's live deployment and physical-host evidence remain pending.
