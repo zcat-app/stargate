@@ -1,7 +1,7 @@
 ---
 id: "T138"
 title: "Define an enforced Tor observation boundary"
-status: in-review
+status: done
 created: "2026-09-12"
 last_updated: 2026-09-20
 source: "reviews/redteam-20260912-677960b.md"
@@ -18,7 +18,7 @@ spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md", "s
 decision_refs: []
 remediates: "T094a"
 tests_first: []
-reviews: {}
+reviews: { round: 3, date: 2026-09-20, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

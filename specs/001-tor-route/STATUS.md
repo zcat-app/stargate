@@ -15,9 +15,9 @@
 |---|---|
 | pending | 56 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 138 |
+| done | 139 |
 | deferred | 3 |
 | **total** | **198** |
 
@@ -31,6 +31,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
+| T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T141 | Pin CI Actions and agent installation dependencies | Foundation audit remediation | ✓ |  |
 | T143 | Retire obsolete Java token-verifier constants | Foundation audit remediation | ✓ |  |
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
@@ -45,14 +46,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
+| T162 | Implement host-loopback DP with unix-socket sidecar fabric | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T138 | Define an enforced Tor observation boundary | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -68,7 +68,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_138 ticket(s) done._
+_139 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -202,6 +202,7 @@ _138 ticket(s) done._
 - T135 — Reject resumed TLS peers after public-key rotation
 - T136 — Prevent cross-site first-party isolation collisions
 - T137 — Create a fresh deadline for each token-reload RPC
+- T138 — Define an enforced Tor observation boundary
 - T139 — Prevent required verification coverage from disappearing
 - T142 — Make agent execution-boundary claims demonstrable
 - T156 — Strengthen constitution and reconcile implementation prerequisites
