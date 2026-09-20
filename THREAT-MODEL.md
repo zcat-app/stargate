@@ -276,8 +276,10 @@ properties pending T134/T155, not verified claims for the current stack.
   metadata* for routed traffic — they see only the encrypted outer tunnel
   to the chosen anonymity network's first hop.
 - Required target: constrain a compromised application plane to its authorized
-  adapter/IPC capabilities. Current T125/T094b topology and full CP cookie do not
-  establish this property; T134/T138 and §5.8 record the remaining work.
+  adapter/IPC capabilities. T134 selected the topology direction, but the current
+  full CP cookie and direct `tor:9051` path do not establish the observer boundary.
+  T138's design requires a separate observer that owns the cookie and exposes only
+  sanitized health; T164/T165 and T155 own the tests, implementation and evidence.
 
 **Does NOT protect against**:
 
@@ -984,10 +986,13 @@ network visibility for its route (§2.6).
 
 **Current implementation gaps:** T125 added a no-masquerade attachment; its DNS/UDP egress
 properties are not proven by the older three-network structural tests. CP currently receives
-Tor's full cookie and can reach its SOCKS port. An in-process command allowlist cannot constrain
-a compromised CP holding that cookie. These are unresolved T134/T138 findings, not accepted
-conformance. The historical tests/decisions record the old design; T155 requires repaired
-packet/capability evidence. A bridge-visible packet alone does not prove internet exfiltration.
+Tor's full cookie and can reach its SOCKS port and its raw control port. An in-process command
+allowlist cannot constrain a compromised CP holding that cookie. T138 recommends a separate
+observer that alone owns the cookie and raw control session, while CP receives only finite
+sanitized health tokens over a separate local endpoint. These are unresolved T134/T138
+findings, not accepted conformance. T164/T165 own the negative command probes, boundary
+implementation and deployment evidence; T155 consumes their closure. A bridge-visible packet
+alone does not prove internet exfiltration.
 
 **Residual risks after a compliant repair:** Tor remains trusted for the anonymity protocol,
 and a malicious sidecar can misuse its own network channel. Host/kernel compromise can escape

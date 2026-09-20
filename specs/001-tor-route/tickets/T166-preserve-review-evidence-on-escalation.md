@@ -1,7 +1,7 @@
 ---
 id: "T166"
 title: "Remove shrink escalation and preserve review evidence"
-status: in-review
+status: done
 created: "2026-09-20"
 last_updated: 2026-09-20
 source: "maintainer request during T138 review"
@@ -16,7 +16,7 @@ risk: "medium"
 round_cap: 2
 spec_refs: [".specify/memory/review-loop.md", "docs/process/workflow.md"]
 decision_refs: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-20, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

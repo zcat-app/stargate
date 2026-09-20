@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 55 |
+| pending | 56 |
 | in-progress | 0 |
 | in-review | 1 |
 | escalated | 0 |
-| done | 137 |
+| done | 138 |
 | deferred | 3 |
-| **total** | **196** |
+| **total** | **198** |
 
 ---
 
@@ -31,7 +31,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
-| T138 | Define an enforced Tor observation boundary | Foundation audit remediation | ✓ |  |
 | T141 | Pin CI Actions and agent installation dependencies | Foundation audit remediation | ✓ |  |
 | T143 | Retire obsolete Java token-verifier constants | Foundation audit remediation | ✓ |  |
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
@@ -53,7 +52,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
-| T166 | Remove shrink escalation and preserve review evidence | in-review |  | Foundation audit remediation |
+| T138 | Define an enforced Tor observation boundary | in-review | ✓ | Foundation audit remediation |
 
 ---
 
@@ -69,7 +68,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_137 ticket(s) done._
+_138 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -208,3 +207,4 @@ _137 ticket(s) done._
 - T156 — Strengthen constitution and reconcile implementation prerequisites
 - T160 — Prepare Tor security upgrade with enforced package content pins
 - T161 — Resolve Tor upgrade live validation failures before promotion
+- T166 — Remove shrink escalation and preserve review evidence
