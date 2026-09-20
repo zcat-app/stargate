@@ -149,19 +149,19 @@ func TestControlPortLive(t *testing.T) {
 		}
 	}
 
-	// (b) LiveGETCONFControlPortRoundTrip — one command, one parsed reply:
-	// GETCONF ControlPort must report the invariant-#3 listener. Proves
+	// (b) LiveGETCONFControlSocketRoundTrip — one command, one parsed reply:
+	// GETCONF ControlSocket must report the invariant-#3 private listener. Proves
 	// framing + parsing against a real tor reply (M4 at runtime).
-	t.Run("LiveGETCONFControlPortRoundTrip", func(t *testing.T) {
+	t.Run("LiveGETCONFControlSocketRoundTrip", func(t *testing.T) {
 		authed(t)
-		lines, err := conn.Command("GETCONF ControlPort")
+		lines, err := conn.Command("GETCONF ControlSocket")
 		if err != nil {
-			t.Fatalf("GETCONF ControlPort: %v", err)
+			t.Fatalf("GETCONF ControlSocket: %v", err)
 		}
-		if len(lines) == 0 || !strings.Contains(strings.Join(lines, "\n"), "ControlPort=0.0.0.0:9051") {
-			t.Errorf("GETCONF ControlPort reply %q does not report the invariant-#3 listener 0.0.0.0:9051", lines)
+		if len(lines) == 0 || !strings.Contains(strings.Join(lines, "\n"), "ControlSocket=/var/lib/tor/control/tor-control.sock") {
+			t.Errorf("GETCONF ControlSocket reply %q does not report the invariant-#3 private socket", lines)
 		} else {
-			t.Logf("OK: GETCONF ControlPort → %q", lines)
+			t.Logf("OK: GETCONF ControlSocket → %q", lines)
 		}
 	})
 

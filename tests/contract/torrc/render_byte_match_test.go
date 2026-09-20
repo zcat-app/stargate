@@ -72,8 +72,8 @@ const wantTorrc = `# Stargate v1 — Tor sidecar configuration.
 # Baked into the Tor image at build time. Do not edit by hand.
 # Source: specs/001-tor-route/contracts/torrc.md
 
-SocksPort 0.0.0.0:9050 IsolateClientAddr IsolateSOCKSAuth
-ControlPort 0.0.0.0:9051
+SocksPort unix:/run/tor-fabric/private/tor-socks.sock IsolateClientAddr IsolateSOCKSAuth
+ControlSocket /var/lib/tor/control/tor-control.sock
 CookieAuthentication 1
 CookieAuthFileGroupReadable 1
 DataDirectory /var/lib/tor

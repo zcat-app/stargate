@@ -16,7 +16,10 @@ package tor
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/hex"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -31,6 +34,34 @@ func newTestConn(replies string) (*ControlPort, *bytes.Buffer) {
 		r: bufio.NewReader(strings.NewReader(replies)),
 	}
 	return p, sent
+}
+
+func TestControlSessionUsesTorPrivateUnixSocket(t *testing.T) {
+	tmp := t.TempDir()
+	argsPath := filepath.Join(tmp, "argv")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$STARGATE_T162_ARGV\"\n"
+	if err := os.WriteFile(filepath.Join(tmp, "docker"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("STARGATE_T162_ARGV", argsPath)
+	cfg := ControlPortConfig{Project: "fixture", ComposeFile: "/tmp/compose.yml", EnvFile: "/tmp/local.env"}
+	p, err := Connect(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = p.Close()
+	data, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := strings.Join(strings.Fields(string(data)), " ")
+	if !strings.Contains(got, "exec -T tor nc -U /var/lib/tor/control/tor-control.sock") {
+		t.Fatalf("control transport = %q, want private Tor-only Unix socket", got)
+	}
+	if strings.Contains(got, "9051") {
+		t.Fatalf("control transport retains TCP endpoint: %q", got)
+	}
 }
 
 // TestParseReplyShapes covers the reply grammar (control-spec §2.3) the

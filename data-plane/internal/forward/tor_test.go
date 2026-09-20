@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -52,6 +53,20 @@ func newStub(t *testing.T, rep byte, silent bool) *stub {
 	if err != nil {
 		t.Fatalf("stub listen: %v", err)
 	}
+	return newStubOnListener(t, ln, rep, silent)
+}
+
+func newStubUnix(t *testing.T, rep byte) *stub {
+	t.Helper()
+	ln, err := net.Listen("unix", filepath.Join(t.TempDir(), "tor.sock"))
+	if err != nil {
+		t.Fatalf("unix stub listen: %v", err)
+	}
+	return newStubOnListener(t, ln, rep, false)
+}
+
+func newStubOnListener(t *testing.T, ln net.Listener, rep byte, silent bool) *stub {
+	t.Helper()
 	s := &stub{ln: ln, rep: rep, silent: silent}
 	go func() {
 		for {
@@ -338,6 +353,37 @@ func TestForwardSendsDomainTargetUnresolved(t *testing.T) {
 	}
 	if host != "unresolvable.invalid" || port != 443 {
 		t.Fatalf("upstream target = %q:%d, want verbatim host from %q", host, port, target)
+	}
+}
+
+// T162 / Constitution I and III: changing the transport to AF_UNIX must not
+// change the SOCKS5h target or send the inbound bearer to Tor.
+func TestForwardUnixSocketPreservesSOCKS5hAuth(t *testing.T) {
+	s := newStubUnix(t, 0x00)
+	f := New("unix://"+s.addr(), &stubCounter{})
+	addr, errc := forwardOn(t, f, []byte("sg1:opaque-partition"), "unresolvable.invalid:443")
+	cli, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("client dial: %v", err)
+	}
+	t.Cleanup(func() { cli.Close() })
+	if err := cli.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatalf("client deadline: %v", err)
+	}
+	roundTrip(t, cli)
+	if err := cli.Close(); err != nil {
+		t.Fatalf("client close: %v", err)
+	}
+	if err := <-errc; err != nil {
+		t.Fatalf("Forward: %v", err)
+	}
+	_, username, plen := s.subNegotiation()
+	if string(username) != "sg1:opaque-partition" || plen != 0 {
+		t.Fatalf("upstream auth = %q, password length %d", username, plen)
+	}
+	atyp, host, port := s.target()
+	if atyp != 0x03 || host != "unresolvable.invalid" || port != 443 {
+		t.Fatalf("upstream target = ATYP %x %q:%d, want hostname-form", atyp, host, port)
 	}
 }
 

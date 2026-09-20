@@ -14,10 +14,10 @@
 // `<3-digit status><sep><payload>` with sep ' ' (final), '-' (continuation)
 // or '+' (dot-stuffed data block), and the session ends with QUIT.
 //
-// Transport (FR-012): the ControlPort is compose-internal — no host-side
-// dial exists and none may be manufactured. The session's TCP socket
-// therefore terminates INSIDE the tor container via
-// `docker compose exec -T tor nc 127.0.0.1 9051`; the Go side owns the
+// Transport (FR-012): raw control is a private Unix socket inside Tor.
+// The session therefore terminates INSIDE the tor container via
+// `docker compose exec -T tor nc -U /var/lib/tor/control/tor-control.sock`;
+// the Go side owns the
 // protocol (cookie handling, framing, reply parsing) and drives it through
 // the exec pipes. `docker compose exec` runs as the image's USER tor — the
 // 0640 tor:tor cookie's owner — which is why ReadCookie can read what the
@@ -53,16 +53,7 @@ import (
 // regression T087 fixed; ReadCookie fails loudly rather than guessing.
 const CookieAuthPath = "/var/lib/tor/control_auth_cookie"
 
-// controlHost/controlPortNum are the ControlPort endpoint as seen from inside
-// the tor container's network namespace (invariant #3: ControlPort
-// 0.0.0.0:9051). Deliberately two argv words: openbsd nc takes
-// `nc host port` — a single `host:port` word is resolved as a hostname and
-// nc dies instantly (found by this ticket's live self-test: every
-// Authenticate saw a bare EOF with no status line).
-const (
-	controlHost    = "127.0.0.1"
-	controlPortNum = "9051"
-)
+const ControlSocketPath = "/var/lib/tor/control/tor-control.sock"
 
 // Bounds for the external-input side of the protocol (validate at the edge;
 // tor's control protocol publishes no reply-size contract). Generous enough
@@ -149,7 +140,7 @@ type ControlPort struct {
 }
 
 // Connect opens a control-port session: it spawns
-// `docker compose exec -T tor nc 127.0.0.1 9051` and wires the protocol
+// `docker compose exec -T tor nc -U /var/lib/tor/control/tor-control.sock` and wires the protocol
 // pipes. The tor service must already be running in the cfg project (every
 // consumer brings the stack up first). nc dying early (control port not yet
 // listening) surfaces on first use — as an EOF-shaped error from
@@ -161,7 +152,7 @@ func Connect(ctx context.Context, cfg ControlPortConfig) (*ControlPort, error) {
 		return nil, err
 	}
 	cmd := exec.CommandContext(ctx, "docker", composeArgs(cfg,
-		"exec", "-T", "tor", "nc", controlHost, controlPortNum)...)
+		"exec", "-T", "tor", "nc", "-U", ControlSocketPath)...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("control session stdin pipe: %w", err)
@@ -173,8 +164,8 @@ func Connect(ctx context.Context, cfg ControlPortConfig) (*ControlPort, error) {
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("control session start (docker compose exec tor nc %s %s): %w: %s",
-			controlHost, controlPortNum, err, strings.TrimSpace(stderr.String()))
+		return nil, fmt.Errorf("control session start (docker compose exec tor nc -U %s): %w: %s",
+			ControlSocketPath, err, strings.TrimSpace(stderr.String()))
 	}
 	return &ControlPort{
 		w:      bufio.NewWriter(stdin),

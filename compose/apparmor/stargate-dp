@@ -1,0 +1,40 @@
+# Copyright 2026 The Stargate Authors
+# SPDX-License-Identifier: Apache-2.0
+
+# T162 / Constitution III: the DP shares the host network namespace for the
+# loopback listener. Never grant generic AF_UNIX: a host abstract socket could
+# relay its traffic out of the owner-match firewall (T134 A.12).
+profile stargate-dp flags=(attach_disconnected,mediate_deleted) {
+  /opt/stargate/stargate-proxy mr,
+  /etc/passwd r,
+  /etc/group r,
+  /etc/hostname r,
+  /etc/hosts r,
+  /etc/stargate/keys/** r,
+  /var/lib/stargate/** rwk,
+  /run/stargate/ rw,
+  /run/stargate/control.sock rw,
+  /run/stargate/dp.sock rwk,
+  /run/stargate-tor/tor-socks.sock rw,
+  # AppArmor resolves the hardlink to Tor's original inode path even when the
+  # DP dials through its read-only fabric mount (verified by the live denial).
+  /run/tor-fabric/private/tor-socks.sock rw,
+  /dev/null rw,
+  /proc/** r,
+  /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
+  /sys/fs/cgroup/cpu.max r,
+  /tmp/ rw,
+  /tmp/** rwk,
+
+  # The browser-facing listener is TCP only. Owner-match rules restrict its
+  # egress to loopback replies; no UDP, raw or packet sockets are required.
+  network inet stream,
+  network inet6 stream,
+
+  # AppArmor mediates pathname sockets through the file rules above. Its
+  # AF_UNIX operation rule must allow the socket lifecycle as well; explicit
+  # local and peer denies close the abstract namespace (including autobind).
+  unix (create,bind,listen,accept,connect,send,receive,getattr,shutdown,getopt,setopt) type=stream,
+  deny unix addr=@**,
+  deny unix peer=(addr=@**),
+}

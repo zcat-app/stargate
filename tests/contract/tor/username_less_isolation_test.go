@@ -18,14 +18,13 @@
 // the digest-bump PR (Principle IV manual promotion) and the outbound
 // contract is renegotiated with a SECURITY-DECISIONS.md entry.
 //
-// Transport (FR-012): the host cannot dial tor:9050 (invariant pinned at
-// runtime by port_exposure_test.go's HostCannotReachTorPorts), so the SOCKS5
+// Transport (FR-012): the host has no Tor TCP SOCKS port, so the SOCKS5
 // sessions ride the same in-container exec/nc pattern as the T062
-// control-port client — `docker compose exec -T tor nc 127.0.0.1 9050` with
+// control client — `docker compose exec -T tor nc -U /run/tor-fabric/private/tor-socks.sock` with
 // the Go side owning the wire bytes (RFC 1928 greeting/method-selection,
 // CONNECT request, reply parsing). The control side (cookie auth, circuit
 // reads) is the landed T062 helper, consumed unmodified; the torrc under
-// test is the image-baked golden (`SocksPort 0.0.0.0:9050 IsolateClientAddr
+// test is the image-baked golden (`SocksPort unix:/run/tor-fabric/private/tor-socks.sock IsolateClientAddr
 // IsolateSOCKSAuth`), so "the rendered torrc" needs no harness rendering.
 //
 // Destination: the spec-pinned reference onion (T033's t033Onion —
@@ -381,7 +380,7 @@ func ulWaitBootstrapped(t *testing.T, conn *ControlPort) {
 }
 
 // ulSocksSession is one SOCKS5 connection to the tor SocksPort over the
-// in-container exec/nc transport — the ControlPort pattern aimed at 9050
+// in-container exec/nc transport — the private Unix SOCKS socket
 // with the Go side owning the RFC 1928 wire bytes. Sequential,
 // single-goroutine: each step writes then reads its bounded reply.
 type ulSocksSession struct {
@@ -391,14 +390,14 @@ type ulSocksSession struct {
 	stderr *bytes.Buffer
 }
 
-// ulDialSocks opens the exec/nc session to 127.0.0.1:9050 inside the tor
+// ulDialSocks opens the exec/nc session to Tor's private Unix SOCKS socket
 // container. Failures name the transport; the SOCKS dialogue itself starts
 // only after Start succeeds. The session lives until close or until ctx is
 // cancelled (CommandContext backstop).
 func ulDialSocks(t *testing.T, ctx context.Context, cfg ControlPortConfig) *ulSocksSession {
 	t.Helper()
 	cmd := exec.CommandContext(ctx, "docker", composeArgs(cfg,
-		"exec", "-T", "tor", "nc", controlHost, "9050")...)
+		"exec", "-T", "tor", "nc", "-U", "/run/tor-fabric/private/tor-socks.sock")...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatalf("socks session stdin pipe: %v", err)
@@ -410,8 +409,8 @@ func ulDialSocks(t *testing.T, ctx context.Context, cfg ControlPortConfig) *ulSo
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		t.Fatalf("socks session start (docker compose exec tor nc %s 9050): %v: %s",
-			controlHost, err, strings.TrimSpace(stderr.String()))
+		t.Fatalf("socks session start (docker compose exec tor nc -U private SOCKS): %v: %s",
+			err, strings.TrimSpace(stderr.String()))
 	}
 	s := &ulSocksSession{cmd: cmd, stdin: stdin, r: bufio.NewReader(stdout), stderr: &stderr}
 	t.Cleanup(func() { _ = s.close() })

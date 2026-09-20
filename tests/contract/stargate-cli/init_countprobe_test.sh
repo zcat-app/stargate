@@ -118,7 +118,7 @@ PROJ="t106-$$-$(date +%s)"
 # before-fix path exits at compose_up (exit 30).
 env -u STARGATE_KEYGEN_IMAGE \
   STARGATE_PROJECT="$PROJ" \
-  STARGATE_COMPOSE_FILE="$TMP/compose.yml" \
+  STARGATE_COMPOSE_FILE="$PWD/tests/contract/stargate-cli/fixtures/fixture-compose.yml" \
   STARGATE_ENV_DIR="$TMP" \
   STARGATE_ENV_EXAMPLE="$TMP/no-such-example.env" \
   STARGATE_ENV_FILE="$TMP/$PROJ.env" \

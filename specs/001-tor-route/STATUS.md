@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 56 |
+| pending | 55 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 139 |
 | deferred | 3 |
@@ -46,13 +46,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
-| T162 | Implement host-loopback DP with unix-socket sidecar fabric | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T162 | Implement host-loopback DP with unix-socket sidecar fabric | in-review | ✓ | Foundation audit remediation |
 
 ---
 

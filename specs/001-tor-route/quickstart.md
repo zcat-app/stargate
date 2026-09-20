@@ -42,14 +42,19 @@ COMPOSE="docker compose -p stargate -f compose/docker-compose.local.yml --env-fi
 `init` does the following in order:
 
 1. Preflight checks (`docker`, `docker compose v2`, socket access).
-2. Generates ed25519 inter-plane keys, writes them to the
+2. Stops any previously running DP, installs its host AppArmor profile and
+   IPv4/IPv6 UID-specific firewall rules, and verifies both before starting
+   it. This needs host administration rights (`sudo -v` before `init`, or a
+   suitable passwordless sudo policy). A failure exits 60 with the DP stopped;
+   do not bypass the gate with a direct `docker compose up`.
+3. Generates ed25519 inter-plane keys, writes them to the
    `stargate-keys` volume with mode 0600.
-3. Brings up the stack via `compose/docker-compose.local.yml`
+4. Brings up the stack via `compose/docker-compose.local.yml`
    (data plane, control plane, Tor sidecar).
-4. Waits for each container's healthcheck (≤60 s per sidecar).
-5. Runs a minimal verification: SOCKS5h handshake on port 8881
-   accepts, control plane gRPC handshake succeeds.
-6. Prints a status table (see arch §9.1 step 6 for the exact shape).
+5. Waits for each container's healthcheck (≤60 s per sidecar).
+6. Runs a bounded TCP-connect check on `127.0.0.1:8881`.
+7. Prints a status table. Tor health observation from CP remains unavailable
+   until T164 adds the sanitized observer; it cannot gate DP admission.
 
 Expected output (truncated):
 
@@ -59,7 +64,7 @@ Expected output (truncated):
 ├──────────────┼──────────┼────────────┼──────────────────────┤
 │ Data plane   │ HEALTHY  │ 127.0.0.1  │ port 8881            │
 │ Control plane│ HEALTHY  │ 127.0.0.1  │ healthcheck only     │
-│ Tor sidecar  │ HEALTHY  │ internal   │ SOCKS5 9050          │
+│ Tor sidecar  │ HEALTHY  │ internal   │ SOCKS5 over UDS      │
 └──────────────┴──────────┴────────────┴──────────────────────┘
 ```
 

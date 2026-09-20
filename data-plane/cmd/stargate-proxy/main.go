@@ -19,8 +19,7 @@
 // Configuration surface: the test-defined env contract pinned in
 // tests/contract/control-grpc/dpharness_test.go §header (STARGATE_IPC_DIR,
 // STARGATE_STATE_DIR, STARGATE_KEYS_DIR, STARGATE_LISTEN_ADDR,
-// STARGATE_TOR_SOCKS_ADDR, STARGATE_IN_CONTAINER); production compose
-// sets STARGATE_LISTEN_ADDR and STARGATE_IN_CONTAINER (T125).
+// STARGATE_TOR_SOCKS_ADDR); production compose sets the Unix fabric path.
 package main
 
 import (
@@ -51,7 +50,7 @@ const (
 	defaultIPCDir     = "/run/stargate"
 	defaultStateDir   = "/var/lib/stargate"
 	defaultListenAddr = "127.0.0.1:8881" // FR-005; FR-010's bind check still applies
-	defaultTorSOCKS   = "tor:9050"       // FR-007; overridden via STARGATE_TOR_SOCKS_ADDR in tests
+	defaultTorSOCKS   = "unix:///run/stargate-tor/tor-socks.sock" // FR-007
 )
 
 // gracefulStopGrace bounds the dp.sock GracefulStop wait on shutdown; the
@@ -76,25 +75,20 @@ func run() int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// --- (1) bind safety FIRST (FR-010, T125-amended): no listener exists
+	// --- (1) bind safety FIRST (FR-010): no listener exists
 	// yet ----------- The env contract's listen address is host:port; the
 	// bind check operates on the HOST literal (bind/check.go is a pure
 	// IP-literal parser — a host:port string would parse-fail). A
 	// malformed address is a fatal config error, same class as a
-	// refused host. Inside compose (STARGATE_IN_CONTAINER=1, set by
-	// docker-compose.local.yml) the listener binds the container-wide
-	// address: the loopback-only HOST guarantee is carried by the
-	// host-published 127.0.0.1 binding + the container netns (a
-	// container-loopback listener is unreachable through Docker's port
-	// publishing — SECURITY-DECISIONS.md, user-approved amend-spec).
+	// refused host. The host-network container binds this same strict
+	// loopback address directly, with no Docker port publication.
 	listenAddr := envOr("STARGATE_LISTEN_ADDR", defaultListenAddr)
 	bindHost, _, err := net.SplitHostPort(listenAddr)
 	if err != nil {
 		log.Error("shutdown", "reason", "listen address "+listenAddr+": "+err.Error())
 		return 1
 	}
-	inContainer := envOr("STARGATE_IN_CONTAINER", "0") == "1"
-	if err := bind.CheckListener(bindHost, inContainer); err != nil {
+	if err := bind.CheckListener(bindHost); err != nil {
 		// The startup class vocabulary has no fatal-boot line; the shutdown
 		// class (reason field) is the journal-visible exit record.
 		log.Error("shutdown", "reason", err.Error())

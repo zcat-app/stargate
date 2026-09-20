@@ -20,7 +20,7 @@
 #                          container names (B1 fix). Bounded (default 60 s).
 #   6. Verification      — Tor route only (no I2P/Nym/Direct).
 #   7. Status table      — DP + CP + Tor sidecar (the components present).
-#   8. Exit codes        — 0/10/20/30/40/50 (stable contract surface).
+#   8. Exit codes        — 0/10/20/30/40/50/60 (stable contract surface).
 #
 # T088 (review/sol-review.md#B1) repairs the shipped installer: it previously
 # ran `docker compose -f ... up` with no `--env-file` and no project name,
@@ -44,6 +44,7 @@
 #   30  compose failure (build / up)
 #   40  healthcheck timeout
 #   50  verification failure
+#   60  mandatory host-network boundary unavailable or ineffective
 #
 # PRIVACY / SUPPLY-CHAIN:
 #   - No outbound network except the Docker daemon socket and the image pulls
@@ -102,10 +103,93 @@ EXIT_KEYGEN=20
 EXIT_COMPOSE=30
 EXIT_HEALTHCHECK=40
 EXIT_VERIFY=50
+EXIT_HOST_BOUNDARY=60
 
 # ---- helpers --------------------------------------------------------------
 say()  { printf '%s\n' "$*" >&2; }
 note() { printf 'stargate init: %s\n' "$*" >&2; }
+
+# T162 / Constitution III: only the checked-in local topology and the
+# no-host-network test fixture are supported here. A copied/overridden
+# production Compose file cannot silently bypass the host policy gate.
+host_boundary_required() {
+  case "$STARGATE_COMPOSE_FILE" in
+    "$_SG_REPO_ROOT/compose/docker-compose.local.yml") return 0 ;;
+    "$_SG_REPO_ROOT/tests/contract/stargate-cli/fixtures/fixture-compose.yml") return 1 ;;
+    *) note "unsupported Compose file: $STARGATE_COMPOSE_FILE"; return 2 ;;
+  esac
+}
+
+host_root() {
+  if [ "$(id -u)" -eq 0 ]; then
+    "$@"
+  else
+    sudo -n -- "$@"
+  fi
+}
+
+# An OUTPUT jump at rule 1 gives the DP uid exactly one way out: replies to
+# already established loopback clients. No NEW loopback exception is present;
+# in particular a local TCP forwarder cannot mediate external access. The
+# DROP target is intentionally silent (no per-packet metadata in logs).
+install_owner_rules() {
+  local fw
+  for fw in iptables ip6tables; do
+    if ! host_root "$fw" -w -S STARGATE_DP_OUT >/dev/null 2>&1; then
+      host_root "$fw" -w -N STARGATE_DP_OUT || return 1
+    fi
+    host_root "$fw" -w -F STARGATE_DP_OUT || return 1
+    host_root "$fw" -w -A STARGATE_DP_OUT -o lo -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT || return 1
+    host_root "$fw" -w -A STARGATE_DP_OUT -j DROP || return 1
+    while host_root "$fw" -w -C OUTPUT -m owner --uid-owner "$DP_UID" -j STARGATE_DP_OUT >/dev/null 2>&1; do
+      host_root "$fw" -w -D OUTPUT -m owner --uid-owner "$DP_UID" -j STARGATE_DP_OUT || return 1
+    done
+    host_root "$fw" -w -I OUTPUT 1 -m owner --uid-owner "$DP_UID" -j STARGATE_DP_OUT || return 1
+  done
+}
+
+verify_host_boundary() {
+  local fw output chain first rules
+  host_root grep -Fxq 'stargate-dp (enforce)' /sys/kernel/security/apparmor/profiles || return 1
+  for fw in iptables ip6tables; do
+    output="$(host_root "$fw" -w -S OUTPUT)" || return 1
+    first="$(printf '%s\n' "$output" | sed -n '/^-A OUTPUT /{p;q;}')"
+    [ "$first" = "-A OUTPUT -m owner --uid-owner $DP_UID -j STARGATE_DP_OUT" ] || return 1
+    chain="$(host_root "$fw" -w -S STARGATE_DP_OUT)" || return 1
+    rules="$(printf '%s\n' "$chain" | sed -n '/^-A STARGATE_DP_OUT /p')"
+    [ "$(printf '%s\n' "$rules" | wc -l)" -eq 2 ] || return 1
+    host_root "$fw" -w -C STARGATE_DP_OUT -o lo -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT || return 1
+    host_root "$fw" -w -C STARGATE_DP_OUT -j DROP || return 1
+    [ "$(printf '%s\n' "$rules" | sed -n '2p')" = '-A STARGATE_DP_OUT -j DROP' ] || return 1
+  done
+}
+
+install_host_boundary() {
+  host_boundary_required
+  case "$?" in
+    1) return 0 ;; # isolated regression fixture has no host-netns DP
+    2) return "$EXIT_HOST_BOUNDARY" ;;
+  esac
+  # Re-init may encounter a running DP, including after a host firewall
+  # flush. Stop it before touching any rule so an intermediate chain state
+  # cannot admit traffic. A failed install deliberately leaves it stopped.
+  if ! compose_run stop stargate-dp >/dev/null 2>&1; then
+    note "cannot stop existing DP before checking host policy"
+    return "$EXIT_HOST_BOUNDARY"
+  fi
+  for tool in sudo iptables ip6tables apparmor_parser; do
+    if [ "$tool" = sudo ] && [ "$(id -u)" -eq 0 ]; then continue; fi
+    command -v "$tool" >/dev/null 2>&1 || { note "$tool missing; refusing DP startup"; return "$EXIT_HOST_BOUNDARY"; }
+  done
+  if ! host_root apparmor_parser -T -r "$_SG_REPO_ROOT/compose/apparmor/stargate-dp"; then
+    note "cannot load DP AppArmor profile; refusing DP startup"
+    return "$EXIT_HOST_BOUNDARY"
+  fi
+  if ! install_owner_rules || ! verify_host_boundary; then
+    note "DP host boundary missing or ineffective; refusing DP startup"
+    return "$EXIT_HOST_BOUNDARY"
+  fi
+}
 
 # tmpdir for host-side key + pepper generation; cleaned on any exit (M11).
 KEYS_TMP=""
@@ -465,13 +549,16 @@ print_status() {
   printf '  %-18s %-10s %-12s %s\n' "Component" "Status" "Bind" "Notes"
   printf '  %-18s %-10s %-12s %s\n' "data plane"   "HEALTHY" "127.0.0.1" "proxy 8881 (Tor route)"
   printf '  %-18s %-10s %-12s %s\n' "control plane" "HEALTHY" "127.0.0.1" "gRPC control.sock"
-  printf '  %-18s %-10s %-12s %s\n' "Tor sidecar"  "HEALTHY" "internal"  "SOCKS5 9050 (tor:9050)"
+  printf '  %-18s %-10s %-12s %s\n' "Tor sidecar"  "HEALTHY" "internal"  "SOCKS5 over DP-only UDS"
   printf '\n'
   printf 'Admin enrollment: not yet implemented (deferred to the admin-UI feature).\n'
 }
 
 # ---- main -----------------------------------------------------------------
 preflight; rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+
+install_host_boundary; rc=$?
 [ "$rc" -eq 0 ] || exit "$rc"
 
 supply_chain_guard; rc=$?

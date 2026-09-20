@@ -64,9 +64,12 @@ T165 owns integrated deployment evidence.
    deadlines, Tor-reply bounds, and one-query/no-queue limit before production
    code. Reject extra fields, oversized input and command text; never forward
    raw Tor replies or error details.
-3. Remove the CP's cookie mount, Tor-cookie group and direct `tor:9051` reach;
-   wire the observer through the selected per-consumer fabric without granting
-   a SOCKS path or a generic proxy.
+3. T162 removes the CP's cookie mount, Tor-cookie group and direct `tor:9051`
+   reach while reserving the CP-only fabric. Install the observer's authenticated
+   health socket on that fabric and give only the observer a narrow Tor-facing
+   raw-control/cookie mount. Test CP→sanitized-health success, CP→SOCKS and
+   CP→raw-control refusal, and observer recovery after Tor socket recreation;
+   no generic proxy or raw Tor reply reaches CP.
 4. Preserve the fixed `SidecarMonitor` event kind/detail vocabulary and
    advisory failure behavior. Reconcile `contracts/control-grpc.md` and its
    tests with T138's explicit health-to-event mapping before replacing the

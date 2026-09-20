@@ -88,9 +88,11 @@ gap language the repair retires.
    asserts from the production deployment namespaces: loopback reachability through
    `127.0.0.1:8881` (SOCKS5 positive control), non-loopback refusal, zero
    TCP/UDP/DNS-shaped packets emitted by the DP identity onto the egress
-   interface, loopback-forwarder mediation closure, and the socket caller matrix
-   (DP→SOCKS ✓ / CP→sanitized ✓ / cross-denials, including after socket
-   recreation) — each negative paired with a positive control on the same capture.
+   interface, loopback-forwarder mediation closure, and T162's available socket
+   caller matrix (DP→SOCKS succeeds; CP→SOCKS and both planes→raw-control fail,
+   including after Tor recreates its socket). T164 implements CP→sanitized
+   health; T165 tests that deployed observer path. Each negative is paired
+   with a positive control on the same capture or socket fixture.
 3. Per-family validation: IPv4 and IPv6 each either pass the same assertions or the
    unsupported family is refused/documented per the deployment contract.
 4. Fail-closed rule verification: an execution path (init/health/startup check)

@@ -1,109 +1,31 @@
 # Copyright 2026 The Stargate Authors
 # SPDX-License-Identifier: Apache-2.0
 #
-# compose/docker-compose.local.yml — Stargate local profile (T015).
-#
-# The `local` deployment profile (per THREAT-MODEL.md §3.1: assumes local
-# code execution is already game-over) brings up the full Stargate runtime
-# on a single host, with the data plane's inbound proxy port (8881) bound
-# to loopback only. T094b splits the services across three Compose networks
-# so only Tor has egress (THREAT-MODEL §5.8): stargate-egress (Tor only),
-# stargate-internal (DP↔tor, internal:true), stargate-cp-tor (CP↔tor,
-# internal:true); T125 adds stargate-host (non-internal, IP masquerade
-# disabled, DP only) to carry the loopback-only 8881 publish. This file is the single source of truth for service
-# topology, runtime users, and volume mounts. The CP observes
-# Tor lifecycle via the cookie-authenticated ControlPort (tor:9051), not a
-# Docker Engine observer — the docker-socket-proxy auxiliary container was
-# removed by T094a (Constitution Principle III — no host-root-pivot
-# surface); see SECURITY-DECISIONS.md §"2026-07-16 — docker-socket-proxy
-# mechanism removed (T094a)".
-#
-# Verification:
-#   - Static structural contract test: tests/contract/compose/local_compose_test.sh
-#     (PR cadence; no daemon containers started).
-#   - Runtime port-exposure contract test: tests/contract/tor/port_exposure_test.go
-#     (T019b; brings this file up).
-#   - Runtime inter-plane UDS topology: tests/contract/control-grpc/ (T022).
-#
-# Out-of-scope here: the LAN (WireGuard sidecar) and VPS (WireGuard/Tailscale
-# tunnel) profiles ship as separate feature specs; this file does NOT carry
-# profile-selection switches or alternate service definitions.
-#
-# No `version:` key: Docker Compose v2 ignores it and warns if present; the
-# Compose specification (current) is the authority.
-
-# The single external image this profile pulls. Digest-pinned per Principle
-# IV; see compose/env/local.env.example for the bump procedure. The three
-# Stargate-built images (DP/CP/Tor) use `build:` directives below — their
-# content pin is the base-image digest already encoded in each Dockerfile
-# (data-plane/Dockerfile, control-plane/Dockerfile, sidecars/tor/Dockerfile).
-# Final-image digest pinning for Stargate-built images is a release-tag-time
-# concern (T017 SECURITY-DECISIONS.md rotation policy) and is intentionally
-# absent from this file in the Phase-2 scaffolding horizon.
+# T162 Local topology. The DP shares the host network namespace so its strict
+# 127.0.0.1 bind is the browser-facing listener. Host owner-match rules and a
+# DP AppArmor profile must be installed before this stack starts; see
+# scripts/stargate init and THREAT-MODEL.md §3.1. Tor alone has bridge egress.
+# The CP observer fabric is reserved for T164; CP has no Tor cookie or raw
+# control socket during this transition.
 
 services:
-  # ─────────────────────────────────────────────────────────────────────
-  # stargate-dp — the Go data plane (Principle I: dumb router).
-  # Listens on 127.0.0.1:8881 (FR-005); dials tor:9050 (FR-007); hosts
-  # /run/stargate/dp.sock exposing ReloadTokens + minimum-subset GetStatus.
-  # UID 5102 / supplementary GID 5100 MUST match data-plane/Dockerfile and
-  # contracts/control-grpc.md §"Socket topology" exactly.
-  #
-  # NO depends_on (Constitution Principle II): the data plane MUST keep
-  # routing if the control plane is unreachable. CP-down survival is gated
-  # by the control-grpc contract test suite (T022).
-  # ─────────────────────────────────────────────────────────────────────
   stargate-dp:
     build:
-      # T122: the context is the REPO ROOT, not ../data-plane — the DP
-      # module carries `replace github.com/zcat-app/stargate/proto =>
-      # ../proto` (data-plane/go.mod) and the builder must see the
-      # repo-top proto/ module or `go mod download` / `go build` fail.
-      # The Dockerfile's COPY paths are repo-root relative accordingly.
       context: ..
       dockerfile: data-plane/Dockerfile
     image: stargate/stargate-dp:local
     user: "5102:5100"
-    # Long-form port binding: explicit 127.0.0.1 prefix is load-bearing.
-    # The short form `8881:8881` would silently bind 0.0.0.0 (FR-005
-    # violation). FR-012's "no host publication" rule for Tor applies in
-    # spirit here too: the proxy is reachable ONLY from loopback.
-    #
-    # T125 (user-approved amend-spec): THIS publish is what carries the
-    # loopback-only host guarantee — Docker can only deliver a published
-    # port to the container's eth0, so the in-container listener must
-    # bind the wildcard (environment below) and a container-loopback
-    # bind made the port unreachable (probed live; the literal FR-010
-    # reading contradicted FR-005). bind.CheckListener refuses the
-    # wildcard without STARGATE_IN_CONTAINER=1, so a bare-metal run
-    # keeps the original loopback-only contract.
-    ports:
-      - "127.0.0.1:8881:8881/tcp"
+    group_add:
+      - "5200"
+    network_mode: host
     environment:
-      # T125: attests the compose boundary (bind.CheckListener then
-      # allows only the wildcard or loopback — never a specific
-      # non-loopback interface) and points the listener at the wildcard
-      # so the publish above can deliver traffic.
-      STARGATE_IN_CONTAINER: "1"
-      STARGATE_LISTEN_ADDR: "0.0.0.0:8881"
+      STARGATE_LISTEN_ADDR: "127.0.0.1:8881"
+      STARGATE_TOR_SOCKS_ADDR: "unix:///run/stargate-tor/tor-socks.sock"
     volumes:
       - stargate-ipc:/run/stargate
       - stargate-keys:/etc/stargate/keys:ro
       - stargate-dp-state:/var/lib/stargate
-    # T094b: DP sits on the internal:true stargate-internal net
-    # (DP↔tor:9050 transport). It has no route to CP.
-    # T125 round 2: the DP ALSO sits on stargate-host (no-masquerade) —
-    # Docker silently discards published ports on internal:true networks
-    # (the first T125 cut published nothing; caught live), so the
-    # host-loopback publish needs one non-internal attachment. The net's
-    # driver_opts kill NAT, so the DP still has no internet egress —
-    # Tor remains the sole egress (Principle III).
-    networks:
-      - stargate-internal
-      - stargate-host
-    # T094b hardening (arch §8): read-only rootfs, all caps dropped, no
-    # privilege escalation, bounded resources. Only the named volumes
-    # (ipc/keys/dp-state) remain writable; /tmp + /run are tmpfs.
+      - stargate-tor-dp-fabric:/run/stargate-tor:ro
     read_only: true
     tmpfs:
       - /tmp
@@ -112,97 +34,28 @@ services:
       - ALL
     security_opt:
       - no-new-privileges:true
+      - apparmor=stargate-dp
     mem_limit: 512m
     pids_limit: 256
-    restart: unless-stopped
+    restart: "no"
 
-  # ─────────────────────────────────────────────────────────────────────
-  # stargate-control — the Quarkus control plane (Principle II: control
-  # plane unreachable ≠ data plane down). Hosts /run/stargate/control.sock
-  # exposing WatchEvents; observes Tor lifecycle via the cookie-
-  # authenticated ControlPort (tor:9051). UID 5101 / supplementary GID
-  # 5100 MUST match control-plane/Dockerfile exactly.
-  #
-  # T094a (Principle III): the docker-socket-proxy that previously brokered
-  # this observation was removed; the CP reaches Tor's ControlPort directly
-  # over the compose-internal network and authenticates with the control
-  # cookie (CookieAuthFileGroupReadable 1; contracts/torrc.md invariant
-  # #4). ControlPort is NEVER host-published (FR-012). The narrow cookie-
-  # read volume + GID alignment landed with the SidecarMonitor client
-  # (T039): a read-only single-file subpath mount of the cookie plus
-  # group_add of the tor image GID 5103 — Tor's entry-guard state never
-  # crosses into the CP (THREAT-MODEL §4.2) — see T094a §Analysis
-  # "Grounding decisions". local_compose_test.sh M4 gates that no service
-  # mounts /var/run/docker.sock; M14 gates the narrow-read shape.
-  # ─────────────────────────────────────────────────────────────────────
   stargate-control:
     build:
-      # T122: repo-root context — the api pom's Quarkus gRPC codegen reads
-      # ${project.basedir}/../../proto/stargate/v1 (repo-top proto/), so
-      # the builder must see it; see the stargate-dp build comment above.
       context: ..
       dockerfile: control-plane/Dockerfile
     image: stargate/stargate-control:local
     user: "5101:5100"
-    depends_on:
-      tor:
-        # service_healthy is load-bearing (T039): the single-file cookie
-        # subpath below must exist when this container is created — a
-        # missing subpath fails container start. Tor's own healthcheck
-        # AUTHENTICATEs with the cookie, so "healthy" proves cookie
-        # presence. Tor still boots with zero dependency on the CP
-        # (Principle II is about the DP; the CP observing Tor is this
-        # ticket's whole function).
-        condition: service_healthy
-    # T039 GID alignment: the tor image pins its user at GID 5103 (see
-    # sidecars/tor/Dockerfile) and CookieAuthFileGroupReadable 1 creates
-    # the control cookie 0640 tor:tor — this supplementary group is what
-    # lets the SidecarMonitor read it. The DP holds neither the group nor
-    # the mount. Cross-checked by local_compose_test.sh M14.
-    group_add:
-      - "5103"
+    network_mode: none
     volumes:
       - stargate-ipc:/run/stargate
       - stargate-keys:/etc/stargate/keys
       - stargate-control-config:/etc/stargate:ro
       - stargate-control-state:/var/lib/stargate
-      # RW: dormant for v1. The CP will render torrc into this volume at
-      # startup once T037 (TorrcRenderer) lands; for v1 the safe torrc is
-      # baked into the Tor image (T087) and the Tor sidecar does NOT mount
-      # this volume. Kept declared so the volume set stays stable
-      # (local_compose_test.sh M7) and the T037 render path has its target.
       - stargate-tor-config:/etc/tor
-      # T039 — the narrow cookie read (T094a grounding decision): the CP's
-      # ONLY view of stargate-tor-state is the control cookie itself, as a
-      # read-only single-file volume subpath. Tor's entry-guard state
-      # (THREAT-MODEL §4.2) is NOT mounted — mounting the volume whole was
-      # explicitly rejected by T094a (it recreates the exfil surface the
-      # docker-socket-proxy removal closed). The ControlPort session this
-      # cookie authenticates is bounded in code to a read-only three-command
-      # allowlist (SidecarMonitor); the protocol itself has no per-command
-      # ACL (redteam finding 20260727-001, open). Gated by M14.
-      - type: volume
-        source: stargate-tor-state
-        target: /run/tor/control_auth_cookie
-        read_only: true
-        volume:
-          subpath: control_auth_cookie
-    # T094b: CP sits ONLY on the internal:true stargate-cp-tor net
-    # (CP↔tor:9051 cookie ControlPort, T094a). No public egress, no route
-    # to DP or to tor:9050. CP never shared a network with DP.
-    networks:
-      - stargate-cp-tor
-    # T094b hardening (arch §8): read-only rootfs, all caps dropped, no
-    # privilege escalation, bounded resources. Only the named volumes
-    # (ipc/keys/control-config/control-state/tor-config) remain writable;
-    # /tmp + /run are tmpfs.
+      - stargate-tor-cp-fabric:/run/stargate-tor-observer:ro
     read_only: true
     tmpfs:
-      # T129: exec is REQUIRED here — sqlite-jdbc extracts its native
-      # library into java.io.tmpdir and mmaps it PROT_EXEC; Docker's tmpfs
-      # default is noexec, which crash-looped the CP on its first boot
-      # ever. Confined to the CP's own tmpfs; the DP keeps the noexec
-      # default.
+      # sqlite-jdbc maps its extracted native library with PROT_EXEC here.
       - /tmp:rw,exec
       - /run
     cap_drop:
@@ -213,47 +66,18 @@ services:
     pids_limit: 512
     restart: unless-stopped
 
-  # ─────────────────────────────────────────────────────────────────────
-  # tor — Stargate-built Tor sidecar (T014 / FR-015). The service key MUST
-  # be `tor` so compose DNS yields the `tor:9050` dial target FR-007 and
-  # T047 depend on.
-  #
-  # FR-012: SocksPort (9050) and ControlPort (9051) are NEVER listed under
-  # `ports:` — they are compose-internal only. The contract test T019b
-  # gates this at runtime (TCP connect from host network namespace to
-  # 127.0.0.1:{9050,9051} both fail; `docker inspect tor` returns no
-  # published binding; tor:9050 reachable from inside stargate-dp).
-  # ─────────────────────────────────────────────────────────────────────
   tor:
     build:
       context: ../sidecars/tor
       dockerfile: Dockerfile
     image: stargate/tor:local
-    # T014's Dockerfile drops to the non-root `tor` user via `USER tor`.
-    # No `user:` override here — the image's directive wins.
-    # The safe torrc is baked into the image at /etc/tor/torrc (T087,
-    # FR-011 amended by T089); Tor does NOT mount stargate-tor-config for
-    # v1 boot (Constitution Principle II — no CP render dependency; a :ro
-    # mount at /etc/tor would shadow the image-baked torrc). The
-    # stargate-tor-config volume stays declared for the future dynamic-
-    # config feature (T037) but is not mounted into tor for v1.
+    group_add:
+      - "5200"
     volumes:
       - stargate-tor-state:/var/lib/tor
-    # T094b: Tor is the SOLE service attached to an egress-capable network.
-    # It carries three attachments: stargate-egress (NOT internal — Tor's
-    # only NAT route to the Tor network), stargate-internal (internal:true,
-    # exposes tor:9050 to DP, FR-007), and stargate-cp-tor (internal:true,
-    # exposes tor:9051 to CP, T094a). DP and CP share no network. The net
-    # split makes Tor the sole egress TCB (THREAT-MODEL §5.8).
+      - stargate-tor-dp-fabric:/run/tor-fabric
     networks:
       - stargate-egress
-      - stargate-internal
-      - stargate-cp-tor
-    # T094b hardening (arch §8): read-only rootfs, all caps dropped, no
-    # privilege escalation, bounded resources. Tor binds 9050/9051 (>1024,
-    # no cap needed), runs as USER tor, and writes only to /var/lib/tor
-    # (stargate-tor-state, the cookie + state) under AvoidDiskWrites 1;
-    # /tmp + /run are tmpfs. HEALTHCHECK reads the cookie in the volume.
     read_only: true
     tmpfs:
       - /tmp
@@ -267,63 +91,16 @@ services:
     restart: unless-stopped
 
 networks:
-  # T094b three networks + the T125 stargate-host publish net: only Tor
-  # has egress.
   stargate-egress:
-    # NOT internal: keeps Docker's default NAT egress. Attached: tor only.
-    # This is Tor's sole route to the Tor network — every other service is
-    # on an internal:true net with no external connectivity.
     driver: bridge
-  stargate-internal:
-    # internal:true: no public egress. Attached: stargate-dp + tor. Carries
-    # DP→tor:9050 (FR-007). The name is preserved deliberately — T019b's
-    # tests/contract/tor/port_exposure_test.go resolves the DP↔tor network
-    # by this literal compose name (lookupComposeNetwork).
-    driver: bridge
-    internal: true
-  stargate-cp-tor:
-    # internal:true: no public egress. Attached: stargate-control + tor.
-    # Carries CP→tor:9051 (cookie-auth ControlPort, T094a). CP and DP share
-    # no network → mutually unreachable at L3.
-    driver: bridge
-    internal: true
-  stargate-host:
-    # T125 round 2: NOT internal (a publish on an internal net is
-    # silently discarded — that was the live finding), but with IP
-    # masquerade DISABLED so attached containers have no internet egress:
-    # originated packets leave with a private source address and are
-    # dropped upstream. Only the host↔DP publish path rides this net.
-    # Attached: stargate-dp only.
-    driver: bridge
-    driver_opts:
-      com.docker.network.bridge.enable_ip_masquerade: "false"
 
 volumes:
-  # Exactly the seven named volumes from data-model.md §6 — local_compose_test.sh
-  # M7 asserts the exact set. Do not add or rename without amending the data
-  # model contract first.
   stargate-keys:
-    # ed25519 keypairs for inter-plane gRPC mTLS; mounted into both planes
-    # at /etc/stargate/keys. CP-owned at runtime (writes cp.pub/dp.pub); DP
-    # reads via :ro.
   stargate-ipc:
-    # The two inter-plane UDS files (control.sock, dp.sock), owned
-    # *:stargate-ipc mode 0660 per contracts/control-grpc.md §"Socket
-    # topology". Mounted into both planes at /run/stargate.
   stargate-control-config:
-    # Operator-authored tokens.yaml (T035). Mounted into CP only, :ro.
   stargate-control-state:
-    # SQLite DB + Flyway state (T012). Mounted into CP only.
   stargate-dp-state:
-    # dp-snapshot.json. Mounted into DP only. Distinct from CP state —
-    # compromise of one plane does not yield write access to the other's
-    # state volume (defense-in-depth, control-grpc.md §"Socket topology").
   stargate-tor-state:
-    # Tor DataDirectory (/var/lib/tor) — entry-guard persistence
-    # (THREAT-MODEL §4.2). Also hosts the control-port cookie file.
   stargate-tor-config:
-    # Dormant for v1 (T087/T089): the safe torrc is image-baked, so Tor
-    # does not mount this volume for v1 boot. The CP keeps its RW mount
-    # for the future T037 TorrcRenderer (dynamic-config feature). Distinct
-    # volume from stargate-tor-state so config and runtime state have
-    # different writers and different mount semantics.
+  stargate-tor-dp-fabric:
+  stargate-tor-cp-fabric:

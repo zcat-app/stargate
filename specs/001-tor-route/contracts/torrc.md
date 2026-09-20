@@ -30,8 +30,8 @@ template below is the single source of truth for v1.
 # Baked into the Tor image at build time. Do not edit by hand.
 # Source: specs/001-tor-route/contracts/torrc.md
 
-SocksPort 0.0.0.0:9050 IsolateClientAddr IsolateSOCKSAuth
-ControlPort 0.0.0.0:9051
+SocksPort unix:/run/tor-fabric/private/tor-socks.sock IsolateClientAddr IsolateSOCKSAuth
+ControlSocket /var/lib/tor/control/tor-control.sock
 CookieAuthentication 1
 CookieAuthFileGroupReadable 1
 DataDirectory /var/lib/tor
@@ -50,13 +50,13 @@ SafeLogging 1
 | # | Invariant                                                                           | Why                                                                                                                                              |
 |---|-------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
 | 1 | `SocksPort` line contains both `IsolateClientAddr` and `IsolateSOCKSAuth`           | FR-011, Principle III — stream isolation by first-party domain depends on `IsolateSOCKSAuth`.                                                     |
-| 2 | `SocksPort` binds `0.0.0.0:9050` (container-internal)                               | arch §4.2 — the port is reachable only on the compose bridge network, never published to the host. The bind address is `0.0.0.0` *inside* the container; the compose file does not map the port to the host. Explicit `0.0.0.0:9050` (rather than bare `9050`) is defensive: the bind-address is part of the byte-match contract, so a future Tor release that changes the default bind-address still produces the same rendered file and a still-passing byte-match test. |
-| 3 | `ControlPort` is present on `0.0.0.0:9051` with `CookieAuthentication 1`            | FR-011 + FR-016 — the contract test for stream isolation queries the control port; cookie auth keeps that channel privileged.                     |
-| 4 | `CookieAuthFileGroupReadable 1` is present alongside `CookieAuthentication 1`       | Required so the cookie file is readable by callers sharing the volume's group (mode `0640` instead of Tor's default `0600 tor:tor`). Without it, the contract-test harness at T062 cannot read the cookie without privilege escalation. |
+| 2 | `SocksPort` is a Unix socket under `/run/tor-fabric/private/`, a Tor-owned 0700 directory | FR-007 — only the hardlinked 0660 socket in the DP fabric root is reachable by the DP group; there is no TCP SOCKS listener. |
+| 3 | `ControlSocket` is under `/var/lib/tor/control/`, a Tor-owned 0700 directory, with `CookieAuthentication 1` | Tor's own healthcheck and the contract harness run inside Tor. CP cannot mount this socket or the cookie. T164 gives only the observer a narrow Tor-facing mount. |
+| 4 | `CookieAuthFileGroupReadable 1` remains with `CookieAuthentication 1` | Tor's cookie remains in its private DataDirectory. Group readability prepares a narrow observer-only mount under T164; CP no longer has the group or mount. |
 | 5 | `ClientUseIPv6 0`                                                                   | FR-011 — avoid dual-stack ambiguity in the local profile; v1 is IPv4-only.                                                                         |
 | 6 | `AvoidDiskWrites 1`                                                                 | FR-011, THREAT-MODEL §3.1 — minimise incidental writes; guard state still persists by design (THREAT-MODEL §4.2 "Stargate-specific notes").       |
 | 7 | `UseBridges 0` and no `Bridge` lines anywhere in the file                           | FR-011, spec Assumption "No bridges". Bridge support is a separate feature spec.                                                                  |
-| 8 | `Log notice stdout` and `SafeLogging 1`                                             | Notice-level logs are sufficient for the healthcheck (it looks for "Bootstrapped 100%"); `SafeLogging 1` is Tor's directive to scrub sensitive fields from logs. |
+| 8 | `Log notice stdout` and `SafeLogging 1` | The Tor-native healthcheck queries its private control socket for bootstrap state; `SafeLogging 1` scrubs sensitive fields from operator-visible logs. |
 | 9 | NO `HiddenServiceDir` or `HiddenServicePort` directives                             | This feature is a *client* of onion services, not a service.                                                                                       |
 | 10 | NO `ExitPolicy` overrides                                                           | This feature does not run an exit node.                                                                                                            |
 | 11 | `DataDirectory /var/lib/tor` is explicit                                            | The image entrypoint runs `tor -f /etc/tor/torrc` WITHOUT `--defaults-torrc /etc/tor/torrc-defaults`, so Debian's defaults file (which would set `DataDirectory /var/lib/tor`) is never loaded (T087 / sol-review B2+M3). Without an explicit directive Tor falls back to its compile-time default of `$HOME/.tor` = `/var/lib/tor/.tor` for USER `tor`, landing the control cookie at `/var/lib/tor/.tor/control_auth_cookie` — not the `/var/lib/tor/control_auth_cookie` the healthcheck and T062's control-port helper assume. Pinning `DataDirectory /var/lib/tor` here makes the cookie path deterministic and keeps guard state on the `stargate-tor-state` volume (mounted at `/var/lib/tor`).                       |
@@ -96,7 +96,7 @@ Greps the golden for `Bridge`, `obfs4`, `snowflake`,
 ### `live_sidecar_test.go`
 
 Spins up the Tor sidecar container with the image-baked config, waits for
-bootstrap, then queries the control port via `GETCONF SocksPort` and
+bootstrap, then queries the private control socket via `GETCONF SocksPort` and
 asserts the response contains `IsolateClientAddr` and `IsolateSOCKSAuth`.
 This verifies the config Tor actually loaded matches what the image
 baked in. (T087 adds a cold-volume companion that asserts Docker

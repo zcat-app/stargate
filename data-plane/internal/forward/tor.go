@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package forward implements the data plane's outbound hop (T047): the
-// fixed-at-startup SOCKS5 client that dials the Tor sidecar (tor:9050 on
-// the compose network) and bridges it to the port-8881 inbound surfaces.
+// fixed-at-startup SOCKS5 client that dials the Tor sidecar over its
+// unix-socket fabric and bridges it to the port-8881 inbound surfaces.
 // Byte-level contract: specs/001-tor-route/contracts/socks5-auth.md
 // §"Deadlines" and §"SOCKS5 request-phase failures (post-auth)".
 //
@@ -31,7 +31,7 @@ import (
 	"github.com/zcat-app/stargate/data-plane/internal/listener"
 )
 
-// upstreamDialTimeout bounds the dial-and-handshake phase — open TCP to
+// upstreamDialTimeout bounds the dial-and-handshake phase — open the socket to
 // the sidecar + SOCKS5 method + auth + request write + BND reply — and
 // is the single named constant the contract requires
 // (contracts/socks5-auth.md §"Deadlines" row 1), so re-tuning is one
@@ -167,7 +167,12 @@ func (t *Tor) dialUpstream(uname []byte, target string) (net.Conn, error) {
 	if len(uname) > 0 {
 		auth = &proxy.Auth{User: string(uname)}
 	}
-	d, err := proxy.SOCKS5("tcp", t.upstream, auth, nil)
+	network, address := "tcp", t.upstream
+	if strings.HasPrefix(address, "unix://") {
+		network = "unix"
+		address = strings.TrimPrefix(address, "unix://")
+	}
+	d, err := proxy.SOCKS5(network, address, auth, nil)
 	if err != nil {
 		return nil, classify(err)
 	}

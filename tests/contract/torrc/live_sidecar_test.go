@@ -37,11 +37,9 @@
 //  3. GETCONF for every torrc directive matches the golden — Tor loaded
 //     what the image baked.
 //
-// Control-port access: the cookie file lives on stargate-tor-state, mounted
-// only into the tor service. A bridge-network probe container can dial
-// tor:9051 (T019b sub-test (c) proves reachability) but cannot read the
-// cookie to authenticate. This test runs the AUTHENTICATE+GETCONF+QUIT
-// exchange inside the tor container as USER tor (which owns the cookie),
+// Control access: the cookie and private ControlSocket stay inside Tor.
+// This test runs the AUTHENTICATE+GETCONF+QUIT exchange in that container
+// as USER tor (which owns the cookie),
 // mirroring the sidecars/tor/Dockerfile HEALTHCHECK exactly. T062 will land
 // a Go-side TCP+cookie client in Phase 4 (US2); T032 (Phase 3) cannot
 // depend on it.
@@ -118,11 +116,11 @@ var getconfCases = []struct {
 	invariant string
 	match     func(value string) bool
 }{
-	{"SocksPort", "0.0.0.0:9050 IsolateClientAddr IsolateSOCKSAuth", "#1/#2", func(v string) bool {
-		return containsToken(v, "0.0.0.0:9050") && containsToken(v, "IsolateClientAddr") && containsToken(v, "IsolateSOCKSAuth")
+	{"SocksPort", "unix:/run/tor-fabric/private/tor-socks.sock IsolateClientAddr IsolateSOCKSAuth", "#1/#2", func(v string) bool {
+		return containsToken(v, "unix:/run/tor-fabric/private/tor-socks.sock") && containsToken(v, "IsolateClientAddr") && containsToken(v, "IsolateSOCKSAuth")
 	}},
-	{"ControlPort", "0.0.0.0:9051", "#3", func(v string) bool {
-		return strings.Contains(v, "0.0.0.0:9051")
+	{"ControlSocket", "/var/lib/tor/control/tor-control.sock", "#3", func(v string) bool {
+		return strings.Contains(v, "/var/lib/tor/control/tor-control.sock")
 	}},
 	{"CookieAuthentication", "1", "#3", func(v string) bool { return v == "1" }},
 	{"CookieAuthFileGroupReadable", "1", "#4", func(v string) bool { return v == "1" }},
@@ -322,10 +320,8 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 	// (6) GETCONF for every torrc directive — Tor loaded what the image
 	// baked. The static tests (T029/T030/T031) gate the golden; this gate
 	// catches a directive Tor silently ignores (alias change, flag drift
-	// across Tor versions). SOCKS/control ports remain compose-internal:
-	// SocksPort=0.0.0.0:9050 binds 0.0.0.0 INSIDE the container (FR-012);
-	// local_compose_test.sh M2 asserts tor has no `ports:` key, and T019b
-	// gates host-unreachability at runtime.
+	// across Tor versions). Both endpoints are Unix sockets. The native SOCKS
+	// directory and raw control socket remain Tor-private (FR-012).
 	t.Run("GETCONFMatchesEveryInvariant", func(t *testing.T) {
 		for _, tc := range getconfCases {
 			out, err := liveTorControl(ctx, composeFile, envFile, "GETCONF "+tc.directive)
@@ -553,7 +549,7 @@ func liveTorControl(ctx context.Context, composeFile, envFile, command string) (
 { printf 'AUTHENTICATE %s\r\n' "$COOKIE_HEX"
   printf '%s\r\n' "$1"
   printf 'QUIT\r\n'
-} | nc 127.0.0.1 9051`
+} | nc -U /var/lib/tor/control/tor-control.sock`
 	args := []string{
 		"compose",
 		"-p", liveComposeProject,

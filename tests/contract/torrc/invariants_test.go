@@ -67,34 +67,33 @@ func TestTorrcInvariants(t *testing.T) {
 		}
 	})
 
-	// Row 2 — SocksPort binds 0.0.0.0:9050 (container-internal; compose does
-	// not map the port to the host).
+	// Row 2 — native SOCKS socket stays in Tor's private fabric directory.
 	t.Run("SocksPort_bind_address", func(t *testing.T) {
 		args, ok := directives["SocksPort"]
 		if !ok {
 			t.Fatal("no SocksPort directive line in wantTorrc")
 		}
 		joined := strings.Join(args, " ")
-		// Match the literal host:port token rather than a substring so a
-		// future `9050` argument elsewhere cannot satisfy the check.
-		if !containsToken(joined, "0.0.0.0:9050") {
-			t.Errorf("SocksPort line %q does not bind 0.0.0.0:9050 — "+
-				"contracts/torrc.md invariant #2 (the bind address is "+
-				"part of the byte-match contract; bare `9050` would not)",
+		if !containsToken(joined, "unix:/run/tor-fabric/private/tor-socks.sock") {
+			t.Errorf("SocksPort line %q does not bind the private Unix socket — "+
+				"contracts/torrc.md invariant #2",
 				"SocksPort "+joined)
 		}
 	})
 
-	// Row 3 — ControlPort on 0.0.0.0:9051 with CookieAuthentication 1.
-	t.Run("ControlPort_and_CookieAuthentication", func(t *testing.T) {
-		cpArgs, ok := directives["ControlPort"]
+	// Row 3 — raw control remains a private Tor-only Unix socket.
+	t.Run("ControlSocket_and_CookieAuthentication", func(t *testing.T) {
+		cpArgs, ok := directives["ControlSocket"]
 		if !ok {
-			t.Fatal("no ControlPort directive line in wantTorrc")
+			t.Fatal("no ControlSocket directive line in wantTorrc")
 		}
-		if !containsToken(strings.Join(cpArgs, " "), "0.0.0.0:9051") {
-			t.Errorf("ControlPort line %q does not bind 0.0.0.0:9051 — "+
+		if !containsToken(strings.Join(cpArgs, " "), "/var/lib/tor/control/tor-control.sock") {
+			t.Errorf("ControlSocket line %q does not bind the private Unix socket — "+
 				"contracts/torrc.md invariant #3",
-				"ControlPort "+strings.Join(cpArgs, " "))
+				"ControlSocket "+strings.Join(cpArgs, " "))
+		}
+		if _, ok := directives["ControlPort"]; ok {
+			t.Error("ControlPort TCP directive must be absent")
 		}
 		caArgs, ok := directives["CookieAuthentication"]
 		if !ok {
@@ -340,8 +339,8 @@ func parseCommentLines(torrc string) []string {
 
 // containsToken reports whether s contains the given token as a
 // whitespace-delimited field. Used instead of strings.Contains so that, for
-// example, checking for argument `0` does not match a `0` substring inside
-// `0.0.0.0:9050`.
+// example, checking for argument `0` does not match a `0` embedded in a
+// socket pathname.
 func containsToken(s, token string) bool {
 	for _, f := range strings.Fields(s) {
 		if f == token {

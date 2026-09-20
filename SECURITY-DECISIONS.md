@@ -41,6 +41,33 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-09-20 — Withdraw T125 wildcard/no-masquerade local posture (T162)
+
+**Decision.** The T125 `STARGATE_IN_CONTAINER` wildcard exception and the
+`stargate-host` no-masquerade attachment are withdrawn as a local-profile
+security posture. T134 demonstrated that this shape did not establish the
+Constitution III application-plane egress boundary; T156's binding text
+already forbids inheriting it. No constitutional amendment or acceptance of
+the residual DNS/UDP path is implied. The T162 replacement is a strict
+host-loopback DP listener, Tor-only bridge egress, separate SOCKS/observer
+Unix fabrics, UID-scoped silent host OUTPUT drops on both IP families, and
+AppArmor mediation of the host abstract-socket channel. T164 must implement
+the sanitized observer before CP Tor health is restored; T163 must establish
+production-namespace packet evidence. Until those gates pass this record is
+a withdrawal and implementation direction, not a conformance claim.
+
+**Why host state is trusted.** Docker Compose alone cannot impose the
+owner-match rule on host-networked DP packets. The installer stops a running
+DP, installs/verifies the host rule/profile, then starts it. The host admin
+and Docker daemon can still flush or bypass this policy; THREAT-MODEL §3.1
+names that trust explicitly. Direct Compose/Docker starts without the
+installer are unsupported, not an alternate secure path. The rule uses
+no LOG target because packet-specific denial records would violate
+Constitution III's aggregate-only audit limit. See T162's acceptance 6,
+T134 A.9/A.11/A.12, and the local Compose contract.
+
+---
+
 ## 2026-09-12 — Tor 0.4.9.12 security promotion and exact package content pins (T160)
 
 **Decision and authorization.** The maintainer explicitly requests the Tor security upgrade

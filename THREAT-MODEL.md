@@ -262,10 +262,22 @@ in their own namespaces. Sidecar endpoints have an enforced caller/port matrix; 
 cannot use arbitrary public TCP/UDP/DNS. T134 compares compliant designs. Host publication
 alone, `STARGATE_IN_CONTAINER` and no-masquerade are insufficient evidence.
 
-**Current gap:** T125 opened a wildcard proxy listener based on an environment flag.
-That behavior is not authorized by the constitution. Existing multi-network/no-masquerade
-configuration has not proven the required egress boundary. The below protections are target
-properties pending T134/T155, not verified claims for the current stack.
+**T162 mechanism (deployment evidence pending T163):** the local DP now uses the host
+network namespace and binds `127.0.0.1:8881` through the strict loopback check;
+the T125 wildcard exception is removed. The CP has `network_mode: none`; Tor alone
+has bridge egress. The installer stops a previously running DP before replacing
+host rules, loads an enforcing DP AppArmor profile, installs IPv4 and IPv6
+OUTPUT owner-match rules for UID 5102, and verifies their placement before
+Compose startup. Only ESTABLISHED/RELATED replies on `lo` are accepted;
+all other DP-owned IP packets hit a silent DROP, with no LOG target. The
+profile mediates AF_UNIX and denies abstract socket peers, closing the
+host abstract-forwarder channel shown in T134 A.12. An install/load/verify
+failure refuses DP startup; the DP has no automatic restart policy. The
+host administrator and Docker daemon are trusted to retain these rules and
+profile; a privileged host firewall flush or profile unload while an already
+running DP remains live is outside this installer-only admission check and
+must be exercised by T163. No claim of production packet-level closure is
+made until T162's behavioral gate and T163's capture matrix pass.
 
 **Protects against**:
 
@@ -276,10 +288,11 @@ properties pending T134/T155, not verified claims for the current stack.
   metadata* for routed traffic — they see only the encrypted outer tunnel
   to the chosen anonymity network's first hop.
 - Required target: constrain a compromised application plane to its authorized
-  adapter/IPC capabilities. T134 selected the topology direction, but the current
-  full CP cookie and direct `tor:9051` path do not establish the observer boundary.
-  T138's design requires a separate observer that owns the cookie and exposes only
-  sanitized health; T164/T165 and T155 own the tests, implementation and evidence.
+  adapter/IPC capabilities. T162 gives the DP a group-gated SOCKS hardlink on a
+  DP-only volume while Tor's native SOCKS directory and raw control socket remain
+  private. CP has only an empty reserved observer fabric, no Tor cookie/group or
+  raw-control route. T138's separate sanitized observer has not yet been
+  implemented; T164/T165 and T155 own its tests, implementation and evidence.
 
 **Does NOT protect against**:
 
@@ -297,6 +310,9 @@ properties pending T134/T155, not verified claims for the current stack.
   loopback.
 - The Docker daemon on the host (it runs the sidecars and can read their
   network namespaces).
+- The installer and host administrator who own the DP UID's firewall rules
+  and AppArmor profile. Docker or another host-root actor can remove either;
+  the policy is not self-healing or enforced by Compose alone.
 
 **Residual risks**:
 
@@ -984,14 +1000,14 @@ network visibility for its route (§2.6).
   arbitrary public TCP/UDP/DNS, or unrestricted container-engine access. Sidecar-native
   network maintenance is a distinct route TCB, not an exception for application planes.
 
-**Current implementation gaps:** T125 added a no-masquerade attachment; its DNS/UDP egress
-properties are not proven by the older three-network structural tests. CP currently receives
-Tor's full cookie and can reach its SOCKS port and its raw control port. An in-process command
-allowlist cannot constrain a compromised CP holding that cookie. T138 recommends a separate
-observer that alone owns the cookie and raw control session, while CP receives only finite
-sanitized health tokens over a separate local endpoint. These are unresolved T134/T138
-findings, not accepted conformance. T164/T165 own the negative command probes, boundary
-implementation and deployment evidence; T155 consumes their closure. A bridge-visible packet
+**Current implementation gaps:** T162 withdraws T125's no-masquerade and wildcard
+posture, and removes CP's full Tor cookie and raw-control path. The new host
+owner-match/AppArmor mechanism still needs T163's production namespace packet
+and startup/restart evidence; an unsupported direct Docker restart or a host
+administrator removing live rules is not a proven fail-closed path. T138's
+sanitized observer remains absent: CP cannot observe Tor health until T164
+adds it, and T165 validates the caller matrix. These pending items are not
+accepted conformance. T155 consumes their closure. A bridge-visible packet
 alone does not prove internet exfiltration.
 
 **Residual risks after a compliant repair:** Tor remains trusted for the anonymity protocol,

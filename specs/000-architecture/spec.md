@@ -61,7 +61,7 @@ must be amended.
                   ▼          ▼            ▼             ▼
        ┌──────────────┐ ┌─────────┐ ┌────────────┐ ┌──────────────┐
        │  Tor sidecar │ │  i2pd   │ │ Nym client │ │ (no sidecar) │
-       │  SOCKS 9050  │ │  4444   │ │ SOCKS 1080 │ │  egress NIC  │
+       │  SOCKS UDS   │ │  4444   │ │ SOCKS 1080 │ │  egress NIC  │
        └──────┬───────┘ └────┬────┘ └─────┬──────┘ └──────┬───────┘
               │              │            │               │
               ▼              ▼            ▼               ▼
@@ -200,19 +200,22 @@ contiguous identifiable block, and reserving 8883 to slot IPFS in cleanly at
 v2 without renumbering. **Why 8443 for admin UI**: conventional HTTPS-admin
 port; visually distinct from route ports.
 
-### 4.2 Sidecar-internal (compose network only, never published)
+### 4.2 Sidecar-internal endpoints (never host-published)
 
 | Sidecar       | Service                | Port  | Bound on              |
 |---------------|------------------------|-------|-----------------------|
-| Tor           | SOCKS5 (stream-iso)    | 9050  | `0.0.0.0` in container |
-| Tor           | Control port (cookie)  | 9051  | `0.0.0.0` in container |
+| Tor           | SOCKS5 (stream-iso)    | UDS   | `/run/tor-fabric/private/tor-socks.sock` in Tor; hardlinked as `/run/stargate-tor/tor-socks.sock` in the DP-only fabric |
+| Tor           | Control socket (cookie) | UDS  | `/var/lib/tor/control/tor-control.sock`, private to Tor; observer-only mount follows in T164 |
 | i2pd          | HTTP proxy             | 4444  | `0.0.0.0` in container |
 | i2pd          | SOCKS proxy            | 4447  | `0.0.0.0` in container |
 | i2pd          | SAM bridge (reserved)  | 7656  | `0.0.0.0` in container |
 | Nym client    | SOCKS5                 | 1080  | `0.0.0.0` in container |
 
-These are reachable only across the Docker bridge network shared by the
-proxy and sidecar containers; none are mapped to the host.
+The Local Tor endpoints have no TCP listener. Only Tor attaches to the Docker
+egress bridge; the DP uses host networking with an exception-free loopback
+bind, and the CP has no Docker network. The DP-only fabric contains the
+SOCKS re-exposure; the CP-only fabric is reserved for T164's authenticated
+sanitized health observer. Other routes are later feature contracts.
 
 ### 4.3 Non-TCP endpoints
 
@@ -526,8 +529,9 @@ baked-into-image:
 
 **What each sidecar gets**:
 
-- **Tor** — `torrc` rendered with: `SocksPort 9050 IsolateClientAddr
-  IsolateSOCKSAuth`, `ControlPort 9051`, `CookieAuthentication 1`,
+- **Tor** — v1 image-baked `torrc` uses a private Unix `SocksPort` with
+  `IsolateClientAddr IsolateSOCKSAuth`, a Tor-private `ControlSocket`,
+  `CookieAuthentication 1`,
   `ClientUseIPv6 0`, `AvoidDiskWrites 1`, plus zero or more `Bridge` lines
   and `UseBridges 1` when enabled. Toggling bridges writes a new `torrc`
   and restarts the Tor container (SIGHUP is not always sufficient for
@@ -599,7 +603,7 @@ destructive change.
    ├──────────────┼──────────┼────────────┼──────────────────────┤
    │ Data plane   │ HEALTHY  │ 127.0.0.1  │ ports 8881–8885      │
    │ Control plane│ HEALTHY  │ 127.0.0.1  │ admin UI on :8443    │
-   │ Tor sidecar  │ HEALTHY  │ internal   │ SOCKS5 9050          │
+   │ Tor sidecar  │ HEALTHY  │ internal   │ SOCKS5 over UDS      │
    │ i2pd sidecar │ STARTING │ internal   │ tunnel build pending │
    │ Nym sidecar  │ HEALTHY  │ internal   │ gateway: <id>        │
    └──────────────┴──────────┴────────────┴──────────────────────┘
@@ -1167,24 +1171,19 @@ observability hooks, etc.). Each must be declared here so that any
 future profile (LAN, VPS) inherits a complete picture of the trusted
 component set.
 
-**Current state (T094a):** the local profile runs **no auxiliary
+**Current state (T162; T164 observer pending):** the local profile runs **no auxiliary
 containers**. The `docker-socket-proxy` auxiliary container that
 previously lived in this section — a digest-pinned
 `tecnativa/docker-socket-proxy` that bridged `/var/run/docker.sock` to a
 filtered HTTP API so the control plane could observe sidecar lifecycle
 (`EVENTS=1`, `CONTAINERS=1`, `POST=0`) — was **removed by T094a**. The
-control plane now observes Tor lifecycle through Tor's own **cookie-
-authenticated ControlPort** (`tor:9051`, enabled by
-`CookieAuthentication 1` + `CookieAuthFileGroupReadable 1`; see
-`specs/001-tor-route/contracts/torrc.md` invariants #3–#4) over the
-compose-internal network — a strictly narrower surface than a Docker
-Engine observer, and one that introduces no host-root-pivot path
-(Constitution Principle III). No service in
+former control-plane direct cookie/ControlPort path is withdrawn. Tor's
+`ControlSocket` and cookie remain inside the Tor container; T164 must add a
+separate sanitized observer before CP health observation resumes. No service in
 `compose/docker-compose.local.yml` mounts `/var/run/docker.sock`
-(gated by `tests/contract/compose/local_compose_test.sh` M4). ControlPort
-is NEVER host-published (FR-012). The narrow cookie-read volume + GID
-alignment is finalised with the SidecarMonitor client (T039),
-constrained to avoid over-broad entry-guard read (THREAT-MODEL §4.2).
+(gated by `tests/contract/compose/local_compose_test.sh` M4). The raw
+control socket is neither host-published nor mounted into either plane
+(Constitution Principle III; THREAT-MODEL §3.1).
 
 The removal rationale — why T090's removal of control-plane route-
 admission gating made the proxy unnecessary for routing correctness,

@@ -352,7 +352,7 @@ tests-first suite (Principle VII) before implementation lands.
   counter increment.**
 - **FR-007**: The data plane MUST forward authenticated inbound bytes
   on port 8881 to the Tor sidecar's SOCKS5 endpoint
-  (`tor:9050` on the compose network), passing through the
+  (`unix:///run/stargate-tor/tor-socks.sock` on the DP-only fabric), passing through the
   hostname-mode (SOCKS5h) target address and the SOCKS5 username
   unchanged. The data plane MUST NOT resolve the target hostname
   locally (Principle III). It MUST NOT parse, inspect, or modify
@@ -405,13 +405,14 @@ tests-first suite (Principle VII) before implementation lands.
   their own namespaces and at host publication. LAN/VPS MUST use the actual tunnel
   interface in each listener namespace and remain closed on tunnel loss. No container
   environment flag, wildcard bind or tunnel elsewhere in the stack is an exception.
-  T125's permission is superseded. T134 owns a conforming topology and tests; see
+  T125's permission is superseded. T134 selected the topology; T162 implements it and
+  T163 verifies production namespaces; see
   `contracts/foundation-boundaries.md` §Deployment and authority.
 
 - **FR-011**: The Tor sidecar MUST be configured with the directive set
   pinned byte-for-byte in `contracts/torrc.md §"Rendered file"`:
-  `SocksPort 0.0.0.0:9050 IsolateClientAddr IsolateSOCKSAuth`,
-  `ControlPort 0.0.0.0:9051`, `CookieAuthentication 1`,
+  `SocksPort unix:/run/tor-fabric/private/tor-socks.sock IsolateClientAddr IsolateSOCKSAuth`,
+  `ControlSocket /var/lib/tor/control/tor-control.sock`, `CookieAuthentication 1`,
   `CookieAuthFileGroupReadable 1`, `DataDirectory /var/lib/tor`,
   `ClientUseIPv6 0`, `AvoidDiskWrites 1`, `UseBridges 0`,
   `Log notice stdout`, `SafeLogging 1`. For this static Tor-only slice
@@ -434,17 +435,17 @@ tests-first suite (Principle VII) before implementation lands.
   equal to the pinned Go golden** for v1 of this feature; T087's
   cold-volume regression test verifies the `/etc/tor/torrc` baked into
   the image equals the same golden without harness-seeded config.
-- **FR-012**: The Tor sidecar's `SocksPort` (9050) and `ControlPort`
-  (9051, cookie-authenticated) MUST NOT be published to the host or to
-  any compose network mapping. Both are reachable only internally on the
-  compose-internal bridge network. Only the data plane needs SocksPort
-  access; the ControlPort is reached by the control plane's
-  `SidecarMonitor` (T039/T074) AND by the contract-test harness, both via
-  the control cookie (`CookieAuthFileGroupReadable 1`;
-  `contracts/torrc.md` invariants #3–#4). Before T094a the CP observed
-  Tor through a `docker-socket-proxy`; T094a removed it in favour of this
-  narrower cookie-authenticated surface (arch §16). (Architecture spec
-  §4.2.)
+- **FR-012**: Tor MUST have no TCP SOCKS or control listener or host port
+  publication. Its native SOCKS Unix socket is in a Tor-private directory;
+  the image-owned hook hardlinks that inode at mode 0660 into a DP-only
+  volume. The DP may dial only that fixed path. The raw cookie-authenticated
+  ControlSocket is in Tor's private state and is reachable only inside Tor
+  for its native healthcheck and by the test harness via `docker compose exec`.
+  CP holds no Tor cookie, Tor-cookie group, raw control mount or Docker network
+  path. A separate CP-only fabric is reserved for T164's authenticated finite
+  health observer. T164 implements and tests that endpoint and T165 validates
+  its deployed caller matrix; until then CP health observation is unavailable
+  and advisory, with no raw-control fallback (architecture spec §4.2).
 
 #### Inter-plane integration
 
@@ -471,7 +472,7 @@ tests-first suite (Principle VII) before implementation lands.
   Principle II): they MUST NOT be a mandatory precondition for listening,
   authenticating, dialing, or forwarding, and they MUST NOT
   short-circuit the upstream dial. The data plane MUST always attempt
-  the fixed `tor:9050` dial on every admitted request; the dial result
+  the fixed Tor fabric dial on every admitted request; the dial result
   alone selects `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`.
   `SidecarEvent`s feed the audit journal (completed-hour operational categories under data-model.md §4) and status reporting only — a stale or
   forged event cannot suppress a dial that would succeed (Principle II:

@@ -47,11 +47,11 @@
 # literal stdout-grep is NOT viable inside the container: /proc/1/fd/1
 # yields only NEW log lines after the reader opens, so once Tor has
 # finished bootstrapping and goes idle the healthcheck would silently
-# fail forever. The robust in-container probe is the control port
+# fail forever. The robust in-container probe is the private control socket
 # (`GETINFO status/bootstrap-phase` over cookie auth), which the
-# contract already enables (ControlPort 0.0.0.0:9051,
+# contract already enables (ControlSocket /var/lib/tor/control/tor-control.sock,
 # CookieAuthentication 1, CookieAuthFileGroupReadable 1). The control
-# port is the authoritative source Tor itself uses to report bootstrap
+# control interface is the authoritative source Tor itself uses to report bootstrap
 # state; the stdout `Bootstrapped 100%` line is derived from the same
 # internal state, so probing the control port is at least as strong.
 # The contract's stdout logging is preserved unchanged — it remains
@@ -184,13 +184,14 @@ RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources \
 #
 # UID/GID 5103 (T039): numeric pin following the 5100–5102 plane scheme.
 # CookieAuthFileGroupReadable 1 (torrc invariant #4) creates the cookie
-# 0640 tor:tor, so the control plane's SidecarMonitor reads it by holding
-# GID 5103 as a supplementary group (compose group_add, cross-checked by
-# local_compose_test.sh M14). A dynamic GID would make that alignment
-# impossible to express in compose. The DP gets neither mount nor group.
+# 0640 tor:tor. CP has neither the mount nor GID 5103; T164's future
+# isolated observer must hold any necessary Tor-facing authority.
 RUN groupadd --system --gid 5103 tor \
+ && groupadd --system --gid 5200 stargate-tor-dp \
  && useradd --system --uid 5103 --gid 5103 --home /var/lib/tor --shell /usr/sbin/nologin tor \
- && install -d -o tor -g tor -m 0700 /var/lib/tor
+ && install -d -o tor -g tor -m 0700 /var/lib/tor /var/lib/tor/control \
+ && install -d -o tor -g stargate-tor-dp -m 0750 /run/tor-fabric \
+ && install -d -o tor -g tor -m 0700 /run/tor-fabric/private
 
 # Image-baked torrc (T087 / FR-011 amended by T089): the safe torrc is
 # COPY'd into the image at build time so Tor startup never waits for the
@@ -202,7 +203,8 @@ RUN groupadd --system --gid 5103 tor \
 # without harness-seeded config. Explicit chmod 0644 so USER tor can read
 # it regardless of the source checkout's file mode (redteam m1).
 COPY torrc /etc/tor/torrc
-RUN chmod 0644 /etc/tor/torrc
+COPY entrypoint.sh /usr/local/bin/stargate-tor-entrypoint
+RUN chmod 0644 /etc/tor/torrc && chmod 0755 /usr/local/bin/stargate-tor-entrypoint
 
 USER tor
 
@@ -210,9 +212,9 @@ USER tor
 # no stargate-tor-config volume mount (T087 dropped the tor service's
 # mount; a :ro mount at /etc/tor would shadow the image-baked torrc).
 # `tor -f /etc/tor/torrc` loads the baked config at container start.
-ENTRYPOINT ["tor", "-f", "/etc/tor/torrc"]
+ENTRYPOINT ["/usr/local/bin/stargate-tor-entrypoint"]
 
-# Health: probe the control port for bootstrap completion. Reads the
+# Health: probe the private control socket for bootstrap completion. Reads the
 # auth cookie (owned by `tor`, so USER tor can read it directly),
 # AUTHENTICATEs, asks GETINFO status/bootstrap-phase, and greps the
 # response for PROGRESS=100. Exits non-zero if Tor is not yet (or no
@@ -226,4 +228,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
         && { printf 'AUTHENTICATE %s\r\n' "$COOKIE_HEX"; \
              printf 'GETINFO status/bootstrap-phase\r\n'; \
              printf 'QUIT\r\n'; \
-           } | nc 127.0.0.1 9051 | grep -q 'BOOTSTRAP.*PROGRESS=100'
+           } | nc -U /var/lib/tor/control/tor-control.sock | grep -q 'BOOTSTRAP.*PROGRESS=100'

@@ -1,9 +1,9 @@
 ---
 id: "T162"
 title: "Implement host-loopback DP with unix-socket sidecar fabric"
-status: "pending"
+status: in-review
 created: "2026-09-13"
-last_updated: "2026-09-13"
+last_updated: 2026-09-20
 source: "specs/001-tor-route/analysis/T134-local-topology.md"
 phase: "Foundation audit remediation"
 story: "-"
@@ -63,10 +63,11 @@ implements the topology; T163 owns the capture-verified evidence suite.
     unusable (SYN-ACK/replies dropped) while loopback admission keeps working
     (T134 A.11 pattern).
   - Sidecar authority is enforced by **mount-separated per-consumer fabrics**: the
-    DP fabric volume carries only the SOCKS re-exposure, the CP fabric volume only
-    the control re-exposure (0660 group-gated); CP cannot reach the SOCKS socket
-    and DP cannot reach the control socket by construction. The CP-side sanitized
-    observation surface itself follows T138's resolved design (prerequisite).
+    DP fabric volume carries only the SOCKS re-exposure; the CP fabric is reserved
+    for T164's sanitized observer endpoint. The raw Tor control socket remains
+    tor-private and is not exposed to CP. CP cannot reach SOCKS or raw control,
+    and DP cannot reach raw control by construction. T164 implements the T138
+    observer after this fabric exists; T165 proves its CP-facing caller matrix.
   - The **abstract-socket channel is closed**: an AppArmor profile for the DP
     mediating AF_UNIX — allowing exactly its pathname fabric sockets, its dp.sock
     server socket AND its control.sock client connection (WatchEvents;
@@ -99,22 +100,26 @@ implements the topology; T163 owns the capture-verified evidence suite.
    wildcard acceptance; `STARGATE_IN_CONTAINER` is removed from the startup wiring
    and compose; a wildcard or specific non-loopback address is refused in every
    mode; the DP in the host namespace binds `127.0.0.1:8881` via the strict path.
-4. Tor image + socket authority: rendered torrc switches to `SocksPort unix:` +
-   the T138-resolved CP observation endpoint (each inside a tor-private 0700
-   directory on its own per-consumer fabric volume — tor 0.4.9.12 refuses
-   group-accessible socket dirs, T134 §3); the Stargate-owned entrypoint re-exposes
-   each endpoint only into its consumer's fabric (0660, consumer group; hardlink
-   hook). Raw ControlSocket re-exposure to the CP is NOT prescribed — the CP fabric
-   carries whatever enforced observer boundary T138 lands. Contracts/torrc.md
-   golden and byte-match tests updated; cookie facts recorded for T138. A
-   **SocketCallerMatrix** regression (real sockets, red-first) demonstrates
-   DP→SOCKS succeeding and the cross-direction denials that the landed T138
-   endpoint defines — including after socket recreation (tor restart).
+4. Tor image + socket authority: rendered torrc switches to `SocksPort unix:`
+   inside a tor-private 0700 directory (tor 0.4.9.12 refuses group-accessible
+   socket dirs, T134 §3). The Stargate-owned entrypoint re-exposes only SOCKS
+   into the DP fabric (0660, DP group; hardlink hook), including after Tor
+   recreates its socket. Raw Tor control stays in a tor-private directory,
+   reachable inside Tor for its native healthcheck and by the test harness;
+   neither CP nor DP mounts it or the cookie. Contracts/torrc.md golden and
+   byte-match tests are updated. A **SocketCallerMatrix** regression (real
+   sockets, red-first) demonstrates DP→SOCKS succeeding and CP→SOCKS,
+   CP→raw-control, DP→raw-control and unprivileged→SOCKS denied, including
+   after Tor restart. T164 owns the observer implementation, its positive
+   CP→sanitized-health test and its own restart behavior; T165 owns the
+   deployed CP-facing caller matrix. This handoff preserves the T138 boundary.
 5. Compose: DP `network_mode: host` (loopback bind only, no ports publish); CP
    `network_mode: none` with CP-fabric access only; stargate-host /
-   stargate-internal / stargate-cp-tor networks removed; the two per-consumer
-   fabric volumes carry the sidecar sockets (DP fabric mounted by tor+DP, CP
-   fabric by tor+CP — never both); local_compose_test.sh,
+   stargate-internal / stargate-cp-tor networks removed; the DP fabric is
+   mounted by Tor+DP only, while the CP-only observer fabric is reserved for
+   T164 and mounted by CP but not Tor. Neither plane mounts the other's fabric.
+   Until T164, Tor health observation is unavailable and advisory; CP holds
+   no raw control credential or route. local_compose_test.sh,
    network_hardening_test.go AND `tests/contract/tor/port_exposure_test.go`
    (which fatally resolves the removed stargate-internal network today) are
    rewritten to pin the new shape (no orphaned M13/stargate-host/internal-net
@@ -146,7 +151,7 @@ implements the topology; T163 owns the capture-verified evidence suite.
    explicitly fail; every capture assertion in these regressions fails closed on
    recorder failure (readiness, clean exit, decodable pcap — T134 §4 pattern).
 7. Spec/contracts/threat model amended in the same PR: FR-007 (upstream endpoint
-   wording — still `tor:9050` on the compose network), FR-010/FR-011/FR-012
+   wording — DP-only Unix SOCKS fabric, no `tor:9050` compose path), FR-010/FR-011/FR-012
    wording, architecture spec §4.2 endpoint descriptions, data-model.md §6 volume
    identities, torrc contract, foundation-boundaries pointer, SECURITY-DECISIONS.md
    entry recording the withdrawal of the T125 posture (no constitutional
@@ -165,6 +170,87 @@ rewritten here); integrated foundation validation (T155); LAN/VPS profiles;
 candidate B relay (documented fallback in the T134 report).
 
 ## Notes
+
+Tests-first evidence for Acceptance 1 (2026-09-20; pre-fix HEAD
+`5d62aece8bd57e8263cd51425e9fd0da6c2deaea`): after writing the
+strict-bind and AF_UNIX forwarder regressions, before changing their production
+code, `go test ./internal/bind -run TestCheckListener -count=1 -timeout=15s`
+failed because `CheckListener("0.0.0.0", true)` and `CheckListener("::", true)`
+returned nil. `go test ./internal/forward -run
+TestForwardUnixSocketPreservesSOCKS5hAuth -count=1 -timeout=10s` failed at
+`read BND reply: ... i/o timeout` against the real recording AF_UNIX SOCKS
+server (the old forwarder attempted the `unix://` endpoint as TCP). After the
+production changes, both same named tests passed (`bind` 0.004s, `forward`
+0.009s). The first forward test run had an unbounded read and hit the test
+timeout; the fixture was corrected with a three-second client read deadline
+before implementation, then rerun to produce the intended red result above.
+
+The torrc byte-match and Compose structural assertions also failed before
+their source/config rewrites, then passed. The Tor control helper's real-argv
+test first observed the old `docker exec ... nc 127.0.0.1 9051` form,
+then passed with the Tor-private Unix control socket. The host-boundary
+installer test first failed because the profile was absent; it now parses
+the profile and pins installer wiring. The real init entrypoint also exits
+60, after stopping DP and before Compose up, when a fake loader fails or
+when fake host tools acknowledge writes but report a wrong-UID OUTPUT jump.
+A disposable `stargate init` on this
+unprivileged host exits 60 before creating DP when `sudo -n` cannot load
+AppArmor. A privileged disposable container loaded the same profile for
+AF_UNIX checks: the first profile denied the authorized SOCKS dial because
+AppArmor resolved Tor's original hardlink inode path; after adding that
+exact path, the SOCKS handshake and control.sock dial passed. An abstract
+socket dial failed under the profile and succeeded without it. These are
+initial mechanism checks. The Docker-cadence regression subsequently ran
+in a disposable internal bridge: absent and wrong-UID rules admitted the
+5102 client (falsifier legs); the scoped IPv4/IPv6 rule set produced zero
+decoded TCP/UDP packets on eth0 after a positive same-capture control,
+with no matching kernel journal, dmesg or container log records. An
+off-loopback 5102 listener accepted a reverse client only under the
+unrestricted-ESTABLISHED mutation, not under the shipped lo-scoped rule,
+while a loopback listener remained reachable. A uniquely named copy of
+the production AppArmor profile then allowed Tor SOCKS, dp.sock bind,
+control.sock dial, and the production Go authenticated WatchEvents
+reconnect and ReloadTokens-over-mTLS tests; a host abstract socket carried
+a byte exchange without the profile but was permission-denied under it.
+Recorder readiness, bounded exit and pcap decoding are fail-closed in the
+test. The test unloads its unique policy and removes disposable resources.
+Production-namespace breadth remains T163; host-root sudo is unavailable
+in this execution environment, so actual `stargate init` was separately
+observed to stop before DP startup with exit 60, and the real host rule
+installation was not exercised here.
+The live username-less Tor isolation test first failed in its final
+distinct-username calibration after both SOCKS CONNECTs succeeded but both
+streams disappeared before a 90-second status poll. An immediate rerun
+passed all three subtests, including distinct circuit IDs (19 and 22);
+the initial failure is recorded as an external onion-stream timing limit,
+not evidence that the first run was green.
+
+Round-1 single-gate review: GLM APPROVE with three Minor test-integrity
+observations; Codex Astra REWORK with three Major evidence gaps (the host
+firewall socket tests used copied rules, the caller matrix lacked raw-control
+connection denials and full post-restart repetition, and log-reader failures
+could be treated as empty logs). Round-2 rework touches only the two named
+test files and this note. The Docker firewall test now runs the real
+`scripts/subcommands/init` inside its disposable privileged network namespace;
+only Docker/AppArmor integration is stubbed, and an invalid image pin stops
+after successful host-policy installation/verification but before volume or
+Compose startup. Its packet and reverse-channel probes run against those
+installed IPv4/IPv6 rules. Temporarily removing `-o lo` from BOTH production
+install and verification functions made the Docker regression fail at
+`reverse off-loopback channel open under scoped rule` (exit 1); both lines
+were restored byte-for-byte and the same test passed. The log checks now
+fail if dmesg, journalctl or docker logs fails; an explicit failed-reader
+falsifier covers each invocation type, and available persistent/runtime
+journal layouts are queried independently, with zero layouts a failure.
+The real-socket Tor caller matrix now tests all five caller outcomes before
+and after restart, positively connects to Tor's raw control endpoint in its
+own namespace, then attempts real connections from the deployed consumer
+view and from adversarially state-volume-attached CP/DP identities. A first
+strengthened run correctly showed the consumer's 0700 ancestor returns
+`Permission denied` rather than `ENOENT`; the assertion accepts either
+denial, while the mounted-state leg requires `Permission denied`. The
+corrected matrix passed (14.36s). These rework checks do not claim T163's
+production-namespace capture coverage.
 
 File budget grounding (37), enumerated path-by-path:
 (1) data-plane/internal/forward/tor.go; (2) forward/tor.go's unix-dial test;
@@ -188,10 +274,11 @@ File budget grounding (37), enumerated path-by-path:
 (29) tests/contract/torrc/isolate_socks_auth_effect_test.go;
 (30) tests/contract/torrc/live_sidecar_test.go;
 (31) tests/contract/tor/control_port_test.go;
-(32) this ticket; (33) STATUS.md — 33 enumerated, leaving four paths within
-the 37-file budget for the SocketCallerMatrix / ReverseChannelClosed /
-DeniedEgressNoDetailedLogs / AbstractSocketForwarderDenied regression files
-the acceptance adds.
+(32) this ticket; (33) STATUS.md. The Docker-backed init test at (11)
+needed no edit (it passes unchanged). Its freed slot and the four reserved
+paths are used by the explicit T163/T164 handoff corrections, the T106
+count-probe fixture-path correction, the AF_UNIX probe fixture, and the
+combined host-enforcement regression. Total touched paths: 37/37.
 
 Prototype evidence for every mechanism named above is in
 `specs/001-tor-route/analysis/T134-local-topology.md` (§4 results incl. the round-2

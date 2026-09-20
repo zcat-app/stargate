@@ -16,8 +16,8 @@ compromise of the CP process. A health helper may not become a generic command p
 T134 compares designs satisfying both listener and egress requirements. Shared networking
 is not pre-approved: shared egress without independent process controls fails the contract.
 
-**T138 authority refinement (design target; not yet implemented):** the CP MUST NOT hold the
-Tor control cookie, the Tor-cookie supplementary group, or a network path to `tor:9051`.
+**T138 authority refinement (T162 fabric landed; observer pending T164):** the CP MUST NOT hold the
+Tor control cookie, the Tor-cookie supplementary group, or a network path to raw Tor control.
 A separate observer owns the Tor-facing credential and raw control session. Its CP-facing
 endpoint accepts one bounded health operation with no arguments and returns only the finite
 tokens `READY`, `NOT_READY` or `UNAVAILABLE`; it MUST reject arbitrary command text and MUST
@@ -31,8 +31,9 @@ An unavailable observer cannot justify a Tor exit or restart claim.
 The observer MUST NOT expose stream/circuit status, configuration, event subscriptions,
 stream attachment, onion-service creation, signals or a generic command proxy. CP health is
 advisory and cannot gate DP admission or select a fallback route. T164/T165 own the
-tests-first implementation and deployment evidence; until then the direct CP cookie shape is
-an explicit unresolved residue, not a compliant exception.
+tests-first implementation and deployment evidence. T162 removes the former direct CP cookie
+and raw-control path and reserves a CP-only fabric volume; until T164, CP Tor health observation
+is unavailable and advisory. The reserved volume is not itself a health endpoint.
 
 Native Tor protocol maintenance belongs to Tor's egress TCB. DP/CP cannot originate public
 TCP/UDP/DNS, including arbitrary names through a forwarding service resolver. Local IPC/service

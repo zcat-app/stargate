@@ -33,13 +33,10 @@
 // (scenario 2 / SC-002) is T061; the NO_AUTH no-username companion (streams
 // share a default circuit by design) is T058a.
 //
-// Transport (FR-012): SocksPort 9050 is compose-internal — no host-side
-// dial exists and none may be manufactured. The SOCKS5 handshake bytes are
-// driven from the Go side through `docker compose exec -T tor nc 127.0.0.1
-// 9050` pipes — the same Go-owns-the-protocol posture as T062's control-port
-// client, and the same two-argv-word nc invocation (openbsd nc takes
-// `nc host port`; a single `host:port` word resolves as a hostname and dies
-// with instant EOF). Circuit state is read through T062's
+// Transport (FR-012): the native SOCKS Unix socket stays Tor-private; no
+// host TCP dial exists. The SOCKS5 bytes are driven from Go through
+// `docker compose exec -T tor nc -U /run/tor-fabric/private/tor-socks.sock`.
+// Circuit state is read through T062's
 // cookie-authenticated control-port helper (tests/contract/tor), never from
 // tor log lines (torrc.md #8: Stargate does not consume Tor logs as data).
 // UNAME values are opaque isolation keys (socks5-auth.md: the first-party
@@ -442,7 +439,7 @@ func isoDialSocks(parent context.Context, cfg tor.ControlPortConfig, uname, pass
 		"compose", "-p", cfg.Project,
 		"-f", cfg.ComposeFile,
 		"--env-file", cfg.EnvFile,
-		"exec", "-T", "tor", "nc", "127.0.0.1", "9050")
+		"exec", "-T", "tor", "nc", "-U", "/run/tor-fabric/private/tor-socks.sock")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancel()
@@ -457,7 +454,7 @@ func isoDialSocks(parent context.Context, cfg tor.ControlPortConfig, uname, pass
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
 		cancel()
-		return nil, fmt.Errorf("socks session start (docker compose exec tor nc 127.0.0.1 9050): %w: %s",
+		return nil, fmt.Errorf("socks session start (docker compose exec tor nc -U private SOCKS): %w: %s",
 			err, strings.TrimSpace(stderr.String()))
 	}
 

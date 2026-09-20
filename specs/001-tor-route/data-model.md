@@ -352,7 +352,7 @@ clean separation the ticket asks for.
 ## 2. Tor route admission
 
 There is **no control-plane-driven admission gate** for the Tor route. The
-data plane attempts the fixed upstream (`tor:9050`) on every admitted
+data plane attempts the fixed upstream (`unix:///run/stargate-tor/tor-socks.sock`) on every admitted
 request; the upstream dial/handshake result alone decides success or the
 privacy-safe route error (`ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`
 per FR-009). A control-plane `SidecarEvent` (`HEALTHY`, `UNHEALTHY`,
@@ -366,7 +366,8 @@ first `HEALTHY` event makes routing availability depend on the advisor
 plane, which is exactly the failure coupling Principle II forbids:
 restarting only the data plane during a control-plane outage would stop
 routing even when Tor and the last-known token snapshot are healthy. The
-fixed upstream dial is the authoritative signal — try `tor:9050`, forward
+fixed upstream dial is the authoritative signal — try the DP-only Tor SOCKS
+fabric socket, forward
 on success, return the protocol-safe route failure on connect/handshake
 failure. Absence or staleness of a sidecar event can never deny admission.
 
@@ -377,7 +378,7 @@ always attempt the upstream dial on every admitted request.
 MUST NOT influence the admission decision or short-circuit the dial.
 A `STOPPED` / `CRASHED` event is recorded in the audit log and may
 surface "sidecar unhealthy" in status, but the data plane still dials
-`tor:9050` — a stale or forged event cannot suppress a dial that would
+the DP-only Tor SOCKS fabric socket — a stale or forged event cannot suppress a dial that would
 succeed (Constitution Principle II: "a compromise of the management UI
 cannot silently corrupt routing decisions"). The upstream dial result
 is the sole input to `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`
@@ -498,7 +499,9 @@ Named volumes this feature creates (referenced by name in
 | `stargate-control-config`    | control-plane container                       | operator-authored `tokens.yaml`                |
 | `stargate-control-state`     | control-plane container                       | SQLite DB and Flyway state                     |
 | `stargate-dp-state`          | data-plane container                          | `dp-snapshot.json`                             |
-| `stargate-tor-state`         | Tor sidecar container (whole volume); control-plane container reads ONLY the cookie file via a read-only single-file volume-subpath mount at `/run/tor/control_auth_cookie` (T039, GID-aligned to the tor image's GID 5103 — T094a rejected mounting the volume whole) | Tor `DataDirectory` — entry-guard persistence (THREAT-MODEL §4.2). The control-port cookie file (`/var/lib/tor/control_auth_cookie`) also lives here; the contract-test harness reads it via T062, and the CP's `SidecarMonitor` reads it via the subpath mount — see `contracts/torrc.md` for the auth flow. The subpath mount is the narrow-read invariant: entry-guard state is readable only inside the tor container. Gated by `local_compose_test.sh` M14. |
+| `stargate-tor-state`         | Tor sidecar container only                    | Tor `DataDirectory`, entry-guard state, private control socket and cookie. Neither application plane mounts this volume. The contract-test harness reaches the control socket inside Tor; the CP's former direct control access is withdrawn pending T164's sanitized observer. |
+| `stargate-tor-dp-fabric`     | Tor sidecar RW; data plane RO                  | Only the group-gated Tor SOCKS re-exposure. Tor's native socket directory remains private within this volume; the DP cannot traverse it. |
+| `stargate-tor-cp-fabric`     | control plane RO                               | Reserved for T164's sanitized observer; no raw Tor control socket or cookie. |
 | `stargate-tor-config`        | (deferred — dynamic-config feature)           | **Deferred by T089.** For v1 the safe `torrc` is baked into the Tor image at build time (T087, FR-011 amended by T089), so this volume is NOT used for v1 boot — Tor loads `/etc/tor/torrc` from the image with no dependency on the control plane (Constitution Principle II / sol-review B2). The volume's CP-RW / Tor-RO mount and its role as the target of `TorrcRenderer`'s atomic write (T037) are future work for a dynamic-config feature (bridges toggle, live reload); T037 is deferred with it. Whether the volume remains declared-but-dormant in compose or is removed entirely for v1 is T087's implementation call; this row records only that v1 boot does not depend on it. |
 
 These volumes are the unit `scripts/stargate wipe` operates on (out of
