@@ -1,7 +1,7 @@
 ---
 id: "T169"
 title: "Make topology probe launch independent of checkout depth"
-status: in-review
+status: done
 created: "2026-09-20"
 last_updated: 2026-09-20
 source: "T168 finalization: shallow-working-directory falsifier"
@@ -21,7 +21,7 @@ decision_refs:
   - "specs/001-tor-route/tickets/T168-fail-closed-on-owner-rule-loss.md"
 remediates: "T168"
 tests_first: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-20, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
