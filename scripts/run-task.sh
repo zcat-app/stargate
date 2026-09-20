@@ -161,7 +161,6 @@ mkdir -p "$RUN_DIR"
 REVIEW_MATRIX="scripts/review-matrix.json"
 [ -f "$REVIEW_MATRIX" ] || { echo "run-task: missing $REVIEW_MATRIX" >&2; exit 1; }
 ROUND_FILE="$RUN_DIR/$TICKET_ID.round"
-DIFFSTAT_FILE="$RUN_DIR/$TICKET_ID-r$([ -f "$ROUND_FILE" ] && cat "$ROUND_FILE" || echo 1).diffstat"
 mapfile -t REVIEW_VERDICT_FILES < <(python3 - "$REVIEW_MATRIX" "$TICKET_ID" "$RUN_DIR" <<'PY'
 import json, os, sys
 for row in json.load(open(sys.argv[1]))['reviewers']:
@@ -178,7 +177,7 @@ AWF_FILE="$RUN_DIR/$TICKET_ID.awf-applied"      # sentinel: APPROVE-WITH-FIXES i
 PROMPT_FILE="$RUN_DIR/$TICKET_ID.prompt"
 
 if [ "$RESET_ROUND" = "1" ]; then
-  rm -f "$ROUND_FILE" "$DIFFSTAT_FILE" "$REVIEW_SNAPSHOT" "$AWF_FILE" \
+  rm -f "$ROUND_FILE" "$REVIEW_SNAPSHOT" "$AWF_FILE" \
     "$REVIEW_SET" "${REVIEW_VERDICT_FILES[@]}"
   # Reset is the documented manual-recovery entry: clear a gate lock stranded
   # by an uncatchable kill. A launcher running right now loses its exclusion —
@@ -575,9 +574,6 @@ Implement $TICKET_ID (workflow.md §"The flow" steps 2–3):
 7. When verify is green and the paths are staged, signal ready:
    touch target/runs/$TICKET_ID.verified
 
-Diff stats will be captured on transition to in-review for the must-shrink
-check on round ≥2.
-
 EOF
     if [ ! -f "target/runs/$TICKET_ID.verified" ]; then
       echo "run-task: $TICKET_ID emitted IMPLEMENT handoff. Code + verify, then re-invoke."
@@ -586,12 +582,6 @@ EOF
     rm -f "target/runs/$TICKET_ID.verified"
     check_inventory || exit 1
 
-    # Capture diff stat for must-shrink on later rounds. Scoped to the
-    # ticket's base SHA (branch-wide `git diff main` would count every
-    # sibling ticket's work too).
-    BASE_SHA="$(cat "$RUN_DIR/$TICKET_ID.start-sha" 2>/dev/null || true)"
-    [ -n "$BASE_SHA" ] || BASE_SHA="$(git rev-parse HEAD)"
-    git diff "$BASE_SHA" --stat > "$DIFFSTAT_FILE" 2>/dev/null || true
     # Also run verify.sh directly as the safety re-check (workflow.md step 3).
     echo "run-task: re-running scripts/verify.sh as the pre-review gate…"
     if bash scripts/verify.sh >> target/verify.log 2>&1; then
@@ -853,36 +843,8 @@ EOF
     if [ "$ROUND" -ge "$ROUND_CAP" ]; then
       echo "run-task: REWORK round $ROUND = cap ($ROUND_CAP) on $TICKET_ID. Escalating." >&2
       update_ticket_status "escalated"
-      invalidate_reviews
+      # Preserve the reviewer reports and manifest for the human decision.
       exit 1
-    fi
-
-    # Must-shrink check on round ≥2: compare this round's diffstat to prior.
-    if [ "$ROUND" -ge 2 ] && [ -f "$RUN_DIR/$TICKET_ID-r$((ROUND-1)).diffstat" ]; then
-      PRIOR="$RUN_DIR/$TICKET_ID-r$((ROUND-1)).diffstat"
-      CURRENT="$DIFFSTAT_FILE"
-      NONCONVERGING="$(python3 - "$PRIOR" "$CURRENT" <<'PY'
-import re, sys
-def parse(p):
-    files, added, removed = 0, 0, 0
-    for line in open(p):
-        m = re.match(r'^\s*(\d+) files? changed, (\d+) insertions?\(\+\), (\d+) deletions?\(-\)\s*$', line)
-        if m:
-            files, added, removed = int(m.group(1)), int(m.group(2)), int(m.group(3))
-    return files, added, removed
-pf, pa, pr = parse(sys.argv[1])
-cf, ca, cr = parse(sys.argv[2])
-# Non-converging = grew on all three dimensions.
-if cf > pf and ca > pa and cr > pr:
-    print(f"NON-CONVERGING: round {2} grew files ({pf}→{cf}), added ({pa}→{ca}), removed ({pr}→{cr}) simultaneously")
-PY
-)"
-      if [ -n "$NONCONVERGING" ]; then
-        echo "run-task: $NONCONVERGING. Escalating (scope creep in fix's clothes)." >&2
-        update_ticket_status "escalated"
-        invalidate_reviews
-        exit 1
-      fi
     fi
 
     # Bump round counter, transition back to in-progress for the rework.

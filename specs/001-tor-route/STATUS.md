@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-19
+**Last updated:** 2026-09-20
 
 ---
 
@@ -15,11 +15,11 @@
 |---|---|
 | pending | 55 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 137 |
 | deferred | 3 |
-| **total** | **195** |
+| **total** | **196** |
 
 ---
 
@@ -51,7 +51,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T166 | Remove shrink escalation and preserve review evidence | in-review |  | Foundation audit remediation |
 
 ---
 

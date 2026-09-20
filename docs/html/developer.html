@@ -44,7 +44,7 @@
 ├── .specify/
 │   └── memory/
 │       ├── constitution.md   ← the 8 binding principles
-│       └── review-loop.md    ← round cap, escalation menu, must-shrink
+│       └── review-loop.md    ← round cap and escalation menu
 ├── .claude/                  ← Claude Code: agents/, skills/, settings
 ├── .opencode/                ← opencode mirror: agent/, skills/
 ├── .github/
@@ -203,7 +203,6 @@ the dispatch flow between <code>run-task.sh</code> (deterministic) and
   <li><strong>Build</strong> — <code>scripts/verify.sh</code> not green after a rework round.</li>
   <li><strong>Review</strong> — REWORK round cap hit, or <code>ESCALATE</code> verdict.</li>
   <li><strong>Redteam</strong> — <code>FINDINGS</code> from <code>stargate-redteam</code> (privacy-critical tickets only).</li>
-  <li><strong>Must-shrink</strong> — a rework round grew files+added+removed simultaneously without a citable mandate.</li>
 </ul>
 
 <h2>CI</h2>

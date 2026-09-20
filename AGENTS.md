@@ -21,7 +21,7 @@ privacy-first. License: Apache 2.0.
 | `.specify/memory/constitution.md` | **Binding.** 8 principles; fix conflicting code/specs first; policy changes require governed amendment. |
 | `THREAT-MODEL.md` | Per-deployment-mode and per-route threat models. A change touching threat-model surfaces updates this **in the same PR**. |
 | `CONTRIBUTING.md` | Workflow, code style per plane, PR norms, AI-assisted-workflow doctrine. |
-| `.specify/memory/review-loop.md` | Per-task review loop: round cap, escalation menu, must-shrink. |
+| `.specify/memory/review-loop.md` | Per-task review loop: round cap and escalation menu. |
 | `docs/process/workflow.md` | The lifecycle + procedure every ticket follows (skills are procedure-only thin wrappers around this). |
 | `docs/process/ticket-template.md` | The YAML frontmatter schema for executable work units. |
 | `specs/NNN-feature/` | Feature specs, plans, contracts, and tickets. |
@@ -69,7 +69,7 @@ Every non-trivial change is **spec-driven** and **ticket-driven**:
    The future `/run` autopilot wraps `run-task.sh` and feeds the handoff
    prompts back to itself unattended, stopping only on bright-line conditions.
 
-Full procedure: `docs/process/workflow.md`. Round cap, must-shrink, escalation
+Full procedure: `docs/process/workflow.md`. Round cap and escalation
 menu: `.specify/memory/review-loop.md`.
 
 ## Working doctrine (from CONTRIBUTING.md — applies to every change)

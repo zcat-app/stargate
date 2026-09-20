@@ -41,21 +41,17 @@ For one task `[ID]` from `specs/NNN-*/tasks.md`:
      round cap below.
    - `ESCALATE` → stop; surface the menu (below) to the human. Do not proceed.
 
-## Round cap and must-shrink
+## Round cap
 
 - **Round cap = 2** rework rounds (3 for a task explicitly marked high
   complexity/risk). Hitting the cap fires the escalation menu — it is not a
   licence to keep going.
-- **Must-shrink:** each rework round should converge. If a fix-only round grows
-  on files touched **and** lines added **and** lines removed *simultaneously*,
-  that is scope creep wearing a fix's clothes — flag it (`non-converging`)
-  unless a prior review item explicitly mandated the growth.
-
 ## Escalation menu (the human decides; the agent never picks)
 
 When the round cap is hit or the reviewer returns `ESCALATE`, present exactly
 these five options and **stop**. For an unattended routine, this is the moment
 to open a PR / notification for human review rather than to push further.
+Escalation must preserve the reviewer reports and review manifest on disk.
 
 1. **refine** — the acceptance criteria were ambiguous or wrong-grained.
    Rewrite the task's acceptance, or run `/speckit-clarify` on the spec, then

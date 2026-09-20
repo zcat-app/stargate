@@ -115,13 +115,6 @@ above. (The milestone-wide `stargate-redteam` sweep — e.g. ticket T078 —
 remains the deep adversarial pass over the whole branch; it does not gate
 individual tickets.)
 
-**MUST-SHRINK** (round ≥ 2 only) — a fix-only round that grows on files
-**and** +lines **and** −lines simultaneously vs the prior round's diffstat
-is FAIL, unless the growth is mandated by a prior REWORK item or an accepted
-redteam finding cited in the commit message. Holding equal or shrinking on
-any one dimension is convergent. `scripts/run-task.sh` does this check
-mechanically; your job is to confirm or override its verdict.
-
 **NO-DEFENSIVE-CODE** (inside trust boundaries). Per the working doctrine in
 `CONTRIBUTING.md §"Working doctrine"`: validation belongs at system edges
 (external input, config parsing, deserialization, IPC, file I/O); inside

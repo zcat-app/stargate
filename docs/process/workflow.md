@@ -7,7 +7,7 @@ truth for the procedure.
 
 The verbatim Constitution principles live in
 [`.specify/memory/constitution.md`](../../.specify/memory/constitution.md);
-the per-task review loop (round cap, escalation menu, must-shrink) lives in
+the per-task review loop (round cap and escalation menu) lives in
 [`.specify/memory/review-loop.md`](../../.specify/memory/review-loop.md). If
 this document conflicts with either, those win — flag the drift and stop.
 
@@ -19,7 +19,7 @@ They defer to it on any conflict.
 
 1. `.specify/memory/constitution.md` — binding principles.
 2. `THREAT-MODEL.md` — per-route/per-mode threat model.
-3. `.specify/memory/review-loop.md` — round cap, must-shrink, escalation menu.
+3. `.specify/memory/review-loop.md` — round cap and escalation menu.
 4. `docs/process/workflow.md` (this file) — lifecycle + procedure.
 5. `docs/process/ticket-template.md` — YAML frontmatter schema.
 6. `docs/process/analysis.md` — the analyze gate (planned; not yet authored).
@@ -171,10 +171,6 @@ feature branch squash-merges to `main` at milestone close.**
    | `REWORK` (round 1) | Address only the named items; re-`verify`; re-review. |
    | `REWORK` (round 2 = cap) / `ESCALATE` | STOP. Surface the menu (below). **You** decide. |
 
-   **Must-shrink:** every rework round must converge. Growth along **all
-   three** of files-touched, lines added, lines removed simultaneously vs the
-   prior round is scope creep — `run-task.sh` flags it automatically unless a
-   prior REWORK item mandated the growth.
 7. **Commit** — `run-task.sh` creates the focused commit on the feature
    branch at APPROVE (one commit per ticket: `Implement <feature>: T-NNN:
    <imperative summary ≤72 chars>` + the §Context paragraph + a

@@ -13,9 +13,9 @@ target/
 *.class
 *.jar
 
-# Per-ticket run state (round counters, diff stats, captured review verdicts).
+# Per-ticket run state (round counters and captured review verdicts).
 # Lives under target/ which is already ignored; this comment is the contract.
-# scripts/run-task.sh reads/writes target/runs/<id>*.{round,diffstat,verdict}.
+# scripts/run-task.sh reads/writes target/runs/<id>*.{round,verdict}.
 
 # Session handoffs and per-ticket outlines — local working notes, never committed.
 # scripts/handoff.sh writes here; the absence from git is the point (handoffs

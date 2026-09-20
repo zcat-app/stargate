@@ -435,6 +435,9 @@ for verdict in REWORK ESCALATE; do
   assert '[ "$rt_rc" -ne 0 ]' "S7-cap: gate $verdict stops"
   assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = escalated ]' "S7-cap: escalated"
   assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S7-cap: no commit"
+  assert '[ -s target/runs/T305.review-glm.verdict ] && [ -s target/runs/T305.review-astra.verdict ]' \
+    "S7-cap: $verdict preserves both reviewer reports"
+  assert '[ -s target/runs/T305.review-set ]' "S7-cap: $verdict preserves the manifest"
 done
 
 # ===========================================================================
@@ -511,6 +514,27 @@ assert '[ "$rt_rc" -eq 0 ]' "S10b: REWORK r1 exits 0 (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T319-fixture.md status)" = in-progress ]' \
   "S10b: status -> in-progress after REWORK r1"
 assert '[ "$(cat target/runs/T319.round)" = 2 ]' "S10b: round bumped to 2"
+
+# Diff growth does not itself escalate. The old must-shrink rule would reject
+# this round even though the reviewer asked for the additional material.
+setup_sandbox s10d
+write_ticket T326 "rework growth allowed" false in-review >/dev/null
+sed -i 's/^round_cap: 2$/round_cap: 3/' specs/001-testfeat/tickets/T326-fixture.md
+commit_all "add T326 ticket"
+git checkout -q -b 001-testfeat main
+mkdir -p target/runs
+echo 2 > target/runs/T326.round
+printf '1 file changed, 1 insertion(+), 1 deletion(-)\n' > target/runs/T326-r1.diffstat
+printf '2 files changed, 2 insertions(+), 2 deletions(-)\n' > target/runs/T326-r2.diffstat
+run_task T326
+gate_verdict T326 REWORK 'add required evidence'
+run_task T326
+assert '[ "$rt_rc" -eq 0 ]' "S10d: growth during rework does not escalate (got $rt_rc)"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T326-fixture.md status)" = in-progress ]' \
+  "S10d: required rework proceeds despite larger diff"
+assert '[ "$(cat target/runs/T326.round)" = 3 ]' "S10d: round advances normally"
+assert '! grep -Eiq "must.?shrink|non-converging|convergence \(rework" "$REPO_ROOT/.claude/agents/stargate-review.md" "$REPO_ROOT/.opencode/agent/stargate-review.md"' \
+  "S10d: active reviewer roles cannot restore the removed growth rule"
 
 # ===========================================================================
 # Scenario 10c: APPROVE-WITH-FIXES — two-step, fail-closed

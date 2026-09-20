@@ -103,11 +103,6 @@ is not lost.
 6. **Correctness.** Logic errors, unhandled errors, wrong boundary conditions,
    resource leaks, nil/null hazards at trust *edges*. Do not demand defensive
    checks *inside* trust boundaries — validate at edges, trust inside.
-7. **Convergence (rework rounds only).** If this is a rework round, compare to
-   the prior round's diffstat. Growth on files **and** lines added **and**
-   lines removed simultaneously, without a prior review item mandating it, is
-   `non-converging` (a candidate for ESCALATE).
-
 ## Security lane — the adversarial checklist, same pass
 
 Audit the diff against `THREAT-MODEL.md`'s commitments and the Constitution.
