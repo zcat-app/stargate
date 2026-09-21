@@ -1,15 +1,15 @@
 ---
 id: "T164"
 title: "Enforce the sanitized Tor observer boundary"
-status: "pending"
+status: pending
 created: "2026-09-19"
-last_updated: "2026-09-19"
+last_updated: 2026-09-21
 source: "specs/001-tor-route/tickets/T138-investigate-tor-observer-authority.md"
 phase: "Foundation audit remediation"
 story: "-"
 blocked_by: ["T138", "T162"]
 parallel: false
-files_budget: 16
+files_budget: 24
 privacy_critical: true
 complexity: "high"
 risk: "high"
@@ -92,3 +92,10 @@ are owned by T165/T155 or later governed work.
 The observer is trusted for its narrow Tor-facing capability, but a compromised
 CP must not be able to reach that capability. A health endpoint must not grow
 into a command broker.
+
+The high-complexity pre-implementation outline at
+`specs/.handoffs/T164-OUTLINE.md` found the original 16-file budget too small
+for the mandatory observer, key provisioning, contract tests, Compose
+boundary, and same-change threat-model update. The 24-file budget reflects
+that grounded inventory; the acceptance and out-of-scope boundaries are
+unchanged. The outline was refined before production code or test edits.
