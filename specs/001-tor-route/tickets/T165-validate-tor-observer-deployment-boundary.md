@@ -1,7 +1,7 @@
 ---
 id: "T165"
 title: "Validate Tor observer deployment and consumers"
-status: in-progress
+status: done
 created: "2026-09-19"
 last_updated: 2026-09-21
 source: "specs/001-tor-route/tickets/T138-investigate-tor-observer-authority.md"
@@ -22,7 +22,7 @@ spec_refs:
 decision_refs: []
 remediates: "T138"
 tests_first: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-21, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

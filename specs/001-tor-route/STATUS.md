@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 52 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 147 |
+| done | 148 |
 | deferred | 3 |
 | **total** | **203** |
 
@@ -32,6 +32,8 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
 | T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
+| T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
+| T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T141 | Pin CI Actions and agent installation dependencies | Foundation audit remediation | ✓ |  |
 | T143 | Retire obsolete Java token-verifier constants | Foundation audit remediation | ✓ |  |
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
@@ -51,9 +53,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T165 | Validate Tor observer deployment and consumers | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -69,7 +69,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_147 ticket(s) done._
+_148 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -212,6 +212,7 @@ _147 ticket(s) done._
 - T162 — Implement host-loopback DP with unix-socket sidecar fabric
 - T163 — Verify packet-level topology boundaries with capture controls
 - T164 — Enforce the sanitized Tor observer boundary
+- T165 — Validate Tor observer deployment and consumers
 - T166 — Remove shrink escalation and preserve review evidence
 - T167 — Repair overlapping read-only control-plane mounts
 - T168 — Keep data-plane egress closed across owner-rule loss
