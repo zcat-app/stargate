@@ -41,8 +41,17 @@ coordination, and receive-only INT/TERM/KILL from the trusted `unconfined` and
 `runc` host peers. Ordinary UID and PID-namespace checks still apply. It grants
 no signal sending to other profiles and no additional IP or Unix-file access.
 T168 refines T163's former owner-rule-loss admission requirement without expanding
-Constitution III's actor/traffic permissions. T163 retains the cumulative and
-physical-host packet evidence obligation.
+Constitution III's actor/traffic permissions. T163 requires cumulative packet
+evidence from the actual Local Compose deployment namespaces on an independently
+booted Linux host, which may be bare metal or a virtual machine. Evidence
+identifies the kernel, runtime, namespace and capture interfaces. VM evidence
+establishes the measured guest deployment boundary; it does not establish
+bare-metal, physical-NIC, hypervisor or untested kernel/architecture behavior.
+Source/egress positive controls, per-family validation or explicit refusal,
+required-confinement failure and recovery, supported restart paths and
+enforcing-profile signal/lifecycle checks remain mandatory. The maintainer
+approved this evidence-scope refinement on 2026-09-21; T163 records the decision
+and measured environment. No application-plane permission changes.
 
 **T138 authority refinement (T162 fabric landed; observer pending T164):** the CP MUST NOT hold the
 Tor control cookie, the Tor-cookie supplementary group, or a network path to raw Tor control.

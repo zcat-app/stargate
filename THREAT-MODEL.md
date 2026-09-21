@@ -262,7 +262,7 @@ in their own namespaces. Sidecar endpoints have an enforced caller/port matrix; 
 cannot use arbitrary public TCP/UDP/DNS. T134 compares compliant designs. Host publication
 alone, `STARGATE_IN_CONTAINER` and no-masquerade are insufficient evidence.
 
-**T162 deployment mechanism (cumulative evidence pending T163):** the local DP uses the host
+**T162 deployment mechanism (T163 measured scope below):** the local DP uses the host
 network namespace and binds `127.0.0.1:8881` through the strict loopback check;
 the T125 wildcard exception is removed. The CP has `network_mode: none`; Tor alone
 has bridge egress. The installer stops a previously running DP before replacing
@@ -275,8 +275,8 @@ host abstract-forwarder channel shown in T134 A.12. An install/load/verify
 failure refuses DP startup; the DP has no automatic restart policy. The
 host administrator and Docker daemon are trusted to retain the profile and
 Unix fabric policy. T168 adds the process boundary below; owner rules remain
-installer-required defense in depth. Cumulative packet-level closure still
-requires T163's complete capture matrix.
+installer-required defense in depth. T163's complete capture matrix below
+records the measured Local guest boundary.
 
 **T168 process mechanism:** before proxy or IPC serving, the static pure-Go DP
 binds an ordinary TCP loopback listener with MPTCP disabled. It rejects other
@@ -365,8 +365,40 @@ The host had no routed IPv6 path; IPv6 loopback/kernel denial tests passed and
 `::1:8881` refused admission. No routed IPv6, physical-host, arm64 runtime or
 ABI >= 7 runtime result is claimed. Contract tests separately prove authenticated
 Unix forwarding from retained state with CP absent and Unix socket recreation.
-Evidence and earlier failed fixture attempts are recorded in T168. T163's
-cumulative/physical-host obligation and the human release review remain open.
+Evidence and earlier failed fixture attempts are recorded in T168. At that
+checkpoint T163's cumulative/physical-host obligation remained open. The later
+approved VM scope and measurements follow; human release review remains required.
+
+**T163 cumulative measured result (2026-09-21, independently booted Ubuntu VM):**
+the maintainer approved the complete Linux VM as the deployment host under the
+revised foundation contract. The guest has its own Linux 6.8.0-139-generic kernel,
+Docker 29.1.3 daemon, AppArmor enforcement and deployment namespaces (amd64,
+Landlock ABI 4). Run `T163-20260921-024737` passed with the committed T171 runner:
+all 29 source/egress/loopback captures were ready, decoded and closed cleanly
+with zero kernel drops. Unrestricted TCP/UDP/DNS controls were visible; no
+marked DP traffic escaped. The real listener and Tor Unix caller matrix passed,
+including socket recreation. Loopback forwarding and resolver mediation failed
+for the DP probes while their unrestricted controls worked. Each owner-jump
+loss, DP restart with both jumps absent, re-init, and required-confinement
+failure/recovery phase passed. T170 separately proved enforcing-profile startup,
+self-signal compatibility and trusted-host stop/restart behavior on this VM.
+
+The DP has no Docker embedded-resolver attachment. Controlled resolver denial,
+including with auxiliary owner rules absent, establishes closure of T125's
+accepted embedded-DNS channel on this measured replacement Local boundary.
+The separate legacy experiment made both TCP connects time out while its source
+and veth captures distinguished one routed SYN from zero filtered SYNs; its
+owner DROP counter was one. Timeout alone remains non-discriminating.
+
+The [T163 evidence report](specs/001-tor-route/analysis/T163-packet-evidence.md)
+binds these results to source, image, helper and capture identities. Actual DP
+startup/admission/restart observations are distinct from attack helpers invoking
+production confinement as UID 5102 in its namespace. SOCKS method admission
+does not prove authenticated destination bytes or a Tor circuit. The guest had
+no routed IPv6 path: `::1` admission was refused, and IPv6 loopback resolver
+controls/denial passed. Routed IPv6, arm64, newer Landlock ABIs, physical NICs,
+hypervisor isolation, LAN/VPS, browser fallback and release conformance remain
+unmeasured here. T164/T165 and T155 retain their separate closure obligations.
 
 **Protects against**:
 
@@ -418,8 +450,8 @@ cumulative/physical-host obligation and the human release review remain open.
   browser.
 - T134's prototype saw on-link ARP while filtering IP egress. Owner-match
   OUTPUT rules do not gate L2 ARP; the TCP/UDP/IP packet claim does not
-  include ARP or claim to suppress neighbor discovery. The physical-host
-  capture remains pending (T163).
+  include ARP or claim to suppress neighbor discovery. T163's VM captures
+  establish the guest IP boundary above; physical-NIC behavior is unmeasured.
 
 **Concrete attacks not mitigated**:
 
@@ -1101,8 +1133,9 @@ deployment attempts measured a CP startup mount failure, not packet isolation;
 T167 repaired the mount and confirmed application-start reachability. T163's
 nested-host packet probes passed, but its original rule-absence probe measured
 continued SOCKS5 admission. T168 implements mandatory process confinement;
-its measured scope is recorded in §3.1 and its ticket. Physical-host packet
-evidence remains pending under T163. T138's
+its measured scope and T163's complete VM packet result are recorded in §3.1.
+The maintainer-approved VM evidence closes the measured Local embedded-resolver
+channel; it makes no physical-NIC or untested-environment claim. T138's
 sanitized observer remains absent: CP cannot observe Tor health until T164
 adds it, and T165 validates the caller matrix. These pending items are not
 accepted conformance. T155 consumes their closure. A bridge-visible packet

@@ -41,6 +41,46 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-09-21 — Retire T125 embedded-resolver acceptance on the measured Local boundary (T163)
+
+**Decision and authority.** Retire only residual (b), the embedded-DNS side
+channel accepted in the 2026-09-07 T125 entry below, for the measured replacement
+Local deployment. T162 already withdrew the wildcard/no-masquerade posture in
+the 2026-09-20 entry. T168 supplies mandatory process confinement, T170 repairs
+enforcing-profile signal/lifecycle compatibility, and T163 supplies cumulative
+packet evidence. This does not accept the former channel under Constitution III
+or change any other historical acceptance.
+
+After receiving the measured result and proposed replacement wording, the
+maintainer replied **"vm is approved"** on 2026-09-21. T163's contract now accepts
+an independently booted Linux VM or bare-metal host, with the actual deployment
+namespaces and every capture, per-family, restart and failure/recovery control
+retained. The alternative was waiting for separate physical hardware. This is
+an evidence-scope refinement, not permission to change DP/CP traffic or bypass
+confinement. Physical-NIC, hypervisor and untested kernel/architecture behavior
+remain outside the VM result; the constitution and external release review
+obligations remain binding.
+
+**Measured closure.** The DP has no Docker embedded-resolver attachment. On the
+Ubuntu Linux 6.8.0-139-generic amd64 guest (Landlock ABI 4), the complete
+`T163-20260921-024737` run passed all 29 capture-validity controls with zero
+kernel drops. Unrestricted TCP/UDP/DNS controls were visible; DP probes emitted
+no marked traffic and could not use the working loopback forwarder/resolver.
+The owner-loss, Compose restart, re-init and mandatory-confinement failure/recovery
+phases passed. T170 also verified enforcing-profile startup and host lifecycle
+signals. The [measured report](specs/001-tor-route/analysis/T163-packet-evidence.md)
+records source/image/capture identities, controls, commands and failed attempts;
+THREAT-MODEL §3.1/§5.8 retains the precise scope.
+
+**Remaining obligations.** No routed IPv6, physical hardware, browser/Tor-circuit
+or release result follows. IPv6 received explicit admission refusal and loopback
+resolver controls/denial. T164/T165 own sanitized observer closure; T155 owns
+integration, and the release gates remain. Re-evaluate this measured closure
+when the DP confinement, namespace/fabric topology, enforcement profile or
+supported kernel/architecture changes; T155 consumes that evidence.
+
+---
+
 ## 2026-09-20 — Withdraw T125 wildcard/no-masquerade local posture (T162)
 
 **Decision.** The T125 `STARGATE_IN_CONTAINER` wildcard exception and the
@@ -161,6 +201,9 @@ the T061 round-1 codereview (Minor, record-only); filed as a supersession
 because this log's entries are immutable once committed.
 
 ## 2026-09-07 — FR-010 bind policy amended to a container-boundary reading; host loopback-only exposure unchanged (T125 live-run finding, ESCALATE → amend-spec, user-approved)
+
+Superseded by: [T163 measured Local embedded-resolver closure](#2026-09-21--retire-t125-embedded-resolver-acceptance-on-the-measured-local-boundary-t163)
+for residual (b) only; the original record below is preserved.
 
 **Finding (accepted, Major — the local profile's core path was
 architecturally unreachable as speced).** FR-010's literal reading (the

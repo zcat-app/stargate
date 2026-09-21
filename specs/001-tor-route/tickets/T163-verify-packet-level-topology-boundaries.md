@@ -1,7 +1,7 @@
 ---
 id: "T163"
 title: "Verify packet-level topology boundaries with capture controls"
-status: pending
+status: done
 created: "2026-09-13"
 last_updated: 2026-09-21
 source: "specs/001-tor-route/analysis/T134-local-topology.md"
@@ -22,7 +22,7 @@ decision_refs:
   - "specs/001-tor-route/analysis/T134-local-topology.md"
 remediates: "T134"
 tests_first: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-21, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -72,7 +72,8 @@ gap language the repair retires.
   evidence breadth and its documented invocation path.
 - **Residue:** live Tor circuit behaviour, real-browser fallback and integrated
   foundation validation stay with T126/T157/T155 and the release-cadence checks;
-  physical-host proof is bounded by the environments where the suite is run.
+  evidence is bounded by the measured host environment. The approved VM scope
+  below makes no bare-metal, physical-NIC or hypervisor claim.
 
 ## Acceptance
 
@@ -111,6 +112,9 @@ gap language the repair retires.
    and SECURITY-DECISIONS.md records the retired T125 DNS-side-channel acceptance;
    no other posture claims change.
 7. `bash scripts/verify.sh` GREEN on the exact candidate.
+8. Apply the maintainer-approved VM evidence scope recorded below consistently
+   in the foundation contract, plan and measured threat model. Preserve all
+   packet controls and failure/recovery assertions; name untested environments.
 
 ## Out-of-scope
 
@@ -218,7 +222,7 @@ up. T171 separates bounded helper startup from socket/fixture timing; T163
 resumes against that harness repair. Its cumulative result and environment
 scope remain to be established.
 
-## Complete VM evidence after T171 (2026-09-21, closure pending)
+## Complete VM evidence after T171 (2026-09-21, checkpoint before scope approval)
 
 T171 landed as `3519d91` after both fresh native reviewers approved and the
 final repository gate passed (26 PASS, one release-cadence SKIP, zero FAIL).
@@ -236,3 +240,62 @@ The maintainer has been asked whether the tested full Linux VM may satisfy
 that obligation; no answer has been received. This ticket is reopened for
 completion after that decision, not marked done. The contract/plan wording,
 T125 decision retirement, final T163 review and focused commit remain pending.
+
+## Approved evidence scope and completion candidate (2026-09-21)
+
+After receiving the complete VM result and concrete replacement wording, the
+maintainer replied **"vm is approved"** in this working session. This authorizes
+the proposed independently booted Linux host scope (bare metal or VM), replacing
+the explicit physical-host obligation. The alternative was to retain that
+obligation and wait for separate hardware; none was available. The protection
+delta is evidence coverage only: actual deployment namespaces, source/egress
+positive controls, per-family validation or refusal, restart, enforcing-profile
+signal/lifecycle and required-confinement failure/recovery remain mandatory.
+No runtime permission or constitutional invariant is weakened. VM evidence
+does not prove physical-NIC, hypervisor or untested kernel/architecture behavior.
+
+The final T171 runner and new legacy experiment are byte-identical to the
+successful live runs recorded above. The versioned
+[measured report](../analysis/T163-packet-evidence.md) identifies those bytes,
+the 29 captures, controls, failures and cleanup. This ticket adds the runnable
+legacy experiment and publishes the already measured evidence; it does not
+invent a retrospective red-first result for T162. T169/T170/T171 retain their
+own failing-before-fix regressions and independent approvals.
+
+The foundation contract and plan adopt the approved wording. THREAT-MODEL
+3.1/5.8 report the measured Local guest boundary, and SECURITY-DECISIONS retires
+only T125's embedded-resolver acceptance for that replacement boundary. The
+historical decision bodies and failed runs remain intact. T164/T165 observer,
+T126/T157 browser/Tor-circuit, T155 integration and release review remain outside
+this completion. Fresh T163 verification, both native reviews and the focused
+driver commit are the remaining delivery gates.
+
+## Review round 1 disposition (2026-09-21)
+
+GLM requested deterministic coverage for the new legacy experiment (Major)
+and removal of an incidental local account path from the report (Minor).
+Astra approved. Both reports are preserved under
+`target/runs/T163-reviewed-r1/`; the driver advanced to round 2.
+
+The coverage gap was reproduced: the existing 17-test contract gate returned
+zero with a syntax error inserted into `legacy_timeout_probe.py`. A new
+`test_legacy_timeout_probe.py` imports and exercises the actual `main()` with
+privileged I/O replaced by fixtures. Its seven tests cover the positive
+result, each capture's required routed SYN and forbidden filtered SYN,
+zero/missing/malformed owner counters, non-timeout outcomes, subprocess and
+capture failures, and cleanup without publishing a success result on failure.
+Existing unittest discovery includes the new tests and import check without
+changing the gate script or the measured experiment.
+
+Five temporary mutations were each rejected by
+`bash tests/contract/compose/topology_capture_test.sh`: a syntax error,
+accepting emitted filtered SYNs, accepting a zero owner counter, parsing the
+wrong counter line, and accepting a non-timeout child outcome. The seven new
+tests pass on the original experiment; mutation logs are retained under
+`target/runs/T163-r2-evidence/`. This is retrospective regression protection
+for the evidence instrument, not a claim of red-first production remediation.
+The experiment retains its measured SHA-256
+`2fb3e82907e8ab14d8e5eb22a16c71bca57d1a2b66e9f89cc2a694fdfd68be18`;
+the packet runner and production inputs are unchanged. The report now labels
+its published cache paths as normalized to `$HOME`. Both findings are fixed;
+neither is accepted as a residual. The candidate uses all ten budgeted files.

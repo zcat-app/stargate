@@ -6,11 +6,28 @@ AppArmor, Landlock ABI >= 4, seccomp TSYNC, `tcpdump`, `ip`, IPv4/IPv6 iptables,
 owner rules and AppArmor profile, then restores the initial firewall snapshots
 and removes its project/profile. Do not run it on a workstation or a shared host.
 The tool intentionally refuses a pre-existing `stargate-dp` profile or owner rule.
+An independently booted Linux VM is an approved host for T163: it must run the
+real deployment and enforcement in its own kernel and namespaces. Record whether
+the host is a VM or bare metal; VM results do not establish physical-NIC or
+hypervisor behavior.
 
 ```sh
+set -e
 STARGATE_LIVE_E2E=1 STARGATE_DISPOSABLE_HOST=1 \
   python3 tests/live-e2e/local-topology/run.py
+
+# Acceptance 1: both connects time out; only the routed SYN is captured.
+STARGATE_LIVE_E2E=1 STARGATE_DISPOSABLE_HOST=1 \
+  python3 -B tests/live-e2e/local-topology/legacy_timeout_probe.py
 ```
+
+The timeout comparison creates a temporary veth pair and network namespace.
+An unrestricted UID reaches a peer that silently drops TCP; the DP UID hits an
+OUTPUT owner DROP before emission. Both must raise `TimeoutError`, but source
+and veth captures must see only the unrestricted SYN, and the owner counter
+must record the filtered attempt. It removes its own rules and fixture;
+evidence stays under `target/live-e2e/T163-legacy-*/`. This is retrospective
+discrimination evidence for the old probe, not a historical tests-first claim.
 
 The runner uses the real `scripts/stargate init` and Local Compose file. Its
 packet probes execute as UID 5102 in the same **host network namespace** as the
@@ -64,8 +81,9 @@ removed and SOCKS admission remained active under T162's installer-only boundary
 T168 replaces that dependency with required process confinement and refines the
 acceptance in the same reviewed change: auxiliary rule loss now requires safe
 continued service; unavailable required confinement requires refusal. The old
-failure is retained in T163's execution record. T163 remains open for cumulative
-and physical-host evidence; this scoped nested-host repair does not close it.
+failure is retained in T163's execution record. That nested-host repair alone
+did not close T163. The final independently booted VM result and approved
+evidence scope are recorded in the [T163 report][t163-evidence].
 
 If the host has no IPv6 route to `2001:db8::77`, the suite reports IPv6 as
 unsupported only after checking that `::1:8881` refuses SOCKS5 and that the
@@ -75,7 +93,9 @@ from packets addressed to documentation ranges.
 
 Captures stay in `target/live-e2e/T163-<UTC timestamp>/`. They can contain the
 test host's source IP, so keep them local and out of prompts/commits. The
-contract gate runs only the fail-closed recorder and decision selftests:
+contract gate runs the fail-closed recorder and decision selftests, including
+the legacy experiment's import, packet controls, owner-counter parsing,
+child outcomes and cleanup with privileged I/O replaced by fixtures:
 `bash tests/contract/compose/topology_capture_test.sh`. A green `verify.sh`
 without the live run proves those decision rules, not packet-level closure.
 ARP is L2 traffic outside owner-match filtering; the packet claim here covers
@@ -86,6 +106,15 @@ Docker 29.8.1 host with Linux 6.8.0-124-generic, Landlock ABI 4, amd64. All 29
 capture summaries had zero kernel drops. IPv6 had no routed egress path, so only
 its loopback/refusal results are claimed. See T168's execution record and
 `THREAT-MODEL.md` §3.1 for the measured scope and remaining T163 obligations.
+
+The final T163 VM run on 2026-09-21 passed on Ubuntu Linux 6.8.0-139-generic,
+amd64, Landlock ABI 4, Docker 29.1.3 and Compose 2.40.3. All 29 captures were
+valid with zero kernel drops, including rule-loss/restart and mandatory-feature
+failure/recovery. Routed IPv6 was unavailable; its loopback/refusal controls
+passed. The [measured report][t163-evidence] records source identities, commands,
+earlier failures, legacy-timeout discrimination and the remaining scope limits.
+
+[t163-evidence]: ../../../specs/001-tor-route/analysis/T163-packet-evidence.md
 
 ## AppArmor signal lifecycle (T170)
 

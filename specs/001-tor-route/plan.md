@@ -142,7 +142,7 @@ The constitution amended on 2026-09-12 and `contracts/foundation-boundaries.md` 
 | VI — reproducibility | Obligations remain pending T075/T109/T081; no empty comparison is PASS. |
 | VII — tests-first | Required-coverage/evidence repairs T139/T144; implementations preserve real failing-before-fix evidence. |
 | VIII — independent reviews | Amendment review in T156; foundation T155 and final T078/T079 remain required. |
-| Deployment | T162 enforces loopback and Unix fabrics; T168 adds irreversible all-thread IP confinement before serving. Owner rules remain installer-required defense in depth. T163 owns cumulative/physical-host evidence. |
+| Deployment | T162 enforces loopback and Unix fabrics; T168 adds irreversible all-thread IP confinement before serving. Owner rules remain installer-required defense in depth. T170 preserves enforcing-profile signal/lifecycle behavior. T163 records cumulative evidence from actual deployment namespaces on an independently booted Linux host, under the foundation contract's capture, family, failure/recovery and restart requirements. The maintainer approved VM evidence on 2026-09-21; the measured guest result makes no physical-NIC, hypervisor or untested-environment claim. |
 
 **Verdict: IMPLEMENTATION BLOCKED ON REMEDIATION**, not PASS (deferred). This plan specifies
 work to reach compliance; it does not waive current defects. Use `remaining-implementation-plan.md`
