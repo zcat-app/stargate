@@ -1,7 +1,7 @@
 ---
 id: "T170"
 title: "Permit Go self-signals and trusted-host DP lifecycle signals"
-status: in-progress
+status: done
 created: "2026-09-21"
 last_updated: 2026-09-21
 source: "T163 independently booted Ubuntu VM: AppArmor signal denials"
@@ -21,7 +21,7 @@ decision_refs:
   - "specs/001-tor-route/tickets/T163-verify-packet-level-topology-boundaries.md"
 remediates: "T162"
 tests_first: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-21, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

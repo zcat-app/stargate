@@ -7,8 +7,8 @@ last_updated: 2026-09-21
 source: "specs/001-tor-route/analysis/T134-local-topology.md"
 phase: "Foundation audit remediation"
 story: "-"
-blocked_by: ["T162", "T167", "T168", "T169", "T170"]
-deferred_on: "T170"
+blocked_by: ["T162", "T167", "T168", "T169", "T170", "T171"]
+deferred_on: "T171"
 deferred_reason: blocked-on-new-ticket
 parallel: false
 files_budget: 10
@@ -211,3 +211,11 @@ the production AppArmor profile. The DP could not complete confinement
 startup or be stopped by Docker until the profile was removed. T170 owns
 the focused repair; T163 resumes the full capture matrix after it lands.
 The earlier nested-host pass does not establish this host configuration.
+
+T170 landed as `f09eb30` after the live signal regression, the repository gate
+and both independent reviews passed. Subsequent VM runs reached listener and
+IPv4 packet checks, but the Python probe's combined 2.8-second launch/operation
+budget expired under emulation. The failed runs remained failures and cleaned
+up. T171 separates bounded helper startup from socket/fixture timing; T163
+resumes against that harness repair. Its cumulative result and environment
+scope remain to be established.

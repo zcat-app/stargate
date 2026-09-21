@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 54 |
-| in-progress | 1 |
+| pending | 55 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 143 |
+| done | 144 |
 | deferred | 4 |
-| **total** | **202** |
+| **total** | **203** |
 
 ---
 
@@ -47,14 +47,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
 | T164 | Enforce the sanitized Tor observer boundary | Foundation audit remediation | ✓ |  |
+| T171 | Separate topology probe launch and fixture timing | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T170 | Permit Go self-signals and trusted-host DP lifecycle signals | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -65,13 +64,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | spec-amend | T089 |
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
-| T163 | Verify packet-level topology boundaries with capture control | blocked-on-new-ticket | T170 |
+| T163 | Verify packet-level topology boundaries with capture control | blocked-on-new-ticket | T171 |
 
 ---
 
 ## Done
 
-_143 ticket(s) done._
+_144 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -216,3 +215,4 @@ _143 ticket(s) done._
 - T167 — Repair overlapping read-only control-plane mounts
 - T168 — Keep data-plane egress closed across owner-rule loss
 - T169 — Make topology probe launch independent of checkout depth
+- T170 — Permit Go self-signals and trusted-host DP lifecycle signals
