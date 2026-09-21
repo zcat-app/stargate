@@ -3,11 +3,11 @@ id: "T155"
 title: "Validate repaired foundation before feature work"
 status: "pending"
 created: "2026-09-12"
-last_updated: "2026-09-12"
+last_updated: "2026-09-21"
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
-blocked_by: ["T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T120", "T114", "T121", "T123", "T124", "T126", "T132", "T157", "T158", "T159", "T161", "T162", "T163", "T164", "T165", "T167", "T168"]
+blocked_by: ["T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T120", "T114", "T121", "T123", "T124", "T126", "T132", "T157", "T158", "T159", "T161", "T162", "T163", "T164", "T165", "T167", "T168", "T172", "T173"]
 parallel: false
 files_budget: 8
 privacy_critical: true
@@ -87,3 +87,7 @@ investigation-only completion from unblocking feature work while defects remain 
 
 Feature expansion, constitution amendments, fabricated historical tests-first evidence,
 release publication, and substituting this checkpoint for final milestone reviews.
+
+T147 migration dependency: T172 reconciles HTTP CONNECT contracts and consumer acceptance;
+T173 implements refusal with preserved authenticated SOCKS coverage and deployed evidence.
+Both must complete before this consumer runs; T147 planning completion alone is insufficient.

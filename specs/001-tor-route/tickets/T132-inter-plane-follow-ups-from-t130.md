@@ -3,11 +3,11 @@ id: T132
 title: 'Inter-plane follow-ups from T130 (re-push, ALPN pins, fakecp ALPN)'
 status: pending
 created: 2026-09-07
-last_updated: "2026-09-12"
+last_updated: "2026-09-21"
 source: hand-filed (T120 convention; T130 rounds 1–2 review follow-ups + audit plan)
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
-blocked_by: ["T130", "T139", "T135", "T137", "T148", "T156", "T159"]
+blocked_by: ["T130", "T139", "T135", "T137", "T148", "T156", "T159", "T172", "T173"]
 parallel: false
 files_budget: 6
 privacy_critical: true   # re-push semantics touch the auth-generation delivery path
@@ -88,3 +88,7 @@ Any accepted residue requires explicit maintainer disposition; it is not the def
 
 - T130's landed fix (this rides on it, does not revisit it).
 - The T123/T124 product fixes (separate, behind the T131 smoke test).
+
+T147 migration dependency: T172 reconciles HTTP CONNECT contracts and consumer acceptance;
+T173 implements refusal with preserved authenticated SOCKS coverage and deployed evidence.
+Both must complete before this consumer runs; T147 planning completion alone is insufficient.

@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 52 |
+| pending | 53 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 148 |
 | deferred | 3 |
-| **total** | **203** |
+| **total** | **205** |
 
 ---
 
@@ -32,14 +32,12 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
 | T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
-| T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T141 | Pin CI Actions and agent installation dependencies | Foundation audit remediation | ✓ |  |
 | T143 | Retire obsolete Java token-verifier constants | Foundation audit remediation | ✓ |  |
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
 | T145 | Test Maven wrapper checksum enforcement | Foundation audit remediation |  |  |
 | T146 | Correct init timeout diagnosis and isolate its fixture | Foundation audit remediation |  |  |
-| T147 | Resolve HTTP CONNECT first-party isolation | Foundation audit remediation | ✓ |  |
 | T148 | Reconcile peer certificate validity policy | Foundation audit remediation | ✓ |  |
 | T149 | Finalize byte accounting after both forwarding pumps | Foundation audit remediation | ✓ |  |
 | T150 | Define truthful mixed-tab route indicator semantics | Foundation audit remediation | ✓ |  |
@@ -53,7 +51,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T147 | Resolve HTTP CONNECT first-party isolation | in-review | ✓ | Foundation audit remediation |
 
 ---
 

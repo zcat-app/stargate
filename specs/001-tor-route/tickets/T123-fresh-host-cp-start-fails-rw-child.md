@@ -3,11 +3,11 @@ id: T123
 title: 'Fresh-host CP start fails: rw child mount under :ro volume parent'
 status: pending
 created: 2026-09-07
-last_updated: "2026-09-12"
+last_updated: "2026-09-21"
 source: hand-filed (T120 convention)
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
-blocked_by: ["T139", "T134", "T138", "T156", "T162", "T164", "T165"]
+blocked_by: ["T139", "T134", "T138", "T156", "T162", "T164", "T165", "T172", "T173"]
 parallel: true
 files_budget: 4
 privacy_critical: true
@@ -120,3 +120,7 @@ Hand-filed by the T059 session (2026-09-07) per the surgical-changes
 doctrine: the boot gap is real and user-facing (every fresh-host operator
 hits it), but fixing it inside T059 would expand that ticket's scope from
 test-authoring to deployment redesign.
+
+T147 migration dependency: T172 reconciles HTTP CONNECT contracts and consumer acceptance;
+T173 implements refusal with preserved authenticated SOCKS coverage and deployed evidence.
+Both must complete before this consumer runs; T147 planning completion alone is insufficient.
