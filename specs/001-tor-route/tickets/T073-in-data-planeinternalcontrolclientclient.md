@@ -33,7 +33,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > In `data-plane/internal/controlclient/client.go` (from T045), wire the `SidecarEvent` consumer to treat all events as **advisory** status per data-model.md §2 (Principle II — events MUST NOT gate admission and MUST NOT short-circuit the dial). The forwarding path ALWAYS dials the upstream; events feed the audit journal (`sidecar_healthy` / `sidecar_unhealthy` rows per §4) and status reporting only. A `STOPPED`/`CRASHED` event is recorded in the audit log but the DP still dials `tor:9050` — a stale or forged event cannot suppress a dial that would succeed. `HEALTHY`/`STARTED`/`RESTARTED` update advisory status only.
 
@@ -61,3 +61,7 @@ implementation follow-ups. Existing behavior needs evidence, not an artificial r
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Keep SidecarEvent status advisory under Principle II. Verify with authenticated SOCKS5 that STOPPED/CRASHED/stale events and CP outage do not suppress a reachable Tor dial; no HTTP CONNECT admission is relied upon.

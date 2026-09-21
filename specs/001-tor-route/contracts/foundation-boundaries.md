@@ -103,12 +103,14 @@ namespaces with positive capture controls; NAT absence and connect timeout are i
 
 ## Negotiation and isolation — T136/T147
 
-The CONNECT/SOCKS envelope can parse only authentication, destination and isolation fields
+The supported SOCKS5 envelope can parse only authentication, destination and isolation fields
 specified in its protocol contract, with bounded input. Payload/TLS/application headers remain
-opaque. Generated failures contain fixed public vocabulary and no echoed peer/destination text.
-No supported ingress may forward without the required isolation identity. The existing CONNECT
-NO_AUTH upstream behavior is a defect, not an exception. T147 must select a bounded identity
-transport or explicit refusal/migration; it cannot parse application headers to infer first party.
+opaque. Generated SOCKS failures contain fixed public vocabulary and no echoed peer/destination
+text. No supported ingress may forward without the required isolation identity. T147 selected
+refusal of HTTP CONNECT on Tor port 8881: demux byte `C` closes with zero response bytes, no
+authentication, no counter increment and no upstream socket. No HTTP negotiation, error template,
+fallback or configuration bypass is supported there. The existing HTTP `Tor.Dial`/NO_AUTH path
+conflicts with this target until T173; it cannot parse application headers to infer first party.
 
 A partition contains authenticated device identity, browser-profile identity and initiating site.
 DNS site boundaries use a pinned offline public/private suffix source (or a documented equivalent

@@ -254,7 +254,7 @@ message RouteCounter {
 **Tests**:
 
 1. `tests/contract/socks5/auth_failure_counter_test.go` (T025c) —
-   probes `GetStatus` before and after 200 auth-failure attempts;
+   probes `GetStatus` before and after 200 SOCKS auth-failure attempts, plus HTTP `C` refusal probes;
    asserts both counter deltas are exactly zero.
 2. `tests/contract/socks5/auth_passed_counter_test.go` (T025d) —
    probes `GetStatus` before and after 100 auth-passing CONNECTs each
@@ -266,7 +266,8 @@ message RouteCounter {
    `request_count` delta is exactly 60 and `byte_count` delta is
    exactly zero. Gates the FR-008 / data-model.md §3 asymmetry that
    route failures DO increment `request_count` post-auth while their
-   synthesised error-template bodies do NOT contribute to `byte_count`.
+   SOCKS failure replies do NOT contribute to `byte_count`. HTTP `C` refusal
+   does not authenticate, dial or change either counter.
 4. No-side-effect: between two `GetStatus` calls separated by ≥1 s of
    wall-clock idle (no inbound port-8881 traffic), both counter values
    are identical — verifies `GetStatus` itself does not increment

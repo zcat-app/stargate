@@ -18,7 +18,7 @@ spec_refs:
   - ".specify/memory/constitution.md Principles I/II/III/V/VII/VIII"
   - "specs/001-tor-route/spec.md FR-005–FR-009"
   - "specs/001-tor-route/contracts/foundation-boundaries.md §Negotiation and isolation"
-  - "specs/001-tor-route/contracts/socks5-auth.md §HTTP CONNECT path"
+  - "specs/001-tor-route/contracts/socks5-auth.md §HTTP CONNECT refusal"
 decision_refs:
   - "specs/001-tor-route/tickets/T147-resolve-connect-isolation-contract.md §Investigation and recommendation"
 remediates: "T043"

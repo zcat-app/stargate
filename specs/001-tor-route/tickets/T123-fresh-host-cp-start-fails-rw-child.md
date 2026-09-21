@@ -124,3 +124,7 @@ test-authoring to deployment redesign.
 T147 migration dependency: T172 reconciles HTTP CONNECT contracts and consumer acceptance;
 T173 implements refusal with preserved authenticated SOCKS coverage and deployed evidence.
 Both must complete before this consumer runs; T147 planning completion alone is insufficient.
+
+## T172 Tor ingress consumer constraint
+
+After T173, exercise this ticket's CP/startup, reconnect and outage outcomes using authenticated SOCKS5 CONNECT with a complete partition username. HTTP first byte `C` must stay silent and must not authenticate, increment counters or dial. Preserve CP-independent SOCKS byte forwarding and the pending-delivery semantics; T173 remains a direct blocker.

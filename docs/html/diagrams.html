@@ -157,7 +157,7 @@ happens; the data plane is a <em>dumb router</em> (Constitution Principle I).</p
     <rect class="box box-dp" width="200" height="170" rx="6"/>
     <text x="100" y="32" text-anchor="middle" class="label">Data plane (Go)</text>
     <text x="100" y="52" text-anchor="middle" class="sub">dumb router</text>
-    <text x="100" y="68" text-anchor="middle" class="sub">SOCKS5 / CONNECT :8881</text>
+    <text x="100" y="68" text-anchor="middle" class="sub">Tor SOCKS5 :8881</text>
     <text x="100" y="100" text-anchor="middle" class="sub">no payload parsing</text>
     <text x="100" y="116" text-anchor="middle" class="sub">no TLS termination</text>
     <text x="100" y="132" text-anchor="middle" class="sub">no DNS resolution</text>
@@ -193,7 +193,7 @@ happens; the data plane is a <em>dumb router</em> (Constitution Principle I).</p
 
   <!-- Extension → Data plane (route choice reflected as port) -->
   <path class="edge-flow" d="M 160 210 C 220 210, 220 230, 280 230" marker-end="url(#arrow)"/>
-  <text x="200" y="200" class="sub">SOCKS5/CONNECT</text>
+  <text x="200" y="200" class="sub">Tor SOCKS5</text>
 
   <!-- Data plane → Sidecar -->
   <path class="edge-flow" d="M 480 230 L 580 210" marker-end="url(#arrow)"/>
@@ -378,7 +378,7 @@ component sees and what it does NOT see (the privacy-critical boundary).</p>
   <g id="stage-dp" transform="translate(330,140)">
     <rect class="box box-dp" width="140" height="80" rx="6"/>
     <text x="70" y="35" text-anchor="middle" class="label">Data plane</text>
-    <text x="70" y="55" text-anchor="middle" class="sub">SOCKS5/CONNECT</text>
+    <text x="70" y="55" text-anchor="middle" class="sub">Tor SOCKS5</text>
   </g>
   <g id="stage-sidecar" transform="translate(510,140)">
     <rect class="box box-side" width="120" height="80" rx="6"/>
@@ -647,10 +647,10 @@ keeping them on a gallery page.</p>
       desc: 'User types a URL or clicks a link. The browser prepares a connection.' },
     { title: 'Extension intercepts', flows: ['flow1'],
       desc: 'The extension intercepts the request and decides the route (Tor, I2P, Nym, or Direct) based on per-tab or per-site rules.' },
-    { title: 'SOCKS5/CONNECT to data plane', flows: ['flow1', 'flow2'],
-      desc: 'Browser opens a SOCKS5 or HTTP CONNECT to 127.0.0.1:8881 with the bearer token.' },
+    { title: 'SOCKS5 to data plane', flows: ['flow1', 'flow2'],
+      desc: 'For Tor, the browser opens authenticated SOCKS5 to 127.0.0.1:8881 with a bearer token and first-party isolation username. HTTP CONNECT is a T172 refusal target pending T173.' },
     { title: 'Data plane authenticates', flows: ['flow1', 'flow2'],
-      desc: 'Data plane verifies the Argon2id token hash. On failure: AUTH_REQUIRED, no per-request log. On success: forward to sidecar.' },
+      desc: 'Data plane verifies the HMAC bearer verifier. SOCKS auth failures return only two bytes with no per-request log; authenticated requests forward to Tor.' },
     { title: 'Bytes to sidecar', flows: ['flow1', 'flow2', 'flow3'],
       desc: 'Data plane forwards raw bytes to the configured sidecar (tor:9050 for Tor route). No inspection, no logging, no modification.' },
     { title: 'Sidecar reaches upstream', flows: ['flow1', 'flow2', 'flow3', 'flow4'],

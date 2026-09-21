@@ -32,7 +32,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > Contract test for `WatchEvents` failure transitions (`UNHEALTHY`/`STOPPED`/`CRASHED`/`RESTARTED` for `tor`, fixed-vocabulary `detail`) in `tests/contract/control-grpc/watch_events_failure_transitions_test.go` — per `contracts/control-grpc.md` §"WatchEvents · Contract" v1 `(kind, detail)` pairing table:
 
@@ -53,3 +53,7 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Preserve all finite WatchEvents kind/detail and reconnect assertions. Add/retain an authenticated SOCKS5 dial control proving STOPPED/CRASHED/stale events and CP disconnect cannot suppress a reachable upstream dial; no HTTP ingress is used.

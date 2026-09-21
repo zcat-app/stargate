@@ -1,6 +1,6 @@
 ---
 id: T067
-title: 'Contract test `tests/contract/error-template/route_timeout_test.go`'
+title: "Test SOCKS5 ROUTE_TIMEOUT failure reply"
 status: pending
 created: 2026-07-04
 last_updated: "2026-09-12"
@@ -24,7 +24,7 @@ redteam_findings: []
 clarity_check: {}
 ---
 
-# T067: Contract test `tests/contract/error-template/route_timeout_test.go`
+# T067: Test SOCKS5 ROUTE_TIMEOUT failure reply
 
 ## Context
 
@@ -32,7 +32,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > Contract test `tests/contract/error-template/route_timeout_test.go` — substitute the synthetic slow SOCKS5 backend (`tests/integration/fake_socks5_tor.go` from T019a, configured in `slow` mode); CONNECT to a hung target; assert 504 + template + `ROUTE_TIMEOUT`.
 
@@ -53,3 +53,7 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Implement authenticated SOCKS5 `ROUTE_TIMEOUT` under `tests/contract/socks5/`: slow fake SOCKS backend exceeding the bounded 30 s dial/handshake deadline yields exactly `05 06 00 01 00 00 00 00 00 00`, then EOF; no idle deadline is introduced after success.

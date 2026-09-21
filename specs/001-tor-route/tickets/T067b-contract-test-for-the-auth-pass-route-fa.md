@@ -32,7 +32,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > Contract test for the auth-pass + route-failure counter-increment asymmetry (FR-008 second half; data-model.md §3 — "Route failures (`ROUTE_DOWN`, `ROUTE_REFUSED`, `ROUTE_TIMEOUT`) DO increment `request_count` once authentication has passed"; the synthesised error-template body is NOT included in `byte_count`) in `tests/contract/socks5/route_failure_counter_test.go`. Uses the same DP-hosted `GetStatus` RPC from T007 / T045 that T025c and T025d use, on the same `/run/stargate/dp.sock`. Three sub-cases, each opening N=20 authenticated CONNECTs through port 8881 (mix of SOCKS5 and HTTP CONNECT inbound framing per sub-case so both protocol surfaces are exercised):
 
@@ -53,3 +53,7 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Use authenticated SOCKS5 CONNECT only for each of three route-failure subcases (N=20 each). Assert `request_count` delta 60 and `byte_count` delta 0, exact REP bytes and no logs/leak-corpus hits. T173 separately checks HTTP `C` leaves both counters unchanged; HTTP cannot count as an auth-passed request.

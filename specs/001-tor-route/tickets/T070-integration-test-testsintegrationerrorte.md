@@ -1,6 +1,6 @@
 ---
 id: T070
-title: 'Integration test `tests/integration/error_template_test.go`'
+title: "Test integrated SOCKS5 Tor failure response"
 status: pending
 created: 2026-07-04
 last_updated: "2026-09-12"
@@ -24,7 +24,7 @@ redteam_findings: []
 clarity_check: {}
 ---
 
-# T070: Integration test `tests/integration/error_template_test.go`
+# T070: Test integrated SOCKS5 Tor failure response
 
 ## Context
 
@@ -32,7 +32,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > Integration test `tests/integration/error_template_test.go` — end-to-end version of T065: bring up the stack, stop the Tor sidecar mid-session, request a `.onion` URL through the data plane, capture the full response, run the leak-corpus scan.
 
@@ -53,3 +53,7 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Run the actual Local stack with Tor stopped and send an authenticated SOCKS5 CONNECT to a controlled onion destination. Assert exact 10-byte `ROUTE_DOWN` reply, EOF, no leak-corpus/log hit and no Direct fallback; use a live Tor/SOCKS positive control. No HTTP template is expected.

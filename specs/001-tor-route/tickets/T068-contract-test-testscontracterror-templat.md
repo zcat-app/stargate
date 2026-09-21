@@ -32,7 +32,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > Contract test `tests/contract/error-template/body_byte_match_test.go` — for one failure of each of the four codes, assert the body matches the template byte-for-byte after substituting the three permitted fields; no other bytes present.
 
@@ -53,3 +53,7 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Test all four future HTTP renderer code bodies directly, byte-for-byte after only the permitted substitutions. Make no port-8881 ingress or browser-visible HTML claim; T173 moves existing ingress fixtures to renderer-only calls.

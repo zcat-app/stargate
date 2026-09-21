@@ -21,9 +21,9 @@ enforced via Tor's `IsolateSOCKSAuth` driven by the extension's SOCKS5 username.
 The control plane runs headlessly in this slice — it loads bearer tokens from a
 YAML file at startup, pushes hashed tokens to the data plane via gRPC
 `ReloadTokens`, and emits `SidecarEvent`s — but exposes no admin UI beyond a
-healthcheck endpoint. Failure modes return the privacy-safe error template from
-architecture spec §10, including a new `AUTH_REQUIRED` code introduced by this
-feature.
+healthcheck endpoint. Tor-port failures use fixed SOCKS5 replies. HTTP CONNECT is refused at first byte
+under the T172 target; T173 owns runtime conformance. The architecture §10 HTML
+error template remains a future-format renderer, not a Tor-port response.
 
 The vertical proves: (1) the data plane forwards bytes correctly through a real
 sidecar to a real anonymity network; (2) the extension's `proxy.onRequest` path
@@ -60,7 +60,7 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 
 - **Data plane unit + integration**: Go `testing`, table-driven. Integration tests in `tests/integration/` exercise port 8881 against the live Tor sidecar via docker-compose.
 - **Control plane**: JUnit 5 via Quarkus Test framework; gRPC server tested against an in-process client.
-- **Contract tests**: five directories under `tests/contract/` — `tor/` (Tor SOCKS surface), `torrc/` (rendered config invariants), `socks5/` (RFC 1928/1929 surface on port 8881), `error-template/` (privacy-safe template invariants), and `control-grpc/` (inter-plane RPC + event-kind invariants). Authoritative list is FR-016 + the project-structure tree below. Harness language: **Go** (research.md §5) so the suite runs in the same toolchain as the data plane and can spin sidecars via the docker SDK.
+- **Contract tests**: five directories under `tests/contract/` — `tor/` (Tor SOCKS surface), `torrc/` (rendered config invariants), `socks5/` (RFC 1928/1929 surface on port 8881), `error-template/` (future renderer format only), and `control-grpc/` (inter-plane RPC + event-kind invariants). Authoritative list is FR-016 + the project-structure tree below. Harness language: **Go** (research.md §5) so the suite runs in the same toolchain as the data plane and can spin sidecars via the docker SDK.
 - **Reproducibility**: `tests/reproducibility/` builds the Go binary twice in clean containers and `cmp`s the output (arch §12.1).
 - **Extension JS units**: Node 20 LTS + built-in `node:test` runner; MV2 background scripts are loaded into the test via `vm.runInNewContext()` with a synthesized `browser` global, so production code stays in idiomatic browser-script style (no UMD wrapper, no test-only export branch). Used in this feature for the FR-004 hardening-audit test (research.md §10).
 - **Browser-level**: Mullvad Browser integration tests are run manually for the SC-001 walkthrough in this feature; automation is deferred (no headless privacy-safe Mullvad Browser harness exists in v1).
@@ -92,13 +92,13 @@ allocation per hash) is RETIRED: HMAC auth is O(1) hash work per request
 regardless of N and O(1) per-request allocation, so the N ≤ 4 cap and the
 Argon2id-derived fill-time math below no longer bound the design. The
 *invariants* (no DNS leak, no leak-corpus matches,
-byte-for-byte template render, stream isolation, no retained allocations,
+renderer-only byte-for-byte template render, stream isolation, no retained allocations,
 and now: bounded per-request memory under unauthenticated flood —
 sol-review B5) hold regardless of wall-clock numbers.
 
 - ≥200 concurrent `.onion` CONNECTs in the integration harness (SC-005). Measured against a *synthetic* SOCKS5 backend that mimics the Tor sidecar's accept-and-relay surface (research.md §7) — driving 200 concurrent live circuits through the real Tor network would flood guards and is not the property under test.
 
-  **Measurement model for SC-005 (T092 amendment)**: "200 concurrent CONNECTs" means 200 client connections established and held open simultaneously through port 8881, each having completed its SOCKS5/CONNECT handshake (one HMAC-SHA-256 verifier computation + constant-time compare against the current generation) and bridged to the synthetic upstream. Under HMAC auth the per-request CPU cost is a single sub-microsecond HMAC plus a constant-time compare loop over N verifiers; it is no longer the Argon2id bottleneck that previously dominated fill time. The 200-connection pool therefore fills in wall-clock dominated by the synthetic upstream's accept rate and goroutine scheduling, not by auth work. SC-005 is met if the pool fills within 30s and the connections remain stable for ≥60s of bidirectional traffic. The load-bearing property T092 adds (sol-review B5): **peak RSS stays inside a documented memory ceiling under a 200-connection unauthenticated flood**, because auth no longer allocates 64 MiB per attempt — this is the falsifier for the B5 finding and is asserted by T079a's extended design (peak-RSS + unauthenticated-flood bounds), not by pool-fill timing alone. T079's `stargate-perf` run uses this measurement model; the steady-state and the fill-time are reported as separate numbers in its findings document, not collapsed into a single throughput figure.
+  **Measurement model for SC-005 (T092 amendment)**: "200 concurrent CONNECTs" means 200 client connections established and held open simultaneously through port 8881, each having completed its authenticated SOCKS5 CONNECT handshake (one HMAC-SHA-256 verifier computation + constant-time compare against the current generation) and bridged to the synthetic upstream. Under HMAC auth the per-request CPU cost is a single sub-microsecond HMAC plus a constant-time compare loop over N verifiers; it is no longer the Argon2id bottleneck that previously dominated fill time. The 200-connection pool therefore fills in wall-clock dominated by the synthetic upstream's accept rate and goroutine scheduling, not by auth work. SC-005 is met if the pool fills within 30s and the connections remain stable for ≥60s of bidirectional traffic. The load-bearing property T092 adds (sol-review B5): **peak RSS stays inside a documented memory ceiling under a 200-connection unauthenticated flood**, because auth no longer allocates 64 MiB per attempt — this is the falsifier for the B5 finding and is asserted by T079a's extended design (peak-RSS + unauthenticated-flood bounds), not by pool-fill timing alone. T079's `stargate-perf` run uses this measurement model; the steady-state and the fill-time are reported as separate numbers in its findings document, not collapsed into a single throughput figure.
 
   **Burst CONNECT scenario (not in SC-005 but tracked here)**: a realistic worst-case user burst is Mullvad Browser session-restore or "open all bookmarks in tabs" — 30 to 100 parallel CONNECTs in a few seconds. Under HMAC auth (T092) per-request auth cost is negligible at any realistic N, so burst latency is dominated by upstream accept + goroutine scheduling, not by the retired Argon2id fill-time math. The prior "N ≤ 4 ceiling" and "shared-salt migration" are retired — auth is already O(1) in N. The migration trigger that remains is the §1.5 residue (pepper-compromise + snapshot-leak → offline candidate testing at HMAC speed, mitigated by 128-bit entropy — see THREAT-MODEL §5.14 / SECURITY-DECISIONS.md), which is a residue, not a perf cap.
 - Data-plane forwarding path: no per-request allocation that retains beyond request lifetime (SC-005, `stargate-perf` agent verifies on completion).
@@ -109,7 +109,8 @@ sol-review B5) hold regardless of wall-clock numbers.
 - Loopback-only bind for all listeners in the local profile (FR-010 + arch §4 bind table); `BIND_REFUSED` startup error if violated.
 - SOCKS5h enforced both inbound (extension sets `proxyDNS: true`) and outbound (data plane never resolves hostnames locally) — FR-003, FR-007.
 - No per-request metadata logging at finer than 1-hour resolution (FR-008).
-- Privacy-safe error template — exactly four response headers, byte-for-byte body match modulo permitted substitutions (FR-009 + arch §10).
+- Fixed SOCKS5 auth and route-failure replies with zero upstream/destination text;
+  the four-header HTML template is renderer-only future-format coverage (FR-009).
 - All sidecar images digest-pinned in `compose/docker-compose.local.yml` (FR-015, Principle IV); contract tests block merge on a digest bump that breaks the Tor surface (FR-016).
 - Enforce Constitution III's actor matrix: DP has only the fixed pathname Unix
   adapter and authenticated Unix IPC; CP has narrow local management and no
@@ -134,7 +135,7 @@ The constitution amended on 2026-09-12 and `contracts/foundation-boundaries.md` 
 
 | Principle | State and required closure |
 |---|---|
-| I — dumb router | Negotiation/management scope clarified; CONNECT identity/refusal design T147 remains pending. |
+| I — dumb router | Negotiation/management scope clarified; T147 selected HTTP `C` refusal on Tor port 8881, T172 reconciles the contract, and T173 still owes implementation and deployed evidence. |
 | II — separation | CP authority, recovery/rollback and peer lifecycle incomplete: T138/T132/T135/T148/T159. |
 | III — privacy | Isolation, browser blocking, aggregate-only diagnostics and completed-hour publication: T136/T147/T152/T157/T158. |
 | IV — immutable updates | T160 delivers Tor package/content and dependency-source enforcement; remaining package/tool and release evidence is pending T141/T145/T081. |
@@ -164,8 +165,8 @@ specs/001-tor-route/
 ├── quickstart.md        # Phase 1 — operator walkthrough
 ├── contracts/           # Phase 1 — boundary contracts
 │   ├── control-grpc.md      # gRPC RPCs used by this feature (subset of arch §5)
-│   ├── socks5-auth.md       # Bearer-token auth via SOCKS5 username/password and Proxy-Authorization
-│   ├── error-template.md    # Privacy-safe error template for ROUTE_*, AUTH_REQUIRED
+│   ├── socks5-auth.md       # SOCKS5 bearer auth; HTTP C refusal
+│   ├── error-template.md    # Future HTTP renderer format only
 │   └── torrc.md             # Rendered Tor config invariants
 └── checklists/          # Pre-existing — clarification log lives in spec.md
 ```
@@ -186,14 +187,14 @@ stargate/
 │   ├── internal/
 │   │   ├── bind/check.go             # bind-safety (FR-010)    (new)
 │   │   ├── listener/socks5.go        # port 8881 listener      (new)
-│   │   ├── listener/connect.go       # HTTP CONNECT framing    (new)
+│   │   ├── listener/connect.go       # historical HTTP parser; remove in T173
 │   │   ├── auth/token.go             # constant-time auth      (new)
 │   │   ├── forward/tor.go            # SOCKS5h to tor:9050     (new)
 │   │   ├── controlclient/client.go   # gRPC client → CP        (new)
 │   │   ├── controlclient/server.go   # DP-hosted gRPC server (ReloadTokens, GetStatus) on /run/stargate/dp.sock (new)
 │   │   ├── controlclient/snapshot.go # dp-snapshot.json        (new)
 │   │   ├── audit/counters.go         # hour-bucket aggregates  (new)
-│   │   └── errortpl/render.go        # arch §10 template       (new)
+│   │   └── errortpl/render.go        # future HTTP renderer    (new)
 │   └── (no other dirs in this feature)
 │
 ├── control-plane/
@@ -243,13 +244,13 @@ stargate/
 ├── tests/
 │   ├── contract/tor/                 # FR-016                  (new)
 │   ├── contract/sidecar-proxy/      # C1 remediation; T019c   (new)
-│   ├── contract/error-template/      # arch §10.3              (new)
+│   ├── contract/error-template/      # future renderer only    (new)
 │   ├── contract/torrc/               # FR-011 byte-match       (new)
-│   ├── contract/socks5/              # SOCKS5+CONNECT inbound  (new)
+│   ├── contract/socks5/              # SOCKS5 + HTTP refusal   (new)
 │   ├── contract/control-grpc/        # inter-plane RPC surface (new)
 │   ├── integration/onion_load_test.go        # US1             (new)
 │   ├── integration/stream_isolation_test.go  # US2             (new)
-│   ├── integration/error_template_test.go    # US3             (new)
+│   ├── integration/route_failure_test.go     # US3 SOCKS       (new)
 │   └── reproducibility/data_plane_test.sh    # build×2 + cmp   (new)
 │
 ├── ARCHITECTURE.md                   # human-facing pointer; this feature does not author it (out of scope)
@@ -332,6 +333,21 @@ intentional and is recorded here so future readers don't treat it as drift.
     VII's test-first discipline.
   - `quickstart.md` — the SC-001 5-minute operator walkthrough.
 
+## T172 Constitution Check — selected Tor ingress
+
+Principles I/III require bounded SOCKS negotiation and an intact device/profile/site
+partition. HTTP `C` cannot carry trusted context in the existing client and must close
+before auth, counters or upstream dial; no application-header inference, error body,
+route conversion or Direct fallback is allowed. Principle II keeps authenticated SOCKS
+forwarding alive across CP outage and ignores advisory sidecar events for admission.
+Principle V: current `listener/connect.go` still violates this target until T173, so
+neither this plan nor T172 certifies implementation. Principle VII: T173 must add the
+real-socket refusal regression red before the production change, while this document
+change uses consistency evidence. Principle VIII: T172 and T173 each need independent
+candidate-bound review. No Constitution amendment or risk acceptance is made.
+
+---
+
 ## Complexity Tracking
 
 *No constitution violations; this section is intentionally empty.*
@@ -385,12 +401,12 @@ the resolutions deliberately rather than accepting them implicitly.
    control-plane restart is the upstream trigger; the data plane still
    applies the new generation Live via the existing RPC. research.md §4.
 
-7. **`AUTH_REQUIRED` on SOCKS5 returns the sub-negotiation failure byte,
-   not the HTML template**. The architecture spec §10.2 template is HTML
-   and only applies to HTTP CONNECT framing. SOCKS5 RFC 1929 specifies a
-   2-byte response (version + status); on rejection the data plane sends
-   `0x01 0xFF` and closes. The contract test in
-   `contracts/socks5-auth.md` enforces both behaviours. research.md §9.
+7. **`AUTH_REQUIRED` on Tor port 8881 uses only SOCKS5 failure bytes.**
+   Authenticated SOCKS5 is the sole supported ingress; RFC 1929 rejection
+   sends `0x01 0xFF` and closes. HTTP `C` closes before authentication with
+   zero response bytes. The HTML template is renderer-only future-format
+   coverage. This T172 decision supersedes historical research.md §9; T173
+   makes the runtime conform.
 
 8. **`scripts/stargate init` ships a minimum subset only**. Full `init`
    (arch §9) is a later feature; this slice delivers only key generation

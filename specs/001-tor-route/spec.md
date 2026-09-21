@@ -97,8 +97,8 @@ renders the page. A simultaneous `tcpdump` / Wireshark capture on the
    (`docker-compose.local.yml` up, Tor sidecar HEALTHY, bearer token
    present in the extension), **When** the user opens a known `.onion`
    URL in Mullvad Browser, **Then** the page renders, the extension's
-   per-tab indicator shows route = Tor, and the response carries no
-   Stargate error template.
+   per-tab indicator shows route = Tor, and the SOCKS tunnel carries page bytes without a
+   Stargate failure reply.
 2. **Given** the same stack, **When** the user opens
    `http://check.torproject.org` via the onion mirror (or, equivalently,
    any `.onion` whose page asserts Tor-routedness), **Then** the page
@@ -160,42 +160,26 @@ for legitimate circuit reuse within a short window for the same origin).
 
 ### User Story 3 - Privacy-safe failure when Tor is down (Priority: P3)
 
-When the Tor sidecar is unreachable or unhealthy, requesting a `.onion`
-URL returns the privacy-safe error template defined by the architecture
-spec. The error response reveals nothing about destinations, upstream
-addresses, sidecar internals, or backtraces.
+When the Tor sidecar is unreachable or refuses a destination, an authenticated
+SOCKS5 request receives only the fixed RFC 1928 failure reply. It contains no
+destination, sidecar reason or application bytes. HTTP CONNECT is unsupported on
+Tor port 8881 and closes silently on first byte `C`, independently of Tor state.
 
-**Why this priority**: Failure-mode privacy is part of the privacy
-property — an error response that leaks destination metadata is a leak
-just as much as a successful request that leaks. This is P3 (not P1)
-because it exercises the error path, not the happy path; an MVP can
-demonstrate value without it, but a release cannot ship without it.
-
-**Independent Test**: Stop the Tor sidecar container
-(`docker compose stop tor`). Issue a request to a `.onion` URL through
-port 8881. Capture the full response (status, headers, body). Assert
-the response byte-for-byte matches the privacy-safe template from the
-architecture spec §10.2 after substitution of only the three permitted
-fields (`{ROUTE_LABEL}`, `{CODE}`, `{LOCAL_REFERENCE_ID}`). Run the response through the curated leak-corpus
-check from architecture spec §10.3 to confirm no forbidden substring
-appears in any header or body byte.
+**Independent Test**: Stop Tor; issue an authenticated SOCKS5 CONNECT through
+port 8881. Assert the exact ten-byte `05 03 00 01 00 00 00 00 00 00` reply
+and EOF, with no leak-corpus match or extra bytes. A live-sidecar refusal and
+a bounded timeout similarly use REP `0x04` and `0x06`. Test the future HTTP
+error renderer separately; it is not reachable from this Tor ingress.
 
 **Acceptance Scenarios**:
 
-1. **Given** the local-profile stack with the Tor sidecar stopped,
-   **When** a CONNECT to a `.onion` destination is sent through port
-   8881, **Then** the data plane responds with HTTP 502 and the body
-   matches the architecture spec §10.2 template with `{CODE} = ROUTE_DOWN`
-   and `{ROUTE_LABEL} = "Tor"`.
-2. **Given** the same scenario, **When** the response headers are
-   inspected, **Then** they contain exactly `Content-Type`,
-   `Content-Length`, `Cache-Control: no-store`, and `X-Stargate-Error:
-   ROUTE_DOWN` — and no other headers (no `Server`, no `Via`, no
-   `X-Forwarded-*`, no sidecar version strings).
-3. **Given** the contract-test leak corpus (test IPs, test hostnames,
-   test circuit IDs, sidecar log fragments), **When** the response body
-   and headers are scanned, **Then** no substring from the corpus
-   appears.
+1. With Tor stopped, authenticated SOCKS5 CONNECT returns the fixed `ROUTE_DOWN`
+   reply above and closes. An advisory `SidecarEvent` alone does not cause it.
+2. With Tor accepting but refusing a target, the reply is exactly
+   `05 04 00 01 00 00 00 00 00 00`; a deadline returns
+   `05 06 00 01 00 00 00 00 00 00`. Neither includes upstream text.
+3. The full reply bytes and diagnostics contain zero leak-corpus matches;
+   an HTTP `C` request receives zero bytes and causes no upstream dial.
 
 ---
 
@@ -205,7 +189,7 @@ These are the conditions the spec must keep working privacy-safely
 through. Each one drives at least one test in the privacy-critical
 tests-first suite (Principle VII).
 
-- **WebSocket upgrade through CONNECT**. The extension routes a
+- **WebSocket upgrade through the SOCKS CONNECT command**. The extension routes a
   `wss://*.onion` request; the data plane tunnels the CONNECT to the Tor
   SOCKS5 sidecar without parsing the upgrade traffic. After the SOCKS5
   handshake completes, the data plane is a byte pipe (Principle I — no
@@ -214,7 +198,7 @@ tests-first suite (Principle VII).
 - **HTTP/2 connections (forced fallback from QUIC)**. The hardening audit
   has already disabled QUIC/HTTP3 at the browser (Principle III /
   THREAT-MODEL §5.5). Connections fall back to HTTP/2 over TLS over the
-  Tor circuit. The data plane sees only the CONNECT framing; the TLS/H2
+  Tor circuit. The data plane sees only SOCKS negotiation; the TLS/H2
   payload is opaque.
 - **Concurrent requests against the same first-party domain**. Multiple
   parallel CONNECTs for resources under the same first-party `.onion`
@@ -227,26 +211,14 @@ tests-first suite (Principle VII).
   surfaces a normal connection error. **No upstream-derived information
   is propagated** to the browser through error headers or response
   bodies (the data plane has none at that layer to leak).
-- **Bearer token missing or invalid**. On the HTTP CONNECT path, the
-  data plane rejects the request with HTTP 407 (Proxy Authentication
-  Required) and a privacy-safe body (per architecture spec §10
-  template, with `{CODE} = AUTH_REQUIRED` — this is a new error code
-  added by this feature; see FR-006). On the SOCKS5 path, the
-  rejection is the 2-byte RFC 1929 sub-negotiation failure
-  `0x01 0xFF` followed by socket close — no body is sent
-  (`contracts/socks5-auth.md` §"Auth failure response"). The CONNECT
-  body MUST NOT distinguish "missing token" from "invalid token"
-  beyond the fact of auth failure. The data plane MUST NOT log the
-  token, the offered token's hash, or the destination of the rejected
-  request (Principle III — no per-request metadata).
-- **Hostname is `.onion` but the service is unreachable or does not
-  exist**. The Tor sidecar's SOCKS5 handshake responds with a SOCKS5
-  failure (e.g., `general SOCKS server failure`, `host unreachable`).
-  The data plane translates this to the architecture spec §10 template
-  with `{CODE} = ROUTE_REFUSED` (the sidecar accepted but refused the
-  target) and 502 status. **The data plane MUST NOT include the
-  destination hostname or the underlying SOCKS5 reason text** in the
-  response body or headers.
+- **Bearer token missing or invalid**. On SOCKS5, reject with the two-byte
+  RFC 1929 `0x01 0xFF` reply and close. HTTP `C` is refused before auth,
+  regardless of credential appearance; it gets zero response bytes and
+  no counter increment. No token, verifier, destination or username enters
+  diagnostics (Principle III).
+- **Hostname is `.onion` but unreachable**. After authenticated SOCKS5
+  admission, translate the sidecar's refusal to the fixed 10-byte REP `0x04`
+  response; never forward SOCKS reason text, destination or application bytes.
 - **Extension disabled mid-session**. The user disables or uninstalls
   the Stargate extension while a session is in progress. New browser
   requests no longer go through the proxy; existing connections on port
@@ -320,36 +292,21 @@ tests-first suite (Principle VII) before implementation lands.
 #### Data plane behaviour
 
 - **FR-005**: The data plane MUST listen on TCP `127.0.0.1:8881` for
-  SOCKS5 (and HTTP CONNECT, per the architecture spec §4.1 protocol
-  column) inbound connections from the browser. The port-to-upstream
-  binding for port 8881 is fixed to the Tor sidecar at startup
-  (Principle I — routing decisions are not made per request by the
-  proxy).
-- **FR-006**: The data plane MUST authenticate every inbound proxy
-  request by extracting the bearer token from the SOCKS5 username/
-  password pair (password = token) or, for any HTTP CONNECT framing it
-  accepts on this port, from `Proxy-Authorization: Bearer <token>` in
-  the CONNECT request. The candidate's verifier is computed once as
-  `HMAC-SHA-256(pepper, candidate)` under the install-time pepper
-  (data-model.md §1.5; T092 — Argon2id is retired, see SECURITY-DECISIONS.md)
-  and compared with `crypto/subtle.ConstantTimeCompare` against every
-  verifier in the current generation (no short-circuit on first match —
-  the comparison loop's timing is independent of which slot matched)
-  provided by the control plane (architecture spec
-  §5.2 `ReloadTokens`). On absence or mismatch, the data plane MUST
-  respond per the inbound protocol:
-  - **HTTP CONNECT path**: HTTP 407 (Proxy Authentication Required)
-    carrying the privacy-safe template body keyed
-    `{CODE} = AUTH_REQUIRED`. Detailed contract:
-    `contracts/error-template.md`.
-  - **SOCKS5 path**: the 2-byte RFC 1929 sub-negotiation failure
-    `0x01 0xFF`, then close the connection — no body, no template
-    (the sub-negotiation framing has no body field). Detailed
-    contract: `contracts/socks5-auth.md` §"Auth failure response".
-
-  **The data plane MUST NOT include the offered token, its hash, or
-  the rejected destination's hostname/port in any response, log, or
-  counter increment.**
+  authenticated SOCKS5 inbound connections from the browser. First byte
+  ASCII `C` (HTTP CONNECT) MUST close with zero response bytes, no auth
+  evaluation, counter increment or upstream socket; no HTTP success,
+  error-template ingress, negotiation extension, retry, fallback or
+  configuration bypass is supported. The port-to-upstream binding is fixed
+  to Tor at startup (Principle I). This is a T172 target; T173 owns the
+  runtime change and proof.
+- **FR-006**: For supported SOCKS5 requests, the data plane MUST extract
+  the bearer from the username/password sub-negotiation (password = token),
+  compute `HMAC-SHA-256(pepper, candidate)` once and compare against every
+  verifier in the current generation with
+  `crypto/subtle.ConstantTimeCompare`, without early exit. Missing or invalid
+  credentials receive only `0x01 0xFF` then close. HTTP `C` must not enter
+  this auth path. No offered token, verifier, username or rejected target may
+  appear in a response, log or counter increment.
 - **FR-007**: The data plane MUST forward authenticated inbound bytes
   on port 8881 to the Tor sidecar's SOCKS5 endpoint
   (`unix:///run/stargate-tor/tor-socks.sock` on the DP-only fabric), passing through the
@@ -383,24 +340,15 @@ tests-first suite (Principle VII) before implementation lands.
   the in-scope test-harness caller and the deferred production
   caller). The invariant on *what* is counted (this FR)
   is independent of the deferral on *where* the counts persist.
-- **FR-009**: When the Tor sidecar is unreachable (no TCP connection) or
-  refuses the SOCKS5 target, the data plane MUST return a privacy-safe
-  failure response with `{CODE}` chosen per architecture spec §10.1
-  (`ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT` as applicable) and
-  shape chosen per the inbound protocol. The upstream dial/handshake
-  result alone decides success or the route error; a `SidecarEvent`
-  (`UNHEALTHY` / `STOPPED` / `CRASHED`) is an advisory hint and MUST NOT
-  be a mandatory precondition for dialing or forwarding (Constitution
-  Principle II; data-model.md §2; sol-review B3):
-  - **HTTP CONNECT path**: HTML template from architecture spec §10.2
-    with `{ROUTE_LABEL} = "Tor"` and the exactly-four headers
-    enumerated in §10.3. Detailed contract: `contracts/error-template.md`.
-  - **SOCKS5 path**: 10-byte RFC 1928 §6 reply with `BND.ADDR`/`BND.PORT`
-    zeroed, then close. The `REP` mapping is `ROUTE_DOWN→0x03`,
-    `ROUTE_REFUSED→0x04`, `ROUTE_TIMEOUT→0x06`; detailed contract:
-    `contracts/socks5-auth.md` §"SOCKS5 request-phase failures (post-auth)".
-  - **Both paths** MUST NOT carry destination, upstream, token, or
-    sidecar-derived bytes in any field of the response.
+- **FR-009**: After authenticated SOCKS5 admission, upstream dial or
+  handshake outcomes alone determine route failure. `SidecarEvent` is
+  advisory and cannot gate admission (Principle II). Return only the fixed
+  ten-byte RFC 1928 reply with zero `BND.ADDR`/`BND.PORT`:
+  `ROUTE_DOWN→0x03`, `ROUTE_REFUSED→0x04`, `ROUTE_TIMEOUT→0x06`, then close.
+  No destination, token, sidecar reason or upstream text may enter the reply
+  or diagnostics. HTTP `C` is refused before auth/dial under FR-005; the
+  renderer-only HTML format in `contracts/error-template.md` has no Tor-port
+  ingress claim.
 - **FR-010**: Local DP route and CP admin/health listeners MUST bind loopback in
   their own namespaces and at host publication. LAN/VPS MUST use the actual tunnel
   interface in each listener namespace and remain closed on tunnel loss. No container
@@ -515,8 +463,8 @@ tests-first suite (Principle VII) before implementation lands.
   and
   per-invariant assertions); `socks5/` (port 8881 inbound SOCKS5
   demux, auth, leak invariants, counter side-channel resistance,
-  request-phase failures); `error-template/` (privacy-safe error
-  template invariants for all four codes plus leak-corpus scan);
+  request-phase failures); `error-template/` (renderer-only future HTTP format, with no Tor-port
+  ingress claim, plus leak-corpus scan);
   `control-grpc/` (inter-plane RPC + transport invariants for both
   UDS sockets). Adding a new
   `tests/contract/<surface>/` directory in a future feature
@@ -549,8 +497,8 @@ tests-first suite (Principle VII) before implementation lands.
   the data plane keeps its last-known list and keeps serving port 8881
   (Principle II "continue routing"). Only a successfully-parsed explicit
   empty list (`tokens: []`) is the revoke-all path: that alone pushes an
-  empty generation, after which the proxy returns `AUTH_REQUIRED` on all
-  requests. A valid empty list and an I/O/parse failure therefore have
+  empty generation, after which supported SOCKS auth receives `01 FF`
+  on all requests. HTTP `C` still closes before auth. A valid empty list and an I/O/parse failure therefore have
   distinct semantics, by design. Token add/revoke requires restarting
   the control-plane container; per architecture spec §11, the data plane
   keeps serving with its last-known token list across this restart.
@@ -574,8 +522,8 @@ tests-first suite (Principle VII) before implementation lands.
 ### Key Entities
 
 - **Bearer token (device token)** — a per-device opaque secret. Used as
-  the SOCKS5 password and (where CONNECT framing is used) in the
-  `Proxy-Authorization` header. Identifies *the device* to the data
+  the SOCKS5 password on Tor port 8881. No HTTP `Proxy-Authorization`
+  ingress is supported there. Identifies *the device* to the data
   plane, not the user. Never persisted in plaintext outside the v1
   config file the user creates manually; stored as an HMAC-SHA-256
   verifier under the install-time pepper (T092) in the control-plane
@@ -595,11 +543,9 @@ tests-first suite (Principle VII) before implementation lands.
   request_count, byte_count)` row in `aggregate_counters`
   (architecture spec §6.4). The only persistent record this feature
   creates about Tor traffic.
-- **Privacy-safe error response** — the rendered byte sequence returned
-  to the browser when a routed request fails. Defined by architecture
-  spec §10; this feature instantiates it for the Tor-route error codes
-  `ROUTE_DOWN`, `ROUTE_REFUSED`, `ROUTE_TIMEOUT`, and the
-  feature-introduced `AUTH_REQUIRED`.
+- **Privacy-safe Tor failure reply** — a fixed SOCKS5 RFC 1928/1929 byte
+  sequence with no destination or upstream text. The HTML template in
+  architecture §10 is a future renderer format with no Tor-port ingress.
 
 ---
 
@@ -647,15 +593,12 @@ tests-first suite (Principle VII) before implementation lands.
   The per-PR gate (T034) implements the same assertion via `gopacket`'s
   DNS-layer parse; the release-tag measurement (T034a) and the
   operator quickstart sanity check use the display filter above.
-- **SC-004**: For each of the four failure modes covered by the privacy-
-  safe error template in this feature (`ROUTE_DOWN`, `ROUTE_REFUSED`,
-  `ROUTE_TIMEOUT`, `AUTH_REQUIRED`), the rendered response contains
-  **zero** values from the curated leak corpus
-  (`tests/contract/error-template/leak-corpus.txt`), which includes:
-  destination hostnames the test issued, the host's egress IP, Tor exit
-  IPs from the consensus, sidecar version strings, sidecar log
-  fragments, error backtraces, internal file paths. Measured by the
-  contract test in §10.3.
+- **SC-004**: Each authenticated SOCKS5 route failure in this feature
+  (`ROUTE_DOWN`, `ROUTE_REFUSED`, `ROUTE_TIMEOUT`) returns its fixed ten-byte
+  reply with zero leak-corpus matches, zero destination/sidecar text and no
+  trailing bytes. SOCKS auth failure returns only `0x01 0xFF`. The future
+  HTTP-format renderer retains byte/header/leak tests separately without a
+  port-8881 success or error-response claim.
 - **SC-005**: The Tor-route data plane handles a sustained
   **≥200 concurrent `.onion` CONNECTs** in the integration test harness
   on the reference workstation, with no per-request allocation in the
@@ -711,7 +654,7 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
 - **`AUTH_REQUIRED` is a new error code added by this feature.** The
   architecture spec §10.1 enumerates `ROUTE_DISABLED`, `ROUTE_DOWN`,
   `ROUTE_TIMEOUT`, `ROUTE_REFUSED`, `BIND_REFUSED`. `AUTH_REQUIRED`
-  (HTTP 407 / SOCKS5 auth-fail equivalent) is added here for the
+  (SOCKS5 auth-fail `01 FF`; HTTP 407 is renderer-only future format) is added here for the
   bearer-token-missing/invalid case (Edge Cases & FR-006). The
   architecture spec is amended in lock-step with this feature's first
   implementation PR to record the new code; until that lands, the spec

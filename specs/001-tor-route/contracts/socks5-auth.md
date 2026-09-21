@@ -1,37 +1,23 @@
 # Contract — Bearer-Token Auth on Port 8881
 
-> **T156 target update:** all supported ingress requires the isolation partition defined in
-> [foundation boundaries](foundation-boundaries.md). The existing CONNECT path without an
-> isolation credential is pending T147; it is not an authorized exception. New negotiation
-> fields or refusal/migration require a reviewed protocol transition before implementation.
+> **T172 target update:** every supported ingress requires the isolation partition defined in
+> [foundation boundaries](foundation-boundaries.md). T147 selected silent refusal of HTTP
+> CONNECT on Tor port 8881. Current code still accepts it until T173; this contract does not
+> claim runtime compliance.
 
 **Status**: Phase 1 contract document
 
 **Scope**: defines the precise byte-level behaviour of the data plane's
 authentication step on inbound TCP connections to `127.0.0.1:8881`. The
-contract tests live under two directories, split by *what is asserted*
-rather than *which inbound framing was sent*:
+contract tests live under two directories:
 
-- `tests/contract/error-template/` — tests of the privacy-safe error
-  template (body byte-match, header set, leak-corpus, reference-ID
-  invariants). Only CONNECT-framed inbound traffic emits this template,
-  so every test here exercises CONNECT framing, but the property under
-  test is the rendered template, not the inbound framing.
-- `tests/contract/socks5/` — every other test of the port-8881 inbound
-  surface: SOCKS5 demux + auth + sub-negotiation; CONNECT-framed
-  auth-success and byte-pipe transparency (which do not emit the
-  template); multi-protocol invariants such as the counter-side-channel
-  tests that probe both SOCKS5 and CONNECT under one fixture.
-
-The split matches FR-016's enumeration of the six contract directories
-(`socks5/` is "port 8881 inbound SOCKS5 demux, auth, leak invariants,
-counter side-channel resistance, request-phase failures";
-`error-template/` is "privacy-safe error template invariants for all
-four codes plus leak-corpus scan"). Tests that span both surfaces
-(e.g. T025b long-lived bidirectional CONNECT, T025c/T025d/T067b counter
-invariants under mixed SOCKS5 + CONNECT load) live under `socks5/`
-because the property under test is the port-8881 surface, not the
-template.
+- `tests/contract/socks5/` covers supported port-8881 SOCKS5 demux, auth,
+  sub-negotiation, counters, forwarding and leak invariants, plus explicit
+  silent-refusal tests for HTTP `C`.
+- `tests/contract/error-template/` covers renderer-only future HTTP format.
+  It has no Tor-port ingress claim. T173 migrates current HTTP fixtures to
+  this scope or replaces their ingress assertions with authenticated SOCKS
+  tests. See T172's per-file inventory.
 
 **Source FRs**: FR-005, FR-006, FR-007, FR-008.
 
@@ -41,26 +27,22 @@ the proxy without the bearer token).
 
 ---
 
-## Two inbound protocols, one port
+## Tor port 8881 ingress
 
-Port 8881 accepts both:
+Port 8881 supports authenticated SOCKS5 (RFC 1928 + RFC 1929). HTTP proxy
+clients lack the required trustworthy initiating-site/profile partition and
+are unsupported on this Tor listener. The listener reads one first byte under
+its bounded handshake deadline:
 
-1. **SOCKS5** (RFC 1928 + RFC 1929 for user/pass auth).
-2. **HTTP `CONNECT host:port HTTP/1.1` framing** (some browsers and
-   tools default to HTTP CONNECT when the proxy is configured as HTTP).
+| First byte | Outcome |
+|---|---|
+| `0x05` | Enter SOCKS5 negotiation. |
+| ASCII `C` (`0x43`) | Close with zero response bytes, no auth evaluation, no counter increment and no upstream socket. |
+| Anything else | Close without response bytes. |
 
-The data plane sniffs the first byte to demultiplex:
-
-| First byte             | Interpreted as | Reason                                                |
-|------------------------|----------------|--------------------------------------------------------|
-| `0x05`                 | SOCKS5         | SOCKS5 version byte; no HTTP method starts with 0x05. |
-| ASCII `C` (`0x43`)     | HTTP CONNECT   | First byte of `CONNECT`.                              |
-| Anything else          | Reject         | Close connection without sending a body.              |
-
-The "anything else" close is silent — no response template — because the
-client is not speaking either supported protocol and there is no
-agreed-upon framing in which to deliver an error. This is fine: a
-correctly-configured browser never sends "anything else" to a proxy.
+On `C`, the listener does not parse further HTTP bytes, including claimed
+isolation headers. It does not issue HTTP 200, 407 or a route-error template.
+There is no HTTP-to-SOCKS conversion, retry, Direct fallback or opt-out.
 
 ---
 
@@ -188,7 +170,8 @@ fields would be a destination-metadata leak on the failure path
 After writing the 10-byte reply, the data plane MUST close the
 connection. No further bytes are written. There is no body and no
 `X-Stargate-Error` header on the SOCKS5 path — those belong to the
-HTTP CONNECT response shape (`contracts/error-template.md`).
+future HTTP-format renderer (`contracts/error-template.md`), which is not
+reachable from this Tor listener.
 
 ### Deadlines
 
@@ -206,7 +189,7 @@ under guard pressure) while keeping a clearly-finite ceiling so the
 forwarding path doesn't queue dead connections. **No idle deadline is
 applied after handshake completes** — Principle I requires the data plane
 to be a transparent byte pipe (spec §"Edge Cases" — WebSocket upgrade
-through CONNECT; HTTP/2 over the same circuit); pinning a per-frame
+through the SOCKS CONNECT command; HTTP/2 over the same circuit); pinning a per-frame
 idle timeout would close long-lived flows that the upstream is keeping
 deliberately quiet. The connection lives until either end closes or the
 underlying Tor circuit drops (spec §"Edge Cases" — *Tor circuit failure
@@ -234,51 +217,18 @@ These tests live at `tests/contract/socks5/request_phase_failures_test.go`.
 
 ---
 
-## HTTP CONNECT path
+## HTTP CONNECT refusal
 
-The client opens a TCP connection and sends:
-
-```
-CONNECT example.onion:443 HTTP/1.1\r\n
-Proxy-Authorization: Bearer 9f2c3a14b8d7e60f5a3c2e1d0b9c8a7f\r\n
-\r\n
-```
-
-The data plane MUST:
-
-1. Parse only the request line and the `Proxy-Authorization` header.
-   No other header is read or interpreted (FR-007 — no header
-   inspection beyond what auth requires).
-2. Extract the token from `Proxy-Authorization: Bearer <token>`.
-   Token MUST match `^[0-9a-f]{32}$` syntactically before hashing.
-3. Hash + constant-time compare against the current generation.
-
-On auth success: respond `HTTP/1.1 200 Connection Established\r\n\r\n`
-and bridge to the upstream SOCKS5 connection (which uses the host
-header from the request line as the target).
-
-On auth failure: respond with the **privacy-safe error template** (see
-`contracts/error-template.md`) with:
-
-- Status: `HTTP/1.1 407 Proxy Authentication Required`
-- `X-Stargate-Error: AUTH_REQUIRED`
-- Other headers per the template invariants.
-
-Then close the connection.
-
-### Invariants enforced by the contract test
-
-| Invariant                                                                             | Test method                                                                                                                                                                  |
-|---------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Missing `Proxy-Authorization` → 407 + AUTH_REQUIRED template                          | Send CONNECT without the header; assert exact response.                                                                                                                       |
-| Malformed token (wrong length, non-hex) → 407 + AUTH_REQUIRED (no distinction from "missing") | Send CONNECT with `Bearer notatoken`; assert response identical to the missing-header case at the byte level (no distinguishing substring).                                  |
-| Valid token + dead sidecar → 502 + ROUTE_DOWN template                                | Auth passes; upstream SOCKS5 connect fails; assert 502 + ROUTE_DOWN body and headers.                                                                                          |
-| Response NEVER includes the destination host or port                                  | Leak-corpus scan over response bytes; corpus includes the destination string used in the test.                                                                                |
-| Response NEVER includes the offered token                                             | Leak-corpus scan over response bytes; corpus includes the offered token.                                                                                                       |
+For any connection whose first byte is ASCII `C` (`0x43`), the data plane
+closes without response bytes. It does not evaluate `Proxy-Authorization`,
+increment request or byte counters, or open an upstream socket. Missing,
+malformed and valid-looking credentials, claimed isolation headers, pipelined
+payload, slow or oversized input all have the same outcome. T173 implements
+and tests this target; current `listener/connect.go` contradicts it.
 
 ---
 
-## Forbidden behaviours (both paths)
+## Forbidden behaviours (SOCKS authentication)
 
 The data plane MUST NOT, on the auth path:
 
@@ -295,4 +245,5 @@ The data plane MUST NOT, on the auth path:
 
 Contract tests for each of these live in
 `tests/contract/socks5/leak_test.go` and
-`tests/contract/error-template/auth_required_test.go`.
+`tests/contract/socks5/auth_required_test.go`. HTTP refusal is independent of
+the authentication path.

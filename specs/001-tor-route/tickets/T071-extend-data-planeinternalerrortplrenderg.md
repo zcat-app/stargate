@@ -1,6 +1,6 @@
 ---
 id: T071
-title: 'Extend `data-plane/internal/errortpl/render.go` (from T048) to cover `'
+title: "Extend future HTTP error renderer only"
 status: pending
 created: 2026-07-04
 last_updated: "2026-09-12"
@@ -25,7 +25,7 @@ redteam_findings: []
 clarity_check: {}
 ---
 
-# T071: Extend `data-plane/internal/errortpl/render.go` (from T048) to cover `
+# T071: Extend future HTTP error renderer only
 
 ## Context
 
@@ -33,7 +33,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > Extend `data-plane/internal/errortpl/render.go` (from T048) to cover `ROUTE_DOWN`, `ROUTE_REFUSED`, `ROUTE_TIMEOUT` per the status/reason table in `contracts/error-template.md` §"Status line"; verify the `LOCAL_REFERENCE_ID` generation is shared across all codes. Verified by T065–T069.
 
@@ -54,3 +54,7 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Limit `render.go` extension to direct future-format renderer calls for all four codes; preserve status/reason, four-header order, body, reference-ID and leak-corpus tests. Do not wire HTML responses to Tor port 8881 or claim they are an implementation of FR-009.

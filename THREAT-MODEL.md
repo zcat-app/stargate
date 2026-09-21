@@ -1225,17 +1225,21 @@ forwarded intact and that the bearer/password is not sent upstream. T126/T155 st
 same-target/distinct-partition circuit evidence with credential-fusion controls; synthetic
 username assertions alone cannot establish the whole browser-to-Tor path.
 
-**HTTP CONNECT gap and migration recommendation (T147):** current authenticated HTTP CONNECT
+**HTTP CONNECT gap and selected T172 target:** current authenticated HTTP CONNECT
 reaches `Tor.Dial` with no username and negotiates NO_AUTH upstream. Neither profile nor
 initiating site is available; this ingress does not meet the required partition guarantee.
 [T147](specs/001-tor-route/tickets/T147-resolve-connect-isolation-contract.md) recommends
 refusing HTTP CONNECT on Tor port 8881 (zero response bytes, no authentication/counters/upstream)
 and retaining the existing authenticated SOCKS5 contract. This is a reviewed-planning target,
-not a deployed repair: T172 owns normative and consumer reconciliation, T173 owns tests-first
+not a deployed repair: T172 records the normative and consumer target, while T173 owns tests-first
 implementation, coverage migration and deployed refusal evidence. Both block foundation
 closure. Clients without trustworthy first-party context remain unsupported; neither a
 destination-derived identity nor switching to Direct is a migration. The pre-release transition
-requires stopping old admission and restarting the DP; it makes no mixed-version safety claim.
+requires stopping old admission and restarting the DP, closing old-process tunnels; it
+makes no mixed-version safety claim. Existing bearer credentials, valid auth snapshots,
+fixed route binding and Tor configuration need no schema/config migration. They remain
+usable for SOCKS under normal generation rules, never as HTTP authorization. LAN/VPS
+live outcomes and post-repair browser/circuit evidence remain open.
 
 Identity-unavailable browser cancellation and no-fallback packets remain T157 rather than being
 inferred from a non-SOCKS descriptor.

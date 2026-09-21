@@ -82,3 +82,7 @@ project-isolation conventions.)*
 Hand-filed by the T059 session per the review follow-up; deliberately
 NOT folded into T059 (its diff is under must-shrink on round 2, and the
 two scenarios exercise different DP failure modes).
+
+## T172 Tor ingress consumer constraint
+
+The two same-target CONNECTs are authenticated SOCKS5 CONNECT commands with distinct complete `sg1:` partition usernames, not HTTP requests. Preserve the actual circuit-ID and credential-fusion controls; T173 is transitively required through T132.

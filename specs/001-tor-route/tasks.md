@@ -16,6 +16,16 @@
 > be re-derived against the amended `data-model.md §1` / `spec.md` FRs /
 > `contracts/control-grpc.md`. Source: `review/sol-review.md` B5+M1.
 
+> **T172 supersession note (2026-09-21).** This regenerated task plan retains
+> historical Tor HTTP CONNECT success and error-template work items (including
+> T023, T025b/c/d, T026/T027, T043/T048 and T064–T073/T079a). They are no
+> longer executable acceptance: T147 selected silent refusal of HTTP first
+> byte `C` on port 8881, while authenticated SOCKS5 CONNECT remains supported.
+> Current runtime code still conflicts until T173. The pending ticket files
+> carry the selected acceptance and preserve every underlying privacy test;
+> completed ticket bodies and these task rows are historical records. A later
+> `/speckit-tasks` regeneration must derive from the reconciled spec/plan.
+
 **Input**: Design documents from `/specs/001-tor-route/`
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, contracts/

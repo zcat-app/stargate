@@ -33,7 +33,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > Extend `data-plane/internal/forward/tor.go` (from T047) to map upstream SOCKS5 connect-failure replies to `ROUTE_REFUSED` and to enforce the 30 s dial-and-handshake deadline mapped to `ROUTE_TIMEOUT` per `contracts/socks5-auth.md` §"Deadlines" (wired as a single named constant; no idle deadline after handshake — the post-handshake byte pipe is intentionally long-lived per Principle I). The mapping emits the **inbound-protocol-appropriate** response shape: on the HTTP CONNECT path, the privacy-safe HTML template via T071; on the SOCKS5 path, the 10-byte RFC 1928 §6 reply with `BND.ADDR`/`BND.PORT` zeroed per `contracts/socks5-auth.md` §"SOCKS5 request-phase failures (post-auth)" — `ROUTE_DOWN→0x03`, `ROUTE_REFUSED→0x04`, `ROUTE_TIMEOUT→0x06`. **No Tor reason text or upstream error string propagates into the response on either shape** (FR-009). Verified by T065–T070 (CONNECT shape), T067a (SOCKS5 shape), and T067b (counter-increment asymmetry across both shapes).
 
@@ -54,3 +54,7 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Implement the 30 s upstream dial/handshake timeout and map `ROUTE_DOWN/REFUSED/TIMEOUT` only to the fixed SOCKS5 REP `03/04/06` with zero BND fields, EOF and no upstream text. No idle deadline after handshake, event-gated admission, HTTP template path or fallback. T065–T070/T067a/b remain the verification consumers.

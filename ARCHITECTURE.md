@@ -14,5 +14,8 @@ For the current Tor slice, use the [foundation contract](specs/001-tor-route/con
 [Constitution Check](specs/001-tor-route/plan.md#constitution-check--t156-target-implementation-not-yet-compliant)
 and [implementation queue](specs/001-tor-route/remaining-implementation-plan.md).
 The September audit found unresolved deployment, isolation, authentication and evidence gaps.
+For Tor port 8881, the reviewed T172 target supports authenticated SOCKS5 only. HTTP
+CONNECT first byte `C` closes with no response, auth evaluation, counter or upstream dial;
+T173 must still replace the current conflicting code and measure the deployed result.
 Older sketches are not proof that the current stack meets the target design. Foundation repair
 and T155 precede further feature implementation; T078/T079 remain final cumulative reviews.

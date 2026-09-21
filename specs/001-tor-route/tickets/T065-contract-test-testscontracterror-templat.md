@@ -1,6 +1,6 @@
 ---
 id: T065
-title: 'Contract test `tests/contract/error-template/route_down_test.go`'
+title: "Test SOCKS5 ROUTE_DOWN failure reply"
 status: pending
 created: 2026-07-04
 last_updated: "2026-09-12"
@@ -24,7 +24,7 @@ redteam_findings: []
 clarity_check: {}
 ---
 
-# T065: Contract test `tests/contract/error-template/route_down_test.go`
+# T065: Test SOCKS5 ROUTE_DOWN failure reply
 
 ## Context
 
@@ -32,7 +32,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > Contract test `tests/contract/error-template/route_down_test.go` — stop the Tor container, send CONNECT with valid auth; assert 502 + template + `X-Stargate-Error: ROUTE_DOWN`; leak-corpus scan passes.
 
@@ -53,3 +53,7 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Implement an authenticated SOCKS5 `ROUTE_DOWN` test under `tests/contract/socks5/`: Tor socket unreachable yields exactly `05 03 00 01 00 00 00 00 00 00`, then EOF. Scan full reply and diagnostics against T064 corpus. A withheld/unhealthy advisory event with reachable Tor must not produce this failure.

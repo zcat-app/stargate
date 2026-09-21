@@ -32,7 +32,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > Contract tests `tests/contract/error-template/reference_id_unique_test.go` and `reference_id_unlinked_test.go` — 1000 sequential failures yield 1000 distinct reference IDs with uniform distribution; the same request issued twice yields two distinct reference IDs (proves the ID is not derived from request data).
 
@@ -53,3 +53,7 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Test future HTTP renderer reference IDs directly: 1000 distinct IDs with the required distribution check, and repeated identical inputs yield unlinked IDs. No Tor-port HTTP request fixture is used.

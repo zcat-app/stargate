@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 53 |
-| in-progress | 0 |
+| pending | 52 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 149 |
@@ -46,13 +46,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
-| T172 | Reconcile Tor HTTP CONNECT refusal contracts | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T172 | Reconcile Tor HTTP CONNECT refusal contracts | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

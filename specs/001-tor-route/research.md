@@ -310,45 +310,16 @@ multi-profile logic keeps the cone manageable and matches the
 
 ---
 
-## 9. `AUTH_REQUIRED` response on SOCKS5 vs HTTP CONNECT framing
+## 9. Historical `AUTH_REQUIRED` HTTP decision (superseded by T172)
 
-**Decision**: the data plane's auth path produces two distinct response
-shapes depending on the inbound protocol:
-
-- **HTTP CONNECT framing on port 8881**: HTTP 407 response with the
-  privacy-safe HTML template body (arch §10.2 with `{CODE} =
-  AUTH_REQUIRED`, `{ROUTE_LABEL} = "Tor"`). Response headers: exactly
-  `Content-Type`, `Content-Length`, `Cache-Control: no-store`,
-  `X-Stargate-Error: AUTH_REQUIRED`. The connection is then closed.
-- **SOCKS5 framing on port 8881**: RFC 1929 sub-negotiation response
-  `0x01 0xFF` (version 1, status non-zero indicating failure). The
-  connection is then closed. No body, no headers — SOCKS5 sub-negotiation
-  failure is a 2-byte response by RFC. The data plane MUST NOT emit any
-  additional bytes on the SOCKS5 path.
-
-**Rationale**: SOCKS5 has no concept of a response body. RFC 1929 §2
-specifies the exact 2-byte server response to the username/password
-sub-negotiation; emitting anything else would violate the protocol and
-risk confusing clients. The arch §10 template is for HTTP CONNECT framing
-only — it is explicitly an HTML response with HTTP headers and is not
-compatible with SOCKS5's binary framing.
-
-The contract test for FR-006 must therefore cover both shapes. The leak-
-corpus scan is a no-op for the SOCKS5 path (no payload to scan beyond
-the 2 bytes); it is meaningful for the CONNECT path.
-
-**Alternatives considered**:
-
-- Send the HTML template on SOCKS5 anyway, after the auth-failure
-  byte: rejected. Violates RFC 1929 and risks leaking template bytes
-  to a confused or malicious SOCKS5 client that holds the connection
-  open past the auth failure. The protocol says close.
-- Send only the 2-byte SOCKS5 response on both paths and let the
-  browser handle the rendering: rejected. The browser cannot render
-  a SOCKS5 binary status; the user would see a blank page or a
-  generic "could not connect" UI. The HTML template gives the user
-  a route-labelled error code they can debug against, which is part
-  of the spec's UX intent.
+The earlier two-response-shape decision assumed HTTP CONNECT was supported on
+Tor port 8881. T147 showed its upstream NO_AUTH path lacks the required
+initiating-site/profile partition. The selected T172 contract supports only
+authenticated SOCKS5: RFC 1929 auth failure is `0x01 0xFF` and close; HTTP
+first byte `C` closes without response, authentication, counters or upstream
+socket. The HTML template remains a renderer-only future format. Current code
+still follows the earlier decision until T173; this section is history, not
+an HTTP success/error promise.
 
 ---
 

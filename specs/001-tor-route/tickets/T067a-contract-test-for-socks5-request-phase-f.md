@@ -32,7 +32,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > Contract test for SOCKS5 request-phase failure replies (FR-009 SOCKS5 path; `contracts/socks5-auth.md` §"SOCKS5 request-phase failures (post-auth)") in `tests/contract/socks5/request_phase_failures_test.go`. Three sub-cases, all over an authenticated SOCKS5 connection on port 8881:
 
@@ -53,3 +53,7 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 ## Notes
 
 Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Retain all three byte-exact authenticated SOCKS5 route-failure replies, zero BND fields, EOF, no HTML or upstream text and corpus scanning. This is the supported Tor error path; avoid duplicate fixtures with T065–T067 while retaining every assertion.

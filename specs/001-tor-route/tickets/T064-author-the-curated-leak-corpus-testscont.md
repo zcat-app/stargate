@@ -32,7 +32,7 @@ Derived from `specs/001-tor-route/tasks.md` — see the full task body there. Th
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
 >
 > Author the curated leak corpus `tests/contract/error-template/leak-corpus.txt` (**SC-004** anchor — this corpus is the substring set every error-template response is scanned against by T065–T068, gating SC-004's "no leak-corpus match in any of the four error-code responses") per `contracts/error-template.md` §"Leak-corpus invariant" — the SC-001/002 reference target onion; the 100-domain synthetic corpus from T063; placeholder lines for the data plane's egress IP and a representative Tor exit IP filled in at test time; version-string fragments (`Tor`, `Quarkus`, `Hibernate`, `SQLite`, `Mandrel`); backtrace fragments (`panic:`, `goroutine`, `stack trace`, `at line`).
 
@@ -63,3 +63,7 @@ and were regenerated in round 2 — copying from any pre-`ddc51b9` source
 embeds dead strings into the leak corpus and silently voids their SC-004
 coverage. (T063 round-1/2 verdict follow-up; recorded here because
 `target/runs/*.verdict` is gitignored.)
+
+## T172 selected acceptance (supersedes conflicting historical task text)
+
+Keep the curated corpus as a shared scanner input for fixed SOCKS failure replies, logs, and the renderer-only future HTTP format. Runtime values are injected by tests; no HTTP response on Tor port 8881 is assumed.

@@ -50,7 +50,7 @@ must be amended.
                      │  │  domain → route in local storage │  │
                      │  └──────────────────────────────────┘  │
                      └──────────────────┬─────────────────────┘
-                                        │ TCP (SOCKS5 / HTTP CONNECT)
+                                        │ TCP (Tor: SOCKS5; other routes: per-route contract)
               ┌─────────────────────────┴─────────────────────────┐
               │            Stargate proxy listening ports         │
               │                                                   │
@@ -181,7 +181,7 @@ network, never published to the host.
 
 | Purpose                           | Port  | Proto         | Local profile bind | LAN profile bind | VPS profile bind |
 |-----------------------------------|-------|---------------|--------------------|------------------|------------------|
-| Tor route (forward proxy)         | 8881  | SOCKS5+HTTP   | `127.0.0.1`        | `wg0` only       | `wg0` only       |
+| Tor route (forward proxy)         | 8881  | SOCKS5 only  | `127.0.0.1`        | `wg0` only       | `wg0` only       |
 | I2P route                         | 8882  | SOCKS5+HTTP   | `127.0.0.1`        | `wg0` only       | `wg0` only       |
 | IPFS route (RESERVED v2)          | 8883  | —             | (not bound in v1)  | (not bound)      | (not bound)      |
 | Mixnet (Nym) route                | 8884  | SOCKS5+HTTP   | `127.0.0.1`        | `wg0` only       | `wg0` only       |
@@ -636,11 +636,13 @@ destructive change.
 
 ## 10. Error Response Contract
 
-When a routed request cannot be served, the proxy returns a **fixed-template
-error response** to the browser. The template is privacy-safe by design: it
-never includes upstream IPs, sidecar version strings, exit-relay identifiers,
-DNS responses, or precise timing — anything that could be exfiltrated through
-an error-channel side channel.
+A supported route returns its protocol-specific fixed failure response. Tor
+port 8881 supports authenticated SOCKS5: RFC 1928/1929 binary failures only.
+HTTP first byte `C` is refused silently before authentication or upstream dial
+under T172; current code conflicts until T173. The HTML template below is a
+future HTTP renderer format without a Tor ingress claim. Other routes require
+separate ingress contracts. No response may include upstream IPs, sidecar
+versions, exit identifiers, DNS answers or request-specific text.
 
 ### 10.1 Error codes (proxy-internal, also emitted as response header)
 
@@ -650,10 +652,11 @@ an error-channel side channel.
 | `ROUTE_DOWN`      | Upstream sidecar unreachable (no TCP connection)            | 502         | REP `0x03` (Network unreachable) |
 | `ROUTE_TIMEOUT`   | Upstream did not respond within the configured timeout     | 504         | REP `0x06` (TTL expired) |
 | `ROUTE_REFUSED`   | Sidecar accepted the SOCKS handshake but refused the target| 502         | REP `0x04` (Host unreachable) |
-| `AUTH_REQUIRED`   | Bearer token missing or invalid (introduced by `specs/001-tor-route/` FR-006) | 407 (CONNECT framing) | sub-negotiation `0x01 0xFF` (RFC 1929 §2; not RFC 1928 §6) |
+| `AUTH_REQUIRED`   | Bearer token missing or invalid (introduced by `specs/001-tor-route/` FR-006) | future HTTP format only; no Tor HTTP ingress | sub-negotiation `0x01 0xFF` (RFC 1929 §2; not RFC 1928 §6) |
 | `BIND_REFUSED`    | Bind-safety check would publish on a non-tunnel interface  | 500 (only at start-up; never per-request) | n/a (start-up only) |
 
-Authoritative source for the post-auth `REP`-byte rows is `specs/001-tor-route/contracts/socks5-auth.md §"SOCKS5 request-phase failures (post-auth)"`; for `AUTH_REQUIRED`'s sub-negotiation form, `specs/001-tor-route/research.md §9`.
+Authoritative source for the post-auth `REP`-byte rows is `specs/001-tor-route/contracts/socks5-auth.md §"SOCKS5 request-phase failures (post-auth)"`; for `AUTH_REQUIRED`'s sub-negotiation form, the Tor SOCKS auth contract.
+The HTTP-status column describes only the future renderer format, not Tor port 8881.
 
 ### 10.2 Response body template (HTML, for browser display)
 
@@ -680,8 +683,8 @@ record content, Tor circuit identifier, request method/path, byte counts.
 
 ### 10.3 Contract test pattern
 
-`tests/contract/error-template/` runs each error condition against a stub
-backend, captures the response, and asserts:
+`tests/contract/error-template/` tests the future HTTP renderer directly,
+without claiming Tor-port ingress. It captures each rendered response and asserts:
 
 1. Status code matches the table.
 2. Body matches the template byte-for-byte after substitution of the three
