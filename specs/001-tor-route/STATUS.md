@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-20
+**Last updated:** 2026-09-21
 
 ---
 
@@ -18,8 +18,8 @@
 | in-review | 0 |
 | escalated | 0 |
 | done | 143 |
-| deferred | 3 |
-| **total** | **201** |
+| deferred | 4 |
+| **total** | **202** |
 
 ---
 
@@ -46,8 +46,8 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
-| T163 | Verify packet-level topology boundaries with capture control | Foundation audit remediation | ✓ |  |
 | T164 | Enforce the sanitized Tor observer boundary | Foundation audit remediation | ✓ |  |
+| T170 | Permit Go self-signals and trusted-host DP lifecycle signals | Foundation audit remediation | ✓ |  |
 
 ---
 
@@ -64,6 +64,7 @@ _(nothing in flight)_
 | T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | spec-amend | T089 |
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
+| T163 | Verify packet-level topology boundaries with capture control | blocked-on-new-ticket | T170 |
 
 ---
 

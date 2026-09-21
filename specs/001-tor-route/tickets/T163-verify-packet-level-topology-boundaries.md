@@ -1,13 +1,15 @@
 ---
 id: "T163"
 title: "Verify packet-level topology boundaries with capture controls"
-status: pending
+status: deferred
 created: "2026-09-13"
-last_updated: 2026-09-20
+last_updated: 2026-09-21
 source: "specs/001-tor-route/analysis/T134-local-topology.md"
 phase: "Foundation audit remediation"
 story: "-"
-blocked_by: ["T162", "T167", "T168", "T169"]
+blocked_by: ["T162", "T167", "T168", "T169", "T170"]
+deferred_on: "T170"
+deferred_reason: blocked-on-new-ticket
 parallel: false
 files_budget: 10
 privacy_critical: true
@@ -200,3 +202,12 @@ restart, re-init and required-restriction failure/recovery with controlled captu
 The initial red result remains historical evidence of the earlier mechanism.
 This does not close T163: cumulative/physical-host evidence and retirement of the
 older accepted DNS-channel residue still belong to this ticket and T155.
+
+## Independently booted host follow-up (2026-09-21)
+
+A disposable Ubuntu VM was created locally. Its Linux 6.8.0-139-generic
+kernel exposed denied Go self-signals and Docker shutdown signals under
+the production AppArmor profile. The DP could not complete confinement
+startup or be stopped by Docker until the profile was removed. T170 owns
+the focused repair; T163 resumes the full capture matrix after it lands.
+The earlier nested-host pass does not establish this host configuration.
