@@ -1,7 +1,7 @@
 ---
 id: "T147"
 title: "Resolve HTTP CONNECT first-party isolation"
-status: in-review
+status: done
 created: "2026-09-12"
 last_updated: 2026-09-21
 source: "reviews/redteam-20260912-677960b.md"
@@ -18,7 +18,7 @@ spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md"]
 decision_refs: ["specs/001-tor-route/contracts/foundation-boundaries.md §Negotiation and isolation"]
 remediates: "T043"
 tests_first: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-21, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
