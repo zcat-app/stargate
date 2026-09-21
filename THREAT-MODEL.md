@@ -308,6 +308,14 @@ host had not exposed: Go's `urg`/`rtmin+1` and host shutdown signals were denied
 An operator's ability to stop the route remains part of Principle II and the
 existing trusted-host boundary. T163 still owns the cumulative packet result.
 
+**T171 evidence timing:** probe processes have a separate bounded startup/run
+allowance; ordinary socket-operation deadlines remain 0.8 seconds. Loopback
+fixtures start after recorder readiness and drain queued attempts before
+teardown; fixture I/O failures invalidate the phase even after a positive
+control succeeds. Three full-VM attempts exceeded the former interpreter budget and
+failed overall; none counts as a denial or cumulative packet result. This is
+test orchestration, with production permissions and packet assertions retained.
+
 **T163 initial measured status (2026-09-20):** no production packet result was claimed.
 Disposable deployments built the checked-in images but `scripts/stargate init`
 stopped at Compose startup (exit 30) before DP/CP admission or capture. The

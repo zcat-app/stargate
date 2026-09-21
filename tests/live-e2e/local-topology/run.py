@@ -156,15 +156,23 @@ def stop_recorders(recorders: list[Recorder]) -> list[str]:
     return decoded
 
 
+def stop_workers(stopped: threading.Event, workers: list[threading.Thread]) -> None:
+    stopped.set()
+    for worker in workers:
+        worker.join(timeout=3)
+    if any(worker.is_alive() for worker in workers):
+        raise CaptureFailure("fixture worker did not stop")
+
+
 def confined_result(returncode: int) -> bool:
     if returncode not in (0, 77):
         raise CaptureFailure(f"confinement probe failed without a denial verdict: exit {returncode}")
     return returncode == 0
 
 
-def probe(uid: int, kind: str, family: int, address: str, port: int, timeout: float = 0.8,
+def probe(uid: int, kind: str, family: int, address: str, port: int, timeout: float = 30,
           confined: bool = False) -> bool:
-    """Run an attack with either owner-rule or production process confinement."""
+    """Bound the helper process separately from its socket-operation deadlines."""
     if confined:
         if uid != DP_UID or CONFINED_BINARY is None:
             raise CaptureFailure("confinement helper not built")
@@ -173,7 +181,7 @@ def probe(uid: int, kind: str, family: int, address: str, port: int, timeout: fl
                    STARGATE_PACKET_ADDRESS=address, STARGATE_PACKET_PORT=str(port))
         result = subprocess.run([str(CONFINED_BINARY), "-test.run=^TestPacketProbe$"],
                                 env=env, user=uid, group=DP_GID, extra_groups=[],
-                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
         return confined_result(result.returncode)
     result = subprocess.run(
         [sys.executable, "-", "--probe", kind, str(family), address, str(port)],
@@ -181,7 +189,7 @@ def probe(uid: int, kind: str, family: int, address: str, port: int, timeout: fl
         # Feed the same source through stdin; a launcher failure is not denial.
         input=Path(__file__).read_bytes(),
         user=uid, group=DP_GID if uid == DP_UID else uid, extra_groups=[],
-        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=timeout + 2,
+        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=timeout,
     )
     if result.returncode not in (0, 1) or result.stderr != b"T163-PROBE-EXECUTED\n":
         raise CaptureFailure(f"socket probe did not complete: exit {result.returncode}")
@@ -316,14 +324,27 @@ def assert_forwarder(evidence: Path, family: int, interface: str, confined: bool
     with socket.socket(af, socket.SOCK_STREAM) as server:
         server.bind((loopback, 0))
         server.listen(2)
-        server.settimeout(1.5)
+        server.settimeout(0.2)
         port = server.getsockname()[1]
         served = []
+        failures = []
+        stopped = threading.Event()
+        workers = []
 
         def accept_probes():
-            for _ in range(2):
+            while len(served) < 2:
                 try:
-                    with server.accept()[0] as peer:
+                    peer, _ = server.accept()
+                except socket.timeout:
+                    if stopped.is_set():
+                        return
+                    continue
+                except OSError:
+                    failures.append("accept")
+                    return
+                try:
+                    with peer:
+                        peer.settimeout(0.8)
                         marker = recv_exact(peer, len(b"t163+"))
                         served.append(marker)
                         destination_port = 39116 if marker == b"t163-" else 39115
@@ -331,23 +352,31 @@ def assert_forwarder(evidence: Path, family: int, interface: str, confined: bool
                             outbound.sendto(b"t163", (target, destination_port))
                         peer.sendall(b"t163")
                 except OSError:
+                    failures.append("exchange")
                     return
 
-        worker = threading.Thread(target=accept_probes, daemon=True)
-        worker.start()
         recorders = [Recorder("lo", f"tcp port {port}", evidence / f"ipv{family}-forwarder-lo.pcap"),
                      Recorder(interface, f"host {target} and udp and (port 39115 or port 39116)",
                               evidence / f"ipv{family}-forwarder-egress.pcap")]
         try:
             for recorder in recorders:
                 recorder.start()
+            # Recorder and interpreter startup are not service inactivity.
+            # End the fixture explicitly after both bounded probes complete.
+            worker = threading.Thread(target=accept_probes, daemon=True)
+            worker.start()
+            workers.append(worker)
             if not probe(CONTROL_UID, "forwarder", family, loopback, port):
                 raise CaptureFailure(f"IPv{family} forwarder positive control failed")
             if probe(DP_UID, "forwarder", family, loopback, port, confined=confined):
                 raise CaptureFailure(f"IPv{family} DP reached loopback forwarder")
-            worker.join(timeout=3)
         finally:
-            decoded = stop_recorders(recorders)
+            try:
+                stop_workers(stopped, workers)
+            finally:
+                decoded = stop_recorders(recorders)
+        if failures:
+            raise CaptureFailure(f"IPv{family} forwarder fixture I/O failed")
         if served != [b"t163+"] or len(decoded) != 2:
             raise CaptureFailure(f"IPv{family} forwarder did not receive exactly the control marker")
         if classify(decoded[0], loopback, port) < 1:
@@ -366,44 +395,54 @@ def assert_resolver(evidence: Path, family: int, confined: bool = False) -> None
     with socket.socket(af, socket.SOCK_DGRAM) as server, socket.socket(af, socket.SOCK_DGRAM) as denied_server:
         server.bind((loopback, 0))
         denied_server.bind((loopback, 0))
-        server.settimeout(2)
-        denied_server.settimeout(2)
+        server.settimeout(0.2)
+        denied_server.settimeout(0.2)
         control_port = server.getsockname()[1]
         denied_port = denied_server.getsockname()[1]
         received, denied_received = [], []
+        failures = []
+        stopped = threading.Event()
+        workers = []
 
-        def answer():
-            try:
-                data, sender = server.recvfrom(128)
-                received.append(data)
-                server.sendto(b"t163", sender)
-            except socket.timeout:
+        def answer(endpoint: socket.socket, observations: list):
+            while True:
+                try:
+                    data, sender = endpoint.recvfrom(128)
+                except socket.timeout:
+                    if stopped.is_set():
+                        return
+                    continue
+                except OSError:
+                    failures.append("receive")
+                    return
+                observations.append(data)
+                try:
+                    endpoint.sendto(b"t163", sender)
+                except OSError:
+                    failures.append("reply")
+                    return
                 return
 
-        def answer_denied():
-            try:
-                data, sender = denied_server.recvfrom(128)
-                denied_received.append(data)
-                denied_server.sendto(b"t163", sender)
-            except socket.timeout:
-                return
-
-        workers = [threading.Thread(target=answer, daemon=True),
-                   threading.Thread(target=answer_denied, daemon=True)]
-        for worker in workers:
-            worker.start()
         recorder = Recorder("lo", f"udp and (port {control_port} or port {denied_port})",
                             evidence / f"ipv{family}-resolver-lo.pcap")
-        recorder.start()
         try:
+            recorder.start()
+            for endpoint, observations in ((server, received), (denied_server, denied_received)):
+                worker = threading.Thread(target=answer, args=(endpoint, observations), daemon=True)
+                worker.start()
+                workers.append(worker)
             if not probe(CONTROL_UID, "dns-reply", family, loopback, control_port):
                 raise CaptureFailure("dummy resolver positive control failed")
             if probe(DP_UID, "dns-reply", family, loopback, denied_port, confined=confined):
                 raise CaptureFailure("DP reached a host-loopback resolver")
-            for worker in workers:
-                worker.join(timeout=3)
         finally:
-            decoded = recorder.stop()
+            try:
+                stop_workers(stopped, workers)
+            finally:
+                captures = stop_recorders([recorder])
+        if failures:
+            raise CaptureFailure(f"IPv{family} resolver fixture I/O failed")
+        decoded, = captures
         if len(received) != 1 or classify(decoded, loopback, control_port) < 1:
             raise CaptureFailure("resolver positive control packet absent")
         if denied_received or classify(decoded, loopback, denied_port):

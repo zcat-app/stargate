@@ -49,6 +49,16 @@ to exit with the fixed confinement error before admission; removing the override
 must restore service. No such policy override is a supported operator bypass.
 The installer/AppArmor and Unix fabric requirements remain unchanged.
 
+T171 separates helper startup from network-operation timing: ordinary and
+confined helper processes have a finite 30-second budget, while the ordinary
+probe's socket operations still use 0.8 seconds. Process expiry, missing
+completion markers and unknown confinement exits fail the run. Forwarder and
+resolver workers start after capture readiness, remain available through both
+bounded probes, drain queued attempts, and stop before captures close. Setup
+or probe failure also joins workers and closes recorders. Fixture I/O errors
+invalidate the phase even after a successful positive control. A slow interpreter
+must not expire the positive fixture or become a denial result.
+
 The historical 2026-09-20 `RuleAbsentStartup` run **failed** when both jumps were
 removed and SOCKS admission remained active under T162's installer-only boundary.
 T168 replaces that dependency with required process confinement and refines the
