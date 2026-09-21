@@ -279,8 +279,9 @@ supply_chain_guard() {
 # the config volume's child mountpoint before Compose mounts it read-only.
 ensure_volumes() {
   local vol phys
-  for vol in "$KEYS_VOLUME" "$IPC_VOLUME" "$CONTROL_STATE_VOLUME" \
-             "$CONTROL_CONFIG_VOLUME" "$DP_STATE_VOLUME" "$TOR_CONFIG_VOLUME"; do
+  for vol in "$KEYS_VOLUME" "$OBSERVER_KEYS_VOLUME" "$OBSERVER_FABRIC_VOLUME" \
+             "$IPC_VOLUME" "$CONTROL_STATE_VOLUME" "$CONTROL_CONFIG_VOLUME" \
+             "$DP_STATE_VOLUME" "$TOR_CONFIG_VOLUME"; do
     phys="$(ensure_project_volume "$vol")"
     [ -n "$phys" ] || { note "ensure_project_volume failed for $vol"; return "$EXIT_KEYGEN"; }
   done
@@ -288,6 +289,12 @@ ensure_volumes() {
   init_volume_root "$(ensure_project_volume "$KEYS_VOLUME")" \
     "$CP_UID" "$IPC_GID" 0750 \
     || { note "init_volume_root failed for $KEYS_VOLUME"; return "$EXIT_KEYGEN"; }
+  init_volume_root "$(ensure_project_volume "$OBSERVER_KEYS_VOLUME")" \
+    "$OBSERVER_UID" "$OBSERVER_UID" 0700 \
+    || { note "init_volume_root failed for $OBSERVER_KEYS_VOLUME"; return "$EXIT_KEYGEN"; }
+  init_volume_root "$(ensure_project_volume "$OBSERVER_FABRIC_VOLUME")" \
+    "$OBSERVER_UID" "$OBSERVER_FABRIC_GID" 0770 \
+    || { note "init_volume_root failed for $OBSERVER_FABRIC_VOLUME"; return "$EXIT_KEYGEN"; }
   # stargate-ipc: both planes create UDS sockets → group-writable (0770),
   # group stargate-ipc. Owner is DP (arbitrary); CP writes via the group.
   init_volume_root "$(ensure_project_volume "$IPC_VOLUME")" \
@@ -321,14 +328,16 @@ ensure_volumes() {
 # persisted). T038/T045/T050 consume contracts/wire-auth.md verbatim for the
 # derivation recipe; this comment is the installer-side half of the contract.
 generate_keys() {
-  local keys_phys
+  local keys_phys observer_phys
   keys_phys="$(ensure_project_volume "$KEYS_VOLUME")"
   [ -n "$keys_phys" ] || { note "cannot resolve $KEYS_VOLUME volume"; return "$EXIT_KEYGEN"; }
+  observer_phys="$(ensure_project_volume "$OBSERVER_KEYS_VOLUME")"
+  [ -n "$observer_phys" ] || { note "cannot resolve $OBSERVER_KEYS_VOLUME volume"; return "$EXIT_KEYGEN"; }
 
-  # M5 (arch §9.3): never clobber existing keys — would invalidate enrolled
-  # devices. Count the 4 key files + the pepper already present (0 → fresh;
-  # 5 → initialised; 1–4 → corrupt partial state).
-  local existing
+  # T164: preserve the existing CP/DP identity and pepper on upgrade. Only
+  # (0,0) fresh, (5,0) pre-observer, and (6,2) complete are valid states.
+  # Anything partial refuses instead of regenerating trusted identities.
+  local existing observer_existing mode
   # HARDENED (redteam round-2): --network none closes the network exfil
   # channel, and this probe runs as the NON-ROOT volume OWNER (5101:5100)
   # with ALL caps dropped — `[ -e ]` needs only SEARCH on the 0750 /keys
@@ -344,27 +353,40 @@ generate_keys() {
   existing=$(docker run --rm --network none --cap-drop ALL --read-only \
     --user "$CP_UID:$IPC_GID" \
     -v "${keys_phys}:/keys:ro" "$STARGATE_KEYGEN_IMAGE" \
-    sh -c 'n=0; for f in cp.priv dp.priv cp.pub dp.pub pepper.key; do [ -e "/keys/$f" ] && n=$((n+1)); done; echo "$n"; exit 0' \
+    sh -c 'n=0; for f in cp.priv dp.priv cp.pub dp.pub pepper.key observer.pub; do [ -e "/keys/$f" ] && n=$((n+1)); done; echo "$n"; exit 0' \
     2>/dev/null) || { note "count-probe helper failed (docker run non-zero exit); aborting to avoid clobbering existing keys"; return "$EXIT_KEYGEN"; }
+  observer_existing=$(docker run --rm --network none --cap-drop ALL --read-only \
+    --user "$OBSERVER_UID:$OBSERVER_UID" \
+    -v "${observer_phys}:/observer:ro" "$STARGATE_KEYGEN_IMAGE" \
+    sh -c 'n=0; for f in observer.priv cp.pub; do [ -e "/observer/$f" ] && n=$((n+1)); done; echo "$n"; exit 0' \
+    2>/dev/null) || { note "observer-key count probe failed; refusing regeneration"; return "$EXIT_KEYGEN"; }
   # Sanitize before interpolation: a legit count is one digit 0-5. Anything
   # else (a backdoored helper emitting key bytes / garbage on stdout) aborts
   # WITHOUT echoing the value — closes the stdout→stderr exfil channel.
   case "$existing" in
-    [0-5]) : ;;
+    [0-6]) : ;;
     *) note "$KEYS_VOLUME count-probe returned non-numeric output (possible helper tamper); aborting keygen without echoing the value."
        return "$EXIT_KEYGEN" ;;
   esac
-  case "${existing:-0}" in
-    5)
-      note "$KEYS_VOLUME already initialised (4/4 keys + pepper present); skipping key+pepper generation (arch §9.3)."
+  case "$observer_existing" in
+    [0-2]) : ;;
+    *) note "$OBSERVER_KEYS_VOLUME count-probe returned invalid output; refusing regeneration."
+       return "$EXIT_KEYGEN" ;;
+  esac
+  case "$existing:$observer_existing" in
+    6:2)
+      note "inter-plane and observer identities already initialised; preserving keys and pepper."
       return 0
       ;;
-    0)
-      :   # fresh volume — proceed to generate
+    0:0)
+      mode=fresh
+      ;;
+    5:0)
+      mode=upgrade
       ;;
     *)
-      note "$KEYS_VOLUME is partially initialised (${existing}/5 key+pepper files present) — refusing to regenerate or proceed."
-      note "Manual recovery required: inspect volume $keys_phys and either complete or wipe it."
+      note "observer/key volumes are partially initialised; refusing to regenerate or proceed."
+      note "Manual recovery required: inspect both key volumes before retry."
       return "$EXIT_KEYGEN"
       ;;
   esac
@@ -378,7 +400,10 @@ generate_keys() {
   # (local execution is already game-over).
 
   local prefix priv pub
-  for prefix in cp dp; do
+  for prefix in cp dp observer; do
+    if [ "$mode" = upgrade ] && [ "$prefix" != observer ]; then
+      continue
+    fi
     priv="$KEYS_TMP/$prefix.priv"
     pub="$KEYS_TMP/$prefix.pub"
     if ! openssl genpkey -algorithm ED25519 -out "$priv" 2>/dev/null; then
@@ -399,11 +424,13 @@ generate_keys() {
   # spec's `openssl rand -bytes 32` shorthand is not valid openssl CLI (no
   # -bytes flag); the real form is `openssl rand -out <file> 32` (T088
   # grounding reconciliation, same class as the pepper-path fix).
-  if ! openssl rand -out "$KEYS_TMP/$PEPPER_FILE" 32 2>/dev/null; then
-    note "openssl rand (pepper) failed"
-    return "$EXIT_KEYGEN"
+  if [ "$mode" = fresh ]; then
+    if ! openssl rand -out "$KEYS_TMP/$PEPPER_FILE" 32 2>/dev/null; then
+      note "openssl rand (pepper) failed"
+      return "$EXIT_KEYGEN"
+    fi
+    chmod "$PEPPER_MODE" "$KEYS_TMP/$PEPPER_FILE"
   fi
-  chmod "$PEPPER_MODE" "$KEYS_TMP/$PEPPER_FILE"
 
   # Install into the project-scoped volume with correct ownership/mode.
   # Private keys: 0600 owned by the owning plane's UID. Public keys: 0644
@@ -420,21 +447,78 @@ generate_keys() {
         --cap-add CHOWN --cap-add FOWNER --cap-add DAC_OVERRIDE \
         --read-only --tmpfs /tmp \
         -v "${keys_phys}:/keys" \
+        -v "${observer_phys}:/observer" \
         -v "${KEYS_TMP}:/src:ro" \
         "$STARGATE_KEYGEN_IMAGE" \
         sh -c '
           set -e
-          install -m '"$KEY_PRIVATE_MODE"' -o '"$CP_UID"' -g '"$IPC_GID"' /src/cp.priv /keys/cp.priv
-          install -m '"$KEY_PRIVATE_MODE"' -o '"$DP_UID"' -g '"$IPC_GID"' /src/dp.priv /keys/dp.priv
-          install -m '"$KEY_PUBLIC_MODE"'  -o '"$CP_UID"' -g '"$IPC_GID"' /src/cp.pub  /keys/cp.pub
-          install -m '"$KEY_PUBLIC_MODE"'  -o '"$DP_UID"' -g '"$IPC_GID"' /src/dp.pub  /keys/dp.pub
-          install -m '"$PEPPER_MODE"'      -o '"$CP_UID"' -g '"$IPC_GID"' /src/'"$PEPPER_FILE"' /keys/'"$PEPPER_FILE"'
+          if [ '"$mode"' = fresh ]; then
+            install -m '"$KEY_PRIVATE_MODE"' -o '"$CP_UID"' -g '"$IPC_GID"' /src/cp.priv /keys/cp.priv
+            install -m '"$KEY_PRIVATE_MODE"' -o '"$DP_UID"' -g '"$IPC_GID"' /src/dp.priv /keys/dp.priv
+            install -m '"$KEY_PUBLIC_MODE"'  -o '"$CP_UID"' -g '"$IPC_GID"' /src/cp.pub  /keys/cp.pub
+            install -m '"$KEY_PUBLIC_MODE"'  -o '"$DP_UID"' -g '"$IPC_GID"' /src/dp.pub  /keys/dp.pub
+            install -m '"$PEPPER_MODE"'      -o '"$CP_UID"' -g '"$IPC_GID"' /src/'"$PEPPER_FILE"' /keys/'"$PEPPER_FILE"'
+          fi
+          install -m '"$KEY_PUBLIC_MODE"'  -o '"$CP_UID"' -g '"$IPC_GID"' /src/observer.pub /keys/observer.pub
+          install -m '"$KEY_PRIVATE_MODE"' -o '"$OBSERVER_UID"' -g '"$OBSERVER_UID"' /src/observer.priv /observer/observer.priv
+          install -m '"$KEY_PUBLIC_MODE"'  -o '"$OBSERVER_UID"' -g '"$OBSERVER_UID"' /keys/cp.pub /observer/cp.pub
         ' >/dev/null 2>&1; then
     note "installing keys+pepper into $keys_phys failed"
     return "$EXIT_KEYGEN"
   fi
 
-  note "generated ed25519 inter-plane keys + bearer-token pepper in $keys_phys (cp.priv/dp.priv 0600, cp.pub/dp.pub 0644, pepper.key 0640)."
+  note "provisioned observer identity without replacing existing CP/DP keys or pepper."
+  return 0
+}
+
+# T138/T164: build the observer from its pinned Go builder and deploy only its
+# content-addressed local image ID. Record source-to-image binding before
+# Compose can start it; a mutable tag or operator-supplied image is refused.
+observer_source_hash() {
+  local source part
+  {
+    for source in data-plane/go.mod data-plane/go.sum proto/go.mod proto/go.sum \
+                  data-plane/cmd/tor-observer/main.go sidecars/tor-observer/Dockerfile; do
+      part="$(openssl dgst -sha256 "$_SG_REPO_ROOT/$source" | awk '{print $NF}')" || return 1
+      printf '%s %s\n' "$source" "$part"
+    done
+  } | openssl dgst -sha256 | awk '{print $NF}'
+}
+
+build_observer_image() {
+  local iidfile image_id source_sha shown_sha env_file env_tmp
+  iidfile="$(mktemp)" || return "$EXIT_COMPOSE"
+  source_sha="$(observer_source_hash)" || return "$EXIT_COMPOSE"
+  if ! docker build --iidfile "$iidfile" \
+      --label "org.opencontainers.image.source-sha256=$source_sha" \
+      --file "$_SG_REPO_ROOT/sidecars/tor-observer/Dockerfile" \
+      "$_SG_REPO_ROOT" >/dev/null 2>&1; then
+    rm -f "$iidfile"
+    note "observer image build failed; refusing deployment."
+    return "$EXIT_COMPOSE"
+  fi
+  image_id="$(cat "$iidfile")"
+  rm -f "$iidfile"
+  case "$image_id" in
+    sha256:????????????????????????????????????????????????????????????????) : ;;
+    *) note "observer image did not yield a content digest; refusing deployment."
+       return "$EXIT_COMPOSE" ;;
+  esac
+  shown_sha="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.source-sha256"}}' "$image_id" 2>/dev/null)"
+  if [ "$shown_sha" != "$source_sha" ] || [ "$(observer_source_hash)" != "$source_sha" ]; then
+    note "observer image/source identity changed during build; refusing deployment."
+    return "$EXIT_COMPOSE"
+  fi
+  env_file="$(compose_env_file)"
+  env_tmp="$(mktemp "${env_file}.XXXXXX")" || return "$EXIT_COMPOSE"
+  awk '!/^STARGATE_OBSERVER_IMAGE=/' "$env_file" > "$env_tmp"
+  printf 'STARGATE_OBSERVER_IMAGE=%s\n' "$image_id" >> "$env_tmp"
+  chmod 0600 "$env_tmp"
+  mv -- "$env_tmp" "$env_file"
+  mkdir -p "$_SG_REPO_ROOT/target/observer-build"
+  printf 'source_sha256=%s\nimage_id=%s\n' "$source_sha" "$image_id" \
+    > "$_SG_REPO_ROOT/target/observer-build/${image_id#sha256:}.txt"
+  note "observer image pinned to a verified local sha256 ID."
   return 0
 }
 
@@ -572,6 +656,12 @@ ensure_volumes; rc=$?
 
 generate_keys; rc=$?
 [ "$rc" -eq 0 ] || exit "$rc"
+
+if host_boundary_required; then
+  build_observer_image; rc=$?
+  [ "$rc" -eq 0 ] || exit "$rc"
+  SERVICES+=(tor-observer)
+fi
 
 compose_up; rc=$?
 [ "$rc" -eq 0 ] || exit "$rc"

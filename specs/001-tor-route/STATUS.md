@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 54 |
+| pending | 53 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 146 |
 | deferred | 3 |
@@ -46,13 +46,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
-| T164 | Enforce the sanitized Tor observer boundary | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T164 | Enforce the sanitized Tor observer boundary | in-review | ✓ | Foundation audit remediation |
 
 ---
 

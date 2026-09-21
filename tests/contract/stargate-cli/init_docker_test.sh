@@ -148,6 +148,10 @@ case "$keys_a" in
 esac
 [ "$keys_a" != "stargate-keys" ] \
   || bail "A: keys volume resolved to literal 'stargate-keys' (B1 regression)"
+observer_keys_a="$(phys_of "$PROJ_A" stargate-observer-keys)"
+[ -n "$observer_keys_a" ] || bail "A: observer key volume missing"
+observer_fabric_a="$(phys_of "$PROJ_A" stargate-tor-cp-fabric)"
+[ -n "$observer_fabric_a" ] || bail "A: observer fabric volume missing"
 config_a="$(phys_of "$PROJ_A" stargate-control-config)"
 [ -n "$config_a" ] || bail "A: stargate-control-config volume missing"
 vol_exists "$config_a" keys \
@@ -167,6 +171,14 @@ for f in cp.pub dp.pub; do
   [ "$mode" = "644" ] || bail "A: $f mode '$mode' (expected 644)"
   [ "$gid" = "5100" ] || bail "A: $f gid '$gid' (expected 5100)"
 done
+vol_exists "$keys_a" observer.pub || bail "A: CP observer pin missing"
+read -r ouid ogid omode _ <<<"$(vol_stat "$observer_keys_a" observer.priv)"
+[ "$ouid:$ogid:$omode" = "5103:5103:600" ] \
+  || bail "A: observer private key ownership/mode '$ouid:$ogid:$omode'"
+read -r fuid fgid fmode _ <<<"$(vol_stat "$observer_fabric_a" .)"
+[ "$fuid:$fgid:$fmode" = "5103:5100:770" ] \
+  || bail "A: observer fabric root ownership/mode '$fuid:$fgid:$fmode'"
+vol_exists "$observer_keys_a" cp.pub || bail "A: observer CP pin missing"
 
 # pepper provisioned (T092 amendment): pepper.key, 32 bytes, 0640, group 5100.
 vol_exists "$keys_a" pepper.key || bail "A: pepper.key missing (T092 provisioning)"
@@ -207,6 +219,7 @@ done
 # Capture A's key hashes for the idempotence check.
 cp_priv_a="$(vol_sha "$keys_a" cp.priv)"
 pepper_a="$(vol_sha "$keys_a" pepper.key)"
+observer_priv_a="$(vol_sha "$observer_keys_a" observer.priv)"
 
 # --- redteam Major #1: keygen helpers are network-less ---------------------
 # The hardened helpers are `--rm` (gone after init), so create — don't start —
@@ -233,10 +246,30 @@ out="$(run_init "$PROJ_A" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || { echo "$out" >&2; bail "idempotent re-init exited $rc (expected 0)"; }
 cp_priv_a2="$(vol_sha "$keys_a" cp.priv)"
 pepper_a2="$(vol_sha "$keys_a" pepper.key)"
+observer_priv_a2="$(vol_sha "$observer_keys_a" observer.priv)"
 [ "$cp_priv_a" = "$cp_priv_a2" ] \
   || bail "idempotence: cp.priv changed on rerun (keys must be preserved)"
+[ "$observer_priv_a" = "$observer_priv_a2" ] \
+  || bail "idempotence: observer.priv changed on rerun"
 [ "$pepper_a" = "$pepper_a2" ] \
   || bail "idempotence: pepper.key changed on rerun (pepper must be preserved)"
+
+# Simulate a T162 installation: the original CP/DP keys and pepper exist,
+# while no observer identity has been provisioned. T164 must add only its
+# identity, never rotate the existing authenticated state.
+docker run --rm --network none --cap-drop ALL --cap-add DAC_OVERRIDE \
+  --read-only -v "${keys_a}:/keys" -v "${observer_keys_a}:/observer" \
+  "$STAT_IMAGE" sh -c \
+  'rm /keys/observer.pub /observer/observer.priv /observer/cp.pub' >/dev/null 2>&1 \
+  || bail "upgrade fixture could not remove observer-only keys"
+out="$(run_init "$PROJ_A" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || { echo "$out" >&2; bail "observer-only upgrade exited $rc"; }
+[ "$(vol_sha "$keys_a" cp.priv)" = "$cp_priv_a" ] \
+  || bail "upgrade rotated cp.priv"
+[ "$(vol_sha "$keys_a" pepper.key)" = "$pepper_a" ] \
+  || bail "upgrade rotated pepper.key"
+[ "$(vol_sha "$observer_keys_a" observer.priv)" != "$observer_priv_a" ] \
+  || bail "upgrade reused deleted observer private key"
 
 # --- Project isolation (B1): a second project is fully distinct -----------
 # Tear A down first (frees 127.0.0.1:8881 so B's stargate-dp can bind it; the

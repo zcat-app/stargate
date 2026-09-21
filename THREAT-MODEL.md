@@ -411,9 +411,13 @@ unmeasured here. T164/T165 and T155 retain their separate closure obligations.
 - Required target: constrain a compromised application plane to its authorized
   adapter/IPC capabilities. T162 gives the DP a group-gated SOCKS hardlink on a
   DP-only volume while Tor's native SOCKS directory and raw control socket remain
-  private. CP has only an empty reserved observer fabric, no Tor cookie/group or
-  raw-control route. T138's separate sanitized observer has not yet been
-  implemented; T164/T165 and T155 own its tests, implementation and evidence.
+  private. T164's separate Go observer sees only Tor's control subpath and its
+  own Ed25519 key volume, has no IP network, and serves one authenticated
+  finite health query on the CP-only Unix fabric. CP has that fabric read-only,
+  no Tor cookie/group, observer private key, SOCKS or raw-control route.
+  T164's fake-boundary tests cover the protocol and event mapping; T165 still
+  owns integrated production-namespace caller and packet evidence. T155
+  consumes that closure.
 
 **Does NOT protect against**:
 
@@ -1135,10 +1139,13 @@ nested-host packet probes passed, but its original rule-absence probe measured
 continued SOCKS5 admission. T168 implements mandatory process confinement;
 its measured scope and T163's complete VM packet result are recorded in §3.1.
 The maintainer-approved VM evidence closes the measured Local embedded-resolver
-channel; it makes no physical-NIC or untested-environment claim. T138's
-sanitized observer remains absent: CP cannot observe Tor health until T164
-adds it, and T165 validates the caller matrix. These pending items are not
-accepted conformance. T155 consumes their closure. A bridge-visible packet
+channel; it makes no physical-NIC or untested-environment claim. T164 adds a
+sanitized observer with a signed CP/observer challenge, finite tokens and a
+narrow Tor control subpath. It reuses Tor's UID in a separate network-less
+container; the shared UID is safe only while CP lacks Tor's state subpath,
+observer key and namespace. T165 must validate the deployed caller matrix,
+socket recreation and packet boundary before production compliance is claimed.
+T155 consumes that closure. A bridge-visible packet
 alone does not prove internet exfiltration.
 
 **Residual risks after a compliant repair:** Tor remains trusted for the anonymity protocol,

@@ -68,7 +68,9 @@ STARGATE_KEYGEN_IMAGE_DEFAULT="debian:12-slim@sha256:60eac759739651111db372c07be
 # cross-checks all three sources for drift.
 CP_UID=5101          # stargate-cp (control-plane/Dockerfile useradd --uid 5101)
 DP_UID=5102          # stargate-dp (data-plane/Dockerfile: stargate-dp:x:5102)
+OBSERVER_UID=5103    # observer has Tor's UID only inside its distinct container
 IPC_GID=5100         # stargate-ipc (both Dockerfiles groupadd --gid 5100)
+OBSERVER_FABRIC_GID=5100 # CP's GID may connect; only observer writes the mounted fabric
 KEY_PRIVATE_MODE=0600
 KEY_PUBLIC_MODE=0644
 PEPPER_MODE=0640     # data-model §1.7: pepper is group-readable by stargate-ipc
@@ -80,6 +82,8 @@ PEPPER_MODE=0640     # data-model §1.7: pepper is group-readable by stargate-ip
 # root-owned, so UID 5101/5102 cannot create their UDS / SQLite / snapshot
 # files there). The set mirrors compose/docker-compose.local.yml exactly.
 KEYS_VOLUME="stargate-keys"
+OBSERVER_KEYS_VOLUME="stargate-observer-keys"
+OBSERVER_FABRIC_VOLUME="stargate-tor-cp-fabric"
 IPC_VOLUME="stargate-ipc"
 CONTROL_STATE_VOLUME="stargate-control-state"
 CONTROL_CONFIG_VOLUME="stargate-control-config"

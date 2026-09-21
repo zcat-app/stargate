@@ -28,7 +28,7 @@ check() {
 }
 
 check "$(q '.services | keys | sort | join(",")')" \
-    "stargate-control,stargate-dp,tor" "service set"
+    "stargate-control,stargate-dp,tor,tor-observer" "sanitized observer service exists"
 check "$(q '.services["stargate-dp"].network_mode // ""')" host "DP network mode"
 check "$(q '.services["stargate-control"].network_mode // ""')" none "CP network mode"
 check "$(q '.services["stargate-dp"].ports // [] | length')" 0 "DP published ports"
@@ -41,6 +41,7 @@ check "$(q '.services["stargate-dp"].environment | has("STARGATE_IN_CONTAINER")'
     false "container wildcard flag absent"
 check "$(q '.services["stargate-dp"].user')" "5102:5100" "DP user"
 check "$(q '.services["stargate-control"].user')" "5101:5100" "CP user"
+check "$(q '.services["tor-observer"].user')" "5103:5100" "observer socket is CP-group accessible"
 check "$(q '.services["stargate-dp"].group_add // [] | join(",")')" \
     5200 "DP SOCKS group"
 check "$(q '.services.tor.group_add // [] | join(",")')" \
@@ -65,6 +66,13 @@ check "$(mounts tor stargate-tor-cp-fabric)" "" "Tor has no CP observer fabric"
 check "$(mounts stargate-control stargate-tor-state)" "" "CP has no cookie or guard-state mount"
 check "$(mounts stargate-dp stargate-tor-state)" "" "DP has no control mount"
 check "$(mounts tor stargate-tor-state)" /var/lib/tor "Tor private state"
+check "$(mounts tor-observer stargate-tor-state)" /run/tor-control "observer narrow Tor control mount"
+check "$(q '[.services["tor-observer"].volumes[] | select(.source == "stargate-tor-state") | .volume.subpath] | join(",")')" \
+    control "observer sees only control subpath"
+check "$(mounts tor-observer stargate-tor-cp-fabric)" /run/stargate-tor-observer "observer CP health socket"
+check "$(mounts tor-observer stargate-tor-dp-fabric)" "" "observer lacks SOCKS fabric"
+check "$(mounts stargate-control stargate-observer-keys)" "" "CP lacks observer private key"
+check "$(mounts tor-observer stargate-observer-keys)" /etc/stargate/observer-keys "observer isolated key volume"
 check "$(mounts stargate-dp stargate-ipc)" /run/stargate "DP IPC"
 check "$(mounts stargate-control stargate-ipc)" /run/stargate "CP IPC"
 check "$(q '[.services["stargate-dp"].volumes[] | select(.source == "stargate-tor-dp-fabric") | .read_only] | join(",")')" \
@@ -77,8 +85,12 @@ check "$(q '.networks["stargate-egress"].internal // false')" false "Tor egress 
 check "$(q '.services.tor.networks | keys | join(",")')" stargate-egress "Tor sole bridge attachment"
 check "$(q '.services["stargate-dp"].networks // {} | length')" 0 "DP no Docker network"
 check "$(q '.services["stargate-control"].networks // {} | length')" 0 "CP no Docker network"
+check "$(q '.services["tor-observer"].network_mode // ""')" none "observer no Docker network"
+check "$(q '.services["tor-observer"] | has("build")')" false "observer deploys a prebuilt digest"
+check "$(q '.services["tor-observer"].image | test("^sha256:[a-f0-9]{64}$")')" \
+    true "observer image uses immutable local ID"
 check "$(q '.volumes | keys | sort | join(",")')" \
-    "stargate-control-config,stargate-control-state,stargate-dp-state,stargate-ipc,stargate-keys,stargate-tor-config,stargate-tor-cp-fabric,stargate-tor-dp-fabric,stargate-tor-state" \
+    "stargate-control-config,stargate-control-state,stargate-dp-state,stargate-ipc,stargate-keys,stargate-observer-keys,stargate-tor-config,stargate-tor-cp-fabric,stargate-tor-dp-fabric,stargate-tor-state" \
     "named volume set"
 
 for svc in stargate-dp stargate-control tor; do

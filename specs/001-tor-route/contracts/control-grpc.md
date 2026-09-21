@@ -153,17 +153,15 @@ enum EventKind {
   `{"healthcheck_pass", "healthcheck_fail", "container_exit",
   "container_start", "config_render"}`. The data plane and the
   contract test treat unknown `detail` values as a contract violation.
-  In v1 of the Tor-route feature the emitted subset is
-  `{"container_start", "healthcheck_pass", "healthcheck_fail",
-  "container_exit"}` with these `(kind, detail)` pairings (per T039 / T074):
-  `STARTED → container_start`, `HEALTHY → healthcheck_pass`,
-  `UNHEALTHY → healthcheck_fail`, `STOPPED → container_exit`,
-  `CRASHED → container_exit`, `RESTARTED → container_start`.
-  `RESTARTED` reuses `container_start` because `detail`'s role is to
-  describe the container action, not to disambiguate `kind` (which the
-  `kind` field already does); keeping the closed set stable across this
-  feature avoids a future-compat vocabulary bump for a purely
-  informational event.
+  T138/T164's sanitized health channel emits only
+  `STARTED → container_start`, `HEALTHY → healthcheck_pass`, and
+  `UNHEALTHY → healthcheck_fail`. The first authenticated READY or NOT_READY
+  sample emits STARTED once. Entry into READY emits HEALTHY; READY to
+  NOT_READY or UNAVAILABLE emits UNHEALTHY once. Repeated samples and
+  NOT_READY/UNAVAILABLE transitions emit nothing. Health cannot prove Tor
+  exited or restarted, so this channel emits no STOPPED, CRASHED or RESTARTED.
+  Those enum values and the closed detail vocabulary remain reserved for
+  independently substantiated lifecycle sources; no such source ships here.
   `config_render` is reserved for `EVENT_KIND_CONFIG_RELOADED`, which
   the **bridges feature** will emit when `UseBridges` / `Bridge`
   lines are toggled and `TorrcRenderer` re-renders live; this feature

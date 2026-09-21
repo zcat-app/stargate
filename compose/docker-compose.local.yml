@@ -7,8 +7,8 @@
 # scripts/stargate init and THREAT-MODEL.md §3.1. Tor alone has bridge egress.
 # T168 also requires Landlock ABI >= 4 and seccomp TSYNC in the static Go DP.
 # It installs process confinement before serving; owner rules are defense in depth.
-# The CP observer fabric is reserved for T164; CP has no Tor cookie or raw
-# control socket during this transition.
+# T164: CP sees only the observer's authenticated health socket. The observer
+# alone mounts Tor's control/ subpath; neither application plane sees it.
 
 services:
   stargate-dp:
@@ -92,6 +92,32 @@ services:
     pids_limit: 256
     restart: unless-stopped
 
+  tor-observer:
+    # init builds from the reviewed Dockerfile and writes the local immutable
+    # image ID into its gitignored env file. A mutable tag is never deployed.
+    image: ${STARGATE_OBSERVER_IMAGE:?run scripts/stargate init}
+    user: "5103:5100"
+    network_mode: none
+    depends_on:
+      - tor
+    volumes:
+      - stargate-observer-keys:/etc/stargate/observer-keys:ro
+      - stargate-tor-cp-fabric:/run/stargate-tor-observer
+      - type: volume
+        source: stargate-tor-state
+        target: /run/tor-control
+        read_only: true
+        volume:
+          subpath: control
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    pids_limit: 64
+    restart: unless-stopped
+
 networks:
   stargate-egress:
     driver: bridge
@@ -106,3 +132,4 @@ volumes:
   stargate-tor-config:
   stargate-tor-dp-fabric:
   stargate-tor-cp-fabric:
+  stargate-observer-keys:

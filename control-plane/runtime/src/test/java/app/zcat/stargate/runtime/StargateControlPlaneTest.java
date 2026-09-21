@@ -175,8 +175,8 @@ class StargateControlPlaneTest {
 
     private StargateControlPlane.BootConfig cfg(Path tokensYaml, Path keys, Path dpSock) {
         return new StargateControlPlane.BootConfig(tokensYaml, tmp.resolve("pepper.key"), keys,
-                runDir().resolve("control.sock"), dpSock, "tor", 9051,
-                runDir().resolve("control_auth_cookie"), Duration.ofSeconds(10));
+                runDir().resolve("control.sock"), dpSock,
+                runDir().resolve("observer.sock"), Duration.ofSeconds(10));
     }
 
     /** Reference §1.5 mint — mirrors TokenLifecycleContractTest cross-module. */
@@ -408,55 +408,67 @@ class StargateControlPlaneTest {
         }
     }
 
-    /**
-     * Round-1 review F1 (the Major): the monitor-start step of the boot
-     * sequence must be OBSERVED, not just inspection-pinned. A fake tor
-     * ControlPort answers the cookie-auth handshake; the boot-wired monitor's
-     * first tick enters HEALTHY and its §4 {@code sidecar_healthy} row arrives
-     * through the production {@code audit::write} adapter, carrying the
-     * generation supplier's value. Deleting {@code monitor.start()} (or
-     * unwiring the adapter / the supplier) leaves the await empty → red.
-     *
-     * <p>The start-BEFORE-load ordering sub-property of acceptance item 3
-     * stays inspection-pinned — the fake answers on the monitor's own thread
-     * and no load-side hook exists to order against; this probe claims the
-     * START + wiring, not the order. (This test's fast poll + live fake is its
-     * own BootConfig; {@code bootsWithoutTokensFile}'s 10 s poll + absent tor
-     * guarantees its no-audit-row assertion stays valid.)
-     */
     @Test
-    void monitorStartIsWiredAtBootAndFeedsTheAuditAdapter() throws Exception {
+    void absentObserverDoesNotBlockControlPlaneBoot() throws Exception {
         Path keys = keysDir();
         pepperFile(TEST_PEPPER);
-        byte[] cookie = new byte[32];
-        Arrays.fill(cookie, (byte) 0xA0);
-        Files.write(runDir().resolve("control_auth_cookie"), cookie);
-        try (FakeControlPort tor = new FakeControlPort()) {
-            StargateControlPlane.BootConfig fastPoll = new StargateControlPlane.BootConfig(
+        RecordingState state = new RecordingState();
+        RecordingAudit audit = new RecordingAudit();
+        try (StargateControlPlane.BootHandle handle = StargateControlPlane.bootstrap(
+                cfg(tmp.resolve("tokens.yaml"), keys, runDir().resolve("dp.sock")),
+                audit, state, state)) {
+            assertNotNull(handle, "observer absence is advisory");
+            assertTrue(audit.rows.isEmpty(), "no fabricated Tor health audit row");
+        }
+    }
+
+    @Test
+    void monitorStartAuthenticatesObserverAndFeedsProductionAuditAdapter() throws Exception {
+        Path keys = keysDir();
+        pepperFile(TEST_PEPPER);
+        KeyPair observer = ed25519();
+        writePem(keys.resolve("observer.pub"), "PUBLIC KEY", observer.getPublic().getEncoded());
+        writePem(tmp.resolve("observer.priv"), "PRIVATE KEY", observer.getPrivate().getEncoded());
+        Files.copy(keys.resolve("cp.pub"), tmp.resolve("cp.pub"));
+
+        Path goDir = Path.of("../../data-plane").toAbsolutePath().normalize();
+        ProcessBuilder builder = new ProcessBuilder("go", "test", "./cmd/tor-observer",
+                "-run", "^TestJavaClientInteropFixture$", "-count=1", "-timeout=30s");
+        builder.directory(goDir.toFile());
+        builder.environment().put("T164_INTEROP_DIR", tmp.toString());
+        builder.redirectErrorStream(true);
+        builder.redirectOutput(tmp.resolve("observer-go.log").toFile());
+        Process fixture = builder.start();
+        try {
+            long readyDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(12);
+            while (!Files.exists(tmp.resolve("ready")) && fixture.isAlive()
+                    && System.nanoTime() < readyDeadline) {
+                Thread.sleep(10);
+            }
+            assertTrue(Files.exists(tmp.resolve("ready")),
+                    "Go observer fixture started: " + Files.readString(tmp.resolve("observer-go.log")));
+            RecordingState state = new RecordingState();
+            state.lastGeneration = 7;
+            RecordingAudit audit = new RecordingAudit();
+            StargateControlPlane.BootConfig config = new StargateControlPlane.BootConfig(
                     tmp.resolve("tokens.yaml"), tmp.resolve("pepper.key"), keys,
                     runDir().resolve("control.sock"), runDir().resolve("dp.sock"),
-                    "127.0.0.1", tor.port, runDir().resolve("control_auth_cookie"),
-                    Duration.ofMillis(50));
-            RecordingState state = new RecordingState();
-            RecordingAudit audit = new RecordingAudit();
+                    tmp.resolve("health.sock"), Duration.ofMillis(50));
             try (StargateControlPlane.BootHandle handle = StargateControlPlane.bootstrap(
-                    fastPoll, audit, state, state)) {
-                assertNotNull(handle, "boot completes");
-                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-                while (audit.rows.stream().noneMatch(r -> "sidecar_healthy".equals(r[0]))
-                        && System.nanoTime() < deadline) {
-                    Thread.sleep(20);
+                    config, audit, state, state)) {
+                long eventDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                while (audit.rows.isEmpty() && System.nanoTime() < eventDeadline) {
+                    Thread.sleep(10);
                 }
-                java.util.Optional<String[]> row = audit.rows.stream()
-                        .filter(r -> "sidecar_healthy".equals(r[0]))
-                        .findFirst();
-                assertTrue(row.isPresent(),
-                        "the boot-wired monitor entered HEALTHY and wrote its §4 row through "
-                                + "the production audit adapter (monitor.start() is live)");
-                assertEquals("tor", row.get()[1], "target is the one sidecar (control-grpc §\"WatchEvents\")");
-                assertEquals("{\"generation\":0}", row.get()[2],
-                        "the §1.8 generation supplier is wired to the store (fresh state ⇒ 0)");
+                assertEquals(1, audit.rows.size(), "production boot must start the health monitor");
+                assertArrayEquals(new String[] {"sidecar_healthy", "tor", "{\"generation\":7}"},
+                        audit.rows.get(0), "authenticated READY reaches the §4 audit adapter");
             }
+            Files.write(tmp.resolve("stop"), new byte[0]);
+            assertTrue(fixture.waitFor(5, TimeUnit.SECONDS), "Go observer fixture exited");
+            assertEquals(0, fixture.exitValue(), Files.readString(tmp.resolve("observer-go.log")));
+        } finally {
+            fixture.destroyForcibly();
         }
     }
 
@@ -480,70 +492,6 @@ class StargateControlPlaneTest {
         try (StargateControlPlane.BootHandle second = StargateControlPlane.bootstrap(
                 shared, new RecordingAudit(), new RecordingState(), new RecordingState())) {
             assertNotNull(second, "close() released control.sock: the same path binds again");
-        }
-    }
-
-    /**
-     * Minimal tor ControlPort stand-in: loops back the only three commands the
-     * monitor may send (T039's allowlist) with 2xx replies, bootstrap phase
-     * PROGRESS=100 — the first session's HEALTHY edge. The wire-level
-     * properties (hex cookie, allowlist, reply parsing) are SidecarMonitorTest's
-     * ground; this fake exists only to make the boot's monitor wiring observable.
-     */
-    private static final class FakeControlPort implements AutoCloseable {
-
-        final int port;
-        private final java.net.ServerSocket serverSocket;
-        private final Thread accepter;
-        private volatile boolean closed;
-
-        FakeControlPort() throws IOException {
-            java.net.ServerSocket ss = new java.net.ServerSocket(0, 8,
-                    java.net.InetAddress.getLoopbackAddress());
-            this.serverSocket = ss;
-            this.port = ss.getLocalPort();
-            this.accepter = new Thread(this::acceptLoop, "fake-tor-controlport");
-            this.accepter.setDaemon(true);
-            this.accepter.start();
-        }
-
-        private void acceptLoop() {
-            while (!closed) {
-                try (java.net.Socket socket = serverSocket.accept()) {
-                    serve(socket);
-                } catch (IOException quiet) {
-                    // close() or a failed cycle — the monitor's next dial retries
-                }
-            }
-        }
-
-        private void serve(java.net.Socket socket) {
-            try {
-                socket.setSoTimeout(2000);
-                var in = new java.io.BufferedReader(new java.io.InputStreamReader(
-                        socket.getInputStream(), StandardCharsets.ISO_8859_1));
-                var out = new java.io.OutputStreamWriter(socket.getOutputStream(),
-                        StandardCharsets.ISO_8859_1);
-                String line;
-                while ((line = in.readLine()) != null) {
-                    if (line.startsWith("GETINFO")) {
-                        out.write("250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=done\r\n");
-                    }
-                    out.write("250 OK\r\n");
-                    out.flush();
-                    if (line.startsWith("QUIT")) {
-                        break;
-                    }
-                }
-            } catch (IOException quiet) {
-                // the cycle died mid-session; the monitor classifies it
-            }
-        }
-
-        @Override
-        public void close() throws IOException {
-            closed = true;
-            serverSocket.close();
         }
     }
 

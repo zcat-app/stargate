@@ -170,7 +170,7 @@ bash "$DISPATCHER" init --profile=local </dev/null >/dev/null 2>&1; rc=$?
 # scripts/lib/compose.sh (the builder init sources); grep the LIB as the
 # source of truth. 0640 + pepper.key assert the T092 pepper-provisioning shape
 # (data-model §1.7).
-for lit in 0600 0644 0640 5101 5102 5100; do
+for lit in 0600 0644 0640 5101 5102 5103 5100; do
   has_literal "$LIB" "${lit}([^0-9]|\$)" \
     "M4: literal ${lit} missing from $LIB (key/pepper ownership constants)"
 done
@@ -186,7 +186,7 @@ has_literal "$COMPOSE" '"5102:5100"' "M4: compose must set stargate-dp user: \"5
 # Key file names (cp.priv/dp.priv/cp.pub/dp.pub per arch §4.3) + the T092
 # pepper file (data-model §1.7). These are literals in init's install +
 # do-not-clobber count loop; the ownership CONSTANTS live in the lib (above).
-for kf in cp\.priv dp\.priv cp\.pub dp\.pub pepper\.key; do
+for kf in cp\.priv dp\.priv cp\.pub dp\.pub observer\.priv observer\.pub pepper\.key; do
   has_literal "$INIT" "${kf}" "M4: key/pepper filename ${kf} missing from $INIT"
 done
 
@@ -196,6 +196,10 @@ has_literal "$INIT" "PEPPER_FILE" \
   "T088: init must reference PEPPER_FILE (T092 pepper provisioning)"
 has_literal "$INIT" "openssl rand" \
   "T088: init must generate the pepper via openssl rand"
+has_literal "$INIT" "--iidfile" \
+  "T164: observer build must capture an immutable local image ID"
+has_literal "$INIT" "observer_source_hash" \
+  "T164: observer build must bind the source bytes before deployment"
 has_literal "$INIT" "compose_run" \
   "T088: init must use compose_run (project-scoped compose command, B1)"
 has_literal "$INIT" "compose_health_ids" \

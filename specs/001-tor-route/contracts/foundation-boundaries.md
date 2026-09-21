@@ -53,7 +53,7 @@ enforcing-profile signal/lifecycle checks remain mandatory. The maintainer
 approved this evidence-scope refinement on 2026-09-21; T163 records the decision
 and measured environment. No application-plane permission changes.
 
-**T138 authority refinement (T162 fabric landed; observer pending T164):** the CP MUST NOT hold the
+**T138/T164 observer boundary:** the CP MUST NOT hold the
 Tor control cookie, the Tor-cookie supplementary group, or a network path to raw Tor control.
 A separate observer owns the Tor-facing credential and raw control session. Its CP-facing
 endpoint accepts one bounded health operation with no arguments and returns only the finite
@@ -62,15 +62,39 @@ not return raw Tor replies. The observer's Tor-facing sequence is fixed to cooki
 authentication, `GETINFO status/bootstrap-phase`, and `QUIT`; this application allowlist is
 defense-in-depth, while the process/socket/credential separation is the enforcement boundary.
 T138's decision record fixes the CP-facing `HEALTH/1` framing and byte/deadline limits,
-Tor-reply bounds, exact token meanings and event mapping; T164 MUST implement and test those
-bounds and reconcile the emitted `WatchEvents` subset before replacing the current monitor.
+Tor-reply bounds, exact token meanings and event mapping. The observer and CP use a
+versioned Ed25519 challenge before the health request: observer sends ASCII `OBS/1\n`
+plus 32 random bytes; CP sends `CP/1\n`, its 32 random bytes, and a 64-byte signature
+over `stargate-observer/1 client\n` plus both nonces in server/client order; observer
+verifies `cp.pub` freshly, then sends `OK/1\n` plus its signature over
+`stargate-observer/1 server\n` plus the same nonces. CP verifies `observer.pub`
+freshly. The private keys live in disjoint volumes with modes `0600`; the
+health socket is on the CP-only Unix fabric. The socket stream is protected by
+the kernel's endpoint/namespace boundary; the challenge authenticates the
+speaking endpoints and rejects replay. No token is sent before caller auth.
+The post-auth request is exactly `HEALTH/1\n` (9 bytes) and write-EOF; replies
+are exactly `READY/1\n`, `NOT_READY/1\n` or `UNAVAILABLE/1\n`, then close.
+The request/EOF deadline is 1 second; one Tor query has a 4-second budget,
+one active query and no waiting queue; CP's whole call has a 6-second cap.
+Tor reply lines are capped at 8 KiB and replies at 64 lines/8 KiB.
+The bootstrap reply must have Tor's `NOTICE BOOTSTRAP` or `WARN BOOTSTRAP`
+status with numeric `PROGRESS`, a keyword `TAG`, and a nonempty `SUMMARY`;
+unrecognized well-formed fields remain allowed. Malformed status text that
+merely contains `PROGRESS=100` is `UNAVAILABLE`, never `READY`.
+The separate observer container has no Docker network. It sees only Tor's
+same-volume `control/` subpath read-only (native control socket and refreshed
+cookie hardlink), its own key volume read-only, and the writable CP health
+fabric. CP sees only the health fabric read-only. Init builds the observer
+from a digest-pinned Go toolchain, verifies a source-hash label on the built
+image and deploys its immutable local sha256 image ID; the evidence identifies
+the local build, not an independently published binary provenance claim.
 An unavailable observer cannot justify a Tor exit or restart claim.
 The observer MUST NOT expose stream/circuit status, configuration, event subscriptions,
 stream attachment, onion-service creation, signals or a generic command proxy. CP health is
-advisory and cannot gate DP admission or select a fallback route. T164/T165 own the
-tests-first implementation and deployment evidence. T162 removes the former direct CP cookie
-and raw-control path and reserves a CP-only fabric volume; until T164, CP Tor health observation
-is unavailable and advisory. The reserved volume is not itself a health endpoint.
+advisory and cannot gate DP admission or select a fallback route. T164 owns the
+source-level implementation and fake-boundary tests; T165 owns integrated
+production-namespace caller and packet evidence. T162 removed the former CP
+cookie and raw-control path; T164 populates the reserved CP-only fabric.
 
 Native Tor protocol maintenance belongs to Tor's egress TCB. DP/CP cannot originate public
 TCP/UDP/DNS, including arbitrary names through a forwarding service resolver. Local IPC/service

@@ -17,6 +17,7 @@ import app.zcat.stargate.auth.TokenLoader;
 import app.zcat.stargate.auth.TokenLoaderContract;
 import app.zcat.stargate.persistence.AuditLogService;
 import app.zcat.stargate.persistence.SqliteTokenState;
+import app.zcat.stargate.sidecar.ObserverHealthClient;
 import app.zcat.stargate.sidecar.SidecarMonitor;
 import io.quarkus.runtime.Quarkus;
 import io.quarkus.runtime.QuarkusApplication;
@@ -46,9 +47,8 @@ import stargate.v1.EventsOuterClass.SidecarEvent;
  *   <li>bind the CP's WatchEvents server on {@code control.sock} (T038) —
  *       the inter-plane surface exists before any push (UDS only, mode 0660,
  *       §"Socket topology");</li>
- *   <li>start the {@code SidecarMonitor} (T039) — the CP's only outbound
- *       dialer, advisory by construction, observing {@code tor:9051}
- *       independently of everything below;</li>
+ *   <li>start the {@code SidecarMonitor} against the authenticated observer
+ *       health socket; its samples are advisory to the data plane;</li>
  *   <li>load {@code tokens.yaml} once (T035; FR-018) — the loader persists
  *       the diff, bumps the §1.8 generation, and pushes
  *       {@code ReloadTokens} (T038) strictly last. A missing, unreadable, or
@@ -100,14 +100,8 @@ public class StargateControlPlane implements QuarkusApplication {
     @ConfigProperty(name = "stargate.dp-sock")
     String dpSock;
 
-    @ConfigProperty(name = "stargate.tor-host")
-    String torHost;
-
-    @ConfigProperty(name = "stargate.tor-control-port")
-    int torControlPort;
-
-    @ConfigProperty(name = "stargate.tor-cookie")
-    String torCookie;
+    @ConfigProperty(name = "stargate.tor-observer-sock")
+    String torObserverSock;
 
     @ConfigProperty(name = "stargate.monitor-poll")
     Duration monitorPoll;
@@ -119,7 +113,7 @@ public class StargateControlPlane implements QuarkusApplication {
     @Override
     public int run(String... args) throws Exception {
         BootConfig cfg = new BootConfig(Path.of(tokensPath), Path.of(pepperPath), Path.of(keysDir),
-                Path.of(controlSock), Path.of(dpSock), torHost, torControlPort, Path.of(torCookie),
+                Path.of(controlSock), Path.of(dpSock), Path.of(torObserverSock),
                 monitorPoll);
         try (BootHandle handle = bootstrap(cfg, auditService, tokenState, tokenState)) {
             Quarkus.waitForExit();
@@ -129,7 +123,7 @@ public class StargateControlPlane implements QuarkusApplication {
 
     /** Immutable boot topology — one place the paths/topology enter the sequence. */
     record BootConfig(Path tokensYaml, Path pepperFile, Path keysDir, Path controlSock,
-            Path dpSock, String torHost, int torPort, Path cookiePath, Duration pollInterval) {
+            Path dpSock, Path observerSock, Duration pollInterval) {
     }
 
     /** The started surfaces, closed in reverse start order. */
@@ -180,7 +174,8 @@ public class StargateControlPlane implements QuarkusApplication {
             // The monitor declares its own (identical-shape) audit port —
             // T039's seam predates the T035a contract's availability here —
             // so the production sink adapts by shape.
-            monitor = new SidecarMonitor(cfg.torHost(), cfg.torPort(), cfg.cookiePath(),
+            monitor = new SidecarMonitor(new ObserverHealthClient(cfg.observerSock(),
+                    cfg.keysDir().resolve("cp.priv"), cfg.keysDir().resolve("observer.pub")),
                     cfg.pollInterval(), generations::lastGeneration, eventSink(events),
                     audit::write);
             monitor.start();

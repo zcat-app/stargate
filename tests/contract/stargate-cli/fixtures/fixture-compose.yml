@@ -74,3 +74,5 @@ volumes:
   stargate-dp-state: {}
   stargate-tor-state: {}
   stargate-tor-config: {}
+  stargate-observer-keys: {}
+  stargate-tor-cp-fabric: {}
