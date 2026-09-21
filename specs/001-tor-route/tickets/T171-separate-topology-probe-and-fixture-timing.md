@@ -1,7 +1,7 @@
 ---
 id: "T171"
 title: "Separate topology probe launch and fixture timing"
-status: in-review
+status: done
 created: "2026-09-21"
 last_updated: 2026-09-21
 source: "T163 full Ubuntu VM probe startup timeouts"
@@ -21,7 +21,7 @@ decision_refs:
   - "specs/001-tor-route/tickets/T163-verify-packet-level-topology-boundaries.md"
 remediates: "T169"
 tests_first: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-21, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -132,3 +132,8 @@ the new capture-manifest SHA-256 is
 `c665c3bb6d511260e95cd989c2b2c303a3fea9f820178aa4d9b0045a774a5f58`.
 All 132 runtime/deployment/test source paths matched the guest before this run.
 The same environment and scheduling settings described above were used.
+
+Both fresh native reviewers approved the corrected candidate without findings
+at snapshot `cab7a0e05fe4839c076f49fb19953e64480032251760fbf822f38fc50cba7813`.
+The driver's final gate reported 26 PASS, one release-cadence SKIP and zero
+FAIL, then created focused commit `3519d91` and marked T171 done.

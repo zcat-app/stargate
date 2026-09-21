@@ -13,12 +13,12 @@
 
 | Status | Count |
 |---|---|
-| pending | 54 |
+| pending | 55 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 144 |
-| deferred | 4 |
+| done | 145 |
+| deferred | 3 |
 | **total** | **203** |
 
 ---
@@ -46,15 +46,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
+| T163 | Verify packet-level topology boundaries with capture control | Foundation audit remediation | ✓ |  |
 | T164 | Enforce the sanitized Tor observer boundary | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T171 | Separate topology probe launch and fixture timing | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -65,13 +64,12 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | spec-amend | T089 |
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
-| T163 | Verify packet-level topology boundaries with capture control | blocked-on-new-ticket | T171 |
 
 ---
 
 ## Done
 
-_144 ticket(s) done._
+_145 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -217,3 +215,4 @@ _144 ticket(s) done._
 - T168 — Keep data-plane egress closed across owner-rule loss
 - T169 — Make topology probe launch independent of checkout depth
 - T170 — Permit Go self-signals and trusted-host DP lifecycle signals
+- T171 — Separate topology probe launch and fixture timing

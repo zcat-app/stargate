@@ -1,15 +1,13 @@
 ---
 id: "T163"
 title: "Verify packet-level topology boundaries with capture controls"
-status: deferred
+status: pending
 created: "2026-09-13"
 last_updated: 2026-09-21
 source: "specs/001-tor-route/analysis/T134-local-topology.md"
 phase: "Foundation audit remediation"
 story: "-"
 blocked_by: ["T162", "T167", "T168", "T169", "T170", "T171"]
-deferred_on: "T171"
-deferred_reason: blocked-on-new-ticket
 parallel: false
 files_budget: 10
 privacy_critical: true
@@ -219,3 +217,22 @@ budget expired under emulation. The failed runs remained failures and cleaned
 up. T171 separates bounded helper startup from socket/fixture timing; T163
 resumes against that harness repair. Its cumulative result and environment
 scope remain to be established.
+
+## Complete VM evidence after T171 (2026-09-21, closure pending)
+
+T171 landed as `3519d91` after both fresh native reviewers approved and the
+final repository gate passed (26 PASS, one release-cadence SKIP, zero FAIL).
+Its corrected runner completed the full independently booted Ubuntu VM
+sequence as `T163-20260921-024737`: all 29 captures were valid with zero
+kernel drops, all owner-loss/restart and required-confinement failure/recovery
+phases passed, and cleanup succeeded. The separate legacy-timeout experiment
+also passed as `T163-legacy-20260921-030213`. Exact source identities and
+captures remain under `target/live-e2e/T163-vm-evidence/` (ignored, local).
+
+The runnable legacy experiment, measured report and concrete host-scope
+proposal are prepared under `target/runs/T163-prepared/` (ignored, local).
+The foundation contract still explicitly requires physical-host evidence.
+The maintainer has been asked whether the tested full Linux VM may satisfy
+that obligation; no answer has been received. This ticket is reopened for
+completion after that decision, not marked done. The contract/plan wording,
+T125 decision retirement, final T163 review and focused commit remain pending.
