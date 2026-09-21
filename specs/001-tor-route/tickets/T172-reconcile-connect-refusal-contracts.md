@@ -1,7 +1,7 @@
 ---
 id: "T172"
 title: "Reconcile Tor HTTP CONNECT refusal contracts"
-status: in-progress
+status: done
 created: "2026-09-21"
 last_updated: 2026-09-21
 source: "T147 investigation and recommendation"
@@ -23,7 +23,7 @@ decision_refs:
   - "specs/001-tor-route/tickets/T147-resolve-connect-isolation-contract.md §Investigation and recommendation"
 remediates: "T043"
 tests_first: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-21, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

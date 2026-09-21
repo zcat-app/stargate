@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 52 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 149 |
+| done | 150 |
 | deferred | 3 |
 | **total** | **205** |
 
@@ -46,14 +46,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
+| T173 | Refuse unpartitioned HTTP CONNECT on the Tor listener | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T172 | Reconcile Tor HTTP CONNECT refusal contracts | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -69,7 +68,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_149 ticket(s) done._
+_150 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -220,3 +219,4 @@ _149 ticket(s) done._
 - T169 — Make topology probe launch independent of checkout depth
 - T170 — Permit Go self-signals and trusted-host DP lifecycle signals
 - T171 — Separate topology probe launch and fixture timing
+- T172 — Reconcile Tor HTTP CONNECT refusal contracts
