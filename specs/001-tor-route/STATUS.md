@@ -15,9 +15,9 @@
 |---|---|
 | pending | 53 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 146 |
+| done | 147 |
 | deferred | 3 |
 | **total** | **203** |
 
@@ -46,14 +46,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
+| T165 | Validate Tor observer deployment and consumers | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T164 | Enforce the sanitized Tor observer boundary | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -69,7 +68,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_146 ticket(s) done._
+_147 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -211,6 +210,7 @@ _146 ticket(s) done._
 - T161 — Resolve Tor upgrade live validation failures before promotion
 - T162 — Implement host-loopback DP with unix-socket sidecar fabric
 - T163 — Verify packet-level topology boundaries with capture controls
+- T164 — Enforce the sanitized Tor observer boundary
 - T166 — Remove shrink escalation and preserve review evidence
 - T167 — Repair overlapping read-only control-plane mounts
 - T168 — Keep data-plane egress closed across owner-rule loss
