@@ -2,7 +2,7 @@
 
 This suite exercises the checked-in Local Compose deployment in the host and Tor
 namespaces. Run it on a **dedicated, disposable Linux Docker host** with root,
-AppArmor, Landlock ABI >= 4, seccomp TSYNC, `tcpdump`, `ip`, IPv4/IPv6 iptables, and Go. It installs the production
+AppArmor, Landlock ABI >= 4, seccomp TSYNC, `tcpdump`, `ip`, `ss`, IPv4/IPv6 iptables, and Go. It installs the production
 owner rules and AppArmor profile, then restores the initial firewall snapshots
 and removes its project/profile. Do not run it on a workstation or a shared host.
 The tool intentionally refuses a pre-existing `stargate-dp` profile or owner rule.
@@ -45,7 +45,30 @@ service and dummy resolver, and the existing Tor socket caller matrix before
 and after Tor restarts. A SOCKS5 method reply proves admission/transport only;
 it does not claim that Tor completed an upstream circuit or returned destination
 bytes. The socket matrix's real control-socket reply is its positive control.
-CP health through the reserved sanitized observer is T164/T165's scope.
+The same run now calls `observer.py` after the DP topology phases. It checks
+the actual CP and observer identities, network modes, mounts and image source
+label; places a fixed-output probe in CP's disposable config volume; and requires
+an authenticated finite health reply there. A CP-namespace packet capture
+requires a visible loopback positive control and no packet to Tor control.
+It tests invalid caller and command inputs against a fake Tor control socket
+only after stopping the disposable Tor container. Each refusal must leave the
+fake's command log unchanged. The fake records command names without retaining
+cookie bytes. With the deployed CP monitor running, the same listener then
+drives valid, malformed and timed-out samples plus observer loss and recovery.
+The DP event consumer must record the exact STARTED, HEALTHY and UNHEALTHY
+transitions without repeats or invented STOPPED, CRASHED or RESTARTED events.
+The event sequence's positive STARTED control fails if CP never samples.
+Tor and observer restart recovery and application log and CP-state raw-marker
+scans are part of this result. Finally, a disposable token is loaded through CP's normal reload;
+with CP stopped and Tor natively healthy, DP must authenticate and return
+destination bytes through the real Tor sidecar. A structural or fake-boundary pass alone is not a
+production namespace result. Raw evidence stays under the same ignored
+`target/live-e2e/T163-*` directory and is consumed by T165/T155.
+
+The observer verdict selftest runs in the ordinary contract gate:
+`python3 -B -m unittest discover -s tests/live-e2e/local-topology -p test_observer.py`.
+T124 still owns the Tor-native healthcheck's cold-bootstrap behavior. That
+healthcheck runs inside Tor's TCB and grants no CP-facing control command.
 
 T168 adds a second phase which removes IPv4 only, IPv6 only and both owner
 jumps. The actual Compose DP must continue admitting safely, including after

@@ -39,6 +39,20 @@ investigation-only completion from unblocking feature work while defects remain 
 - Gated: per-ticket regressions and independent reviews, followed by current integrated evidence.
 - Residue: synthetic and skipped tests do not establish clean-host or browser-network behavior.
 
+## T165 Local observer input (2026-09-21)
+
+- The [T165 observer evidence](../analysis/T165-observer-evidence.md) records
+  the clean-volume Local deployment, CP/observer production identities and
+  mounts, positive CP-namespace packet capture, forbidden-command non-arrival,
+  finite token/failure matrix, deployed CP→DP STARTED/HEALTHY/UNHEALTHY
+  event sequence with no false lifecycle event, socket recreation, and CP-down
+  authenticated destination bytes through real Tor. The complete T163/T165
+  guest run is `target/runs/T165-r2-vm-final3.log`; copied raw artifacts are
+  under `target/live-e2e/T165-vm-20260921-190436/` (gitignored).
+- This input covers the QEMU guest's Local namespace and kernel. It does not
+  substitute for T155's remaining foundation, routed-IPv6, LAN/VPS, physical
+  NIC, browser, release-cadence or independent cumulative-review checks.
+
 ## Acceptance
 
 1. Reconcile every September audit finding and the July finding ownership table against

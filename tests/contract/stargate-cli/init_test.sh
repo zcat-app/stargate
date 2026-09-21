@@ -29,7 +29,7 @@
 #   - M6  hard-coded compose/docker-compose.local.yml; no --profile flag.
 #   - M7  bounded healthcheck (60 s default + env override); no `compose down`.
 #   - M8  Tor-only verify (no 8882/8884/8885 port literals).
-#   - M9  status table references DP + CP + Tor sidecar.
+#   - M9  status table references DP + CP + Tor sidecar + observer.
 #   - M10 exit-code constants 10/20/30/40/50 present.
 #   - M12 no curl/wget of a remote URL (no outbound except docker daemon).
 #   - M13 SPDX license headers present.
@@ -200,6 +200,17 @@ has_literal "$INIT" "--iidfile" \
   "T164: observer build must capture an immutable local image ID"
 has_literal "$INIT" "observer_source_hash" \
   "T164: observer build must bind the source bytes before deployment"
+# T165: the real Compose file requires an observer image digest. A fresh
+# env file has no digest until after host-policy setup and observer build;
+# the early stop operation must supply a parse-only digest in that one call.
+has_literal "$INIT" 'STARGATE_OBSERVER_IMAGE=sha256:0{64} compose_run stop stargate-dp' \
+  "T165: clean-host stop must parse Compose before observer image build"
+# The disposable VM uses the documented remote Buildx builder. The observer
+# image must be loaded into the guest daemon before its immutable ID is read.
+has_literal "$INIT" 'BUILDX_BUILDER' \
+  "T165: remote builder selection must be explicit"
+has_literal "$INIT" 'buildx build .*--load' \
+  "T165: remote observer build must load its image into the local daemon"
 has_literal "$INIT" "compose_run" \
   "T088: init must use compose_run (project-scoped compose command, B1)"
 has_literal "$INIT" "compose_health_ids" \
@@ -258,10 +269,11 @@ lacks_literal "$INIT" "compose[[:space:]]+down" \
 lacks_literal "$INIT" "888[245]" \
   "M8: non-Tor route port (8882/8884/8885) must not appear in $INIT"
 
-# --- M9: status table references exactly DP + CP + Tor ---------------------
+# --- M9: status table references the deployed Local services --------------
 has_literal "$INIT" "(D|d)ata[[:space:]]*plane"  "M9: status table missing 'data plane'"
 has_literal "$INIT" "(C|c)ontrol[[:space:]]*plane" "M9: status table missing 'control plane'"
 has_literal "$INIT" "(T|t)or[[:space:]]*sidecar"   "M9: status table missing 'Tor sidecar'"
+has_literal "$INIT" '"Tor observer"' "T165: status table missing deployed Tor observer"
 # M9 "exactly": no placeholder rows for absent sidecars (research §8 — only
 # the components present in this feature). The script must not emit i2p/nym/
 # direct status rows. (Comments may mention them as deferred; the STATUS

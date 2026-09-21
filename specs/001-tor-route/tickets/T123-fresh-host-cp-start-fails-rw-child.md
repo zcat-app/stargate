@@ -87,10 +87,11 @@ Options (any ONE satisfies acceptance #1):
 
 ## Acceptance
 
-1. On a clean volume set (`docker volume ls` shows none of the project's
-   seven volumes), `docker compose -f compose/docker-compose.local.yml
-   --env-file compose/env/local.env.example up -d` brings all three
-   services to healthy — no manual volume surgery.
+1. On a clean project volume set, the supported `scripts/stargate init`
+   sequence brings up all four Local services (DP, CP, Tor and observer)
+   without manual volume surgery. Tor's Docker healthcheck and the
+   observer's process-running state are reported distinctly; an observer
+   process alone is not proof of authenticated Tor health.
 2. If the chosen option touches the :ro posture or a contract path, the
    change is recorded in SECURITY-DECISIONS.md and the structural compose
    contract (local_compose_test.sh M-gates) is extended to pin the new
@@ -100,9 +101,9 @@ Options (any ONE satisfies acceptance #1):
 ### Required planning refinement
 
 
-The supported clean-start sequence must be settled after T134/T138. Acceptance #1 means
+The supported clean-start sequence was selected after T134/T138. Acceptance #1 means
 empty project volumes followed by the documented operator initialization and Compose startup;
-if initialization is required, raw `compose up` is not an alternative success claim. Test the
+raw `compose up` is not an alternative success claim. Test the
 actual operator commands without harness-only mkdir/chown/key seeding. Preserve read-only
 configuration and least privilege. Record the failing fresh-volume regression before fixing it.
 The earlier design options are hypotheses, not permission to weaken the hardening posture.

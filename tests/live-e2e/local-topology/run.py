@@ -567,7 +567,7 @@ def run_live() -> None:
         raise RuntimeError("set STARGATE_LIVE_E2E=1 and STARGATE_DISPOSABLE_HOST=1 on a dedicated disposable host")
     if os.geteuid() != 0:
         raise RuntimeError("root is required for real host owner rules and packet capture")
-    for tool in ("docker", "tcpdump", "ip", "iptables", "ip6tables", "iptables-save", "ip6tables-save",
+    for tool in ("docker", "tcpdump", "ip", "ss", "iptables", "ip6tables", "iptables-save", "ip6tables-save",
                  "iptables-restore", "ip6tables-restore", "apparmor_parser", "go"):
         if shutil.which(tool) is None:
             raise RuntimeError(f"required tool missing: {tool}")
@@ -625,6 +625,10 @@ def run_live() -> None:
         print("PASS: T162 Tor socket caller matrix before/after Tor restart")
         assert_rule_absent(evidence, env)
         assert_restriction_unavailable(evidence, env)
+        # The stdin-fed socket helpers execute this module without its source
+        # directory on sys.path. Import only in the live driver, never there.
+        import observer
+        observer.validate(evidence, env)
     finally:
         shutil.rmtree(helper_dir)
         cleanup_failures = []

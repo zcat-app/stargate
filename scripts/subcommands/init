@@ -19,7 +19,7 @@
 #   5. Healthcheck wait  — `docker compose ps -q <service>`, never guessed
 #                          container names (B1 fix). Bounded (default 60 s).
 #   6. Verification      — Tor route only (no I2P/Nym/Direct).
-#   7. Status table      — DP + CP + Tor sidecar (the components present).
+#   7. Status table      — DP + CP + Tor sidecar + observer.
 #   8. Exit codes        — 0/10/20/30/40/50/60 (stable contract surface).
 #
 # T088 (review/sol-review.md#B1) repairs the shipped installer: it previously
@@ -173,7 +173,11 @@ install_host_boundary() {
   # Re-init may encounter a running DP, including after a host firewall
   # flush. Stop it before touching any rule so an intermediate chain state
   # cannot admit traffic. A failed install deliberately leaves it stopped.
-  if ! compose_run stop stargate-dp >/dev/null 2>&1; then
+  # Compose interpolates every service even for `stop`. The first clean-host
+  # env file has no observer image yet; this zero digest is parse-only and is
+  # scoped to the stop command. build_observer_image must verify and persist
+  # the real image ID before compose_up can start any service (T138/T165).
+  if ! STARGATE_OBSERVER_IMAGE=sha256:0000000000000000000000000000000000000000000000000000000000000000 compose_run stop stargate-dp >/dev/null 2>&1; then
     note "cannot stop existing DP before checking host policy"
     return "$EXIT_HOST_BOUNDARY"
   fi
@@ -487,9 +491,15 @@ observer_source_hash() {
 
 build_observer_image() {
   local iidfile image_id source_sha shown_sha env_file env_tmp
+  local -a build_cmd=(docker build)
   iidfile="$(mktemp)" || return "$EXIT_COMPOSE"
   source_sha="$(observer_source_hash)" || return "$EXIT_COMPOSE"
-  if ! docker build --iidfile "$iidfile" \
+  # A remote Buildx worker keeps results in its own cache by default. Loading
+  # the verified result into this daemon is required before Compose can pin it.
+  if [ -n "${BUILDX_BUILDER:-}" ]; then
+    build_cmd=(docker buildx build --builder "$BUILDX_BUILDER" --load)
+  fi
+  if ! "${build_cmd[@]}" --iidfile "$iidfile" \
       --label "org.opencontainers.image.source-sha256=$source_sha" \
       --file "$_SG_REPO_ROOT/sidecars/tor-observer/Dockerfile" \
       "$_SG_REPO_ROOT" >/dev/null 2>&1; then
@@ -629,7 +639,7 @@ verify_tor() {
 
 # ---- 7. STATUS TABLE (arch §9.1 step 6) ------------------------------------
 print_status() {
-  # Only the components present in the local profile (research §8). No
+# Only the components present in the local profile (research §8). No
   # placeholder rows for absent sidecars (i2pd/nym not in this feature).
   printf '\n'
   printf 'Stargate status (local profile, project %s):\n' "$STARGATE_PROJECT"
@@ -637,6 +647,8 @@ print_status() {
   printf '  %-18s %-10s %-12s %s\n' "data plane"   "HEALTHY" "127.0.0.1" "proxy 8881 (Tor route)"
   printf '  %-18s %-10s %-12s %s\n' "control plane" "HEALTHY" "127.0.0.1" "gRPC control.sock"
   printf '  %-18s %-10s %-12s %s\n' "Tor sidecar"  "HEALTHY" "internal"  "SOCKS5 over DP-only UDS"
+  # Running alone does not prove Tor bootstrap or an authenticated sample.
+  printf '  %-18s %-10s %-12s %s\n' "Tor observer" "RUNNING" "internal" "authenticated advisory health"
   printf '\n'
   printf 'Admin enrollment: not yet implemented (deferred to the admin-UI feature).\n'
 }

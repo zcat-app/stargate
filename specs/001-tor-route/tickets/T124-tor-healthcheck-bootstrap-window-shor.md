@@ -44,25 +44,24 @@ greps the control-port bootstrap-phase for `PROGRESS=100` — i.e. it demands
 FULL live-network bootstrap within ~150 s worst case. A cold bootstrap on
 the live Tor network legitimately takes minutes (T032 and T058a budget
 5 minutes for exactly this; T059's run #1 bootstrapped within the window,
-run #3 did not — same tree, fresh volume both times). When the window is
-exceeded, `stargate-control`'s `depends_on: tor: service_healthy` aborts
-the whole `docker compose up` — so every full-stack bring-up (T033, T059,
-T060, T061, T070 live shapes, and any operator's clean-host start) flakes
-on slow Tor-network days. The tor-only suites never saw it because they
-wait on their own deadlines, not on the healthcheck.
+run #3 did not — same tree, fresh volume both times). The current installer
+waits for Tor's Docker healthcheck, so a delayed bootstrap can time out the
+operator's clean-host `init` even while the observer process is running.
+The Tor-native healthcheck is inside Tor's TCB; it is not a CP command channel.
 
 ## Analysis
 
 *(Quick pass — arithmetic + one knob.)*
 
 - The healthcheck's JOB (compose file comments; T032) is to prove the
-  control port authenticates with the cookie — the CP's cookie subpath
-  mount depends on cookie existence, and "healthy" gates the CP start.
+  Tor-local control socket authenticates with its own cookie. T164 moved CP
+  observation to the separate authenticated finite-health observer, so the
+  native healthcheck gives CP no cookie or raw-control authority.
   Demanding PROGRESS=100 goes beyond that job: the cookie + control
   listener exist LONG before bootstrap completes (tor writes the cookie
   at startup; bootstrap only builds circuits).
-- **Fix (chosen):** keep the same control-port probe but gate on the
-  property the CP actually needs — `250 OK` from `AUTHENTICATE` (cookie
+- **Fix (chosen):** keep the same Tor-native control probe but gate on
+  `250 OK` from `AUTHENTICATE` (cookie
   present + control listener up), not PROGRESS=100. Runtime consumers
   needing full bootstrap (the tests) already poll for it with their own
   5-minute deadlines. Alternative (widening start-period to ~6 min)
@@ -74,12 +73,13 @@ wait on their own deadlines, not on the healthcheck.
 ## Acceptance
 
 1. With a fresh volume set and a deliberately slow/patchy Tor-network
-   connection (or by temporarily narrowing the window), `docker compose
-   up -d` brings all three services up: tor reports healthy once the
-   control port authenticates, without waiting for PROGRESS=100.
-2. The CP still only starts after the cookie exists (the healthcheck's
-   AUTHENTICATE still gates it) — the T039 cookie-subpath mount
-   guarantee is unchanged.
+   connection (or by temporarily narrowing the window), the supported
+   `scripts/stargate init` brings up all four services: Tor reports healthy
+   once its native control socket authenticates, without waiting for
+   `PROGRESS=100`.
+2. The Tor-native healthcheck still requires a valid cookie and control
+   socket, while CP receives only the observer's authenticated finite token.
+   Missing/invalid-cookie and delayed-bootstrap cases remain separate tests.
 3. `bash scripts/verify.sh` GREEN (torrc structural contracts
    unaffected; the healthcheck lives in the Dockerfile, not the torrc).
 

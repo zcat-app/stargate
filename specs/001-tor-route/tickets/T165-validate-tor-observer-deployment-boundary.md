@@ -1,9 +1,9 @@
 ---
 id: "T165"
 title: "Validate Tor observer deployment and consumers"
-status: "pending"
+status: in-progress
 created: "2026-09-19"
-last_updated: "2026-09-19"
+last_updated: 2026-09-21
 source: "specs/001-tor-route/tickets/T138-investigate-tor-observer-authority.md"
 phase: "Foundation audit remediation"
 story: "-"

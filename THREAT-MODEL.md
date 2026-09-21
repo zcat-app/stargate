@@ -398,7 +398,24 @@ does not prove authenticated destination bytes or a Tor circuit. The guest had
 no routed IPv6 path: `::1` admission was refused, and IPv6 loopback resolver
 controls/denial passed. Routed IPv6, arm64, newer Landlock ABIs, physical NICs,
 hypervisor isolation, LAN/VPS, browser fallback and release conformance remain
-unmeasured here. T164/T165 and T155 retain their separate closure obligations.
+unmeasured here. T155 retains the integrated foundation closure obligation.
+
+The [T165 observer evidence](specs/001-tor-route/analysis/T165-observer-evidence.md)
+adds a clean-volume Local deployment under QEMU 11.1.1. From the running CP
+identity, the cookie, Tor-cookie group, SOCKS fabric and raw control socket
+were absent; the observer's image digest and source label matched the tested
+candidate. A CP-namespace capture saw its loopback positive control and no
+packet to Tor's bridge control address. Invalid caller/request inputs returned
+no token or Tor-side command; the authenticated observer returned only finite
+health tokens through ready, not-ready, malformed and timeout cases. The
+deployed CP monitor's exact STARTED/HEALTHY/UNHEALTHY transitions reached
+DP's live event consumer, while repeats, malformed replies and observer loss
+produced no false Tor exit or restart event. Tor and observer socket
+recreation recovered. A disposable token reached DP through
+CP's authenticated reload; with CP stopped and Tor natively healthy, DP
+authenticated and forwarded a request through Tor to destination response
+bytes. These are guest-kernel Local claims, not physical-NIC, routed-IPv6,
+LAN/VPS or hypervisor-isolation claims.
 
 **Protects against**:
 
@@ -415,9 +432,9 @@ unmeasured here. T164/T165 and T155 retain their separate closure obligations.
   own Ed25519 key volume, has no IP network, and serves one authenticated
   finite health query on the CP-only Unix fabric. CP has that fabric read-only,
   no Tor cookie/group, observer private key, SOCKS or raw-control route.
-  T164's fake-boundary tests cover the protocol and event mapping; T165 still
-  owns integrated production-namespace caller and packet evidence. T155
-  consumes that closure.
+  T164's fake-boundary tests cover the protocol and event mapping; T165's
+  Local production-namespace caller and packet evidence covers the deployed
+  boundary above. T155 consumes that scoped evidence.
 
 **Does NOT protect against**:
 
@@ -1143,10 +1160,10 @@ channel; it makes no physical-NIC or untested-environment claim. T164 adds a
 sanitized observer with a signed CP/observer challenge, finite tokens and a
 narrow Tor control subpath. It reuses Tor's UID in a separate network-less
 container; the shared UID is safe only while CP lacks Tor's state subpath,
-observer key and namespace. T165 must validate the deployed caller matrix,
-socket recreation and packet boundary before production compliance is claimed.
-T155 consumes that closure. A bridge-visible packet
-alone does not prove internet exfiltration.
+observer key and namespace. T165 measured the deployed Local caller matrix,
+socket recreation and CP packet boundary as described in §3.1; T155 still
+owns feature-wide compliance. A bridge-visible packet alone does not prove
+internet exfiltration.
 
 **Residual risks after a compliant repair:** Tor remains trusted for the anonymity protocol,
 and a malicious sidecar can misuse its own network channel. Host/kernel compromise can escape
