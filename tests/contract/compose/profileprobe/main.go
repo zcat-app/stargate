@@ -2,24 +2,38 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Command profileprobe is the unprivileged, static test client for T162's
-// AppArmor AF_UNIX caller matrix. It never sends destinations or credentials.
+// AppArmor AF_UNIX caller matrix and T170 signal-peer checks. It never sends destinations or credentials.
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
+	"strconv"
+	"syscall"
 	"time"
 )
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: profileprobe socks|dial|listen|serve|abstract-dial|abstract-serve <address>")
+		fmt.Fprintln(os.Stderr, "usage: profileprobe socks|dial|listen|serve|abstract-dial|abstract-serve|signal-exists <address-or-pid>")
 		os.Exit(2)
 	}
 	var err error
 	switch os.Args[1] {
+	case "signal-exists":
+		pid, parseErr := strconv.Atoi(os.Args[2])
+		if parseErr != nil || pid <= 0 {
+			fmt.Fprintln(os.Stderr, "signal-exists requires a positive PID")
+			os.Exit(2)
+		}
+		err = syscall.Kill(pid, 0)
+		if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES) {
+			fmt.Println("DENIED")
+			os.Exit(77)
+		}
 	case "socks", "dial", "abstract-dial":
 		var conn net.Conn
 		address := os.Args[2]

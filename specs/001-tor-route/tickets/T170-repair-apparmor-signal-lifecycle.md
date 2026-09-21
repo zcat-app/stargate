@@ -1,9 +1,9 @@
 ---
 id: "T170"
 title: "Permit Go self-signals and trusted-host DP lifecycle signals"
-status: pending
+status: in-progress
 created: "2026-09-21"
-last_updated: "2026-09-21"
+last_updated: 2026-09-21
 source: "T163 independently booted Ubuntu VM: AppArmor signal denials"
 phase: "Foundation audit remediation"
 story: "-"
@@ -83,3 +83,30 @@ the DP an IP origin or cross-plane management capability.
 
 DP/CP network permissions, Unix fabric or file allowlists, seccomp/Landlock
 mechanisms, routing/authentication behavior, CP signal authority, and T163 closure.
+
+## Execution record (2026-09-21)
+
+The live regression was written and run before the profile change. On the
+Ubuntu VM it reported `startup_method_reply=False` and
+`signal_succeeded=False` for TERM, then correctly failed cleanup under the
+old enforcing profile. Recovery unloaded the profile and removed the
+disposable container; that recovery did not turn the result green. Kernel
+records independently show denied Go `urg`/`rtmin+1` self-signals and
+`term`/`kill` from `runc`/`unconfined`.
+
+The old profile SHA-256 was
+`57ae3a538c2b1ac18a4b2569f4ed906d9d92225094f37f335bac603e17db82fb`.
+The repaired profile is
+`d9e5a57253d357fb0af1010df5550c1582cc33afc6fb010f9f41e101e1e13803`.
+The unchanged regression then passed: startup after confinement on every run,
+host USR1 denial, TERM/INT exit 0, KILL exit 137, and same-UID signal-zero
+control success versus specific permission denial under the production profile.
+The fixture removed its container/profile and did not modify IP/Unix policies.
+
+This used Linux 6.8.0-139-generic, Landlock ABI 4, amd64, Docker 29.1.3 and
+Go 1.26.3. The real production image was
+`sha256:46015820884045a6a53e598ff3f060f921783b66df3bf442be3f9896e24060a1`.
+Its extracted DP binary SHA-256 was
+`4679b0891a49e6b41e06712b2d4f205139ead3e6df2b9a32aa37124bf20338a8`,
+identical to the pinned-toolchain source build. Raw local evidence remains
+under `target/live-e2e/T170-20260921/`; no packet-matrix closure is claimed here.

@@ -76,3 +76,28 @@ Docker 29.8.1 host with Linux 6.8.0-124-generic, Landlock ABI 4, amd64. All 29
 capture summaries had zero kernel drops. IPv6 had no routed egress path, so only
 its loopback/refusal results are claimed. See T168's execution record and
 `THREAT-MODEL.md` §3.1 for the measured scope and remaining T163 obligations.
+
+## AppArmor signal lifecycle (T170)
+
+On the same dedicated disposable host, with the real DP image built from the
+candidate and no loaded `stargate-dp` profile, run:
+
+```sh
+STARGATE_LIVE_E2E=1 STARGATE_DISPOSABLE_HOST=1 GOTOOLCHAIN=go1.26.3 \
+  python3 -B tests/live-e2e/local-topology/apparmor_signals.py
+```
+
+This loads the production profile, starts the real DP on `127.0.0.1:18881`,
+and requires its exact SOCKS method reply after process confinement. A public
+test pepper and an empty token store suffice for this negotiation-only check;
+it does not claim authenticated forwarding. Host USR1 must be denied. Docker
+TERM and host INT must exit gracefully with code 0; restart repeats startup;
+Docker KILL must exit with code 137 while the profile remains enforcing.
+
+A separate static test helper uses host PID visibility and a same-UID dummy
+target to isolate the signal-peer boundary. The unconfined control must pass
+signal zero; the profiled helper must observe EPERM/EACCES, not a missing target
+or launch failure. These helper options are test controls, not production
+deployment settings. The test removes its container and profile. Recovery after
+an old-profile cleanup denial still fails the test; unloading the profile cannot
+turn a failed lifecycle check green.

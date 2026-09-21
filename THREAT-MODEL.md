@@ -297,6 +297,17 @@ Compose DP restart. Re-init restores the extra owner rules. Overriding the
 container's AppArmor/security policy is unsupported. Linux amd64/arm64 paths use
 native constants; cross-compilation is not evidence of runtime conformance.
 
+**T170 signal compatibility:** the enforcing DP AppArmor profile permits
+same-profile signals so Go can coordinate all-thread confinement and runtime
+preemption. It receives only INT/TERM/KILL from the trusted host peers
+`unconfined` and `runc`; ordinary UID and PID-namespace checks still apply.
+There is no grant to send signals to other profiles, no CP signal authority,
+and no change to IP, Unix-file or process-confinement restrictions. The full
+Ubuntu VM exposed missing self/lifecycle permissions that the earlier nested
+host had not exposed: Go's `urg`/`rtmin+1` and host shutdown signals were denied.
+An operator's ability to stop the route remains part of Principle II and the
+existing trusted-host boundary. T163 still owns the cumulative packet result.
+
 **T163 initial measured status (2026-09-20):** no production packet result was claimed.
 Disposable deployments built the checked-in images but `scripts/stargate init`
 stopped at Compose startup (exit 30) before DP/CP admission or capture. The

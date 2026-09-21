@@ -36,6 +36,10 @@ reinstalls them. Missing process confinement instead requires observable refusal
 before a SOCKS method or management response. AppArmor and the existing Unix fabric
 caller matrix remain required; overriding Docker security policy is unsupported.
 Neither the CP nor a per-request host verifier participates in this boundary.
+T170 permits signal send/receive within the `stargate-dp` profile for Go runtime
+coordination, and receive-only INT/TERM/KILL from the trusted `unconfined` and
+`runc` host peers. Ordinary UID and PID-namespace checks still apply. It grants
+no signal sending to other profiles and no additional IP or Unix-file access.
 T168 refines T163's former owner-rule-loss admission requirement without expanding
 Constitution III's actor/traffic permissions. T163 retains the cumulative and
 physical-host packet evidence obligation.

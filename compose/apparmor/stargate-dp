@@ -26,6 +26,12 @@ profile stargate-dp flags=(attach_disconnected,mediate_deleted) {
   /tmp/ rw,
   /tmp/** rwk,
 
+  # T170 / Principles II and III: Go coordinates all-thread confinement with
+  # self-signals; the trusted host must still be able to stop the route.
+  signal (send, receive) peer=stargate-dp,
+  signal (receive) set=(int, term, kill) peer=unconfined,
+  signal (receive) set=(int, term, kill) peer=runc,
+
   # The browser-facing listener is TCP only. Owner-match rules restrict its
   # egress to loopback replies; no UDP, raw or packet sockets are required.
   network inet stream,

@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 55 |
-| in-progress | 0 |
+| pending | 54 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 143 |
@@ -47,13 +47,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
 | T164 | Enforce the sanitized Tor observer boundary | Foundation audit remediation | ✓ |  |
-| T170 | Permit Go self-signals and trusted-host DP lifecycle signals | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T170 | Permit Go self-signals and trusted-host DP lifecycle signals | in-progress | ✓ | Foundation audit remediation |
 
 ---
 
