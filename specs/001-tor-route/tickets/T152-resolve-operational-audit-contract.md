@@ -1,7 +1,7 @@
 ---
 id: "T152"
 title: "Replace detailed operational journals with hourly aggregates"
-status: in-review
+status: done
 created: "2026-09-12"
 last_updated: 2026-09-22
 source: "reviews/redteam-20260912-677960b.md"
@@ -18,7 +18,7 @@ spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md"]
 decision_refs: []
 remediates: "T036"
 tests_first: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-22, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

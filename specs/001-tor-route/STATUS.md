@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 44 |
-| in-progress | 1 |
-| in-review | 4 |
+| pending | 45 |
+| in-progress | 0 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 151 |
+| done | 156 |
 | deferred | 5 |
-| **total** | **205** |
+| **total** | **206** |
 
 ---
 
@@ -43,18 +43,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
+| T174 | Migrate live observer checks to silent operational boundarie | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T143 | Retire obsolete Java token-verifier constants | in-review | ✓ | Foundation audit remediation |
-| T148 | Reconcile peer certificate validity policy | in-progress | ✓ | Foundation audit remediation |
-| T149 | Finalize byte accounting after both forwarding pumps | in-review | ✓ | Foundation audit remediation |
-| T152 | Replace detailed operational journals with hourly aggregates | in-review | ✓ | Foundation audit remediation |
-| T158 | Publish only finalized aggregate counter buckets | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -72,7 +67,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_151 ticket(s) done._
+_156 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -209,8 +204,13 @@ _151 ticket(s) done._
 - T138 — Define an enforced Tor observation boundary
 - T139 — Prevent required verification coverage from disappearing
 - T142 — Make agent execution-boundary claims demonstrable
+- T143 — Retire obsolete Java token-verifier constants
 - T147 — Resolve HTTP CONNECT first-party isolation
+- T148 — Reconcile peer certificate validity policy
+- T149 — Finalize byte accounting after both forwarding pumps
+- T152 — Replace detailed operational journals with hourly aggregates
 - T156 — Strengthen constitution and reconcile implementation prerequisites
+- T158 — Publish only finalized aggregate counter buckets
 - T160 — Prepare Tor security upgrade with enforced package content pins
 - T161 — Resolve Tor upgrade live validation failures before promotion
 - T162 — Implement host-loopback DP with unix-socket sidecar fabric

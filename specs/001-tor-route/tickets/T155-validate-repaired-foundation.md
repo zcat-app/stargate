@@ -3,11 +3,11 @@ id: "T155"
 title: "Validate repaired foundation before feature work"
 status: "pending"
 created: "2026-09-12"
-last_updated: "2026-09-21"
+last_updated: "2026-09-22"
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
-blocked_by: ["T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T120", "T114", "T121", "T123", "T124", "T126", "T132", "T157", "T158", "T159", "T161", "T162", "T163", "T164", "T165", "T167", "T168", "T172", "T173"]
+blocked_by: ["T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T120", "T114", "T121", "T123", "T124", "T126", "T132", "T157", "T158", "T159", "T161", "T162", "T163", "T164", "T165", "T167", "T168", "T172", "T173", "T174"]
 parallel: false
 files_budget: 8
 privacy_critical: true
@@ -52,6 +52,12 @@ investigation-only completion from unblocking feature work while defects remain 
 - This input covers the QEMU guest's Local namespace and kernel. It does not
   substitute for T155's remaining foundation, routed-IPv6, LAN/VPS, physical
   NIC, browser, release-cadence or independent cumulative-review checks.
+
+## T152 operational-boundary follow-up
+
+T174 must migrate the live harness's Docker-health and DP receipt-journal consumers before
+this checkpoint uses fresh integrated results. The T165 artifacts above remain historical;
+they do not establish the post-T152 observation mechanism.
 
 ## Acceptance
 
