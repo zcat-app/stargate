@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 48 |
+| pending | 47 |
 | in-progress | 1 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 151 |
 | deferred | 5 |
@@ -35,7 +35,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T141 | Pin CI Actions and agent installation dependencies | Foundation audit remediation | ✓ |  |
-| T143 | Retire obsolete Java token-verifier constants | Foundation audit remediation | ✓ |  |
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
 | T145 | Test Maven wrapper checksum enforcement | Foundation audit remediation |  |  |
 | T146 | Correct init timeout diagnosis and isolate its fixture | Foundation audit remediation |  |  |
@@ -53,6 +52,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
+| T143 | Retire obsolete Java token-verifier constants | in-review | ✓ | Foundation audit remediation |
 | T148 | Reconcile peer certificate validity policy | in-progress | ✓ | Foundation audit remediation |
 
 ---

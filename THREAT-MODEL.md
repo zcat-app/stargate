@@ -1378,6 +1378,12 @@ install-time pepper shared by the control plane and data plane
 pepper is a new long-lived secret introduced by T092; its residue is
 recorded here so it is not silently widened later.
 
+T143 retires the unused Java Argon2id parameter class and its obsolete
+assertions left from T011 after T092 superseded the verifier contract.
+The active HMAC minter and pepper contract are unchanged. The scoped Java
+`RetiredTokenVerifierTest` guards the retired class's absence; it does not
+establish historical tests-first compliance or strengthen the protections below.
+
 **Protects.** Per-request authentication with O(1) memory regardless of
 token-list size or concurrent flood size — retiring the Argon2id
 allocation-DoS path (sol-review B5). A `dp-snapshot.json` leak alone does
