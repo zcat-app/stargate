@@ -19,6 +19,28 @@ import run
 
 
 class CaptureEvidenceTest(unittest.TestCase):
+    def test_confinement_refusal_needs_no_operational_journal(self):
+        self.confinement_fixture("1", False)
+
+    def test_confinement_refusal_requires_exit_and_no_admission(self):
+        for code, admitted in (("0", False), ("2", False), ("1", True)):
+            with self.subTest(code=code, admitted=admitted), self.assertRaises(RuntimeError):
+                self.confinement_fixture(code, admitted)
+
+    def confinement_fixture(self, code, admitted):
+        def command(*args, **kwargs):
+            if args[:2] == ("docker", "logs"):
+                raise AssertionError("a silent deployment has no readable journal")
+            output = code if args[:2] == ("docker", "wait") else "fixture-container"
+            return subprocess.CompletedProcess(args, 0, output, "")
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(run, "compose_args", return_value=["docker", "compose"]), \
+                patch.object(run, "command", side_effect=command), \
+                patch.object(run, "probe", return_value=admitted), \
+                patch.object(run, "wait_listener") as recovery:
+            run.assert_restriction_unavailable(Path(directory), {})
+            self.assertEqual(recovery.call_count, 3)
+
     def test_delayed_interpreter_still_completes_real_udp_probe(self):
         real_run = subprocess.run
 

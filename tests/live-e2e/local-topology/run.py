@@ -550,8 +550,10 @@ def assert_restriction_unavailable(evidence: Path, env: dict) -> None:
             command(*prefix, "-f", str(override), "up", "-d", "--no-deps", "--force-recreate", "stargate-dp")
             container = command(*prefix, "ps", "-a", "-q", "stargate-dp").stdout.strip()
             code = command("docker", "wait", container, timeout=20).stdout.strip()
-            logs = command("docker", "logs", container).stderr
-            if code != "1" or "network confinement unavailable" not in logs:
+            # T152 suppresses startup diagnostics. The injected restriction,
+            # nonzero exit, absent admission and restored positive control
+            # establish refusal without requiring a forbidden receipt journal.
+            if code != "1":
                 raise RuntimeError(f"{syscall_name} failure did not refuse at confinement installation")
             if probe(CONTROL_UID, "socks", 4, "127.0.0.1", SOCKS_PORT):
                 raise RuntimeError("missing required restriction still admitted SOCKS")

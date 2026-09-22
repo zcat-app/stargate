@@ -4,11 +4,17 @@
 """T165 falsifiers for deployed observer-boundary verdicts."""
 
 import copy
+import subprocess
+import sys
+from pathlib import Path
 import unittest
+from unittest.mock import Mock, patch
+
+import observer as subject
 
 from observer import (assert_boundary, assert_fixed_queries, assert_cp_capture,
-                      assert_no_commands, assert_event_sequence, parse_dp_events,
-                      has_dp_event_stream, sample_cursor, assert_safe_command_stream)
+                      assert_no_commands, assert_event_sequence,
+                      sample_cursor, assert_safe_command_stream)
 
 
 def fixture():
@@ -29,15 +35,25 @@ def fixture():
         ],
     }
     tor = {
-        "Config": {"Healthcheck": {"Test": ["CMD-SHELL",
-            "od /var/lib/tor/control_auth_cookie; AUTHENTICATE; GETINFO status/bootstrap-phase; "
-            "nc -U /var/lib/tor/control/tor-control.sock"]}},
+        "Config": {"Healthcheck": {"Test": ["NONE"]}},
+        "HostConfig": {},
         "Mounts": [{"Destination": "/var/lib/tor", "RW": True}],
     }
+    for service in (cp, observer, tor):
+        service["Config"]["Healthcheck"] = {"Test": ["NONE"]}
+        service["HostConfig"]["LogConfig"] = {"Type": "none"}
+        service["State"] = {"Running": True}
     return cp, observer, tor
 
 
 class ObserverBoundaryVerdictTest(unittest.TestCase):
+    def test_authenticated_event_probe_socket_contract(self):
+        root = Path(__file__).resolve().parents[3]
+        result = subprocess.run(["go", "test", str(root / "tests/live-e2e/local-topology/observer_probe.go"),
+                                 str(root / "tests/live-e2e/local-topology/observer_probe_test.go")],
+                                cwd=root, capture_output=True, text=True, timeout=120)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_positive_control(self):
         assert_boundary(*fixture())
 
@@ -53,11 +69,54 @@ class ObserverBoundaryVerdictTest(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "Docker socket"):
             assert_boundary(cp, observer, tor)
 
-    def test_native_tor_healthcheck_cannot_use_cp_fabric(self):
+    def test_post_t152_absent_health_metadata_accepts_current_boundary(self):
+        cp, observer, tor = fixture()
+        del tor["Config"]["Healthcheck"]
+        assert_boundary(cp, observer, tor)
+
+    def test_docker_health_history_cannot_be_restored(self):
         cp, observer, tor = copy.deepcopy(fixture())
-        tor["Config"]["Healthcheck"]["Test"][1] = "nc -U /run/stargate-tor-observer/health.sock"
-        with self.assertRaisesRegex(AssertionError, "Tor-native healthcheck"):
+        tor["Config"]["Healthcheck"]["Test"] = ["CMD", "true"]
+        with self.assertRaisesRegex(AssertionError, "health history"):
             assert_boundary(cp, observer, tor)
+
+    def test_operational_capture_cannot_be_restored(self):
+        for index in range(3):
+            services = fixture()
+            services[index]["HostConfig"]["LogConfig"]["Type"] = "json-file"
+            with self.assertRaisesRegex(AssertionError, "logging"):
+                assert_boundary(*services)
+
+    def test_disabled_docker_reader_is_not_a_retained_operational_archive(self):
+        denial = "Error response from daemon: configured logging driver does not support reading\n"
+        for code, stdout, stderr in ((0, "", ""), (1, "", denial)):
+            subject.assert_empty_archive(subprocess.CompletedProcess([], code, stdout, stderr))
+        for code, stdout, stderr in ((0, "raw marker", ""), (1, "raw marker", denial),
+                                     (2, "", denial), (1, "", "unrelated Docker failure")):
+            with self.subTest(code=code, stdout=stdout), self.assertRaises(AssertionError):
+                subject.assert_empty_archive(subprocess.CompletedProcess([], code, stdout, stderr))
+
+    def test_empty_dp_journal_uses_authenticated_ephemeral_observation(self):
+        expected = [("STARTED", "container_start")]
+        source = Mock()
+        source.snapshot.return_value = expected
+        with patch.object(subject.subprocess, "run",
+                          return_value=subprocess.CompletedProcess([], 0, "", "")) as run:
+            assert_event_sequence(subject.dp_events(source), expected)
+            run.assert_not_called()
+
+    def test_current_readiness_requires_authenticated_ready_not_running(self):
+        for code in (1, 2, 125):
+            with self.subTest(code=code), patch.object(subject.subprocess, "run",
+                    return_value=subprocess.CompletedProcess([], code, "", "")):
+                with self.assertRaisesRegex(AssertionError, "readiness"):
+                    subject.await_tor_ready("observer-fixture", timeout=0.01)
+        with patch.object(subject.subprocess, "run",
+                return_value=subprocess.CompletedProcess([], 0, "", "")) as run:
+            subject.await_tor_ready("observer-fixture", timeout=0.01)
+            self.assertEqual(run.call_args.args[0][-2:],
+                             ["/opt/stargate/tor-observer", "--check-ready"])
+            self.assertLessEqual(run.call_args.kwargs["timeout"], 6)
 
     def test_observer_key_volume_must_be_read_only(self):
         cp, observer, tor = copy.deepcopy(fixture())
@@ -87,26 +146,50 @@ class ObserverBoundaryVerdictTest(unittest.TestCase):
     def test_deployed_event_verdict_requires_positive_control_and_exact_transitions(self):
         expected = [("STARTED", "container_start"), ("HEALTHY", "healthcheck_pass"),
                     ("UNHEALTHY", "healthcheck_fail"), ("HEALTHY", "healthcheck_pass")]
-        lines = "\n".join(
-            f'time=2026-09-21T16:00:00Z level=INFO msg="sidecar event" '
-            f'sidecar=tor kind=EVENT_KIND_{kind} detail={detail}'
-            for kind, detail in expected)
-        assert_event_sequence(parse_dp_events(lines), expected)
+        assert_event_sequence(expected, expected)
         with self.assertRaisesRegex(AssertionError, "event sequence"):
-            assert_event_sequence(parse_dp_events(""), expected)  # CP sampling disabled
+            assert_event_sequence([], expected)  # CP sampling disabled
         with self.assertRaisesRegex(AssertionError, "event sequence"):
-            assert_event_sequence(parse_dp_events(lines + "\n" + lines.splitlines()[-1]), expected)
+            assert_event_sequence(expected + [expected[-1]], expected)
         with self.assertRaisesRegex(AssertionError, "event sequence"):
-            assert_event_sequence(parse_dp_events(lines.replace("EVENT_KIND_HEALTHY",
-                                                        "EVENT_KIND_RESTARTED", 1)), expected)
+            assert_event_sequence([("RESTARTED", "container_start")] + expected[1:], expected)
 
-    def test_event_stream_readiness_requires_connected_control_socket(self):
-        listening = 'u_str LISTEN 0 4096 /run/stargate/control.sock 42 * 0'
-        wrong = 'u_str ESTAB 0 0 /run/stargate/dp.sock 43 * 44'
-        connected = 'u_str ESTAB 0 0 /run/stargate/control.sock 45 * 46'
-        self.assertFalse(has_dp_event_stream(listening))
-        self.assertFalse(has_dp_event_stream(wrong))
-        self.assertTrue(has_dp_event_stream(listening + '\n' + connected))
+    def test_ephemeral_subscriber_rejects_eof_unknown_and_overflow(self):
+        for lines in ([], ["RAW_DETAIL"], ["HEALTHY"] * 17):
+            with self.subTest(lines=len(lines)):
+                observation = subject.EventObservation("unused", "/unused", "/unused")
+                code = "import time; print('SUBSCRIBED',flush=True); "
+                if lines:
+                    code += "print(" + repr("\n".join(lines)) + ",flush=True); time.sleep(60)"
+                observation.argv = [sys.executable, "-u", "-c", code]
+                with self.assertRaisesRegex(AssertionError, "subscriber"):
+                    with observation:
+                        observation.snapshot()
+
+    def test_ephemeral_subscriber_preserves_duplicates_and_clears_memory(self):
+        observation = subject.EventObservation("unused", "/unused", "/unused")
+        observation.argv = [sys.executable, "-u", "-c",
+                            "import time; print('SUBSCRIBED\\nSTARTED\\nSTARTED',flush=True); time.sleep(60)"]
+        with observation:
+            actual = observation.snapshot()
+            self.assertEqual(len(actual), 2)
+            with self.assertRaisesRegex(AssertionError, "event sequence"):
+                assert_event_sequence(actual, [("STARTED", "container_start")])
+        self.assertEqual(observation.events, [])
+
+    def test_timeout_matrix_waits_for_cp_classification_before_asserting_silence(self):
+        clock = [0]
+        fake = Mock()
+        fake.snapshot.return_value = []
+        observation = Mock()
+        # The fake sees GETINFO immediately; CP can only classify its timeout
+        # four seconds later. A false lifecycle event at that point must fail.
+        observation.snapshot.side_effect = lambda: ([('CRASHED', 'container_exit')]
+                                                    if clock[0] >= 4 else [])
+        with patch.object(subject, 'await_control_sample', return_value=2), \
+                patch.object(subject.time, 'sleep', side_effect=lambda seconds: clock.__setitem__(0, clock[0]+seconds)):
+            with self.assertRaisesRegex(AssertionError, 'event sequence'):
+                subject.observe_phase(observation, fake, None, [], ['AUTHENTICATE', 'GETINFO'])
 
     def test_sample_cursor_does_not_skip_an_unexpected_following_command(self):
         commands = ["AUTHENTICATE", "GETINFO", "QUIT", "SETCONF"]

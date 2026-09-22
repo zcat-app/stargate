@@ -69,14 +69,45 @@ def assert_boundary(cp, observer, tor):
         raise AssertionError("observer Tor control subpath is not constrained")
     if "/run/stargate-tor" in om or "/run/stargate-tor-observer" in tm:
         raise AssertionError("sidecar fabrics crossed")
-    health = " ".join(tor["Config"]["Healthcheck"]["Test"])
-    if any(item not in health for item in ("/var/lib/tor/control_auth_cookie",
-                                           "/var/lib/tor/control/tor-control.sock",
-                                           "AUTHENTICATE", "GETINFO status/bootstrap-phase")) or \
-            "/run/stargate-tor-observer" in health:
-        raise AssertionError("Tor-native healthcheck lost its private control boundary")
+    for service in (cp, observer, tor):
+        assert_silent_capture(service)
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", observer["Config"]["Image"]):
         raise AssertionError("observer image is not immutable")
+
+
+def assert_silent_capture(service):
+    health = service["Config"].get("Healthcheck", {}).get("Test", [])
+    if health not in ([], ["NONE"]) or "Health" in service.get("State", {}):
+        raise AssertionError("Docker health history is enabled or retained")
+    if service["HostConfig"].get("LogConfig", {}).get("Type") != "none" or service.get("LogPath"):
+        raise AssertionError("Docker operational logging is enabled")
+
+
+def assert_empty_archive(result):
+    # Engine 29 refuses reads of a disabled driver. Accept only that exact
+    # static denial, with no stdout, after inspection proved logging=none.
+    denial = "Error response from daemon: configured logging driver does not support reading\n"
+    if not result.stdout and ((result.returncode == 0 and not result.stderr) or
+                              (result.returncode == 1 and result.stderr == denial)):
+        return
+    raise AssertionError("operational output capture is not empty or unreadable")
+
+
+def await_tor_ready(observer_id, timeout=300):
+    """Current cookie-authenticated Tor readiness through the existing observer."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            result = subprocess.run(["docker", "exec", observer_id,
+                                     "/opt/stargate/tor-observer", "--check-ready"],
+                                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL, timeout=6)
+            if result.returncode == 0:
+                return
+        except subprocess.TimeoutExpired:
+            pass
+        time.sleep(min(2, max(0, deadline - time.monotonic())))
+    raise AssertionError("authenticated current Tor readiness unavailable")
 
 
 def source_hash():
@@ -193,41 +224,80 @@ def assert_safe_command_stream(commands):
             raise AssertionError(f"unexpected Tor command or order: {name}")
 
 
-def parse_dp_events(log):
-    pattern = re.compile(r'msg="sidecar event"\s+sidecar=tor\s+'
-                         r'kind=EVENT_KIND_([A-Z]+)\s+detail=([a-z_]+)')
-    return [match.groups() for line in log.splitlines()
-            if (match := pattern.search(line))]
+class EventObservation:
+    """Bounded volatile test-only WatchEvents consumer, never a Docker journal."""
+
+    TOKENS = {"STARTED": ("STARTED", "container_start"),
+              "HEALTHY": ("HEALTHY", "healthcheck_pass"),
+              "UNHEALTHY": ("UNHEALTHY", "healthcheck_fail")}
+
+    def __init__(self, binary, ipc, keys):
+        self.argv = [str(binary), "events", str(ipc), str(keys)]
+        self.events = []
+        self.lock = threading.Lock()
+        self.failed = False
+        self.closing = False
+        self.process = None
+        self.reader = None
+
+    def __enter__(self):
+        self.process = subprocess.Popen(self.argv, stdin=subprocess.DEVNULL,
+                                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                        text=True)
+        try:
+            ready, _, _ = select.select([self.process.stdout], [], [], 10)
+            if not ready or self.process.stdout.readline(32) != "SUBSCRIBED\n":
+                raise AssertionError("authenticated event subscriber did not connect")
+            self.reader = threading.Thread(target=self.read, daemon=True)
+            self.reader.start()
+            # Subscription send is not server registration; positive events
+            # below remain mandatory. Allow the real handler to attach first.
+            time.sleep(1)
+            self.snapshot()
+            return self
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+
+    def read(self):
+        while line := self.process.stdout.readline(32):
+            with self.lock:
+                token = line.removesuffix("\n")
+                if line != token + "\n" or token not in self.TOKENS or len(self.events) >= 16:
+                    self.failed = True
+                    return
+                self.events.append(self.TOKENS[token])
+        with self.lock:
+            if not self.closing:
+                self.failed = True
+
+    def snapshot(self):
+        with self.lock:
+            if self.failed or self.process.poll() is not None:
+                raise AssertionError("event subscriber closed or violated the finite boundary")
+            return list(self.events)
+
+    def __exit__(self, *_):
+        with self.lock:
+            self.closing = True
+        if self.process.poll() is None:
+            self.process.terminate()
+        try:
+            self.process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait(timeout=5)
+        if self.reader is not None:
+            self.reader.join(timeout=5)
+            if self.reader.is_alive():
+                raise AssertionError("event subscriber reader did not stop")
+        self.process.stdout.close()
+        self.events.clear()
 
 
 def assert_event_sequence(actual, expected):
     if actual != expected:
-        raise AssertionError(f"CP→DP event sequence {actual} != {expected}")
-
-
-def has_dp_event_stream(snapshot):
-    return any((parts := line.split())[:2] == ["u_str", "ESTAB"] and
-               len(parts) > 4 and parts[4] == "/run/stargate/control.sock"
-               for line in snapshot.splitlines())
-
-
-def await_dp_event_stream(evidence, timeout=180):
-    # WatchEvents is a live fan-out with no replay. Wait for the actual UDS
-    # connection before the first STARTED edge; CP socket creation alone can
-    # precede DP's authenticated stream after a guest-scheduled reconnect.
-    deadline = time.monotonic() + timeout
-    consecutive = 0
-    while time.monotonic() < deadline:
-        snapshot = checked(["ss", "-xan"], timeout=10)
-        consecutive = consecutive + 1 if has_dp_event_stream(snapshot) else 0
-        if consecutive == 3:
-            evidence.joinpath("T165-control-stream.txt").write_text(
-                "\n".join(line for line in snapshot.splitlines()
-                          if "/run/stargate/control.sock" in line) + "\n")
-            time.sleep(30)  # allow the established UDS to finish gRPC TLS/WatchEvents
-            return
-        time.sleep(5)
-    raise AssertionError("DP WatchEvents connection did not attach to CP control.sock")
+        raise AssertionError("CP→DP event sequence mismatch (raw events not retained)")
 
 
 def assert_cp_capture(decoded, tor_address):
@@ -247,11 +317,9 @@ def await_commands(fake, count):
     raise AssertionError("fake Tor control did not record the positive command sequence")
 
 
-def dp_events(dp_id):
-    result = subprocess.run(["docker", "logs", dp_id], capture_output=True, text=True, timeout=30)
-    if result.returncode:
-        raise RuntimeError("DP event log unavailable")
-    return parse_dp_events(result.stdout + "\n" + result.stderr)
+def dp_events(observation):
+    # Same wire subscription as DP; this measures CP publication, not a DP receipt journal.
+    return observation.snapshot()
 
 
 def await_event_sequence(dp_id, baseline, expected, timeout=90):
@@ -304,7 +372,7 @@ def socks_auth(conn, token):
     return receive_exact(conn, 2)
 
 
-def assert_cp_down_forwarding(evidence, prefix, project, cp_id, tor_id):
+def assert_cp_down_forwarding(evidence, prefix, project, cp_id, observer_id):
     # A disposable test credential is installed after the clean-host operator
     # startup. CP pushes its verifier through the real authenticated reload.
     token = secrets.token_hex(16).encode("ascii")
@@ -341,8 +409,7 @@ def assert_cp_down_forwarding(evidence, prefix, project, cp_id, tor_id):
     checked(prefix + ["stop", "stargate-control"], timeout=90)
     if checked(["docker", "inspect", "--format", "{{.State.Running}}", cp_id]) != "false":
         raise AssertionError("CP container remained running")
-    if checked(["docker", "inspect", "--format", "{{.State.Health.Status}}", tor_id]) != "healthy":
-        raise AssertionError("Tor-native health lost while testing CP-down routing")
+    await_tor_ready(observer_id)
     with socket.create_connection(("127.0.0.1", 8881), timeout=3) as conn:
         conn.settimeout(40)
         if socks_auth(conn, token) != b"\x01\x00":
@@ -355,7 +422,7 @@ def assert_cp_down_forwarding(evidence, prefix, project, cp_id, tor_id):
         if not conn.recv(128).startswith(b"HTTP/"):
             raise AssertionError("CP-down DP forwarding did not return destination bytes")
     evidence.joinpath("T165-cp-down.txt").write_text(
-        "CP stopped and Tor natively healthy: disposable credential authenticated "
+        "CP stopped and authenticated current Tor readiness READY: disposable credential authenticated "
         "at DP; a SOCKS CONNECT to example.com:80 through Tor returned an HTTP "
         "response. No token or response bytes are retained.\n")
 
@@ -414,16 +481,34 @@ def cp_packet_capture(evidence, cp_pid, tor_address, cp_probe):
     evidence.joinpath("T165-cp-any.decoded.txt").write_text(decoded + "\n")
 
 
-def exercise_cp_events(evidence, fake, prefix, project, cp_id, observer_id, dp_id):
-    """Drive the deployed Java monitor and observe its real DP event consumer."""
-    # Boot CP with the observer down. Its first UNAVAILABLE sample emits no
-    # event. This lets the DP WatchEvents stream attach before the first
-    # authenticated NOT_READY sample, making STARTED observable exactly once.
+def observe_phase(observation, fake, reply, expected, command_names, action=None):
+    before = len(fake.snapshot())
+    fake.set_reply(reply)
+    if action is not None:
+        action()
+    if command_names is None:
+        time.sleep(22)  # two real ten-second monitor polls with observer down
+    else:
+        for _ in range(2):
+            before = await_control_sample(fake, before, command_names, timeout=30)
+    # GETINFO is recorded before Tor replies (or times out). Let CP's full
+    # six-second call budget expire before asserting that the last sample
+    # produced no event; otherwise a false timeout event can escape the window.
+    time.sleep(6)
+    await_event_sequence(observation, 0, expected, timeout=3)
+    time.sleep(1)  # let the last completed sample reach the subscriber
+    assert_event_sequence(dp_events(observation), expected)
+
+
+def exercise_cp_events(evidence, fake, prefix, project, cp_id, observer_id, binary):
+    """Observe production CP publication through bounded test-only IPC windows."""
     checked(prefix + ["stop", "tor-observer"], timeout=90)
     fake.set_reply(NOT_READY)
     checked(["docker", "kill", "--signal=CONT", cp_id])
     ipc = Path(checked(["docker", "volume", "inspect", "--format", "{{.Mountpoint}}",
                         project + "_stargate-ipc"])) / "control.sock"
+    keys = Path(checked(["docker", "volume", "inspect", "--format", "{{.Mountpoint}}",
+                         project + "_stargate-keys"]))
     old_inode = ipc.stat().st_ino if ipc.exists() else None
     checked(prefix + ["restart", "stargate-control"], timeout=90)
     deadline = time.monotonic() + 240
@@ -433,67 +518,36 @@ def exercise_cp_events(evidence, fake, prefix, project, cp_id, observer_id, dp_i
         time.sleep(2)
     else:
         raise AssertionError("production CP event server did not recreate its socket")
-    await_dp_event_stream(evidence)
-    baseline = len(dp_events(dp_id))
-    before = fake.snapshot()
-    # Compose start follows depends_on and would restart the real Tor sidecar,
-    # bypassing the disposable fake control socket used for this matrix.
-    checked(["docker", "start", observer_id], timeout=90)
-    commands = await_control_sample(fake, len(before), ["AUTHENTICATE", "GETINFO", "QUIT"])
-    expected = [("STARTED", "container_start")]
-    await_event_sequence(dp_id, baseline, expected)
+    results = {}
 
-    # A repeated valid sample must not emit duplicate STARTED or HEALTHY.
-    commands = await_control_sample(fake, commands, ["AUTHENTICATE", "GETINFO", "QUIT"])
-    assert_event_sequence(dp_events(dp_id)[baseline:], expected)
-    fake.set_reply(READY)
-    commands = await_control_sample(fake, commands, ["AUTHENTICATE", "GETINFO", "QUIT"])
-    expected.append(("HEALTHY", "healthcheck_pass"))
-    await_event_sequence(dp_id, baseline, expected)
+    def phase(name, reply, expected, command_names, action=None):
+        # Each fresh TLS connection gets one <35s window, below T148's
+        # channel lifetime. Any early EOF/rotation fails; no replay or gap is hidden.
+        with EventObservation(binary, ipc, keys) as observation:
+            observe_phase(observation, fake, reply, expected, command_names, action)
+            results[name] = {"exact_events": True, "count": len(expected), "reconnects": 0}
 
-    fake.set_reply(NOT_READY)
-    commands = await_control_sample(fake, commands, ["AUTHENTICATE", "GETINFO", "QUIT"])
-    expected.append(("UNHEALTHY", "healthcheck_fail"))
-    await_event_sequence(dp_id, baseline, expected)
-
-    fake.set_reply("551 " + RAW_MARKER + "\r\n")
-    for _ in range(2):
-        commands = await_control_sample(fake, commands, ["AUTHENTICATE", "GETINFO", "QUIT"])
-    assert_event_sequence(dp_events(dp_id)[baseline:], expected)
-    fake.set_reply(None)
-    for _ in range(2):
-        commands = await_control_sample(fake, commands, ["AUTHENTICATE", "GETINFO"])
-    assert_event_sequence(dp_events(dp_id)[baseline:], expected)
-
-    fake.set_reply(READY)
-    commands = await_control_sample(fake, commands, ["AUTHENTICATE", "GETINFO", "QUIT"])
-    expected.append(("HEALTHY", "healthcheck_pass"))
-    await_event_sequence(dp_id, baseline, expected)
-
-    checked(prefix + ["stop", "tor-observer"], timeout=90)
-    expected.append(("UNHEALTHY", "healthcheck_fail"))
-    await_event_sequence(dp_id, baseline, expected)
-    time.sleep(12)  # one more poll cannot fabricate a repeat or Tor exit
-    assert_event_sequence(dp_events(dp_id)[baseline:], expected)
-    checked(["docker", "start", observer_id], timeout=90)
-    commands = await_control_sample(fake, commands, ["AUTHENTICATE", "GETINFO", "QUIT"])
-    expected.append(("HEALTHY", "healthcheck_pass"))
-    await_event_sequence(dp_id, baseline, expected)
-    commands = await_control_sample(fake, commands, ["AUTHENTICATE", "GETINFO", "QUIT"])
-    assert_event_sequence(dp_events(dp_id)[baseline:], expected)
-    observed = dp_events(dp_id)[baseline:]
-    assert_event_sequence(observed, expected)
+    query = ["AUTHENTICATE", "GETINFO", "QUIT"]
+    phase("initial-not-ready-and-repeat", NOT_READY, [("STARTED", "container_start")], query,
+          lambda: checked(["docker", "start", observer_id], timeout=90))
+    phase("ready-and-repeat", READY, [("HEALTHY", "healthcheck_pass")], query)
+    phase("not-ready-and-repeat", NOT_READY, [("UNHEALTHY", "healthcheck_fail")], query)
+    phase("malformed-and-repeat", "551 " + RAW_MARKER + "\r\n", [], query)
+    phase("timeout-and-repeat", None, [], ["AUTHENTICATE", "GETINFO"])
+    phase("ready-after-failures", READY, [("HEALTHY", "healthcheck_pass")], query)
+    phase("observer-down-and-repeat", READY, [("UNHEALTHY", "healthcheck_fail")], None,
+          lambda: checked(prefix + ["stop", "tor-observer"], timeout=90))
+    phase("observer-recovery-and-repeat", READY, [("HEALTHY", "healthcheck_pass")], query,
+          lambda: checked(["docker", "start", observer_id], timeout=90))
     checked(["docker", "kill", "--signal=STOP", cp_id])
-    time.sleep(6)  # let an in-flight observer query finish after CP stops sampling
-    tor_commands = fake.snapshot()
-    assert_safe_command_stream(tor_commands)
-    evidence.joinpath("T165-cp-events.json").write_text(json.dumps({
-        "production_dp_events": observed, "observer_container": observer_id,
-        "positive_control": "STARTED delivered after observer restored to booted CP",
-        "no_duplicate_or_lifecycle_events": True,
-        "tor_commands": tor_commands,
+    time.sleep(6)
+    assert_safe_command_stream(fake.snapshot())
+    evidence.joinpath("T174-cp-events.json").write_text(json.dumps({
+        "observation": "ephemeral authenticated test subscriber; production CP publisher",
+        "phases": results, "no_duplicate_or_false_lifecycle_events": True,
+        "tor_command_allowlist": True,
     }, indent=2) + "\n")
-    print("PASS: deployed CP→DP finite event matrix and observer-down recovery", flush=True)
+    print("PASS: deployed CP finite event windows and observer-down recovery", flush=True)
 
 
 def validate(evidence, env):
@@ -508,6 +562,7 @@ def validate(evidence, env):
                  for service, value in ids.items()}
     cp, observer, tor = (inspected[name] for name in ("stargate-control", "tor-observer", "tor"))
     assert_boundary(cp, observer, tor)
+    assert_silent_capture(inspected["stargate-dp"])
     image_id = observer["Image"]
     label = checked(["docker", "image", "inspect", "--format",
                      '{{index .Config.Labels "org.opencontainers.image.source-sha256"}}', image_id])
@@ -517,6 +572,10 @@ def validate(evidence, env):
         "project": project, "cp_id": ids["stargate-control"], "observer_id": ids["tor-observer"],
         "tor_id": ids["tor"], "dp_id": ids["stargate-dp"], "observer_image": image_id,
         "observer_source_sha256": label,
+        "images": {name: item["Image"] for name, item in inspected.items()},
+        "harness_sha256": {name: hashlib.sha256((SOURCE.parent / name).read_bytes()).hexdigest()
+                           for name in ("observer.py", "observer_probe.go", "run.py")},
+        "source_head": checked(["git", "rev-parse", "HEAD"]),
         "cp_mounts": sorted(mounts(cp)), "observer_mounts": sorted(mounts(observer)),
     }, indent=2) + "\n")
     binary = evidence / "observer-probe"
@@ -605,10 +664,10 @@ def validate(evidence, env):
                 "invalid_auth_and_eof_non_arrival": True,
                 "fake_ready": "READY/1", "fake_not_ready": "NOT_READY/1",
                 "fake_malformed": "UNAVAILABLE/1", "fake_timeout": "UNAVAILABLE/1",
-                "tor_commands": fake.snapshot(),
+                "tor_command_allowlist": True,
             }, indent=2) + "\n")
             exercise_cp_events(evidence, fake, prefix, project, ids["stargate-control"],
-                               ids["tor-observer"], ids["stargate-dp"])
+                               ids["tor-observer"], binary)
     finally:
         checked(["docker", "kill", "--signal=CONT", ids["stargate-control"]])
         checked(prefix + ["start", "tor"], timeout=90)
@@ -653,19 +712,13 @@ def validate(evidence, env):
         time.sleep(1)
     else:
         raise AssertionError("observer-down recovery failed")
-    dp_log = ""
-    for service in ("stargate-control", "tor-observer", "stargate-dp"):
+    for service in ("stargate-control", "tor-observer", "stargate-dp", "tor"):
         result = subprocess.run(["docker", "logs", ids[service]], capture_output=True, text=True, timeout=30)
-        if result.returncode or RAW_MARKER in result.stdout or RAW_MARKER in result.stderr:
-            raise AssertionError("raw Tor marker appeared in application logs")
-        if service == "stargate-dp":
-            dp_log = result.stdout + result.stderr
-    if re.search(r"sidecar event.*kind=EVENT_KIND_(?:STOPPED|CRASHED|RESTARTED)\b", dp_log):
-        raise AssertionError("observer failure became a false Tor lifecycle event")
+        assert_empty_archive(result)
     state = Path(checked(["docker", "volume", "inspect", "--format", "{{.Mountpoint}}",
                           project + "_stargate-control-state"]))
     for path in state.rglob("*"):
         if path.is_file() and RAW_MARKER.encode("ascii") in path.read_bytes():
             raise AssertionError("raw Tor reply reached CP state or audit rows")
-    assert_cp_down_forwarding(evidence, prefix, project, ids["stargate-control"], ids["tor"])
+    assert_cp_down_forwarding(evidence, prefix, project, ids["stargate-control"], ids["tor-observer"])
     print("PASS: T165 deployed observer boundary and CP-down authenticated Tor forwarding")

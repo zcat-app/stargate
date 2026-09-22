@@ -55,20 +55,41 @@ only after stopping the disposable Tor container. Each refusal must leave the
 fake's command log unchanged. The fake records command names without retaining
 cookie bytes. With the deployed CP monitor running, the same listener then
 drives valid, malformed and timed-out samples plus observer loss and recovery.
-The DP event consumer must record the exact STARTED, HEALTHY and UNHEALTHY
-transitions without repeats or invented STOPPED, CRASHED or RESTARTED events.
-The event sequence's positive STARTED control fails if CP never samples.
-Tor and observer restart recovery and application log and CP-state raw-marker
-scans are part of this result. Finally, a disposable token is loaded through CP's normal reload;
-with CP stopped and Tor natively healthy, DP must authenticate and return
-destination bytes through the real Tor sidecar. A structural or fake-boundary pass alone is not a
-production namespace result. Raw evidence stays under the same ignored
-`target/live-e2e/T163-*` directory and is consumed by T165/T155.
+T174 observes the deployed CP publisher with a disposable host-side, mutually
+TLS-authenticated `WatchEvents` subscriber using that project's DP identity. It
+validates the current CP pin and certificate validity, discards event timestamps,
+and sends only validated finite tokens over an anonymous pipe. Each observation
+window lasts at most 35 seconds, does not reconnect, and checks two actual monitor
+samples; any early stream closure fails. Separate windows cover STARTED, readiness
+changes, malformed/timeout replies, duplicate suppression, and observer stop/start.
+The STARTED and HEALTHY controls must arrive. Window gaps are not claimed as continuous
+monitoring, and the subscriber is evidence of CP publication, not a production DP
+receipt journal. The existing DP consumer contract tests cover its advisory behavior.
+Only per-scenario verdicts/counts are saved; no event/detail/timestamp sequence is
+written to evidence, Docker logs, or application state. This helper is never part
+of a deployed image and only reads disposable test keys on the dedicated host.
 
-The observer verdict selftest runs in the ordinary contract gate:
+Tor socket recreation, observer restart/down recovery, empty application/Tor log
+capture, and CP-state raw-marker scans remain required. Docker health history and
+logging must be disabled. Finally, a disposable token is loaded through CP's normal
+reload. With CP stopped, the observer's bounded, cookie-authenticated `--check-ready`
+query must return READY before DP authentication and real Tor-routed destination
+bytes are tested. Neither a running container nor an open DP port establishes readiness.
+A structural or fake-boundary pass alone is not a production namespace result.
+
+Evidence stays under the same ignored `target/live-e2e/T163-*` directory. Its
+`T174-cp-events.json` contains scenario summaries; `T165-observer-identity.json`
+retains all four image IDs and current harness source hashes despite its historical
+filename. Changes to those sources/images invalidate the affected results. Historical
+T165 runs precede T152 and do not validate this observation mechanism. T155 remains
+blocked until T174 and independent review complete. Missing host, Tor-network or
+build prerequisites must be reported as missing evidence, never PASS.
+
+The observer regressions run in the ordinary contract gate:
 `python3 -B -m unittest discover -s tests/live-e2e/local-topology -p test_observer.py`.
-T124 still owns the Tor-native healthcheck's cold-bootstrap behavior. That
-healthcheck runs inside Tor's TCB and grants no CP-facing control command.
+This includes the Go probe's real authenticated Unix-socket and pin/validity controls.
+T124's old Docker HEALTHCHECK assumption is superseded by T152's one-shot observer
+readiness; no health history or CP-facing raw-control permission is restored.
 
 T168 adds a second phase which removes IPv4 only, IPv6 only and both owner
 jumps. The actual Compose DP must continue admitting safely, including after

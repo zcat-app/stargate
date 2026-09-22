@@ -1567,6 +1567,20 @@ can finish up to four seconds after the window, plus the existing two-second ret
 A running DP listener is checked separately and cannot substitute for Tor bootstrap readiness.
 The observer's authenticated CP protocol and its authority/mounts are unchanged.
 
+**T174 live evidence boundary.** The disposable Local test harness uses the same
+bounded authenticated readiness query while CP is stopped, then requires actual DP
+authentication and Tor-forwarded destination bytes. It checks CP event publication
+with a host-side test subscriber using only the disposable project's DP identity,
+current CP key pin and certificate validity. The subscriber is not shipped in a
+production image, has no Tor authority, and keeps at most 16 finite events in memory
+for a non-reconnecting 35-second window. Raw timestamps/details are discarded;
+only scenario verdicts and counts survive. Stream failure cannot count as event
+silence, and gaps between windows are not continuous-monitoring evidence. Production
+DP receipt logging and Docker health history remain disabled. Fresh live results
+must identify the source/image candidate; pre-T152 T165 results do not validate this
+path. Until those checks and independent review complete, T174/T155 remain pending
+validation; unit/fixture passes alone do not close that obligation.
+
 **Legacy cleanup procedure.** Stop old CP instances and any reader/exporter of the old database
 before upgrading. Deploy the matching new source/images together; do not roll an old writer
 back onto V002. Flyway's V001 checksum remains unchanged and V002 runs before normal CP startup.

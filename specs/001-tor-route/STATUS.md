@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 45 |
+| pending | 44 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 156 |
 | deferred | 5 |
@@ -43,13 +43,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
-| T174 | Migrate live observer checks to silent operational boundarie | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T174 | Migrate live observer checks to silent operational boundarie | in-review | ✓ | Foundation audit remediation |
 
 ---
 
