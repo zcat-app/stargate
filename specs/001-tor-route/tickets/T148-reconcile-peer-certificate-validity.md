@@ -1,15 +1,15 @@
 ---
 id: "T148"
 title: "Reconcile peer certificate validity policy"
-status: "pending"
+status: in-progress
 created: "2026-09-12"
-last_updated: "2026-09-12"
+last_updated: 2026-09-22
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
 blocked_by: ["T095", "T139", "T135", "T156"]
 parallel: false
-files_budget: 8
+files_budget: 20
 privacy_critical: true
 complexity: "high"
 risk: "high"
@@ -34,9 +34,15 @@ Both Go and Java implement key-only trust while threat-model/wire-auth text prom
 
 ## Analysis
 
-- Must hold: the ticket acceptance and cited constitutional properties.
-- Gated: existing baseline verify is green; it did not catch the audited issue.
-- Residue: the specific missing property in Context; the acceptance probes below must discriminate it. Investigation-only tickets must resolve the design before authorizing production changes.
+- Must hold: both TLS roles enforce current pins, private-key possession and the certificate
+  validity interval on full and resumed handshakes. Automatic in-memory renewal needs neither
+  CP availability nor a plane restart. Each endpoint bounds existing IPC connections independently;
+  closing IPC must preserve established proxy pipes and admission under retained valid auth state.
+- Gated: existing tests cover derivation, wrong keys, Go resumption pin replacement and version
+  metadata; new validity, renewal and transport-lifetime regressions must fail before their fixes.
+- Residue: Java provider resumption and real Go/Java interoperability require executable transport
+  probes, not direct trust-manager calls alone. Accelerated clocks test renewal; actual UDS tests
+  cover active/idle channel closure and routing during CP outage. No claim of instantaneous revocation.
 
 ## Acceptance
 
@@ -54,7 +60,13 @@ Both Go and Java implement key-only trust while threat-model/wire-auth text prom
 
 Claiming public-certificate possession enables impersonation, or folding the definite pin-resumption fix (T135) into this decision.
 
+The existing TestDeriveDPTLSWiresBothSides static-certificate assertion changes to select the
+identity through the renewal callbacks; its same-key/both-role invariant remains required.
+
 ## Notes
+
+2026-09-22: maintainer authorized retaining one ticket and extending files_budget to 20 after
+reviewing the grounded 14–18-path estimate. Acceptance and independent review gates are unchanged.
 
 Filed from the current-state foundation audit. This is pending work, not a
 review approval or accepted risk. For implementation, demonstrate the privacy

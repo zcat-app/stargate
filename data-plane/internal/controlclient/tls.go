@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -59,6 +60,10 @@ const (
 // §2.2. A non-Ed25519 key is a derivation error (§1: Ed25519 is the only
 // signature algorithm on this channel).
 func DeriveCert(key crypto.Signer, id Identity) (tls.Certificate, error) {
+	return deriveCertAt(key, id, time.Now())
+}
+
+func deriveCertAt(key crypto.Signer, id Identity, now time.Time) (tls.Certificate, error) {
 	pub, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
 		return tls.Certificate{}, fmt.Errorf("tls: key is %T, want ed25519 (wire-auth.md §1)", key.Public())
@@ -67,7 +72,6 @@ func DeriveCert(key crypto.Signer, id Identity) (tls.Certificate, error) {
 	if err != nil {
 		return tls.Certificate{}, fmt.Errorf("tls: parsing SPIFFE ID: %w", err)
 	}
-	now := time.Now()
 	tmpl := &x509.Certificate{
 		Version:               3, // §2.2: required for the SAN extension
 		SerialNumber:          big.NewInt(0),
@@ -178,15 +182,27 @@ func PeerPinVerifier(peerPubPath string) func(rawCerts [][]byte, _ [][]*x509.Cer
 // restored peer certificate is therefore checked against the current on-disk
 // pin before either connection can dispatch an RPC (T135; wire-auth.md §3.1).
 func PeerPinConnectionVerifier(peerPubPath string) func(tls.ConnectionState) error {
+	return peerPinConnectionVerifier(peerPubPath, time.Now)
+}
+
+func peerPinConnectionVerifier(peerPubPath string, now func() time.Time) func(tls.ConnectionState) error {
 	return func(state tls.ConnectionState) error {
 		if len(state.PeerCertificates) != 1 {
 			return fmt.Errorf("tls: peer presented %d certs, want exactly 1 (wire-auth.md §1)", len(state.PeerCertificates))
 		}
-		return verifyPeerPin(state.PeerCertificates[0], peerPubPath)
+		return verifyPeerAt(state.PeerCertificates[0], peerPubPath, now())
 	}
 }
 
 func verifyPeerPin(cert *x509.Certificate, peerPubPath string) error {
+	return verifyPeerAt(cert, peerPubPath, time.Now())
+}
+
+func verifyPeerAt(cert *x509.Certificate, peerPubPath string, now time.Time) error {
+	// wire-auth §2.4: issuance backdating is the only skew allowance.
+	if now.Before(cert.NotBefore) || now.After(cert.NotAfter) {
+		return errors.New("tls: peer certificate is outside its validity interval")
+	}
 	peerKey, ok := cert.PublicKey.(ed25519.PublicKey)
 	if !ok {
 		return fmt.Errorf("tls: peer cert key is %T, want ed25519 (wire-auth.md §1)", cert.PublicKey)
@@ -245,8 +261,9 @@ func ServerTLSConfig(cert tls.Certificate, peerPubPath string) *tls.Config {
 	return cfg
 }
 
-// DeriveDPTLS is the boot-time one-shot (§2.1): read dp.priv, derive the
-// single in-memory cert, and return the (client, server) TLS pair — the
+// DeriveDPTLS loads the key once (§2.1), derives the initial identity and
+// installs automatic in-memory renewal (§2.4). It returns the
+// (client, server) TLS pair — the
 // client half for the control.sock dial, the server half for dp.sock, both
 // pinning cp.pub. The caller (T050) treats an error as a degraded-mode
 // warning and keeps routing port 8881 (§2.2/§3.3; Constitution Principle
@@ -268,9 +285,39 @@ func DeriveDPTLS(keysDir string) (client, server *tls.Config, err error) {
 		// knows the pin file is missing says so now (§3.3 degraded mode).
 		return nil, nil, err
 	}
-	return ClientTLSConfig(cert, pin), ServerTLSConfig(cert, pin), nil
+	client, server = ClientTLSConfig(cert, pin), ServerTLSConfig(cert, pin)
+	enableRenewal(client, priv, cert)
+	enableRenewal(server, priv, cert)
+	return client, server, nil
 }
 
 func keysPath(keysDir, name string) string {
 	return keysDir + "/" + name
+}
+
+// Each selection renews locally before use; no CP call or background worker
+// can gate routing. Keeping the loaded key preserves operator rotation (§6.2).
+func enableRenewal(cfg *tls.Config, key crypto.Signer, initial tls.Certificate) {
+	var mu sync.Mutex
+	current := initial
+	selectCert := func() (*tls.Certificate, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		now := time.Now()
+		if cfg.Time != nil {
+			now = cfg.Time()
+		}
+		if now.Before(current.Leaf.NotBefore) || !now.Before(current.Leaf.NotAfter.Add(-24*time.Hour)) {
+			renewed, err := deriveCertAt(key, DPIdentity, now)
+			if err != nil {
+				return nil, err
+			}
+			current = renewed
+		}
+		selected := current
+		return &selected, nil
+	}
+	cfg.Certificates = nil // ensure even a server handshake without SNI selects dynamically
+	cfg.GetCertificate = func(*tls.ClientHelloInfo) (*tls.Certificate, error) { return selectCert() }
+	cfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return selectCert() }
 }

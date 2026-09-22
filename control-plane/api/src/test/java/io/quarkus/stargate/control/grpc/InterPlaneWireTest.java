@@ -89,6 +89,71 @@ class InterPlaneWireTest {
     @TempDir
     Path tmp;
 
+    @Test
+    void serverClosesActiveStreamWithoutPeerCooperation() throws Exception {
+        Path keys = Files.createDirectories(tmp.resolve("keys-lifetime"));
+        var cp = ed25519(); var dp = ed25519();
+        Path cpPriv = writePrivateKey(keys, "cp.priv", cp);
+        Path cpPub = writePublicKey(keys, "cp.pub", cp);
+        Path dpPub = writePublicKey(keys, "dp.pub", dp);
+        var service = new ControlGrpcService();
+        var ended = new java.util.concurrent.CountDownLatch(1);
+        try (Stack stack = new Stack()) {
+            Path sock = tmp.resolve("lifetime.sock");
+            stack.add(service.startServer(sock, cpPriv, cpPub, dpPub, Duration.ofSeconds(1)));
+            var ch = stack.add(UdsChannel.connect(sock.toString(), dp.getPrivate(), dp.getPublic(), cpPub)).channel;
+            EventsGrpc.newStub(ClientInterceptors.intercept(ch, injectMetadata("1", "0")))
+                .watchEvents(EventsOuterClass.WatchEventsRequest.getDefaultInstance(), new StreamObserver<>() {
+                    public void onNext(EventsOuterClass.SidecarEvent e) { }
+                    public void onError(Throwable e) { ended.countDown(); }
+                    public void onCompleted() { ended.countDown(); }
+                });
+            waitUntil("stream admitted", Duration.ofSeconds(1), () -> service.activeStreams() == 1);
+            writePublicKey(keys, "dp.pub", ed25519());
+            assertTrue(ended.await(3, SECONDS), "revoked peer retained active WatchEvents beyond channel lifetime");
+            waitUntil("stream released", Duration.ofSeconds(1), () -> service.activeStreams() == 0);
+        }
+    }
+
+    @Test
+    void clientCannotRetainRevokedServerOnIdleChannel() throws Exception {
+        Path keys = Files.createDirectories(tmp.resolve("keys-client-age"));
+        var cp = ed25519(); var dp = ed25519();
+        writePrivateKey(keys, "cp.priv", cp);
+        Path cpPub = writePublicKey(keys, "cp.pub", cp);
+        Path dpPub = writePublicKey(keys, "dp.pub", dp);
+        Path sock = tmp.resolve("idle.sock");
+        try (Stack stack = new Stack()) {
+            stack.add(MockServer.start(NettyServerBuilder
+                .forAddress((java.net.SocketAddress) new DomainSocketAddress(sock.toString()))
+                .sslContext(CpTls.serverContext(dpIdentity(dp.getPrivate(), dp.getPublic()), cpPub))
+                .addService(new ControlGrpc.ControlImplBase() {
+                    public void reloadTokens(ControlOuterClass.ReloadTokensRequest request,
+                            StreamObserver<ControlOuterClass.ReloadTokensResponse> response) {
+                        response.onNext(ControlOuterClass.ReloadTokensResponse.newBuilder()
+                            .setAppliedGeneration(request.getGeneration()).build());
+                        response.onCompleted();
+                    }
+                })));
+            try (var client = ReloadTokensClient.create(keys, sock, dpPub, Duration.ofSeconds(1))) {
+                assertEquals(1, client.reload(1, List.of()).getAppliedGeneration());
+                writePublicKey(keys, "dp.pub", ed25519());
+                Thread.sleep(1500);
+                assertThrows(StatusRuntimeException.class, () -> client.reload(2, List.of()),
+                    "revoked server retained channel authority after local deadline");
+                writePublicKey(keys, "dp.pub", dp);
+                waitUntil("authorized reconnect recovers", Duration.ofSeconds(4), () -> {
+                    try { return client.reload(3, List.of()).getAppliedGeneration() == 3; }
+                    catch (StatusRuntimeException retrying) { return false; }
+                });
+                Files.delete(dpPub);
+                Thread.sleep(1500);
+                assertThrows(StatusRuntimeException.class, () -> client.reload(4, List.of()),
+                    "pin removal after startup must be a refused transport, not a constructor failure");
+            }
+        }
+    }
+
     // --- fixture helpers ---------------------------------------------------------
 
     private static final String DP_CN = "stargate-dp";

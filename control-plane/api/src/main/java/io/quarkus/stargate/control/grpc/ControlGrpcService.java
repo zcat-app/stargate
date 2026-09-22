@@ -102,6 +102,11 @@ public final class ControlGrpcService extends EventsGrpc.EventsImplBase {
      */
     public BoundServer startServer(Path controlSockPath, Path cpPriv, Path cpPub, Path dpPub)
             throws IOException {
+        return startServer(controlSockPath, cpPriv, cpPub, dpPub, java.time.Duration.ofSeconds(40));
+    }
+
+    BoundServer startServer(Path controlSockPath, Path cpPriv, Path cpPub, Path dpPub,
+            java.time.Duration lifetime) throws IOException {
         CpTls.Identity identity = CpTls.deriveCpIdentity(cpPriv, cpPub);
         // grpc-netty requires all-or-nothing (boss, worker, channelType):
         // a domain-socket channel NEEDS the explicit groups, and
@@ -120,6 +125,9 @@ public final class ControlGrpcService extends EventsGrpc.EventsImplBase {
                     .bossEventLoopGroup(boss)
                     .workerEventLoopGroup(workers)
                     .sslContext(CpTls.serverContext(identity, dpPub))
+                    // §2.4: 40s + 10% jitter + grpc-java’s 10s GOAWAY ping wait < 60s.
+                    .maxConnectionAge(lifetime.toNanos(), TimeUnit.NANOSECONDS)
+                    .maxConnectionAgeGrace(0, TimeUnit.NANOSECONDS)
                     .intercept(StargateProtoVersion.serverVersionInterceptor())
                     .addService(this)
                     .build()

@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 49 |
-| in-progress | 0 |
+| pending | 48 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 151 |
@@ -39,7 +39,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
 | T145 | Test Maven wrapper checksum enforcement | Foundation audit remediation |  |  |
 | T146 | Correct init timeout diagnosis and isolate its fixture | Foundation audit remediation |  |  |
-| T148 | Reconcile peer certificate validity policy | Foundation audit remediation | ✓ |  |
 | T149 | Finalize byte accounting after both forwarding pumps | Foundation audit remediation | ✓ |  |
 | T150 | Define truthful mixed-tab route indicator semantics | Foundation audit remediation | ✓ |  |
 | T151 | Name the actual WebRTC remediation preference | Foundation audit remediation | ✓ |  |
@@ -52,7 +51,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T148 | Reconcile peer certificate validity policy | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

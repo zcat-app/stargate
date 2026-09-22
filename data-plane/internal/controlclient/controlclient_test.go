@@ -391,14 +391,22 @@ func TestDeriveDPTLSWiresBothSides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DeriveDPTLS: %v", err)
 	}
-	if len(clientCfg.Certificates) == 0 || len(serverCfg.Certificates) == 0 {
-		t.Fatal("configs carry no certificate")
+	if clientCfg.GetClientCertificate == nil || serverCfg.GetCertificate == nil {
+		t.Fatal("renewable identity selection missing")
 	}
-	if !samePublicKey(clientCfg.Certificates[0], serverCfg.Certificates[0]) {
-		t.Error("client and server configs present different certs — §2.1: one in-memory cert, both roles")
+	clientCert, err := clientCfg.GetClientCertificate(&tls.CertificateRequestInfo{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverCert, err := serverCfg.GetCertificate(&tls.ClientHelloInfo{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !samePublicKey(*clientCert, *serverCert) {
+		t.Error("client/server renewal identities differ")
 	}
 	wantKey := dpKey.Public().(ed25519.PublicKey)
-	gotKey, ok := clientCfg.Certificates[0].Leaf.PublicKey.(ed25519.PublicKey)
+	gotKey, ok := clientCert.Leaf.PublicKey.(ed25519.PublicKey)
 	if !ok || !bytes.Equal(gotKey, wantKey) {
 		t.Error("derived cert is not from dp.priv (§2.1)")
 	}

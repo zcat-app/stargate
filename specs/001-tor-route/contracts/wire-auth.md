@@ -1,10 +1,10 @@
 # Contract — Inter-Plane Wire Authentication and Versioning
 
-> **T156 target update (implemented for current pins by T135; validity pending T148):** current authorized pins,
+> **T156 policy (T135 current pins; T148 validity/lifecycle):** current authorized pins,
 > key possession and certificate validity are mandatory on full and resumed handshakes.
 > T135 uses a verification hook that executes for both; `VerifyPeerCertificate` alone does not
-> guarantee resumption checks. T148 must specify renewal before expiry,
-> clock tolerance and existing-channel rotation/revocation before code. See
+> guarantee resumption checks. T148's validity, renewal and channel deadlines are specified in §2.4.
+> See
 > [foundation boundaries](foundation-boundaries.md); monthly manual restart is not renewal.
 
 **Status**: Phase 2 foundational contract document (T095). **Binding on T038,
@@ -54,7 +54,7 @@ documented migration test (arch §5.3; Constitution Principle II).
 ### 2.1 When and where
 
 Each plane derives its **own** self-signed certificate from its **own**
-private key at **process startup**; the certificate is held in process memory
+private key at **process startup and automatic renewal (§2.4)**; the certificate is held in process memory
 only and is never persisted to disk. This decouples certificate validity from
 the long-lived key material in `stargate-keys` (Constitution Principle VI —
 the on-disk artefact set stays reproducible and auditable; transient certs do
@@ -96,6 +96,43 @@ Aside from `NotBefore` / `NotAfter`, the derived certificate is byte-identical
 across restarts against the same key. An auditor comparing two startup
 captures need only account for the validity window; this is the analogue of
 `BUILD-DIFFS.md`'s "expected variations" discipline for a runtime artefact.
+
+### 2.4 Validity, renewal and established-channel deadlines (T148)
+
+- **Clock policy:** each verifier requires `NotBefore <= now <= NotAfter`, using its local
+  wall clock, on full AND resumed handshakes. There is no additional verifier grace period.
+  The issuance backdate of five minutes in §2.2 is the entire skew allowance. Expired or
+  future certificates, missing/unreadable pins and replaced pins fail closed before RPC dispatch.
+  Host clock integrity is a precondition; a backward clock jump is not an authorization mechanism.
+- **Renewal:** when selecting its identity for a handshake, each plane replaces its in-memory
+  certificate if it has at most 24 hours remaining or is not yet valid under the local clock.
+  It signs a fresh §2.2 certificate with the already loaded key, without network access, disk
+  persistence, peer coordination or process restart. Idle identities need no background work:
+  renewal occurs before their next presentation, even after a long CP outage. Active channels
+  reconnect at the deadline below and therefore renew well before expiry. Failed renewal denies
+  the new IPC handshake; it must not disable data-plane routing under existing valid auth state.
+- **Established channels:** BOTH endpoints independently force-close each authenticated IPC
+  transport no later than 60 seconds after its handshake. A certificate expiring on an already
+  authenticated transport therefore has at most 60 seconds of remaining channel authority;
+  new handshakes have no expiry grace. There is no unbounded graceful-drain extension for active RPCs
+  or WatchEvents streams. Deadlines assume a running process and scheduler; suspension/host
+  compromise is outside this timing guarantee. No per-request CP dependency is introduced.
+- **Revocation/rotation:** replacing or removing the authorized peer pin immediately affects
+  subsequent full/resumed handshakes. Previously authenticated channels may remain usable for
+  at most 60 seconds; local expiry of their transport does not depend on peer cooperation.
+  TLS resumption must recheck current pin AND certificate dates, not refresh the age of a cached
+  authorization. Expired cached sessions cannot block a fresh authorized full handshake forever.
+  Go retains resumption with `VerifyConnection` checks. Java uses a fresh JDK TLS context for each
+  engine, disabling session reuse in both roles: an offered old ticket requires a full handshake.
+  This avoids grpc-netty's direct SslHandler construction bypassing Netty's resumption callback.
+- **Recovery:** ordinary gRPC reconnect and the WatchEvents retry loop establish a new authenticated
+  transport. Token delivery retains its existing per-call result/deadline semantics (T137); this
+  does not implement T132's separate durable-state re-push policy. IPC closure never closes proxy
+  byte pipes or expires the retained client-auth generation solely because CP is unavailable.
+
+These rules strengthen the pre-public v1 implementations without changing RPC schemas or key
+formats. Both peers ship together. A mixed old/new deployment does not satisfy T148 until both
+endpoints are upgraded; the old verifier/renewal behavior is not a compatibility guarantee.
 
 ---
 
@@ -312,9 +349,9 @@ shared GID.
 
 ### 6.2 Certificate vs key rotation
 
-- **Transient cert rotation**: implicit, on every plane restart, per §2.1.
+- **Transient cert rotation**: automatic on identity selection, per §2.4, and on plane restart.
   No operator action. No on-disk artefact changes. The validity window
-  (§2.2) bounds the cert lifetime to 30 days from each restart.
+  (§2.2) bounds each certificate's lifetime to 30 days from issuance.
 - **Key rotation** (the operator-visible event): replacing the on-disk
   `cp.priv`/`cp.pub` / `dp.priv`/`dp.pub` keypairs. This is currently
   operator-manual (no automated rotation in v1 — see §Out-of-scope in the
@@ -368,7 +405,7 @@ does NOT redefine those rows; it adds the compose-level rows T022 deferred.
 - Remote TCP gRPC transport. The local profile is UDS-only (arch §5.4). A
   LAN/VPS profile may introduce an authenticated TCP surface; that is a
   future feature and a `stargate.v<major+1>` consideration (§4.1).
-- Automated certificate rotation. The on-disk keypair is operator-replaced
+- Automated keypair rotation. In-memory certificate renewal is required by §2.4. The on-disk keypair is operator-replaced
   (§6.2); an automated-rotation feature (CP-driven key generation + atomic
   install + plane restart) is deferred.
 - A `Handshake` RPC. Version + capabilities ride gRPC metadata on every RPC

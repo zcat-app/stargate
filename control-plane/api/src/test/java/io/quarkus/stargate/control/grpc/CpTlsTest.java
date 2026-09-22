@@ -54,6 +54,39 @@ class CpTlsTest {
     @TempDir
     Path tmp;
 
+    @Test
+    void rejectsExpiredAndFuturePeersInBothRoles() throws Exception {
+        KeyPair peer = ed25519KeyPair();
+        Path pin = writePublicKey(tmp, "peer.pub", peer);
+        var trust = CpTls.peerPinTrustManager(pin);
+        for (Instant issued : List.of(Instant.now().minus(Duration.ofDays(31)),
+                Instant.now().plus(Duration.ofHours(1)))) {
+            X509Certificate cert = CpTls.deriveSelfSigned(peer.getPrivate(), peer.getPublic(),
+                    "stargate-dp", "spiffe://stargate.local/dp", issued);
+            assertThrows(CertificateException.class,
+                    () -> trust.checkClientTrusted(new X509Certificate[] { cert }, "Ed25519"));
+            assertThrows(CertificateException.class,
+                    () -> trust.checkServerTrusted(new X509Certificate[] { cert }, "Ed25519"));
+        }
+    }
+
+    @Test
+    void renewsIdentityWithoutPeerOrDiskAccess() throws Exception {
+        KeyPair own = ed25519KeyPair();
+        Instant issued = Instant.now().minus(Duration.ofDays(31));
+        var initial = CpTls.deriveSelfSigned(own.getPrivate(), own.getPublic(),
+                "stargate-cp", "spiffe://stargate.local/cp", issued);
+        var id = new CpTls.Identity(own.getPrivate(), initial,
+                java.time.Clock.fixed(issued.plus(Duration.ofDays(31)), java.time.ZoneOffset.UTC));
+        assertTrue(id.certificate().getNotAfter().toInstant().isAfter(Instant.now().plus(Duration.ofDays(29))),
+                "renewal must happen before using an identity after a long outage");
+        assertEquals(own.getPublic(), id.certificate().getPublicKey());
+        var beforeExpiry = new CpTls.Identity(own.getPrivate(), initial,
+                java.time.Clock.fixed(issued.plus(Duration.ofDays(29)).plus(Duration.ofHours(1)), java.time.ZoneOffset.UTC));
+        assertTrue(beforeExpiry.certificate().getNotAfter().after(initial.getNotAfter()),
+                "renewal must start before the old certificate expires");
+    }
+
     // --- fixtures -------------------------------------------------------------
 
     /** Writes a PEM file (64-column Base64, standard RFC 7468 armour). */

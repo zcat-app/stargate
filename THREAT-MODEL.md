@@ -1330,14 +1330,27 @@ inter-plane UDS sockets (`/run/stargate/control.sock` or
 
 **Current gaps and residual risk (T095 history; T156 requirements)**:
 
-- **Current state:** T135 makes the Go DP's production verifier re-read the authorized peer pin
-  on both full and resumed TLS handshakes; a real-UDS regression proves an old CP session cannot
-  invoke `ReloadTokens` after `cp.pub` rotation while the newly pinned identity can reconnect.
-  Certificates retain the specified `NotBefore = now − 5 min` and `NotAfter = now + 30 days`
-  fields, but expiry enforcement and renewal remain incomplete: T148 must enforce the validity policy,
-  automatically renew certificates before expiry, and specify existing-channel lifecycle.
-  Manual monthly restart is not a conforming renewal policy, and current-pin enforcement does
-  not claim that rotation terminates an already-established channel.
+- **T148 implemented policy:** both peers require `NotBefore <= now <= NotAfter` on new
+  handshakes; the five-minute issuance backdate is the sole clock allowance. Go retains T135's
+  current-pin check on full/resumed handshakes and checks the restored certificate dates.
+  Java creates a fresh JDK TLS session context per engine: cached authorization is never reused,
+  including when a client offers a ticket. Both peers issue in-memory certificates valid for 30 days and renew them
+  when selected with at most 24 hours remaining (or after an idle outage), using the same loaded
+  key without CP coordination, disk persistence, network egress or a restart.
+- **Established IPC authority is bounded, not instantaneous:** both endpoint roles close local
+  transports within 60 seconds of authentication, including active streams and idle channels.
+  Pin replacement/removal and certificate expiry can therefore leave at most 60 seconds of
+  previously authenticated channel authority. This timing assumes a running process/scheduler
+  and trustworthy host clock; suspension and host compromise are outside it. Normal IPC
+  reconnection uses fresh authorization. It neither expires retained bearer-token state nor
+  closes proxy byte pipes; T132's durable re-push semantics remain separate.
+- **Evidence:** `tls_lifecycle_test.go` covers invalid dates, actual Go resumption with an advanced
+  verifier clock, renewal before expiry/after CP outage, independently timed closure in both roles,
+  and old/new authenticated byte pipes through the production listener/forwarder and a local echo
+  sidecar. `CpTlsTest`, `InterPlaneWireTest` and `CrossPlaneTlsTest` cover Java renewal, active/idle
+  channel loss and recovery, plus real Go/Java UDS date checks, ticket offers, pin replacement and
+  repeated gRPC reconnects. Synthetic-clock and local-fixture evidence does not establish live Tor
+  anonymity, host-clock integrity, month-long soak behavior or future LAN/VPS transport guarantees.
 - **No automated key rotation in v1.** Replacing the on-disk
   `cp.priv`/`cp.pub` / `dp.priv`/`dp.pub` keypairs is operator-manual
   (write-tmp + rename + plane restart, ordered per `wire-auth.md` §6.2).

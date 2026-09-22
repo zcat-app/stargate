@@ -6,6 +6,8 @@ package io.quarkus.stargate.control.grpc;
 import java.net.SocketAddress;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.function.Supplier;
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 
 import io.grpc.ManagedChannel;
@@ -50,14 +52,35 @@ public final class ReloadTokensClient implements AutoCloseable {
      * not wire shape. */
     private static final long DEADLINE_SECONDS = 10;
 
-    private final ManagedChannel channel;
-    private final ControlGrpc.ControlBlockingStub stub;
+    private ManagedChannel channel;
+    private final Supplier<ManagedChannel> channelFactory;
     private final EventLoopGroup eventLoopGroup;
+    private final Duration lifetime;
+    private boolean closed;
 
-    private ReloadTokensClient(ManagedChannel channel, EventLoopGroup eventLoopGroup) {
-        this.channel = channel;
+    private ReloadTokensClient(Supplier<ManagedChannel> channelFactory, EventLoopGroup eventLoopGroup,
+            Duration lifetime) {
+        this.channelFactory = channelFactory;
         this.eventLoopGroup = eventLoopGroup;
-        this.stub = ControlGrpc.newBlockingStub(channel);
+        this.lifetime = lifetime;
+        this.channel = openChannel();
+    }
+
+    private ManagedChannel openChannel() {
+        ManagedChannel opened = channelFactory.get();
+        // Local forced shutdown: an uncooperative server cannot retain an
+        // authenticated connection indefinitely (wire-auth §2.4).
+        var expiry = eventLoopGroup.next().schedule(opened::shutdownNow, lifetime.toNanos(), TimeUnit.NANOSECONDS);
+        expiry.addListener(result -> {
+            if (!result.isSuccess()) { opened.shutdownNow(); }
+        });
+        return opened;
+    }
+
+    private synchronized ManagedChannel currentChannel() {
+        if (closed) { throw new IllegalStateException("reload client is closed"); }
+        if (channel.isShutdown()) { channel = openChannel(); }
+        return channel;
     }
 
     /**
@@ -77,23 +100,29 @@ public final class ReloadTokensClient implements AutoCloseable {
     /** Test seam: an overridden peer-pin path (the §3.3 wrong-key scenario). */
     static ReloadTokensClient create(java.nio.file.Path keysDir, java.nio.file.Path dpSock,
             java.nio.file.Path peerPinPath) {
+        return create(keysDir, dpSock, peerPinPath, java.time.Duration.ofSeconds(55));
+    }
+
+    static ReloadTokensClient create(Path keysDir, Path dpSock, Path peerPinPath,
+            java.time.Duration lifetime) {
         CpTls.Identity identity = CpTls.deriveCpIdentity(
                 keysDir.resolve("cp.priv"), keysDir.resolve("cp.pub"));
         // grpc-netty requires all-or-nothing (group, channelType): a domain-
         // socket channel NEEDS the explicit group, and a builder-provided
         // group is caller-owned — closed in close().
+        var tls = CpTls.clientContext(identity, peerPinPath);
         EventLoopGroup group = new EpollEventLoopGroup(1);
-        ManagedChannel channel = NettyChannelBuilder
+        Supplier<ManagedChannel> channelFactory = () -> NettyChannelBuilder
                 .forAddress((SocketAddress) new DomainSocketAddress(dpSock.toString()))
                 // grpc-netty's default channel type is the INET epoll channel;
                 // a unix socket address NEEDS the domain variant (wire-auth §4
                 // UDS authority) or connect fails EAFNOSUPPORT.
                 .channelType(EpollDomainSocketChannel.class)
                 .eventLoopGroup(group)
-                .sslContext(CpTls.clientContext(identity, peerPinPath))
+                .sslContext(tls)
                 .intercept(StargateProtoVersion.clientVersionInterceptor())
                 .build();
-        return new ReloadTokensClient(channel, group);
+        return new ReloadTokensClient(channelFactory, group, lifetime);
     }
 
     /**
@@ -111,12 +140,13 @@ public final class ReloadTokensClient implements AutoCloseable {
                 .setGeneration(generation)
                 .addAllTokens(tokens)
                 .build();
-        return stub.withDeadlineAfter(DEADLINE_SECONDS, TimeUnit.SECONDS)
+        return ControlGrpc.newBlockingStub(currentChannel()).withDeadlineAfter(DEADLINE_SECONDS, TimeUnit.SECONDS)
                 .reloadTokens(request);
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
+        closed = true;
         channel.shutdownNow();
         try {
             // A stubborn channel must not plant a phantom interrupt on the

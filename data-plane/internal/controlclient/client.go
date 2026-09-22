@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/zcat-app/stargate/data-plane/internal/protoversion"
@@ -122,7 +121,7 @@ func NewClient(cfg ClientConfig, jitter func() float64) (*Client, error) {
 	}
 	conn, err := grpc.NewClient(
 		"unix://"+cfg.ControlSocket,
-		grpc.WithTransportCredentials(credentials.NewTLS(cfg.TLS)),
+		grpc.WithTransportCredentials(NewTransportCredentials(cfg.TLS)),
 		// §5.3: the client interceptor sets the three metadata keys on
 		// EVERY call — installed here, on the only client conn the DP
 		// dials, so no call can bypass it.

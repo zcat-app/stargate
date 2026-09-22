@@ -41,6 +41,34 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-09-22 — Enforce certificate validity and bounded IPC authority (T148)
+
+**Supersedes:** the 2026-07-12 T095 certificate-validity rationale, for expiry enforcement,
+renewal and established-channel authority. T156 Principle II requires possession of the private
+key, the currently authorized pin and a valid certificate; matching keys alone are insufficient.
+This reconciles the implementation with that policy, not a weakening or finding waiver.
+
+**Decision:** wire-auth §2.4 specifies exact local-clock validity checks with only the existing
+five-minute issuance backdate, automatic in-memory renewal within the final 24 hours or before
+use after an idle outage, and independently enforced IPC connection lifetimes of at most
+60 seconds. Established channels have bounded residual authority after pin replacement or expiry;
+new handshakes have no expiry grace. Routing under retained valid auth state survives IPC loss.
+
+Go uses its full/resumed verification hook and bounded transport credentials. Java uses separate
+JDK TLS contexts per engine because grpc-netty constructs SslHandler directly, bypassing Netty's
+context-associated resumption controller. Disabling Java session reuse preserves authentication
+without relying on a callback that production does not invoke. Synthetic and real Go/Java UDS
+checks are listed in THREAT-MODEL §5.13 and reviews/T148/README.md.
+
+**Corrected rationale:** a certificate alone cannot impersonate its holder; possession of the
+currently pinned private key CAN impersonate the peer without restarting the legitimate plane.
+A stolen key can mint new valid certificates. Certificate expiry does not bound key compromise;
+operator key rotation remains necessary. No automated keypair rotation is introduced. Host clock
+integrity and process scheduling remain timing preconditions; no instantaneous revocation or
+new live-network anonymity evidence is claimed.
+
+---
+
 ## 2026-09-21 — Retire T125 embedded-resolver acceptance on the measured Local boundary (T163)
 
 **Decision and authority.** Retire only residual (b), the embedded-DNS side
@@ -700,6 +728,8 @@ emit.
 ---
 
 ## 2026-07-12 — Inter-plane X.509 certificate validity policy (T095 wire-auth contract)
+
+Superseded by: [T148 validity and IPC authority](#2026-09-22--enforce-certificate-validity-and-bounded-ipc-authority-t148), for validity enforcement, renewal, existing-channel deadlines and the private-key impersonation rationale.
 
 **Context.** T095 completed the inter-plane wire contract
 (`specs/001-tor-route/contracts/wire-auth.md`) that arch §5.4 had left

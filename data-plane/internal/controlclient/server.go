@@ -28,7 +28,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -185,7 +184,7 @@ func NewGRPCServer(control *Server, serverTLS *tls.Config) (*grpc.Server, error)
 		return nil, errors.New("dp.sock requires server TLS material (wire-auth.md §4; T130) — refusing to serve unauthenticated")
 	}
 	gs := grpc.NewServer(
-		grpc.Creds(credentials.NewTLS(serverTLS)),
+		grpc.Creds(NewTransportCredentials(serverTLS)),
 		grpc.ChainUnaryInterceptor(UnaryProtoVersionInterceptor),
 		grpc.ChainStreamInterceptor(StreamProtoVersionInterceptor),
 	)

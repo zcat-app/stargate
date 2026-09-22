@@ -19,6 +19,8 @@ import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
+import java.time.Clock;
+import org.jspecify.annotations.Nullable;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -61,7 +63,40 @@ public final class CpTls {
 
     /** The plane's TLS identity: the long-lived private key plus the transient
      * self-signed cert derived from it (in memory only, never persisted — §2.1). */
-    public record Identity(PrivateKey privateKey, X509Certificate certificate) {
+    public static final class Identity {
+        private final PrivateKey privateKey;
+        private X509Certificate certificate;
+        private final @Nullable Clock clock;
+
+        // Static synthetic identities let negative tests present expired certificates;
+        // production derives an identity with a clock via deriveCpIdentity below.
+        public Identity(
+                PrivateKey privateKey,
+                X509Certificate certificate) {
+            this(privateKey, certificate, null);
+        }
+
+        Identity(
+                PrivateKey privateKey,
+                X509Certificate certificate,
+                @Nullable Clock clock) {
+            this.privateKey = privateKey;
+            this.certificate = certificate;
+            this.clock = clock;
+        }
+
+        public PrivateKey privateKey() { return privateKey; }
+        public synchronized X509Certificate certificate() {
+            if (clock != null) {
+                Instant now = clock.instant();
+                if (now.isBefore(certificate.getNotBefore().toInstant())
+                        || !now.isBefore(certificate.getNotAfter().toInstant().minus(Duration.ofDays(1)))) {
+                    certificate = deriveSelfSigned(privateKey, certificate.getPublicKey(),
+                            COMMON_NAME, SPIFFE_ID, now);
+                }
+            }
+            return certificate;
+        }
     }
 
     private CpTls() {
@@ -84,7 +119,7 @@ public final class CpTls {
             PrivateKey priv = loadPkcs8Pem(cpPriv);
             PublicKey pub = loadSpkiPem(cpPub);
             return new Identity(priv, deriveSelfSigned(priv, pub, COMMON_NAME, SPIFFE_ID,
-                    Instant.now()));
+                    Instant.now()), Clock.systemUTC());
         } catch (GeneralSecurityException | java.io.IOException e) {
             throw new IllegalStateException(
                     "cp TLS material derivation failed (wire-auth.md §2.1 startup error): " + e.getMessage(),
@@ -161,6 +196,7 @@ public final class CpTls {
                             "peer presented " + (chain == null ? 0 : chain.length)
                                     + " certs, want exactly 1 (wire-auth.md §1)");
                 }
+                chain[0].checkValidity(); // §2.4: issuance backdate is the only skew allowance
                 byte[] peerKey = extractRawEd25519(chain[0].getPublicKey().getEncoded());
                 byte[] pinned = readPinnedRawKey(peerPubPath); // fresh from disk, every handshake (§3.1 step 3)
                 if (!MessageDigest.isEqual(peerKey, pinned)) {
@@ -227,6 +263,11 @@ public final class CpTls {
      * is the sole trust decision; system roots are never consulted.
      */
     public static SslContext serverContext(Identity id, Path peerPubPath) {
+        readPinnedRawKey(peerPubPath);
+        return new FreshTlsContext(() -> buildServerContext(id, peerPubPath));
+    }
+
+    private static SslContext buildServerContext(Identity id, Path peerPubPath) {
         // §3.3: a missing/unreadable/unparseable pin is a CP STARTUP error —
         // fail fast here rather than at the DP's first dial. This governs
         // PRESENCE only; the per-handshake re-read (§3.1 step 3) still governs
@@ -235,7 +276,8 @@ public final class CpTls {
         try {
             SslContextBuilder builder = GrpcSslContexts.configure(
                     SslContextBuilder.forServer(id.privateKey(), id.certificate()));
-            builder.trustManager(peerPinTrustManager(peerPubPath))
+            builder.sslProvider(io.netty.handler.ssl.SslProvider.JDK)
+                    .trustManager(peerPinTrustManager(peerPubPath))
                     .clientAuth(ClientAuth.REQUIRE) // §4: client auth REQUIRED
                     .protocols("TLSv1.3");
             return builder.build();
@@ -251,10 +293,16 @@ public final class CpTls {
      * citation on {@link #serverContext} for the InsecureSkipVerify analogy.
      */
     public static SslContext clientContext(Identity id, Path peerPubPath) {
+        readPinnedRawKey(peerPubPath);
+        return new FreshTlsContext(() -> buildClientContext(id, peerPubPath));
+    }
+
+    private static SslContext buildClientContext(Identity id, Path peerPubPath) {
         readPinnedRawKey(peerPubPath); // §3.3 startup fail-fast (see serverContext)
         try {
             SslContextBuilder builder = GrpcSslContexts.configure(SslContextBuilder.forClient());
-            builder.keyManager(id.privateKey(), id.certificate())
+            builder.sslProvider(io.netty.handler.ssl.SslProvider.JDK)
+                    .keyManager(id.privateKey(), id.certificate())
                     .trustManager(peerPinTrustManager(peerPubPath))
                     .protocols("TLSv1.3");
             return builder.build();
