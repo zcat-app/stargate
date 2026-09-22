@@ -42,6 +42,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -54,13 +55,15 @@ import (
 // test needs. Each Start call produces an independent instance so
 // generation / token-list state never leaks between sub-tests.
 type Harness struct {
-	ProxyAddr    string // 127.0.0.1:<port>; STARGATE_LISTEN_ADDR
-	UpstreamAddr string // loopback fake upstream (fake_socks5_tor); empty in tests that don't forward
-	IPCDir       string // dir hosting dp.sock + where control.sock is dialed
-	KeysDir      string // inter-plane key set (T130: dp.sock dials need CP-shaped TLS creds)
-	Journal      *LockedBuffer
-	PID          int
-	Cmd          *exec.Cmd
+	CounterTime      time.Time
+	counterClockPath string
+	ProxyAddr        string // 127.0.0.1:<port>; STARGATE_LISTEN_ADDR
+	UpstreamAddr     string // loopback fake upstream (fake_socks5_tor); empty in tests that don't forward
+	IPCDir           string // dir hosting dp.sock + where control.sock is dialed
+	KeysDir          string // inter-plane key set (T130: dp.sock dials need CP-shaped TLS creds)
+	Journal          *LockedBuffer
+	PID              int
+	Cmd              *exec.Cmd
 	// CP is the TLS fake control plane booted by WithControlPlane; nil
 	// otherwise. The DP dials it over the §4 mutual-pin TLS handshake.
 	CP *fakecp.Server
@@ -72,9 +75,39 @@ type Harness struct {
 type Option func(*startConfig)
 
 type startConfig struct {
-	beforeBoot   func(ipcDir string)
-	upstream     string // empty = use production default (tor:9050)
-	controlPlane bool   // seed inter-plane keys + host the TLS fake CP
+	counterClock     *time.Time
+	countersDisabled bool
+	beforeBoot       func(ipcDir string)
+	upstream         string // empty = use production default (tor:9050)
+	controlPlane     bool   // seed inter-plane keys + host the TLS fake CP
+}
+
+// WithCounterClock selects a test binary using production runWithCounters wiring.
+// Only traffic accounting receives this clock; TLS, sockets and deadlines use real time.
+func WithCounterClock(now time.Time) Option {
+	return func(c *startConfig) { c.counterClock = &now }
+}
+
+func WithCountersDisabled() Option { return func(c *startConfig) { c.countersDisabled = true } }
+
+// AdvanceCounterHour closes one synthetic hour. Status remains an ordinary RPC;
+// tests must explicitly advance time, preserving meaningful negative assertions.
+func (h *Harness) AdvanceCounterHour(t *testing.T) {
+	t.Helper()
+	if h.counterClockPath == "" {
+		t.Fatal("counter clock not enabled")
+	}
+	h.CounterTime = h.CounterTime.Add(time.Hour)
+	writeCounterClock(t, h.counterClockPath, h.CounterTime)
+}
+func writeCounterClock(t *testing.T, path string, now time.Time) {
+	t.Helper()
+	if err := os.WriteFile(path+".new", []byte(strconv.FormatInt(now.Unix(), 10)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(path+".new", path); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // WithBeforeBoot registers a callback invoked AFTER the IPC dir is
@@ -150,7 +183,7 @@ func Start(t *testing.T, opts ...Option) *Harness {
 		t.Skipf("go toolchain not on PATH (environmental, like T019b's docker-daemon skip): %v", err)
 	}
 
-	binPath := buildDPOnce(t)
+	binPath := buildDPOnce(t, cfg.counterClock != nil)
 
 	// IPC dir via MkdirTemp, NOT t.TempDir: sun_path on Linux caps UDS
 	// paths at ~108 bytes and t.TempDir embeds the full test name.
@@ -180,17 +213,32 @@ func Start(t *testing.T, opts ...Option) *Harness {
 	var hCP *fakecp.Server
 
 	cmd := exec.Command(binPath)
+	var counterClockPath string
+	var counterTime time.Time
+	if cfg.counterClock != nil {
+		counterClockPath = filepath.Join(stateDir, "test-counter-clock")
+		counterTime = *cfg.counterClock
+		writeCounterClock(t, counterClockPath, counterTime)
+		cmd = exec.Command(binPath, "-test.run=^TestCounterClockProcess$")
+	}
 	env := append(os.Environ(),
 		"STARGATE_IPC_DIR="+ipcDir,
 		"STARGATE_STATE_DIR="+stateDir,
 		"STARGATE_KEYS_DIR="+keysDir,
 		"STARGATE_LISTEN_ADDR="+proxyAddr,
+		"STARGATE_TRAFFIC_COUNTERS=true",
 	)
 	if cfg.upstream != "" {
 		// Test-defined env-var interface: T047 / T050 must read this
 		// and override the production tor:9050 default when set.
 		// The Unix adapter matches production; no DP destination DNS or TCP dial.
 		env = append(env, "STARGATE_TOR_SOCKS_ADDR="+UnixUpstream(t, cfg.upstream))
+	}
+	if counterClockPath != "" {
+		env = append(env, "STARGATE_TEST_COUNTER_CLOCK="+counterClockPath)
+	}
+	if cfg.countersDisabled {
+		env = append(env, "STARGATE_TRAFFIC_COUNTERS=false")
 	}
 	cmd.Env = env
 	cmd.Stderr = journal
@@ -226,14 +274,16 @@ func Start(t *testing.T, opts ...Option) *Harness {
 	})
 
 	return &Harness{
-		ProxyAddr:    proxyAddr,
-		UpstreamAddr: cfg.upstream,
-		IPCDir:       ipcDir,
-		KeysDir:      keysDir,
-		Journal:      journal,
-		PID:          cmd.Process.Pid,
-		Cmd:          cmd,
-		CP:           hCP,
+		CounterTime:      counterTime,
+		counterClockPath: counterClockPath,
+		ProxyAddr:        proxyAddr,
+		UpstreamAddr:     cfg.upstream,
+		IPCDir:           ipcDir,
+		KeysDir:          keysDir,
+		Journal:          journal,
+		PID:              cmd.Process.Pid,
+		Cmd:              cmd,
+		CP:               hCP,
 	}
 }
 
@@ -260,33 +310,41 @@ func (h *Harness) SockPath() string {
 // invocation; every sub-test boots the same artifact. The build output
 // lands under os.TempDir (not t.TempDir) because the path is shared
 // across sub-tests; the OS owns its lifecycle.
-var (
-	buildOnce sync.Once
-	binPath   string
-	binErr    error
-)
+var builds [2]struct {
+	once sync.Once
+	path string
+	err  error
+}
 
-func buildDPOnce(t *testing.T) string {
+func buildDPOnce(t *testing.T, clock bool) string {
 	t.Helper()
-	buildOnce.Do(func() {
+	index := 0
+	if clock {
+		index = 1
+	}
+	b := &builds[index]
+	b.once.Do(func() {
 		dir, err := os.MkdirTemp("", "stargate-contract-bin")
 		if err != nil {
-			binErr = err
+			b.err = err
 			return
 		}
-		binPath = filepath.Join(dir, "stargate-proxy")
-		repoRoot := FindRepoRoot(t)
-		cmd := exec.Command("go", "build", "-o", binPath, "./cmd/stargate-proxy")
+		b.path = filepath.Join(dir, "stargate-proxy")
+		args := []string{"build", "-o", b.path, "./cmd/stargate-proxy"}
+		if clock {
+			args = []string{"test", "-c", "-o", b.path, "./cmd/stargate-proxy"}
+		}
+		cmd := exec.Command("go", args...)
 		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
-		cmd.Dir = filepath.Join(repoRoot, "data-plane")
+		cmd.Dir = filepath.Join(FindRepoRoot(t), "data-plane")
 		if out, err := cmd.CombinedOutput(); err != nil {
-			binErr = fmt.Errorf("go build ./cmd/stargate-proxy: %w\n%s", err, out)
+			b.err = fmt.Errorf("building DP: %w\n%s", err, out)
 		}
 	})
-	if binErr != nil {
-		t.Fatalf("building data-plane binary: %v", binErr)
+	if b.err != nil {
+		t.Fatal(b.err)
 	}
-	return binPath
+	return b.path
 }
 
 // stop terminates the DP process: SIGINT first (exercising whatever

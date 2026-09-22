@@ -251,13 +251,43 @@ message RouteCounter {
   as `ReloadTokens`; the mode/group scheme described in §"Socket
   topology" gates dial access to in-group callers.
 
+### T158 pre-release status transition (2026-09-22)
+
+This is a semantic transition of the existing `stargate.v1` response, with unchanged field
+numbers, types and version metadata. Deploy the revised DP and same-revision test/Java bindings
+together. Old clients can decode the response but their immediate-delta expectations are no
+longer valid; do not mix old accounting probes with the new producer. No production CP status
+poller or SQLite traffic writer exists in this feature. Both language bindings must decode
+empty and finalized responses over authenticated RPCs before this transition is approved.
+
+- All clock samples and increments serialize under the counter mutex. The effective UTC hour
+  is the maximum observed nonnegative Unix hour. Backward wall-clock movement cannot reopen
+  a finalized/expired bucket: new increments go to that effective current hour and remain
+  private until a later hour is observed. Large forward adjustments can finalize and expire
+  rows immediately; host-clock integrity is a precondition, not a protection supplied here.
+- Each authenticated request counts at admission; its bytes count exactly once after both
+  forwarding pumps finish, in the effective completion hour. Long-lived tunnels never amend
+  the earlier request bucket. An empty hour has no row. Reads increment no traffic counters.
+- Publish only rows strictly older than the effective hour, as independent sorted copies.
+  Finalized row values never change; retention can remove whole rows. No current totals,
+  observation timestamps or per-client labels are added to metadata, health or error responses.
+- Delete rows when the effective hour reaches `hour_bucket + 168` (seven days from bucket
+  start). Every access enforces this cutoff. A lifecycle-bound worker also sweeps at UTC hour
+  boundaries while idle; process suspension/scheduler delays can delay physical memory cleanup,
+  but an expired row is never returned after execution resumes. Expired rows never reappear
+  after rollback. Restart loses all private and finalized traffic state.
+- `STARGATE_TRAFFIC_COUNTERS=false` disables accumulation and export from startup; unset/`true`
+  enables them. Other values refuse startup with a fixed error. Disabling retention means no
+  traffic rows, never unlimited retention. No production control can accelerate this clock.
+
 **Tests**:
 
 1. `tests/contract/socks5/auth_failure_counter_test.go` (T025c) —
    probes `GetStatus` before and after 200 SOCKS auth-failure attempts, plus HTTP `C` refusal probes;
-   asserts both counter deltas are exactly zero.
+   asserts both finalized counter deltas after controlled rollover are exactly zero.
 2. `tests/contract/socks5/auth_passed_counter_test.go` (T025d) —
-   probes `GetStatus` before and after 100 auth-passing CONNECTs each
+   probes `GetStatus` before traffic, during the private hour, and after controlled
+   rollover following 100 auth-passing CONNECTs each
    transferring exactly `2B` bytes; asserts `request_count` delta is
    100 and `byte_count` delta is exactly `100 × 2B`.
 3. `tests/contract/socks5/route_failure_counter_test.go` (T067b) —
@@ -268,7 +298,9 @@ message RouteCounter {
    route failures DO increment `request_count` post-auth while their
    SOCKS failure replies do NOT contribute to `byte_count`. HTTP `C` refusal
    does not authenticate, dial or change either counter.
-4. No-side-effect: between two `GetStatus` calls separated by ≥1 s of
+4. Repeated polling, rollback, late completion, concurrent reads, retention and Java/Go
+   decoding are exercised against authenticated RPCs with a test-only clock.
+5. No-side-effect: between two `GetStatus` calls separated by ≥1 s of
    wall-clock idle (no inbound port-8881 traffic), both counter values
    are identical — verifies `GetStatus` itself does not increment
    counters. Asserted as a sandwich inside T025c.

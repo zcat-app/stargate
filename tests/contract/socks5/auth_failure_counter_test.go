@@ -97,7 +97,7 @@ func TestAuthFailureCounterSideChannelResistance(t *testing.T) {
 	// (listener socks5.go), so nothing downstream of auth
 	// is ever reached. WatchEvents retry noise is irrelevant — this
 	// test asserts counters, not the journal.
-	h := dpharness.Start(t)
+	h := dpharness.Start(t, dpharness.WithCounterClock(time.Date(2026, 9, 4, 10, 30, 0, 0, time.UTC)))
 
 	// Populate the generation with one valid verifier so the
 	// CorrectLength_AbsentFromGeneration mode is a near-miss against
@@ -163,6 +163,10 @@ func TestAuthFailureCounterSideChannelResistance(t *testing.T) {
 	// in-process counter mutex, so a regression whose increment lands
 	// slightly after close is not missed by a too-early snapshot.
 	time.Sleep(250 * time.Millisecond)
+	if current := dpharness.Status(t, h); !proto.Equal(before, current) {
+		t.Fatal("private-hour counters exposed")
+	}
+	h.AdvanceCounterHour(t) // Hidden current rows alone would make the negative test vacuous.
 	after := dpharness.Status(t, h)
 
 	// (a) request_count delta exactly zero — the FR-008 side-channel

@@ -1104,10 +1104,10 @@ func TestReloadTokensLogsApply(t *testing.T) {
 	}
 }
 
-func TestGetStatusReturnsSnapshotNoSideEffects(t *testing.T) {
-	// §"GetStatus (minimum subset)": returns the in-memory counter snapshot
-	// via the audit seam (T049's counters.go plugs in here) and MUST NOT
-	// increment anything as a side effect.
+func TestGetStatusReturnsFinalizedSnapshotNoSideEffects(t *testing.T) {
+	// The seam supplies a completed immutable row (T158), not current traffic.
+	// Real-clock and authenticated-RPC boundary cases live in audit/counters_test.go.
+	// The handler must preserve the finalized data and never increment it.
 	calls := 0
 	snap := &grpcpb.StatusResponse{Counters: []*grpcpb.RouteCounter{{
 		Route: "TOR", HourBucket: 42, RequestCount: 7, ByteCount: 9,

@@ -1,15 +1,15 @@
 ---
 id: "T158"
 title: "Publish only finalized aggregate counter buckets"
-status: "pending"
+status: in-review
 created: "2026-09-12"
-last_updated: "2026-09-12"
+last_updated: 2026-09-22
 source: "specs/001-tor-route/contracts/foundation-boundaries.md"
 phase: "Foundation audit remediation"
 story: "-"
 blocked_by: ["T156", "T139", "T149"]
 parallel: false
-files_budget: 12
+files_budget: 22
 privacy_critical: true
 complexity: "high"
 risk: "high"
@@ -35,9 +35,14 @@ fine-grained observation by repeated reads. T156 requires completed immutable bu
 
 ## Analysis
 
-- Must hold: the constitutional property named below across the actual trust boundary.
-- Gated: existing baseline does not establish the new acceptance; do not infer a live leak.
-- Residue: test doubles and static text cannot prove browser/network or crash semantics.
+- Must hold: GetStatus discloses only immutable completed UTC-hour traffic aggregates;
+  rollback cannot reopen published buckets; completion bytes remain loss-free until expiry.
+  Active counts stay volatile and private; traffic retention is bounded to seven days.
+- Gated: new repeated-poll, rollover, rollback, completion, concurrency and expiry regressions;
+  exact SOCKS totals after controlled rollover and authenticated Go/Java RPC probes.
+- Residue: accelerated clocks establish state transitions, not host-clock integrity or a
+  seven-day soak. Process restart loses counters; production CP persistence remains deferred.
+  Operational journal/schema migration remains T152; no browser/network anonymity claim.
 
 ## Acceptance
 
@@ -59,6 +64,10 @@ Contract/IPC callers require the corresponding transition tests; do not merely r
 Constitution weakening, unrelated feature work, and claiming unavailable tests passed.
 
 ## Notes
+
+2026-09-22: maintainer authorized keeping T158 as one ticket with files_budget 22 after
+investigating the T148 precedent and the counter/test/contract delivery boundary. Acceptance
+and independent review gates are unchanged. The test clock is unavailable in production.
 
 Privacy regressions are authored first within this ticket; empty tests_first is not an exemption.
 If decomposed, create concrete children and add them to T155 and affected consumers before closure.

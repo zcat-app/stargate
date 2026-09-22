@@ -141,12 +141,12 @@ func assertHTTPRefusal(t *testing.T, conn net.Conn, request string) {
 	}
 }
 
-// This test is unchanged across the red/green production snapshots. Its binary
-// harness uses main's real wiring; the paired controls falsify a disconnected
-// upstream and observe exact credentials/hostname plus early opaque bytes.
+// T173's paired controls observe exact credentials/hostname and early opaque
+// bytes through main's real wiring. T158 adds explicit test-clock rollover so
+// counter assertions still detect wrong increments after publication is delayed.
 func TestHTTPConnectSameDestinationDistinctFirstPartyRefused(t *testing.T) {
 	address, accepts, records := refusalUpstream(t)
-	h := dpharness.Start(t, dpharness.WithUpstream(address), dpharness.WithControlPlane())
+	h := dpharness.Start(t, dpharness.WithUpstream(address), dpharness.WithControlPlane(), dpharness.WithCounterClock(time.Date(2026, 9, 4, 10, 30, 0, 0, time.UTC)))
 	if r := dpharness.Reload(t, h, 1, []*grpcpb.TokenVerifier{dpharness.MintToken(t, refusalToken), dpharness.MintToken(t, refusalOtherToken)}); r.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
 		t.Fatal("auth fixture not loaded")
 	}
@@ -190,6 +190,11 @@ func TestHTTPConnectSameDestinationDistinctFirstPartyRefused(t *testing.T) {
 			}
 		})
 	}
+	time.Sleep(250 * time.Millisecond) // Both pumps must finish before closing their accounting hour.
+	if requests, n := t025dCounterTotals(dpharness.Status(t, h)); requests != beforeReq || n != beforeBytes {
+		t.Fatal("positive controls exposed current-hour totals")
+	}
+	h.AdvanceCounterHour(t)
 	deadline := time.Now().Add(3 * time.Second)
 	for {
 		requests, n := t025dCounterTotals(dpharness.Status(t, h))
@@ -215,6 +220,7 @@ func TestHTTPConnectSameDestinationDistinctFirstPartyRefused(t *testing.T) {
 			c.Close()
 			// Socket close plus bounded observation catches asynchronous admission too.
 			time.Sleep(30 * time.Millisecond)
+			h.AdvanceCounterHour(t) // Observe completed refusal-hour totals.
 			req, n := t025dCounterTotals(dpharness.Status(t, h))
 			if accepts.Load() != baseAccept {
 				t.Errorf("HTTP opened upstream sockets: delta=%d", accepts.Load()-baseAccept)
@@ -239,6 +245,7 @@ func TestHTTPConnectSameDestinationDistinctFirstPartyRefused(t *testing.T) {
 			assertHTTPRefusal(t, c, tc.request)
 			c.Close()
 			time.Sleep(30 * time.Millisecond)
+			h.AdvanceCounterHour(t) // Observe completed refusal-hour totals.
 			req, n := t025dCounterTotals(dpharness.Status(t, h))
 			if accepts.Load() != baseAccept || req != baseReq || n != baseBytes {
 				t.Error("HTTP refusal changed upstream accepts or counters")

@@ -107,4 +107,63 @@ class CrossPlaneTlsTest {
         assertTrue(handshakes.size() >= 3, "must exercise multiple real handshakes");
         assertTrue(handshakes.stream().noneMatch("true"::equals), "Java must not reuse sessions across engines");
     }
+    @Test void finalizedCountersDecodeAcrossJavaGoTransition() throws Exception {
+        seed();
+        Path socket = tmp.resolve("counters.sock");
+        var server = new ProcessBuilder(peer.toString(), "counters", tmp.toString(), socket.toString(), "current")
+                .redirectError(tmp.resolve("counter-error.log").toFile()).start();
+        var group = new io.netty.channel.epoll.EpollEventLoopGroup(1);
+        io.grpc.ManagedChannel channel = null;
+        try {
+            var output = server.inputReader();
+            assertEquals("READY", peerLine(server, output));
+            var identity = CpTls.deriveCpIdentity(tmp.resolve("cp.priv"), tmp.resolve("cp.pub"));
+            channel = io.grpc.netty.NettyChannelBuilder
+                    .forAddress(new io.netty.channel.unix.DomainSocketAddress(socket.toString()))
+                    .channelType(io.netty.channel.epoll.EpollDomainSocketChannel.class)
+                    .eventLoopGroup(group).sslContext(CpTls.clientContext(identity, tmp.resolve("dp.pub")))
+                    .intercept(StargateProtoVersion.clientVersionInterceptor()).build();
+            var client = stargate.v1.ControlGrpc.newBlockingStub(channel);
+            var request = stargate.v1.ControlOuterClass.StatusRequest.getDefaultInstance();
+            for (int i = 0; i < 8; i++) {
+                counterCommand(server, output, "traffic");
+                assertEquals(0, client.withDeadlineAfter(3, TimeUnit.SECONDS).getStatus(request).getCountersCount());
+            }
+            counterCommand(server, output, "advance");
+            var completed = client.withDeadlineAfter(3, TimeUnit.SECONDS).getStatus(request);
+            assertEquals(1, completed.getCountersCount());
+            var row = completed.getCounters(0);
+            assertEquals("TOR", row.getRoute());
+            assertEquals(496810, row.getHourBucket());
+            assertEquals(8, row.getRequestCount());
+            assertEquals(104, row.getByteCount());
+            counterCommand(server, output, "rollback");
+            counterCommand(server, output, "traffic");
+            for (int i = 0; i < 8; i++) {
+                assertEquals(completed, client.withDeadlineAfter(3, TimeUnit.SECONDS).getStatus(request));
+            }
+            counterCommand(server, output, "expire");
+            assertEquals(0, client.withDeadlineAfter(3, TimeUnit.SECONDS).getStatus(request).getCountersCount());
+            assertEquals(1, stargate.v1.ControlOuterClass.StatusResponse.getDescriptor().getFields().size());
+            assertEquals(4, stargate.v1.ControlOuterClass.RouteCounter.getDescriptor().getFields().size());
+        } finally {
+            if (channel != null) { channel.shutdownNow().awaitTermination(3, TimeUnit.SECONDS); }
+            group.shutdownGracefully().syncUninterruptibly();
+            server.destroyForcibly(); server.waitFor(3, TimeUnit.SECONDS);
+        }
+    }
+
+    static String peerLine(Process peer, java.io.BufferedReader output) throws Exception {
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (!output.ready() && peer.isAlive() && System.nanoTime() < deadline) { Thread.sleep(10); }
+        assertTrue(output.ready(), "Go peer did not acknowledge command");
+        return output.readLine();
+    }
+
+    static void counterCommand(Process peer, java.io.BufferedReader output, String command) throws Exception {
+        peer.getOutputStream().write((command + "\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        peer.getOutputStream().flush();
+        assertEquals("OK", peerLine(peer, output));
+    }
+
 }

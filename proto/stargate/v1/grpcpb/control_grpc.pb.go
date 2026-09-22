@@ -67,8 +67,9 @@ type ControlClient interface {
 	// contracts/control-grpc.md §"ReloadTokens" for generation
 	// and persistence semantics.
 	ReloadTokens(ctx context.Context, in *ReloadTokensRequest, opts ...grpc.CallOption) (*ReloadTokensResponse, error)
-	// Test-harness -> DP: read a point-in-time snapshot of the
+	// Test-harness -> DP: read finalized immutable completed-hour
 	// (route, hour_bucket) -> (request_count, byte_count) aggregates.
+	// T158 retains this wire shape; current traffic stays private.
 	// Production CP caller is deferred to the admin-UI feature; in v1
 	// the only callers are tests/contract/socks5/{auth_failure_counter,
 	// auth_passed_counter,route_failure_counter}_test.go.
@@ -111,8 +112,9 @@ type ControlServer interface {
 	// contracts/control-grpc.md §"ReloadTokens" for generation
 	// and persistence semantics.
 	ReloadTokens(context.Context, *ReloadTokensRequest) (*ReloadTokensResponse, error)
-	// Test-harness -> DP: read a point-in-time snapshot of the
+	// Test-harness -> DP: read finalized immutable completed-hour
 	// (route, hour_bucket) -> (request_count, byte_count) aggregates.
+	// T158 retains this wire shape; current traffic stays private.
 	// Production CP caller is deferred to the admin-UI feature; in v1
 	// the only callers are tests/contract/socks5/{auth_failure_counter,
 	// auth_passed_counter,route_failure_counter}_test.go.

@@ -46,8 +46,9 @@ service Control {
   // and persistence semantics.
   rpc ReloadTokens(ReloadTokensRequest) returns (ReloadTokensResponse);
 
-  // Test-harness -> DP: read a point-in-time snapshot of the
+  // Test-harness -> DP: read finalized immutable completed-hour
   // (route, hour_bucket) -> (request_count, byte_count) aggregates.
+  // T158 retains this wire shape; current traffic stays private.
   // Production CP caller is deferred to the admin-UI feature; in v1
   // the only callers are tests/contract/socks5/{auth_failure_counter,
   // auth_passed_counter,route_failure_counter}_test.go.
@@ -91,7 +92,7 @@ message StatusResponse {
 
 message RouteCounter {
   string route        = 1;   // "TOR" in this feature; later sidecars add their own labels
-  uint64 hour_bucket  = 2;   // unix-hour bucket per data-model.md §3
+  uint64 hour_bucket  = 2;   // completed unix-hour; expires at bucket + 168 (T158)
   uint64 request_count = 3;
   uint64 byte_count   = 4;
 }

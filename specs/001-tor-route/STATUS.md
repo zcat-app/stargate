@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 46 |
+| pending | 45 |
 | in-progress | 1 |
-| in-review | 2 |
+| in-review | 3 |
 | escalated | 0 |
 | done | 151 |
 | deferred | 5 |
@@ -54,6 +54,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T143 | Retire obsolete Java token-verifier constants | in-review | ✓ | Foundation audit remediation |
 | T148 | Reconcile peer certificate validity policy | in-progress | ✓ | Foundation audit remediation |
 | T149 | Finalize byte accounting after both forwarding pumps | in-review | ✓ | Foundation audit remediation |
+| T158 | Publish only finalized aggregate counter buckets | in-review | ✓ | Foundation audit remediation |
 
 ---
 

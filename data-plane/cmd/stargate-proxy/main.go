@@ -25,6 +25,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"os"
@@ -61,7 +62,19 @@ const gracefulStopGrace = 2 * time.Second
 
 func main() { os.Exit(run()) }
 
-func run() int {
+func run() int { return runWithCounters(audit.New) }
+
+func trafficCountersEnabled(raw string) (bool, error) {
+	switch raw {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	}
+	return false, errors.New("invalid traffic counter configuration")
+}
+
+func runWithCounters(newCounters func() *audit.Counters) int {
 	// The DP journal (loginvariants): slog TextHandler on stderr with the
 	// time= attribute stripped — every line must stay inside the fixed
 	// line-class allowlist at ≥1h timestamp resolution (FR-008; arch §6.4).
@@ -73,6 +86,16 @@ func run() int {
 			return a
 		},
 	}))
+
+	counterOption, configured := os.LookupEnv("STARGATE_TRAFFIC_COUNTERS")
+	if !configured {
+		counterOption = "true"
+	}
+	countersEnabled, err := trafficCountersEnabled(counterOption)
+	if err != nil {
+		log.Error("shutdown", "reason", err.Error())
+		return 1
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -118,7 +141,12 @@ func run() int {
 		return 1
 	}
 
-	counters := audit.New()
+	counters := newCounters()
+	if !countersEnabled {
+		counters.Disable()
+	}
+	go counters.Run(ctx) // Idle expiry ends with the process context (Constitution III).
+
 	store := auth.NewTokenStore()
 
 	// --- (2) cold-start snapshot (arch §5.5): a missing or broken cache

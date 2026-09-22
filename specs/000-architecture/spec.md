@@ -351,7 +351,11 @@ must not cause an otherwise valid DP to abandon routing (T153). No per-event jou
 
 Snapshots contain auth verifiers/generation, never routing history. GetStatus is an aggregate
 counter response, not a source of auth snapshots. See feature 001 data-model.md and its foundation
-boundary contract for snapshot and completed-hour publication semantics.
+boundary contract for snapshot and completed-hour publication semantics. T158 implements
+completed traffic buckets with a nondecreasing effective UTC hour and seven-day expiry from
+bucket start. No current totals or per-client fields cross GetStatus. Its explicit pre-release
+semantic transition preserves the v1 field layout and tests Java/Go decoding together;
+production CP polling and traffic persistence remain deferred to the admin-UI feature.
 
 ---
 

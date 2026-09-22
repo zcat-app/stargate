@@ -1240,8 +1240,7 @@ paused-I/O regressions cover the concurrent-close loss, and blocked-read/write p
 shutdown in both directions. This preserves the existing upstream-boundary byte definition,
 opaque payload handling and listener ownership of client Close; it adds no idle deadline or
 request log. This is an implementation repair within the existing transport boundary, not a
-new trust boundary. It does not repair current-hour counter exposure: immutable completed-hour
-publication remains T158's obligation. See the
+new trust boundary. T158 separately repairs current-hour exposure with immutable completed-hour publication. See the
 [T149 evidence](specs/001-tor-route/analysis/T149-accounting-evidence.md) for the local evidence layer.
 
 The [T173 evidence record](specs/001-tor-route/analysis/T173-connect-refusal-evidence.md)
@@ -1311,6 +1310,30 @@ cover-traffic schemes are network-level properties of mixnets (Nym), not
 endpoint hacks. The mitigation against timing-correlation is the
 mixnet's own cover, not Stargate's. We state this here to pre-empt
 "Stargate should add cover traffic" feature requests.
+
+### Traffic counter publication — T158
+
+The DP keeps the active hour's traffic totals private in process memory. Authenticated
+GetStatus exports only completed UTC-hour rows; repeated polls cannot observe within-hour
+request/byte increments. One serialized, nondecreasing effective hour prevents wall-clock
+rollback or delayed completion from reopening published rows. Bytes are attributed after both
+forwarding pumps finish, to the effective completion hour, preserving T149 accounting until
+retention expires. No new labels, current totals, metadata fields or traffic logs are added.
+
+Rows expire seven days from bucket start. Reads/writes apply the cutoff; a process-owned worker
+also removes expired rows at hour boundaries while idle. Scheduler delay or suspension can delay
+physical memory cleanup, but resumed RPC handling cannot return expired rows. A trusted host
+clock remains a precondition: forward jumps may finalize/expire early and backward jumps delay
+publication; this is no defense against a host controlling time or reading DP memory. Restart
+loses active and finalized rows. Disabling traffic counters prevents collection/export for the
+boot. Completed hourly totals still disclose aggregate route activity, especially on quiet hosts.
+
+T158's evidence uses authenticated local RPCs, real forwarding sockets, Java/Go decoding and
+synthetic traffic clocks; it does not establish a seven-day soak or live anonymity guarantees.
+The Java production status poller/SQLite traffic writer remain deferred. Operational logs and
+sidecar diagnostics are separate T152 obligations; this change does not claim their remediation.
+See [T158 evidence](reviews/T158/README.md) and the
+[status transition](specs/001-tor-route/contracts/control-grpc.md#t158-pre-release-status-transition-2026-09-22).
 
 ### 5.13 Inter-plane channel authentication and certificate validity
 

@@ -400,7 +400,7 @@ Columns are defined in architecture spec §6.4; restated here for clarity:
 | Column          | Type    | Update rule                                                                            |
 |-----------------|---------|----------------------------------------------------------------------------------------|
 | `route`         | TEXT    | Always `'TOR'` for rows produced by this feature.                                       |
-| `hour_bucket`   | INTEGER | Current `time.Now().Unix() / 3600`, computed at increment time.                         |
+| `hour_bucket`   | INTEGER | Effective UTC Unix hour at increment time, never below the greatest hour observed this boot (T158).                         |
 | `request_count` | INTEGER | Incremented by 1 on each authenticated SOCKS5 CONNECT through port 8881. HTTP `C` refusal does not authenticate or increment it. Auth failures are NOT counted (Principle III — counting them would be a side channel for token-guessing attacks, since an attacker can submit tokens at will). Route failures (`ROUTE_DOWN`, `ROUTE_REFUSED`, `ROUTE_TIMEOUT`) DO count: they are not attacker-controlled in the same way, and the gap between `request_count` and "the fraction of `byte_count > 0` per hour" gives the admin sidecar-health visibility at negligible privacy cost. |
 | `byte_count`    | INTEGER | Incremented by the total bytes **forwarded between client and upstream** in both directions at request close. SOCKS failure replies and renderer-only future HTTP bodies are NOT included — `byte_count` reflects actual cross-network transfer only. HTTP `C` refusal forwards zero bytes and does not increment it. |
 
@@ -418,7 +418,16 @@ deferring the CP caller does not relax what the DP records, only where
 the counts ultimately reach. When the admin-UI feature wires its
 caller, the CP writes the pulled rows to SQLite via Hibernate Panache.
 
-**Invariants (T156 target; implemented by T158)**:
+**T158 publication and retention:** only completed rows cross GetStatus. A row expires at
+`hour_bucket + 168`; active and retained rows are volatile and restart loses both. Clock rollback
+never reopens published or expired hours; completion bytes enter the effective current hour,
+including when admission's row has already expired. The exact clock, idle-cleanup and pre-release
+peer transition are in [control-grpc.md](contracts/control-grpc.md#t158-pre-release-status-transition-2026-09-22).
+`STARGATE_TRAFFIC_COUNTERS=false` disables accumulation/export for the boot. No production
+clock override or SQLite traffic writer is added. Finalized rows are immutable until removed,
+so a future persistence consumer must expire whole rows and must never poll for active totals.
+
+**Invariants (T158 implementation; evidence in reviews/T158/README.md)**:
 
 - GetStatus/export/storage disclose only completed immutable hour buckets. Never return a changing
   current-hour count; repeated reads must not reveal fine-grained request activity.

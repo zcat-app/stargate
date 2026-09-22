@@ -14,11 +14,13 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"github.com/zcat-app/stargate/data-plane/internal/audit"
 	"io"
 	"log/slog"
 	"net"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github.com/zcat-app/stargate/data-plane/internal/auth"
@@ -54,7 +56,7 @@ func main() {
 	mode, keys, sock := os.Args[1], os.Args[2], os.Args[3]
 	key := must(controlclient.LoadPrivateKey(filepath.Join(keys, "dp.priv"))).(ed25519.PrivateKey)
 	pin := filepath.Join(keys, "cp.pub")
-	if mode == "serve" {
+	if mode == "serve" || mode == "counters" {
 		cfg := controlclient.ServerTLSConfig(certAt(key, os.Args[4]), pin)
 		verify := cfg.VerifyConnection
 		cfg.VerifyConnection = func(s tls.ConnectionState) error {
@@ -64,7 +66,14 @@ func main() {
 			return verify(s)
 		}
 		store := auth.NewTokenStore()
-		ctl := controlclient.NewServer(store, func(*auth.Generation) error { return nil }, func() *pb.StatusResponse { return &pb.StatusResponse{} }, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		var clock atomic.Int64
+		clock.Store(time.Date(2026, 9, 4, 10, 30, 0, 0, time.UTC).Unix())
+		counters := audit.NewWithClock(func() time.Time { return time.Unix(clock.Load(), 0) })
+		status := func() *pb.StatusResponse { return &pb.StatusResponse{} }
+		if mode == "counters" {
+			status = counters.Snapshot
+		}
+		ctl := controlclient.NewServer(store, func(*auth.Generation) error { return nil }, status, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		gs := grpc.NewServer(grpc.Creds(controlclient.NewTransportCredentials(cfg)),
 			grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionAge: 500 * time.Millisecond, MaxConnectionAgeGrace: 0}),
 			grpc.UnaryInterceptor(controlclient.UnaryProtoVersionInterceptor))
@@ -73,7 +82,27 @@ func main() {
 		defer lis.Close()
 		go gs.Serve(lis)
 		fmt.Println("READY")
-		bufio.NewReader(os.Stdin).ReadString('\n')
+		if mode == "counters" {
+			commands := bufio.NewScanner(os.Stdin)
+			for commands.Scan() {
+				switch commands.Text() {
+				case "traffic":
+					counters.AuthPassedRequest()
+					counters.AddForwardedBytes(13)
+				case "advance":
+					clock.Add(3600)
+				case "rollback":
+					clock.Add(-3600)
+				case "expire":
+					clock.Add(200 * 3600)
+				default:
+					panic("unknown test command")
+				}
+				fmt.Println("OK")
+			}
+		} else {
+			bufio.NewReader(os.Stdin).ReadString('\n')
+		}
 		gs.Stop()
 		return
 	}

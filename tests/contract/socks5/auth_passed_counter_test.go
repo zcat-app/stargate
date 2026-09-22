@@ -9,6 +9,7 @@ package socks5
 import (
 	"bytes"
 	"fmt"
+	"google.golang.org/protobuf/proto"
 	"io"
 	"math/rand"
 	"net"
@@ -95,6 +96,7 @@ func TestAuthPassedCounterIncrements(t *testing.T) {
 	// fixture shape, keeping control-channel retry noise out of the
 	// journal delta assertion (d) scans.
 	h := dpharness.Start(t,
+		dpharness.WithCounterClock(time.Date(2026, 9, 4, 10, 30, 0, 0, time.UTC)),
 		dpharness.WithUpstream(upstreamAddr),
 		dpharness.WithControlPlane(),
 	)
@@ -123,10 +125,8 @@ func TestAuthPassedCounterIncrements(t *testing.T) {
 	time.Sleep(250 * time.Millisecond)
 	journalBefore := h.Journal.String()
 	before := dpharness.Status(t, h)
-	// h0 is the wall-clock hour at baseline (data-model.md §3 computes
-	// hour_bucket at increment time; rows may land in h0 or, if the
-	// run crosses an hour boundary, the adjacent h0+1).
-	h0 := uint64(time.Now().Unix() / 3600)
+	// The test-only traffic clock freezes the admission and completion hour.
+	h0 := uint64(h.CounterTime.Unix() / 3600)
 
 	// Every SOCKS connection has a distinct destination, partition and payload.
 	capture := &bytes.Buffer{} // every byte read off the tunnel surface
@@ -142,6 +142,10 @@ func TestAuthPassedCounterIncrements(t *testing.T) {
 	// its close-flush settle before the probe, and let journal writes
 	// flush before the second journal snapshot.
 	time.Sleep(250 * time.Millisecond)
+	if current := dpharness.Status(t, h); !proto.Equal(before, current) {
+		t.Fatalf("current-hour counters changed: %v", current)
+	}
+	h.AdvanceCounterHour(t)
 	after := dpharness.Status(t, h)
 	journalAfter := h.Journal.String()
 
@@ -200,24 +204,12 @@ func TestAuthPassedCounterIncrements(t *testing.T) {
 		}
 	})
 
-	// (c) hour_bucket wall-clock truth: every row the snapshot carries
-	// is route 'TOR' (the only label the v1 DP produces) in the
-	// baseline hour or the adjacent one — the two-row allowance for a
-	// mid-run hour rollover, where a connection's request_count
-	// increment and its close-time byte flush may land in adjacent
-	// buckets while both deltas stay exact (data-model.md §3).
-	t.Run("HourBucket_WallClock", func(t *testing.T) {
+	// The frozen traffic clock removes the old adjacent-hour allowance: all
+	// requests and completions must appear in precisely their completed hour.
+	t.Run("HourBucket_CompletedClock", func(t *testing.T) {
 		for _, c := range after.GetCounters() {
-			if c.GetRoute() != "TOR" {
-				t.Errorf("counter row route=%q, want \"TOR\" — the only "+
-					"route label the v1 DP produces (data-model.md §3)", c.GetRoute())
-			}
-			if hour := c.GetHourBucket(); hour != h0 && hour != h0+1 {
-				t.Errorf("counter row hour_bucket=%d, want %d (baseline "+
-					"wall-clock hour) or %d (the one adjacent-bucket "+
-					"allowance for a mid-run rollover) — data-model.md §3: "+
-					"hour_bucket is the unix-hour at increment time",
-					hour, h0, h0+1)
+			if c.GetRoute() != "TOR" || c.GetHourBucket() != h0 {
+				t.Errorf("row route/hour = %s/%d, want TOR/%d", c.GetRoute(), c.GetHourBucket(), h0)
 			}
 		}
 	})
@@ -366,4 +358,80 @@ func t025dCounterTotals(resp *grpcpb.StatusResponse) (requests, bytes uint64) {
 		bytes += c.GetByteCount()
 	}
 	return requests, bytes
+}
+
+// T158 exercises completion-hour attribution through real listener/forwarding
+// sockets while the same authenticated tunnel spans publication of its request.
+func TestLongLivedCounterCompletionAndDisabledCollection(t *testing.T) {
+	for _, disabled := range []bool{false, true} {
+		t.Run(fmt.Sprintf("disabled_%v", disabled), func(t *testing.T) {
+			upstream := integration.NewServer(integration.AcceptAndRelay)
+			addr, err := upstream.Start()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = upstream.Close() })
+			opts := []dpharness.Option{dpharness.WithUpstream(addr), dpharness.WithControlPlane(), dpharness.WithCounterClock(time.Date(2026, 9, 4, 10, 30, 0, 0, time.UTC))}
+			if disabled {
+				opts = append(opts, dpharness.WithCountersDisabled())
+			}
+			h := dpharness.Start(t, opts...)
+			if r := dpharness.Reload(t, h, 1, []*grpcpb.TokenVerifier{dpharness.MintToken(t, t025dLoadedToken)}); r.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
+				t.Fatal("auth fixture failed")
+			}
+			conn := dialProxy(t, h)
+			defer conn.Close()
+			doMethodNegotiation(t, conn)
+			if !bytes.Equal(doSubnegotiation(t, conn, refusalIdentity(t025dLoadedToken, "long-counter", "example.onion"), t025dLoadedToken), []byte{1, 0}) {
+				t.Fatal("auth failed")
+			}
+			writeConnectRequest(t, conn, "example.onion", 443)
+			if reply := readN(t, conn, 10); reply[1] != 0 {
+				t.Fatal("upstream refused")
+			}
+			exchange := func() {
+				t.Helper()
+				if _, err := conn.Write([]byte("opaque")); err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(readN(t, conn, 6), []byte("opaque")) {
+					t.Fatal("payload changed")
+				}
+			}
+			exchange()
+			if len(dpharness.Status(t, h).GetCounters()) != 0 {
+				t.Fatal("active request exposed")
+			}
+			h.AdvanceCounterHour(t)
+			published := dpharness.Status(t, h)
+			want := uint64(1)
+			if disabled {
+				want = 0
+			}
+			if r, b := t025dCounterTotals(published); r != want || b != 0 {
+				t.Fatalf("admission hour = %d/%d, want %d/0", r, b, want)
+			}
+			exchange() // A published request row must not prevent continued opaque forwarding.
+			conn.Close()
+			time.Sleep(250 * time.Millisecond)
+			if !proto.Equal(published, dpharness.Status(t, h)) {
+				t.Fatal("completion changed already published rows")
+			}
+			h.AdvanceCounterHour(t)
+			final := dpharness.Status(t, h)
+			wantBytes := uint64(24)
+			if disabled {
+				wantBytes = 0
+			}
+			if r, b := t025dCounterTotals(final); r != want || b != wantBytes {
+				t.Fatalf("final totals = %d/%d, want %d/%d", r, b, want, wantBytes)
+			}
+			if !disabled {
+				rows := final.GetCounters()
+				if len(rows) != 2 || rows[1].GetHourBucket() != rows[0].GetHourBucket()+1 || rows[1].GetRequestCount() != 0 || rows[1].GetByteCount() != 24 {
+					t.Fatal("bytes not isolated in completion hour")
+				}
+			}
+		})
+	}
 }

@@ -17,5 +17,8 @@ The September audit found unresolved deployment, isolation, authentication and e
 For Tor port 8881, the T173 implementation supports authenticated SOCKS5 only. HTTP
 CONNECT first byte `C` closes with no response, auth evaluation, counter or upstream dial;
 T173's evidence record distinguishes real-socket verification from deployed measurement.
+T158 keeps active traffic counters private and publishes immutable completed UTC-hour rows,
+with seven-day expiry and clock-rollback handling in the [status contract](specs/001-tor-route/contracts/control-grpc.md).
+Production CP traffic persistence remains deferred to the admin-UI feature.
 Older sketches are not proof that the current stack meets the target design. Foundation repair
 and T155 precede further feature implementation; T078/T079 remain final cumulative reviews.

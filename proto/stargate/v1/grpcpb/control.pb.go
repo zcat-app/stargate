@@ -351,7 +351,7 @@ func (x *StatusResponse) GetCounters() []*RouteCounter {
 type RouteCounter struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Route         string                 `protobuf:"bytes,1,opt,name=route,proto3" json:"route,omitempty"`                              // "TOR" in this feature; later sidecars add their own labels
-	HourBucket    uint64                 `protobuf:"varint,2,opt,name=hour_bucket,json=hourBucket,proto3" json:"hour_bucket,omitempty"` // unix-hour bucket per data-model.md §3
+	HourBucket    uint64                 `protobuf:"varint,2,opt,name=hour_bucket,json=hourBucket,proto3" json:"hour_bucket,omitempty"` // completed unix-hour; expires at bucket + 168 (T158)
 	RequestCount  uint64                 `protobuf:"varint,3,opt,name=request_count,json=requestCount,proto3" json:"request_count,omitempty"`
 	ByteCount     uint64                 `protobuf:"varint,4,opt,name=byte_count,json=byteCount,proto3" json:"byte_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
