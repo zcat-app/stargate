@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 49 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 150 |
+| done | 151 |
 | deferred | 5 |
 | **total** | **205** |
 
@@ -32,6 +32,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | 2: Foundational (Blocking Prerequisites) |  | ✓ |
 | T120 | Make `verify.sh` log writes concurrency-safe for parallel ti | 6: Polish & Cross-Cutting Concerns |  |  |
 | T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
+| T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T141 | Pin CI Actions and agent installation dependencies | Foundation audit remediation | ✓ |  |
 | T143 | Retire obsolete Java token-verifier constants | Foundation audit remediation | ✓ |  |
@@ -51,9 +52,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T173 | Refuse unpartitioned HTTP CONNECT on the Tor listener | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -71,7 +70,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_150 ticket(s) done._
+_151 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -223,3 +222,4 @@ _150 ticket(s) done._
 - T170 — Permit Go self-signals and trusted-host DP lifecycle signals
 - T171 — Separate topology probe launch and fixture timing
 - T172 — Reconcile Tor HTTP CONNECT refusal contracts
+- T173 — Refuse unpartitioned HTTP CONNECT on the Tor listener
