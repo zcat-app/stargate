@@ -1,114 +1,30 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// Contract test for the HTTP CONNECT AUTH_REQUIRED response shape and
-// its no-distinguishing-substring property — specs/001-tor-route/spec.md
-// FR-006 (HTTP CONNECT path on token absence/mismatch → 407 +
-// AUTH_REQUIRED template; offered token and rejected destination MUST
-// NOT appear in any response) + FR-009 (privacy-safe failure response
-// shape) and contracts/error-template.md §"Contract tests" row 1
-// (missing vs malformed → 407 + AUTH_REQUIRED, byte-for-byte identical
-// except the LOCAL_REFERENCE_ID substitution slot) +
-// contracts/socks5-auth.md §"HTTP CONNECT path" (the auth-failure
-// flow) + §"HTTP CONNECT path · Invariants enforced by the contract
-// test" (Missing → 407; Malformed → 407 no distinction from missing;
-// Response NEVER includes destination or offered token). Task body:
-// specs/001-tor-route/tasks.md T027.
-//
-// This is the failure-path half of the two-framing split (research.md
-// §9); T026 owns the success-path half. T025's
-// AuthFailure_NoTokenBytesInCapture is the SOCKS5 analogue and the
-// route-independent auth-failure setup precedent (bare dpharness.Start,
-// one token push, NO upstream, NO HEALTHY) T027 mirrors for the
-// CONNECT path. The no-distinguishing-substring property is unique to
-// the CONNECT template path: the SOCKS5 failure is a fixed 2-byte
-// `01 FF` with no renderable body, so "identical modulo the random
-// ref-ID slot" is a non-trivial property the SOCKS5 path does not
-// need.
-//
-// The structural-equality check masks EXACTLY the 16-char
-// LOCAL_REFERENCE_ID hex slot (located via the body literal prefix
-// `Code: AUTH_REQUIRED · Reference: `) and asserts the two responses
-// are byte-for-byte equal on the remainder — proving no
-// distinguishing substring outside the ref-ID slot. The
-// distinct-ref-ID property (ref-IDs vary across responses) is T069's
-// orthogonal scope; T027 does NOT assert the two captured ref-IDs
-// differ, only that no distinguishing substring exists outside the
-// slot.
-//
-// Tests-first (Constitution Principle VII): content-gates on T043
-// (listener/connect.go — the inbound CONNECT surface under test),
-// T044 (auth/token.go — the bearer-verify failure path that produces
-// AUTH_REQUIRED), and T048 (errortpl/render.go — the renderer that
-// substitutes {ROUTE_LABEL}/{CODE}/{LOCAL_REFERENCE_ID} into the
-// Template and emits the four headers), plus the boot minimum inside
-// dpharness.Start (T042/T045/T050); the test SKIPs until all land,
-// then a response-shape, structural-equality, or leak regression is
-// FAIL, not SKIP.
+// Direct renderer contract: exact AUTH_REQUIRED format, no variation outside
+// its reference-ID slot and full response leak scans. T173 removes all ingress
+// claims; actual credential refusal remains in the SOCKS/refusal suites.
 package errortemplate
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
-	"io"
-	"net"
+	"context"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sync"
 	"testing"
 	"time"
 
-	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
 	"github.com/zcat-app/stargate/tests/contract/internal/dpharness"
 	"github.com/zcat-app/stargate/tests/internal/loginvariants"
 )
 
-// authRequiredPlaintext is the bearer-token plaintext the test mints
-// into an HMAC verifier via dpharness.MintToken and pushes to the DP
-// via ReloadTokens. The generation is NON-EMPTY — the realistic case
-// where a missing/malformed offer is rejected against a populated
-// generation, not the degenerate empty-generation case. 32 hex chars
-// — the CONNECT path's syntactic gate (contracts/socks5-auth.md
-// §"HTTP CONNECT path" step 2: ^[0-9a-f]{32}$) passes for THIS token
-// (the valid one); the malformed offer `notatoken` fails the gate and
-// never reaches hashing. Distinct from T025a/T025b/T026's token
-// plaintexts so a corpus-scan hit is attributable to this test.
 const authRequiredPlaintext = "a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c"
-
-// malformedToken is the canonical malformed bearer-token value sent
-// in case (b). Per contracts/socks5-auth.md §"HTTP CONNECT path"
-// step 2 the syntactic gate ^[0-9a-f]{32}$ fires BEFORE hashing;
-// `notatoken` fails BOTH the length gate (9 chars ≠ 32) AND the
-// charset gate (contains non-hex 'n'/'o'/'t'/'k'). One value covers
-// both failure modes, matching the cited test method verbatim.
 const malformedToken = "notatoken"
-
-// wantStatusLine is the byte-exact status line the DP MUST emit on
-// the CONNECT AUTH_REQUIRED path (contracts/error-template.md
-// §"Wire format · Status line", AUTH_REQUIRED row).
 const wantStatusLine = "HTTP/1.1 407 Proxy Authentication Required\r\n"
-
-// wantXStargateError is the byte-exact header that marks the
-// response as AUTH_REQUIRED (contracts/error-template.md
-// §"Wire format · Response headers"). Asserted via Contains so a
-// future header-order regression does not false-fail this shape
-// check before the structural-equality check gives a more precise
-// byte-comparison failure; the exhaustive header-order gate is
-// T068a's scope.
 const wantXStargateError = "X-Stargate-Error: AUTH_REQUIRED\r\n"
-
-// refIDSlotPrefix is the body literal immediately preceding the
-// 16-char LOCAL_REFERENCE_ID hex run. Used to locate the ref-ID slot
-// for the structural-equality masking. The literal is body-specific
-// (no header carries "Code:"), so a single byte.Index locates the
-// slot unambiguously.
 const refIDSlotPrefix = "Code: AUTH_REQUIRED · Reference: "
-
-// refIDHexLen is the exact width of the LOCAL_REFERENCE_ID
-// substitution slot per contracts/error-template.md §"Response body"
-// (16-char lowercase-hex of crypto/rand.Read(8)). The masking check
-// zeroes EXACTLY this many bytes — a wider or narrower mask would
-// hide real distinguishing bytes (§Analysis redteam scope (b)).
 const refIDHexLen = 16
 
 // authRequiredBodyRe matches the AUTH_REQUIRED response body
@@ -133,180 +49,51 @@ var authRequiredBodyRe = regexp.MustCompile(
 		`<p>Code: AUTH_REQUIRED · Reference: [0-9a-f]{16}</p>\n` +
 		`<p>See the admin dashboard for details\.</p>$`)
 
-// TestAUTHRequired pins the CONNECT AUTH_REQUIRED contract: exact
-// response shape, no distinguishing substring between missing and
-// malformed offers, and response leak-scan. Single consolidated body
-// for act+shape+structural (the assertions layer on one fixture —
-// one DP boot, one token push, two sequential CONNECT auth-fail
-// requests on independent connections); only the two response-bytes
-// leak scans split into sub-tests so a corpus hit in either case is
-// independently attributable (the T025 leak-test precedent).
+var rendererBuild sync.Once
+var rendererBinary string
+var rendererBuildError error
+var rendererBuildOutput []byte
+
+// Build errors fail the suite; missing source cannot silently become a skip.
+func renderCode(t *testing.T, code string) ([]byte, error) {
+	t.Helper()
+	rendererBuild.Do(func() {
+		root := dpharness.FindRepoRoot(t)
+		rendererBinary = filepath.Join(root, "target", "t173-renderer-fixture")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "go", "build", "-o", rendererBinary, "./internal/errortpl/testdata/render")
+		cmd.Dir = filepath.Join(root, "data-plane")
+		rendererBuildOutput, rendererBuildError = cmd.CombinedOutput()
+	})
+	if rendererBuildError != nil {
+		t.Fatalf("renderer fixture build: %v: %s", rendererBuildError, rendererBuildOutput)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return exec.CommandContext(ctx, rendererBinary, code).Output()
+}
+
 func TestAUTHRequired(t *testing.T) {
-	repoRoot := dpharness.FindRepoRoot(t)
-	// Per-test content gates beyond the boot minimum inside
-	// dpharness.Start (T042/T045/T050): the CONNECT listener under
-	// test, the auth-failure surface, and the renderer that produces
-	// the AUTH_REQUIRED response bytes.
-	dpharness.RequireFile(t,
-		filepath.Join(repoRoot, "data-plane", "internal", "listener", "connect.go"),
-		"listener/connect.go not implemented yet (T043); this skip self-lifts when T043 lands")
-	dpharness.RequireFile(t,
-		filepath.Join(repoRoot, "data-plane", "internal", "auth", "token.go"),
-		"auth/token.go not implemented yet (T044); this skip self-lifts when T044 lands")
-	dpharness.RequireFile(t,
-		filepath.Join(repoRoot, "data-plane", "internal", "errortpl", "render.go"),
-		"errortpl/render.go not implemented yet (T048 — the AUTH_REQUIRED renderer); "+
-			"this skip self-lifts when T048 lands")
-
-	// Route-independent auth-failure setup (mirrors T025's
-	// AuthFailure_NoTokenBytesInCapture, NOT T026's success-path
-	// setup): bare dpharness.Start — NO WithUpstream (auth-fail
-	// happens before the forward path is consulted; the upstream is
-	// never dialed), NO WithBeforeBoot(fakecp.Start) (no HEALTHY to
-	// push — AUTH_REQUIRED is route-independent; the DP's background
-	// WatchEvents dial fails harmlessly). The valid token below
-	// establishes a non-empty generation — the realistic case where
-	// a missing/malformed offer is rejected against a populated
-	// generation.
-	h := dpharness.Start(t)
-
-	reloadResp := dpharness.Reload(t, h, 1,
-		[]*grpcpb.TokenVerifier{dpharness.MintToken(t, authRequiredPlaintext)})
-	if reloadResp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
-		t.Fatalf("ReloadTokens(generation=1) status=%v, want "+
-			"APPLY_STATUS_OK — precondition for the AUTH_REQUIRED "+
-			"test failed; the DP did not accept the test's token "+
-			"generation (without a populated generation the test "+
-			"cannot assert the missing-vs-malformed distinction "+
-			"against a realistic state)", reloadResp.GetStatus())
-	}
-
-	// Distinctive corpus items scanned across response bytes. The
-	// destination is the FR-006/FR-009-named surface; the malformed
-	// token is the offered-but-rejected secret. Each is scanned in
-	// nine renderings (raw + eight derived) per loginvariants.
-	const dest = "t027-dest.example.onion"
-
-	// (a) Missing Proxy-Authorization → 407 + AUTH_REQUIRED template.
-	// Request-line only, no Proxy-Authorization header — the cited
-	// test method's missing-header shape.
-	respMissing := sendCONNECT(t, h,
-		fmt.Sprintf("CONNECT %s:443 HTTP/1.1\r\n\r\n", dest))
-
-	// (b) Malformed token → 407 + AUTH_REQUIRED template. The DP
-	// closes after AUTH_REQUIRED, so this is a NEW connection (not a
-	// pipelined follow-up on the first).
-	respMalformed := sendCONNECT(t, h,
-		fmt.Sprintf("CONNECT %s:443 HTTP/1.1\r\nProxy-Authorization: Bearer %s\r\n\r\n",
-			dest, malformedToken))
-
-	// (a) StatusShape: both responses ARE the AUTH_REQUIRED template,
-	// not (e.g.) a 200, a 502, or a different code. Gates the
-	// response identity before the structural-equality check gives a
-	// misleading byte-comparison failure. Response bytes are WITHHELD
-	// from failure messages (a buggy DP may echo the destination or
-	// malformed token into the response, and those are scanned
-	// separately under Response_NoCorpusItem).
-	assertStatusShape(t, "missing", respMissing)
-	assertStatusShape(t, "malformed", respMalformed)
-
-	// (b) BodyTemplate: both response bodies match the Template
-	// literal byte-for-byte with the permitted substitutions.
-	assertBodyTemplate(t, "missing", respMissing)
-	assertBodyTemplate(t, "malformed", respMalformed)
-
-	// (c) NoDistinguishingSubstring: the two responses are
-	// byte-for-byte identical EXCEPT for the 16-char ref-ID slot.
-	// Mask those 16 bytes in both and assert equality on the
-	// remainder — a DP that emits ANY distinguishing byte outside
-	// the ref-ID slot (a header value, a body field, an extra CRLF,
-	// a different Content-Length) fails here. The masking is exactly
-	// 16 bytes wide so a wider-or-narrower mask cannot hide real
-	// distinguishing bytes (§Analysis redteam scope (b)). This is
-	// the property the task body names.
-	maskedMissing := maskRefIDSlot(t, respMissing)
-	maskedMalformed := maskRefIDSlot(t, respMalformed)
-	if !bytes.Equal(maskedMissing, maskedMalformed) {
-		t.Errorf("AUTH_REQUIRED responses for missing vs malformed "+
-			"Proxy-Authorization differ outside the 16-char "+
-			"LOCAL_REFERENCE_ID slot — contracts/socks5-auth.md "+
-			"§\"HTTP CONNECT path · Invariants\" row 2 and "+
-			"contracts/error-template.md §\"Contract tests\" row 1 "+
-			"require byte-for-byte identity outside the ref-ID "+
-			"slot (a third-party observer must not learn from the "+
-			"response bytes whether the client sent a missing "+
-			"header or a malformed token; Principle III). "+
-			"Response bytes withheld (leak-safe; see "+
-			"Response_NoCorpusItem for the dest/token scan). "+
-			"masked responses: missing=%d bytes, malformed=%d bytes.",
-			len(maskedMissing), len(maskedMalformed))
-	}
-
-	// (d) ResponseLeaksNothing — two sub-tests, one per case so a
-	// corpus hit is independently attributable. The 407 response
-	// carries no destination and no malformed-token byte in any of
-	// the nine textual renderings an accidental logger would
-	// produce (contracts/socks5-auth.md §"Invariants" rows 4–5;
-	// contracts/error-template.md §"Leak-corpus invariant";
-	// Principle III / FR-006 / FR-009).
-	t.Run("Response_NoCorpusItem_Missing", func(t *testing.T) {
-		loginvariants.AssertNoSecrets(t, string(respMissing),
-			[]byte(dest), []byte(malformedToken))
-	})
-	t.Run("Response_NoCorpusItem_Malformed", func(t *testing.T) {
-		loginvariants.AssertNoSecrets(t, string(respMalformed),
-			[]byte(dest), []byte(malformedToken))
-	})
-}
-
-// sendCONNECT dials the DP, writes req, and reads the full response
-// until EOF. The DP closes after AUTH_REQUIRED per
-// contracts/error-template.md §"HTTP CONNECT path"; io.ReadAll
-// returns the complete response on clean EOF. A wedged DP that
-// writes the response but never closes fails at the connection
-// deadline rather than hanging the test (§Analysis redteam scope
-// (f)).
-func sendCONNECT(t *testing.T, h *dpharness.Harness, req string) []byte {
-	t.Helper()
-	conn := dialProxy(t, h)
-	defer func() { _ = conn.Close() }()
-	if _, err := conn.Write([]byte(req)); err != nil {
-		t.Fatalf("write CONNECT request: %v — the DP closed or "+
-			"errored before reading the request (assertion setup "+
-			"failed; the AUTH_REQUIRED response was never produced)",
-			err)
-	}
-	resp, err := io.ReadAll(conn)
+	first, err := renderCode(t, "AUTH_REQUIRED")
 	if err != nil {
-		var netErr net.Error
-		if errors.As(err, &netErr) && netErr.Timeout() {
-			t.Fatalf("DP did not close within the connection "+
-				"deadline after the CONNECT request — "+
-				"contracts/error-template.md §\"HTTP CONNECT "+
-				"path\" requires close after AUTH_REQUIRED; "+
-				"possible wedged DP (read returned partial "+
-				"response of %d bytes, withheld)", len(resp))
+		t.Fatal(err)
+	}
+	second, err := renderCode(t, "AUTH_REQUIRED")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, resp := range [][]byte{first, second} {
+		assertStatusShape(t, "direct renderer", resp)
+		assertBodyTemplate(t, "direct renderer", resp)
+		loginvariants.AssertNoSecrets(t, string(resp), []byte("t027-dest.example.onion"), []byte(malformedToken), []byte(authRequiredPlaintext))
+		if i == 1 && bytes.Equal(first, resp) {
+			t.Error("reference ID was reused")
 		}
-		t.Fatalf("reading AUTH_REQUIRED response (got %d bytes "+
-			"before error, withheld): %v", len(resp), err)
 	}
-	return resp
-}
-
-// dialProxy connects to the DP's proxy listener with a deadline that
-// covers the HMAC auth-fail path (sub-ms nominal, more on loaded CI)
-// plus the render + close. Mirrors the package-local dialProxy
-// in tests/contract/socks5/demux_test.go (T023); not importable
-// across packages, so re-implemented here. 30 s mirrors T025/T026's
-// deadline — generous for HMAC under CI load.
-func dialProxy(t *testing.T, h *dpharness.Harness) net.Conn {
-	t.Helper()
-	conn, err := net.DialTimeout("tcp", h.ProxyAddr, 5*time.Second)
-	if err != nil {
-		t.Fatalf("dial proxy %s: %v", h.ProxyAddr, err)
+	if !bytes.Equal(maskRefIDSlot(t, first), maskRefIDSlot(t, second)) {
+		t.Error("renderer differs outside permitted reference-ID slot")
 	}
-	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
-	return conn
 }
 
 // assertStatusShape asserts resp begins with the AUTH_REQUIRED

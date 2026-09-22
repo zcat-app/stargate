@@ -14,8 +14,7 @@ future HTTP renderer format for these error codes:
 This is a **renderer-only future HTTP format** for Tor-labelled errors. The Tor
 port 8881 does not emit it: authenticated SOCKS5 failures use RFC 1928/1929
 binary replies; HTTP first byte `C` closes silently before auth or dial.
-The existing HTTP ingress tests and `listener/connect.go` still conflict until
-T173 migrates them. No browser-visible HTML failure is promised for Tor.
+T173 removes the HTTP parser and migrates its active transport/renderer coverage. No browser-visible HTML failure is promised for Tor.
 Other routes require their own reviewed ingress contracts.
 
 **Source**: architecture spec §10.1 (codes), §10.2 (body template),
@@ -125,12 +124,22 @@ hit fails the test.
 
 ## Renderer tests (`tests/contract/error-template/`)
 
-T173 must convert existing ingress-driven tests here to renderer-only calls.
-Keep byte-exact status, four-header order/absence, body substitution,
-reference-ID uniqueness/unlinkability and full leak-corpus scans for all four
-codes. No test in this directory may claim an HTTP response is reachable from
-Tor port 8881. Supported SOCKS auth and route failures, plus HTTP refusal, are
-covered under `tests/contract/socks5/` and the T173 real-socket regression.
+T173 converts the implemented AUTH_REQUIRED ingress-driven tests to direct production-renderer
+calls. Preserve byte-exact status, four-header order/absence/length, body substitution,
+reference-ID shape/freshness/only-variable-bytes and full response leak scans. For the three
+currently unsupported route codes, require an error and zero output without skip gates;
+that is current-behavior coverage, not positive rendering coverage.
+
+T071 owns the three route renderers and positive format assertions for all four codes,
+including T068's byte-exact body cases and T069's reference-ID uniqueness/distribution and
+repeated-input checks. Those tests and implementation are one atomic red-before-green
+change; T068/T069 are superseded deferred records, not prerequisites that must pass first.
+This maintainer-authorized T173 refinement supersedes T172's all-four-code migration row
+without changing its historical approval or weakening the future format contract.
+
+No test here claims an HTTP response is reachable from Tor port 8881. Supported SOCKS auth
+and route failures, plus HTTP refusal, remain covered under `tests/contract/socks5/` and the
+T173 real-socket regression. Every migrated/deleted test has an explicit invariant mapping.
 
 Adding a new error code to the data plane requires adding a new row to
 this contract document AND a new test in `tests/contract/error-template/`

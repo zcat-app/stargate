@@ -112,54 +112,11 @@ func TestSOCKS5DemuxAndMethodNegotiation(t *testing.T) {
 		expectEOF(t, conn, "after 0xFF reply")
 	})
 
-	// (d) First-byte demux: ASCII 'C' (0x43) → HTTP CONNECT path.
-	// The DP must NOT treat 'C' as SOCKS5 (no `05..` reply). Full
-	// CONNECT-path behaviour (auth-success 200 / auth-failure 407
-	// template) is T026/T027's scope; this case only pins the demux
-	// ROUTING decision — the byte was recognized as CONNECT and routed
-	// accordingly, not as SOCKS5 and not as "anything else" (silent
-	// close).
+	// (d) HTTP C closes immediately, before any further framing.
 	t.Run("Demux_HTTPConnectFirstByte", func(t *testing.T) {
 		conn := dialProxy(t, h)
 		defer conn.Close()
-		if _, err := conn.Write([]byte{0x43}); err != nil { // 'C'
-			t.Fatalf("write 'C' first byte: %v", err)
-		}
-		// Read with a short deadline. The PASS conditions:
-		//   - read times out with zero bytes — the DP is waiting for
-		//     the rest of the HTTP request line (the correct outcome).
-		//   - read returns data whose first byte is NOT 0x05 — the DP
-		//     began an HTTP-path response (T026/T027's scope, not ours).
-		// FAIL conditions:
-		//   - first byte == 0x05 — the DP routed 'C' down the SOCKS5
-		//     path and emitted a method-selection reply.
-		//   - read returns zero bytes with EOF / reset / non-timeout
-		//     error — the DP closed the connection. That is the
-		//     silent-close regression the ticket §Analysis names as a
-		//     property under test ("not silently closed"); without this
-		//     check a DP that mis-routes 'C' to the "anything else" row
-		//     would pass the test undetected.
-		_ = conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
-		buf := make([]byte, 8)
-		n, err := conn.Read(buf)
-		if n >= 1 && buf[0] == 0x05 {
-			t.Errorf("'C' first byte produced a SOCKS5-shaped reply %x — "+
-				"the DP must route 'C' down the HTTP CONNECT path, not the "+
-				"SOCKS5 path (contracts/socks5-auth.md §\"Two inbound "+
-				"protocols, one port\")", buf[:n])
-		}
-		if n == 0 {
-			var netErr net.Error
-			if !(errors.As(err, &netErr) && netErr.Timeout()) {
-				t.Errorf("'C' first byte: DP closed the connection (err=%v) "+
-					"— contract requires the CONNECT path to keep the "+
-					"connection open for request-line parsing; a close "+
-					"here is the silent-close regression (contracts/"+
-					"socks5-auth.md §\"Two inbound protocols, one port\")", err)
-			}
-		}
-		// n >= 1 with buf[0] != 0x05: HTTP-path bytes — out of scope
-		// here (T026/T027 pin the CONNECT path's positive behaviour).
+		assertHTTPRefusal(t, conn, "C")
 	})
 
 	// (e) First-byte demux: "anything else" → silent close.
@@ -237,9 +194,12 @@ func expectEOF(t *testing.T, conn net.Conn, what string) {
 //
 // PASS: read times out with zero bytes (DP waiting).
 // FAIL: read returns data — DP wrote extra bytes (the reply was not
-//   "exactly 2 bytes" as the contract states).
+//
+//	"exactly 2 bytes" as the contract states).
+//
 // FAIL: read returns zero bytes with EOF/reset/non-timeout error — the
-//   DP closed the connection.
+//
+//	DP closed the connection.
 func expectHeldOpen(t *testing.T, conn net.Conn, what string) {
 	t.Helper()
 	_ = conn.SetReadDeadline(time.Now().Add(300 * time.Millisecond))

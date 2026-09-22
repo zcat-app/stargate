@@ -297,8 +297,7 @@ tests-first suite (Principle VII) before implementation lands.
   evaluation, counter increment or upstream socket; no HTTP success,
   error-template ingress, negotiation extension, retry, fallback or
   configuration bypass is supported. The port-to-upstream binding is fixed
-  to Tor at startup (Principle I). This is a T172 target; T173 owns the
-  runtime change and proof.
+  to Tor at startup (Principle I). T173 implements this T172 contract; its evidence record scopes verification.
 - **FR-006**: For supported SOCKS5 requests, the data plane MUST extract
   the bearer from the username/password sub-negotiation (password = token),
   compute `HMAC-SHA-256(pepper, candidate)` once and compare against every

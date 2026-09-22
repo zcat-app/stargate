@@ -9,7 +9,7 @@ package auth
 // the algorithm-level executable spec is the T093 test set in
 // hmac_verifier_test.go (same package). The listener-facing seam is
 // listener.Verifier (T042), satisfied structurally — auth imports stdlib
-// only; T050 wires the concrete type into Deps.Auth / ConnectDeps.Auth.
+// only; T050 wires the concrete type into Deps.Auth.
 
 import (
 	"crypto/hmac"

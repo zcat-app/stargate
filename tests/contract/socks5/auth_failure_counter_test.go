@@ -1,51 +1,12 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// Contract test for the auth-failure counter side channel — specs/
-// 001-tor-route/spec.md FR-008 ("auth failures leave the counter
-// unchanged"), FR-006 (the failure framings the burst drives),
-// data-model.md §3 (the rule's canonical statement: counting failures
-// would side-channel token guessing, since an attacker can submit
-// tokens at will; the synthesised AUTH_REQUIRED template body is
-// excluded from byte_count), and contracts/control-grpc.md §"GetStatus
-// (minimum subset)" Tests rows 1 and 4 (this file; the no-traffic
-// sandwich).
-//
-// The test lives next to the SOCKS5 leak tests, not under
-// tests/contract/control-grpc/: the property under test sits at the
-// port-8881 auth boundary, and GetStatus is used here as the test-only
-// probe data-model.md §3 documents — the read surface whose side-effect
-// freedom is itself one of the gated properties.
-//
-// Method: probe GetStatus for a baseline counter snapshot, verify the
-// probe itself is side-effect-free (snapshot → ≥1 s idle → snapshot →
-// identical), drive 200 auth-failure attempts at port 8881 — 100 SOCKS5
-// CONNECTs and 100 HTTP CONNECTs cycling four malformation modes each
-// (missing password/header, all-zero token, wrong-length token,
-// correct-length token absent from the loaded generation) — then probe
-// again and assert the request_count and byte_count deltas are both
-// EXACTLY zero and the full snapshot is unchanged.
-//
-// This is the counter channel of the auth-failure leak family: T025
-// gates the log/journal channel, T025d/T067b the positive (increment)
-// angles. All must hold or the failure path leaks. The failure
-// responses' own byte contracts are siblings' scope (T028 the 01 FF
-// shape, T027 the 407 template) — asserted here only as each attempt's
-// failure precondition, because an attempt that unexpectedly succeeds
-// increments and masks the delta assertions.
-//
-// Tests-first (Constitution Principle VII): dpharness.Start self-skips
-// until T050 (cmd/stargate-proxy/main.go) lands the boot wiring; the
-// gate then fails closed. The precondition ReloadTokens rides the
-// shared harness helper whose §5.3 metadata gap is recorded residue
-// owned by T022/T050 (T020a Notes) — loud precondition failure, never a
-// silent pass, if it is unfixed at first real run.
+// Counter invariants: 100 SOCKS auth failures and 100 silent HTTP refusals;
+// retain the no-traffic GetStatus sandwich and exact zero deltas (T173).
 package socks5
 
 import (
 	"bytes"
-	"errors"
-	"io"
 	"net"
 	"path/filepath"
 	"testing"
@@ -91,11 +52,8 @@ var t025cCandidates = []struct {
 	socks5Passwd string
 	// httpAuthHeader is the full Proxy-Authorization header line, or
 	// empty to omit the header entirely (the missing-password analog on
-	// the CONNECT framing). AllZero passes validBearerToken's 32-hex
-	// gate and reaches the compare loop; WrongLength short-circuits at
-	// the gate; CorrectLength is a near-miss against the loaded
-	// generation — the three attacker depths the compare path must
-	// treat identically.
+	// the CONNECT framing). HTTP is refused before parsing these offers;
+	// the paired SOCKS offers still exercise the distinct verifier depths.
 	httpAuthHeader string
 }{
 	{
@@ -136,7 +94,7 @@ func TestAuthFailureCounterSideChannelResistance(t *testing.T) {
 
 	// No upstream, no fake CP (the T028 fixture shape): an auth failure
 	// short-circuits before the upstream dial on both framings
-	// (listener socks5.go / connect.go), so nothing downstream of auth
+	// (listener socks5.go), so nothing downstream of auth
 	// is ever reached. WatchEvents retry noise is irrelevant — this
 	// test asserts counters, not the journal.
 	h := dpharness.Start(t)
@@ -184,7 +142,7 @@ func TestAuthFailureCounterSideChannelResistance(t *testing.T) {
 		}
 	})
 
-	// The burst: 100 SOCKS5 + 100 HTTP CONNECT auth failures — exactly
+	// The burst: 100 SOCKS5 + 100 HTTP refusals — exactly
 	// the contract's N per framing (contracts/control-grpc.md §"GetStatus
 	// (minimum subset)" Tests row 1) — cycling the four malformation
 	// modes (25 each per framing; i % 4 covers each mode 25 times).
@@ -225,7 +183,7 @@ func TestAuthFailureCounterSideChannelResistance(t *testing.T) {
 	})
 
 	// (b) byte_count delta exactly zero — the synthesised AUTH_REQUIRED
-	// template body (HTTP framing) and the 01 FF reply (SOCKS5 framing)
+	// HTTP refusal and the 01 FF reply (SOCKS5 framing)
 	// are DP-generated, never forwarded client↔upstream bytes
 	// (data-model.md §3 byte_count rule). A failure path that wrapped
 	// the client conn with the counting seam would book the template
@@ -287,63 +245,16 @@ func t025cDriveSocks5AuthFailure(t *testing.T, h *dpharness.Harness, mode int) {
 	expectEOF(t, conn, "after 01 FF (mode "+c.label+")")
 }
 
-// t025cDriveHTTPConnectAuthFailure performs one HTTP CONNECT
-// auth-failure attempt in the given mode and asserts the failure
-// precondition: the response status line carries 407, the AUTH_REQUIRED
-// signal on the CONNECT framing (FR-006 HTTP path). The template body's
-// byte shape is T027's scope; the body is drained through EOF (bounded
-// close window) so the DP's close is observed — the point where a
-// close-flush regression would book failure bytes, if one ever existed.
+// HTTP refusal never reaches authentication or increments either counter.
 func t025cDriveHTTPConnectAuthFailure(t *testing.T, h *dpharness.Harness, mode int) {
 	t.Helper()
-	c := t025cCandidates[mode]
-	conn := dialProxy(t, h)
-	defer func() { _ = conn.Close() }()
-	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
-
-	dest := "t025c-connect.example.onion"
-	req := "CONNECT " + dest + ":443 HTTP/1.1\r\n"
-	if c.httpAuthHeader != "" {
-		req += c.httpAuthHeader + "\r\n"
+	c := dialProxy(t, h)
+	defer c.Close()
+	req := "CONNECT t025c-connect.example.onion:443 HTTP/1.1\r\n"
+	if header := t025cCandidates[mode].httpAuthHeader; header != "" {
+		req += header + "\r\n"
 	}
-	req += "\r\n"
-	if _, err := conn.Write([]byte(req)); err != nil {
-		t.Fatalf("write CONNECT request (mode %s): %v", c.label, err)
-	}
-
-	// Byte-at-a-time header read (the package helper) cannot over-read
-	// past the header block — irrelevant for a failure response (no
-	// tunnel follows), but it keeps the drain below well-defined.
-	hdr := readConnectResponseHeader(t, conn)
-	statusLine := hdr
-	if i := bytes.Index(hdr, []byte("\r\n")); i >= 0 {
-		statusLine = hdr[:i]
-	}
-	if !bytes.HasPrefix(statusLine, []byte("HTTP/1.1 407")) {
-		_ = conn.Close()
-		t.Fatalf("mode %s: CONNECT response status line = %q, want 407 — "+
-			"the attempt did not fail auth (FR-006); a success increments "+
-			"request_count and masks the counter delta assertions",
-			c.label, statusLine)
-	}
-
-	// Drain the template body through EOF. The 2 s deadline is the
-	// close-check window (the contract requires close after the failure
-	// response); a timeout means the DP held the connection — surfaced,
-	// not swallowed, so the attempt cannot silently stay in flight
-	// across the post-burst snapshot. ReadAll returns nil (not io.EOF)
-	// on a clean close, so the guard below is exactly the error path.
-	_ = conn.SetReadDeadline(time.Now().Add(2 * time.Second))
-	if _, err := io.ReadAll(conn); err != nil {
-		var netErr net.Error
-		if errors.As(err, &netErr) && netErr.Timeout() {
-			t.Errorf("mode %s: DP did not close within 2 s of the 407 "+
-				"response (contract requires close) — the attempt's "+
-				"connection was still open at the drain deadline", c.label)
-		}
-		// Other non-timeout errors (reset, pipe) imply the conn is gone,
-		// which satisfies the close half of the contract.
-	}
+	assertHTTPRefusal(t, c, req+"\r\n")
 }
 
 // writeRawSubnegotiation writes the RFC 1929 username/password message

@@ -163,3 +163,26 @@ or launch failure. These helper options are test controls, not production
 deployment settings. The test removes its container and profile. Recovery after
 an old-profile cleanup denial still fails the test; unloading the profile cannot
 turn a failed lifecycle check green.
+
+## HTTP refusal and migration (T173)
+
+`connect_refusal.py` runs against an already initialized, dedicated disposable
+Local stack with the pre-fix DP. The caller owns installation and cleanup. Set
+`STARGATE_LIVE_E2E=1`, `STARGATE_DISPOSABLE_HOST=1`, `STARGATE_PROJECT`,
+`STARGATE_ENV_FILE`, `STARGATE_EVIDENCE_DIR` and `STARGATE_CANDIDATE_IMAGE`
+(the immutable repaired image ID), then run the script as root. It provisions
+a disposable token through CP, establishes an old Tor tunnel, stops CP/DP,
+checks old-pipe/listener closure, and starts the repaired image with retained
+snapshot state. HTTP valid/missing/malformed offers must close without bytes;
+a following SOCKS request must return destination bytes through real Tor.
+Each CP setup attempt allows 600 seconds for a slow emulated JVM; HTTP refusal
+and SOCKS exchange deadlines remain separately bounded. Attempt failures are
+reported without printing credentials.
+
+A dedicated tracefs instance observes `unix_stream_connect` endpoint paths for
+the sole deployed `stargate-proxy` process. The real SOCKS request is the trace
+positive control; missing controls, fetch faults, buffer overruns or missed
+kprobes invalidate refusal evidence. No auth or payload buffers are traced.
+This uses Linux's [documented kprobe argument/string fetches](https://docs.kernel.org/trace/kprobetrace.html).
+The host needs `CONFIG_KPROBE_EVENTS` and tracefs. Selftests run through the
+ordinary topology contract gate; this does not substitute for the live probe.

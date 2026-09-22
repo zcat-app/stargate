@@ -1,9 +1,9 @@
 ---
 id: T068
 title: 'Contract test `tests/contract/error-template/body_byte_match_test.go` '
-status: pending
+status: deferred
 created: 2026-07-04
-last_updated: "2026-09-12"
+last_updated: "2026-09-21"
 source: tasks.md#T068
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
@@ -16,6 +16,9 @@ risk: low
 round_cap: 2
 spec_refs: []   # TODO: cite spec.md § at /start
 decision_refs: []
+deferred_on: T071
+deferred_reason: decomposed
+replaced_by: T071
 reviews: {}
 overrides: []
 aborted_attempts: []
@@ -57,3 +60,10 @@ Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
 ## T172 selected acceptance (supersedes conflicting historical task text)
 
 Test all four future HTTP renderer code bodies directly, byte-for-byte after only the permitted substitutions. Make no port-8881 ingress or browser-visible HTML claim; T173 moves existing ingress fixtures to renderer-only calls.
+
+## T173 authorized refinement — superseded by T071
+
+This unimplemented test-only unit is consolidated into T071's atomic tests-first renderer
+change. Its complete assertions remain required there; it is not a done dependency and
+must not be delivered through permanent skips or a standalone red commit. T071 replaces
+this ticket in downstream blockers. Historical task text above records the original scope.

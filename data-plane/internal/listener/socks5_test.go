@@ -3,7 +3,7 @@
 
 // Unit tests for the port-8881 inbound SOCKS5 framing (T042), driven
 // through the exported HandleConn surface over net.Pipe with stub
-// seams (Auth / Forward / Audit / Connect).
+// seams (Auth / Forward / Audit).
 //
 // Why this exists alongside the contract suites (T023/T024/T025/T028):
 // those suites boot the whole data-plane process and content-gate on
@@ -152,14 +152,12 @@ func (r *deadlineRecorder) total() int { r.mu.Lock(); defer r.mu.Unlock(); retur
 // fixture bundles one net.Pipe pair with HandleConn already serving the
 // server end (in a goroutine) and every stub seam.
 type fixture struct {
-	client    net.Conn
-	server    *deadlineRecorder
-	auth      *stubAuth
-	forward   *stubForward
-	audit     *stubAudit
-	connects  []net.Conn    // conns the Connect seam received
-	connected chan struct{} // closed when the Connect seam first fires
-	done      chan struct{}
+	client  net.Conn
+	server  *deadlineRecorder
+	auth    *stubAuth
+	forward *stubForward
+	audit   *stubAudit
+	done    chan struct{}
 }
 
 // startFixture serves one connection. The first byte is NOT consumed —
@@ -173,36 +171,17 @@ func startFixture(t *testing.T, fwdErr error, authAccept bool) *fixture {
 	// hang on the write instead of failing fast here.
 	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	f := &fixture{
-		client:    c,
-		server:    &deadlineRecorder{Conn: s},
-		auth:      &stubAuth{accept: authAccept},
-		forward:   &stubForward{err: fwdErr, called: make(chan struct{})},
-		audit:     &stubAudit{},
-		connected: make(chan struct{}),
-		done:      make(chan struct{}),
+		client:  c,
+		server:  &deadlineRecorder{Conn: s},
+		auth:    &stubAuth{accept: authAccept},
+		forward: &stubForward{err: fwdErr, called: make(chan struct{})},
+		audit:   &stubAudit{},
+		done:    make(chan struct{}),
 	}
 	d := &Deps{
 		Auth:    f.auth,
 		Forward: f.forward,
 		Audit:   f.audit,
-		Connect: func(conn net.Conn) {
-			f.connects = append(f.connects, conn)
-			select {
-			case <-f.connected:
-			default:
-				close(f.connected)
-			}
-			// Hold the conn like the real CONNECT handler (T043) does —
-			// the handler owns the connection from the seam onward, so a
-			// no-op stub would close it and false-positive the held-open
-			// assertion. Blocked read releases at test cleanup's Close.
-			buf := make([]byte, 16)
-			for {
-				if _, err := conn.Read(buf); err != nil {
-					return
-				}
-			}
-		},
 	}
 	go func() {
 		HandleConn(f.server, d)
@@ -315,23 +294,17 @@ func TestDemux_SilentClose_UnknownFirstByte(t *testing.T) {
 	awaitDone(t, f, "unknown first byte")
 }
 
-func TestDemux_ConnectRouted(t *testing.T) {
-	f := startFixture(t, nil, false)
-	write(t, f.client, 0x43) // 'C'
-	// The 'C' byte is consumed by the demux; the seam receives the conn
-	// positioned after it and the server must NOT have replied anything
-	// (no SOCKS5-shaped bytes, no close — T023(d)).
-	expectHeldOpen(t, f.client, "'C' first byte")
-	select {
-	case <-f.connected:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("Connect seam never invoked")
+func TestDemux_HTTPRefusedBeforeAuth(t *testing.T) {
+	f := startFixture(t, nil, true)
+	write(t, f.client, 'C')
+	expectEOFWithNoData(t, f.client, "HTTP first byte")
+	awaitDone(t, f, "HTTP first byte")
+	if f.auth.count() != 0 || f.audit.count() != 0 {
+		t.Fatal("HTTP evaluated authentication or counters")
 	}
-	if len(f.connects) != 1 {
-		t.Fatalf("Connect seam invoked %d time(s), want 1", len(f.connects))
+	if n, _, _ := f.forward.state(); n != 0 {
+		t.Fatal("HTTP reached forwarding")
 	}
-	_ = f.client.Close()
-	awaitDone(t, f, "'C' first byte")
 }
 
 // --- method negotiation ------------------------------------------------
@@ -464,8 +437,8 @@ func TestSubneg_Failure_01FF_Close_NoCounter(t *testing.T) {
 
 // TestSubneg_NoFormatGate pins research.md §9: the SOCKS5 path applies
 // NO syntactic token gate — an arbitrary 8-byte PASSWD reaches the auth
-// seam raw and the reply depends only on its verdict (the 32-hex gate
-// is CONNECT-path-only, T043).
+// seam raw and the reply depends only on its verdict. The auth implementation
+// owns bearer syntax; framing does not duplicate it.
 func TestSubneg_NoFormatGate(t *testing.T) {
 	f := startFixture(t, nil, true)
 	greet(t, f.client)

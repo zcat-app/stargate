@@ -71,7 +71,7 @@ import (
 type dpHarness struct {
 	client    grpcpb.ControlClient
 	conn      *grpc.ClientConn
-	proxyAddr string // 127.0.0.1:<port> SOCKS5/CONNECT listener
+	proxyAddr string // 127.0.0.1:<port> SOCKS5 listener
 	stateDir  string // holds dp-snapshot.json
 	journal   *lockedBuffer
 	pid       int    // DP process PID; T022 reads /proc/<pid>/net/tcp

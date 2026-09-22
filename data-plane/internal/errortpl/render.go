@@ -1,16 +1,7 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// render.go — the AUTH_REQUIRED wire renderer (T048): assembles the
-// privacy-safe error response for the HTTP CONNECT auth-failure case
-// from the byte-pinned Template literal (T019). The wire shape is
-// contracts/error-template.md §"Wire format" — status line
-// `HTTP/1.1 407 Proxy Authentication Required`, exactly the four
-// contract headers in declared order, then the body with the three
-// permitted substitutions. ROUTE_DOWN/ROUTE_REFUSED/ROUTE_TIMEOUT are
-// deliberately NOT rendered here: their status rows are T071's
-// extension of this file, and inventing them now would redefine a wire
-// shape outside the contract-review loop (T048 §Analysis scope split).
+// Future HTTP format renderer; no Tor listener ingress uses this package.
 package errortpl
 
 import (
@@ -20,20 +11,19 @@ import (
 	"io"
 	"strconv"
 	"strings"
-
-	"github.com/zcat-app/stargate/data-plane/internal/listener"
 )
 
-// Renderer renders error responses onto the wire. It satisfies
-// listener.ErrorRenderer and is stateless: every response is assembled
-// from the constants below plus one fresh random ref-ID, so nothing
-// request-derived can enter the bytes (FR-006/FR-009; the only variable
-// bytes are the ref-ID slot and the Content-Length digits it implies).
-//
-// Compile-time seam conformance: T050 fills listener.ConnectDeps.
-// Renderer with this type.
-var _ listener.ErrorRenderer = (*Renderer)(nil)
+// ErrorCode is the future-format vocabulary, independent of proxy ingress.
+type ErrorCode string
 
+const (
+	CodeAuthRequired ErrorCode = "AUTH_REQUIRED"
+	CodeRouteDown    ErrorCode = "ROUTE_DOWN"
+	CodeRouteRefused ErrorCode = "ROUTE_REFUSED"
+	CodeRouteTimeout ErrorCode = "ROUTE_TIMEOUT"
+)
+
+// Renderer takes no request data. Only its random reference ID varies.
 type Renderer struct{}
 
 // authRequiredStatusLine is the contract §"Status line" AUTH_REQUIRED
@@ -56,10 +46,9 @@ const refIDLen = 16
 
 // WriteFailure renders code's response onto w. AUTH_REQUIRED is the
 // T048 scope; a route code writes nothing and returns an error —
-// HandleConnect treats renderer errors as best-effort (the connection
-// closes silently), and T071 lifts the route rows in this same file.
-func (r *Renderer) WriteFailure(w io.Writer, code listener.ErrorCode) error {
-	if code != listener.CodeAuthRequired {
+// T071 owns their atomic tests-first implementation; T173 preserves this boundary.
+func (r *Renderer) WriteFailure(w io.Writer, code ErrorCode) error {
+	if code != CodeAuthRequired {
 		return fmt.Errorf("errortpl: code %q has no renderer yet (T071)", code)
 	}
 
@@ -69,7 +58,7 @@ func (r *Renderer) WriteFailure(w io.Writer, code listener.ErrorCode) error {
 	}
 	body := strings.NewReplacer(
 		"{ROUTE_LABEL}", "Tor",
-		"{CODE}", string(listener.CodeAuthRequired),
+		"{CODE}", string(CodeAuthRequired),
 		"{LOCAL_REFERENCE_ID}", hex.EncodeToString(refID[:]),
 	).Replace(Template)
 
@@ -83,7 +72,7 @@ func (r *Renderer) WriteFailure(w io.Writer, code listener.ErrorCode) error {
 	buf.WriteString("\r\n")
 	buf.WriteString(headerCacheControl)
 	buf.WriteString("X-Stargate-Error: ")
-	buf.WriteString(string(listener.CodeAuthRequired))
+	buf.WriteString(string(CodeAuthRequired))
 	buf.WriteString("\r\n\r\n")
 	buf.WriteString(body)
 

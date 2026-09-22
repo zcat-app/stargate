@@ -3,11 +3,11 @@ id: T072
 title: 'Extend `data-plane/internal/forward/tor.go` (from T047) to map upstrea'
 status: pending
 created: 2026-07-04
-last_updated: "2026-09-12"
+last_updated: "2026-09-21"
 source: tasks.md#T072
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
-blocked_by: ["T009", "T155", "T065", "T066", "T067", "T067a", "T067b", "T068", "T069", "T070", "T071", "T156"]
+blocked_by: ["T009", "T155", "T065", "T066", "T067", "T067a", "T067b", "T070", "T071", "T156"]
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true
@@ -16,7 +16,7 @@ risk: low
 round_cap: 2
 spec_refs: []   # TODO: cite spec.md § at /start
 decision_refs: []
-tests_first: ["T065", "T066", "T067", "T067a", "T067b", "T068", "T069", "T070"]
+tests_first: ["T065", "T066", "T067", "T067a", "T067b", "T070"]
 reviews: {}
 overrides: []
 aborted_attempts: []
@@ -58,3 +58,8 @@ Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
 ## T172 selected acceptance (supersedes conflicting historical task text)
 
 Implement the 30 s upstream dial/handshake timeout and map `ROUTE_DOWN/REFUSED/TIMEOUT` only to the fixed SOCKS5 REP `03/04/06` with zero BND fields, EOF and no upstream text. No idle deadline after handshake, event-gated admission, HTTP template path or fallback. T065–T070/T067a/b remain the verification consumers.
+
+## T173 renderer dependency refinement
+
+T071 owns the consolidated T068/T069 tests and renderer implementation. Retain T071 as
+the blocker; the superseded deferred test tickets must not independently block this consumer.

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package errortpl holds the privacy-safe error-response template literal
-// the data plane emits on HTTP CONNECT error responses (architecture spec
+// for the future HTTP renderer; Tor port 8881 never emits it (architecture spec
 // §10.2; specs/001-tor-route/contracts/error-template.md §"Response body").
 //
 // This file holds the LITERAL ONLY — the bytes the renderer (T048 / T071)
@@ -13,8 +13,7 @@
 // substitution.
 package errortpl
 
-// Template is the privacy-safe error-response body the data plane returns
-// on HTTP CONNECT failures (ROUTE_DOWN / ROUTE_REFUSED / ROUTE_TIMEOUT /
+// Template is the future-format error-response body for direct renderer calls (ROUTE_DOWN / ROUTE_REFUSED / ROUTE_TIMEOUT /
 // AUTH_REQUIRED). The bytes are byte-for-byte equal to the code-block
 // content of specs/001-tor-route/contracts/error-template.md §"Response
 // body" — no trailing newline, LF line endings, UTF-8 middle-dot `·`

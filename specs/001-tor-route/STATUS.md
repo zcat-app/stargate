@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-21
+**Last updated:** 2026-09-22
 
 ---
 
@@ -13,12 +13,12 @@
 
 | Status | Count |
 |---|---|
-| pending | 52 |
-| in-progress | 0 |
+| pending | 49 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 150 |
-| deferred | 3 |
+| deferred | 5 |
 | **total** | **205** |
 
 ---
@@ -46,13 +46,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
-| T173 | Refuse unpartitioned HTTP CONNECT on the Tor listener | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T173 | Refuse unpartitioned HTTP CONNECT on the Tor listener | in-progress | ✓ | Foundation audit remediation |
 
 ---
 
@@ -61,6 +62,8 @@ _(nothing in flight)_
 | ID | Title | Reason | Blocked on |
 |---|---|---|---|
 | T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | spec-amend | T089 |
+| T068 | Contract test `tests/contract/error-template/body_byte_match | decomposed | T071 |
+| T069 | Contract tests `tests/contract/error-template/reference_id_u | decomposed | T071 |
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
 

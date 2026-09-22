@@ -1,8 +1,8 @@
 # Contract — Bearer-Token Auth on Port 8881
 
-> **T172 target update:** every supported ingress requires the isolation partition defined in
+> **T172 contract / T173 implementation:** every supported ingress requires the isolation partition defined in
 > [foundation boundaries](foundation-boundaries.md). T147 selected silent refusal of HTTP
-> CONNECT on Tor port 8881. Current code still accepts it until T173; this contract does not
+> CONNECT on Tor port 8881. T173 implements silent refusal; this contract does not
 > claim runtime compliance.
 
 **Status**: Phase 1 contract document
@@ -223,8 +223,7 @@ For any connection whose first byte is ASCII `C` (`0x43`), the data plane
 closes without response bytes. It does not evaluate `Proxy-Authorization`,
 increment request or byte counters, or open an upstream socket. Missing,
 malformed and valid-looking credentials, claimed isolation headers, pipelined
-payload, slow or oversized input all have the same outcome. T173 implements
-and tests this target; current `listener/connect.go` contradicts it.
+payload, slow or oversized input all have the same outcome. T173 implements and tests this refusal at the demux; there is no HTTP parser.
 
 ---
 

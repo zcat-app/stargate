@@ -145,7 +145,7 @@ The extension's icon appears in the toolbar.
 
 ---
 
-## Tor ingress migration (pre-release T172 target)
+## Tor ingress migration (pre-release T173 repair)
 
 When upgrading to the T173 repair, stop new admission and restart the data
 plane with the repaired binary. Restart closes existing old-process tunnels;
@@ -158,7 +158,7 @@ Do not switch them to Direct. The change requires no credential or snapshot
 schema rewrite, route-binding change or Tor configuration migration. Existing
 credentials/snapshots remain usable for authenticated SOCKS under their
 normal generation rules, but their presence does not authorize HTTP. T173
-must verify the actual stop/restart and Local listener outcome. LAN/VPS live
+records the actual stop/restart and Local listener evidence separately. LAN/VPS live
 behaviour and post-repair circuit/browser evidence remain open.
 
 ## Step 4 — Configure the bearer token in the extension (30 seconds)
@@ -246,13 +246,12 @@ Stop the Tor sidecar:
 $COMPOSE stop tor
 ```
 
-In the T172 target, a refresh through the extension's authenticated SOCKS5
+With the T173 repair, a refresh through the extension's authenticated SOCKS5
 route receives a fixed binary `ROUTE_DOWN` reply (`05 03 00 01 00 00 00 00
 00 00`) and closes. The browser may show its own connection error; Stargate
 does not send an HTML response on Tor port 8881. HTTP proxy clients that begin
 with `C` are unsupported and receive zero response bytes, regardless of token.
-Current code still accepts HTTP CONNECT until T173; do not treat this guide
-as evidence of deployed refusal. Inspect the SOCKS reply and proxy logs for
+Use T173's candidate-specific evidence record for measured deployed refusal. Inspect the SOCKS reply and proxy logs for
 absence of destination, Tor version and per-request details in the tests.
 
 Restart the sidecar to recover:

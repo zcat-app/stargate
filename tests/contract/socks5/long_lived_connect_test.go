@@ -1,51 +1,14 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// Contract test for the long-lived bidirectional CONNECT byte-pipe
-// invariant — Constitution Principle I (dumb router), specs/001-tor-
-// route/spec.md FR-005/FR-006/FR-007/FR-008 and §"Edge Cases" rows
-// "WebSocket upgrade through CONNECT" + "HTTP/2 connections (forced
-// fallback from QUIC)" (both mechanically subsumed: after the SOCKS5/
-// CONNECT handshake completes, any TLS-over-CONNECT payload is opaque
-// bytes to the data plane, so the byte-transparency assertion covers
-// every protocol shape without protocol-specific tests), and
-// contracts/socks5-auth.md §"Deadlines" (post-handshake deadline is
-// "none — long-lived") + §"HTTP CONNECT path". Task body:
-// specs/001-tor-route/tasks.md T025b.
-//
-// Two tunnels are opened through the DP's port-8881 listener to the
-// accept-and-relay fake upstream (T019a) — one via authenticated
-// SOCKS5, one via HTTP CONNECT + Proxy-Authorization: Bearer — and
-// each exchanges a deterministic, seeded byte stream for ≥30 s (mixed
-// frame sizes, bursty vs. trickle phases, idle gaps up to 5 s).
-// Because the upstream is an echo, every byte traverses the DP once
-// in each direction; the reader regenerates the expected stream from
-// the same seed and compares chunk-by-chunk, so insertion, deletion,
-// reordering, or rewriting in EITHER direction surfaces as a
-// divergence (offset reported, bytes withheld — leak-safe failures).
-// The journal delta around the exchange is held to the T025a shared
-// allowlist (tests/internal/loginvariants) — the DP must not narrate
-// frame traffic.
-//
-// Anti echo-false-pass (redteam finding 20260706-002 class): a DP
-// that short-circuited to a local echo without forwarding would pass
-// the transparency assertion, so the SOCKS5 leg's distinctive UNAME
-// is asserted present in upstream.CircuitIDs() — proof the traffic
-// transited the fake, doubling as FR-007 username-passed-through-
-// unchanged evidence. See the ticket §Analysis residue for the
-// CONNECT leg's indirect equivalent.
-//
-// Tests-first (Constitution Principle VII): content-gates on T042/
-// T045/T050 (dpharness boot minimum) plus T044 auth/token.go, T047
-// forward/tor.go, T045 controlclient/client.go, and T043
-// listener/connect.go; the test SKIPs until all land, then a byte-pipe
-// or log regression is FAIL, not SKIP.
+// Two concurrent authenticated SOCKS partitions preserve 30s+ interleaved,
+// asymmetric, idle and large-payload byte-pipe coverage and journal invariants.
+// T173 migrates the former HTTP leg without reducing its traffic schedule.
 package socks5
 
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"math/rand"
 	"net"
 	"path/filepath"
@@ -60,11 +23,7 @@ import (
 	"github.com/zcat-app/stargate/tests/internal/loginvariants"
 )
 
-// longLivedPlaintext is the bearer-token plaintext for both legs. 32
-// hex chars — the CONNECT path's syntactic gate (contracts/socks5-
-// auth.md §"HTTP CONNECT path" step 2: ^[0-9a-f]{32}$) must pass so
-// the tunnel opens. Distinct from T025a's token so a corpus hit is
-// attributable to this test.
+// Synthetic bearer shared by the two distinct partition controls.
 const longLivedPlaintext = "f0e1d2c3b4a5968778695a4b3c2d1e0f"
 
 // minExchange is the ≥30 s the task body mandates, measured per leg
@@ -96,7 +55,7 @@ const readStallDeadline = 15 * time.Second
 // this is a wedged DP, reported with counts, not payload bytes.
 const legDeadline = 180 * time.Second
 
-// TestLongLivedBidirectionalCONNECT drives the two framing legs
+// TestLongLivedBidirectionalCONNECT drives two SOCKS partition legs
 // concurrently (bounding wall-clock at ~one exchange window, not two
 // — concurrency is NOT the property under test; that is T079a), then
 // asserts the upstream-transit gate and the journal invariants over
@@ -106,8 +65,7 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 	// Per-test content gates beyond the boot minimum inside
 	// dpharness.Start (T042/T045/T050): the auth surface, the forward
 	// path, the WatchEvents client (advisory; admission is not CP-gated
-	// per T090), and — new vs. T025a — the HTTP CONNECT listener path
-	// for leg 2.
+	// per T090). Both legs now use independently partitioned SOCKS.
 	dpharness.RequireFile(t,
 		filepath.Join(repoRoot, "data-plane", "internal", "auth", "token.go"),
 		"auth/token.go not implemented yet (T044); this skip self-lifts when T044 lands")
@@ -118,9 +76,6 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 		filepath.Join(repoRoot, "data-plane", "internal", "controlclient", "client.go"),
 		"controlclient/client.go not implemented yet (T045 client side); "+
 			"needed to consume the WatchEvents stream (advisory; admission is not CP-gated per T090)")
-	dpharness.RequireFile(t,
-		filepath.Join(repoRoot, "data-plane", "internal", "listener", "connect.go"),
-		"listener/connect.go not implemented yet (T043); needed for the HTTP CONNECT leg")
 
 	// Fake upstream in AcceptAndRelay mode: completes the upstream
 	// SOCKS5 handshake, REP=0x00, then echoes. Every byte the test
@@ -173,7 +128,7 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 	const (
 		destSOCKS5      = "t025b-dest-socks5.example.onion"
 		destConnect     = "t025b-dest-connect.example.onion"
-		unameSOCKS5     = "t025b-uname-socks5"
+		unameSOCKS5     = "sg1:" + "1111111111111111111111111111111111111111111111111111111111111111"
 		sentinelSOCKS5  = "t025b-payload-sentinel-socks5-XXXXXXXXXX"
 		sentinelConnect = "t025b-payload-sentinel-connect-XXXXXXXXX"
 	)
@@ -202,9 +157,9 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 			}
 			driveBytePipe(t, conn, 0x5b_0001, sentinelSOCKS5)
 		})
-		t.Run("HTTPConnect", func(t *testing.T) {
+		t.Run("SOCKS5SecondPartition", func(t *testing.T) {
 			t.Parallel()
-			conn := openHTTPConnectTunnel(t, h, destConnect, longLivedPlaintext)
+			conn := openSOCKSTunnel(t, h, destConnect, longLivedPlaintext)
 			t.Cleanup(func() { _ = conn.Close() })
 			driveBytePipe(t, conn, 0x5b_0002, sentinelConnect)
 		})
@@ -215,19 +170,17 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 	// FR-007 requires the DP to pass the username through unchanged,
 	// so the leg's distinctive UNAME observed AT THE UPSTREAM proves
 	// the tunnel's bytes transited the fake rather than a DP-local
-	// echo. (CONNECT-leg equivalent is indirect — ticket §Analysis.)
-	seen := false
-	for _, id := range upstream.CircuitIDs() {
-		if id == unameSOCKS5 {
-			seen = true
-			break
+	// echo. Both SOCKS partitions are observed directly after migration.
+	for _, want := range []string{unameSOCKS5, refusalIdentity(longLivedPlaintext, "transport-profile", destConnect)} {
+		seen := false
+		for _, id := range upstream.CircuitIDs() {
+			if id == want {
+				seen = true
+			}
 		}
-	}
-	if !seen {
-		t.Errorf("upstream never observed the SOCKS5 leg's distinctive " +
-			"UNAME at sub-negotiation — traffic did not transit the fake " +
-			"upstream (echo-false-pass guard, redteam 20260706-002 class; " +
-			"FR-007 username pass-through)")
+		if !seen {
+			t.Error("upstream did not observe a SOCKS partition")
+		}
 	}
 
 	// Post-exchange quiesce, then the delta over BOTH legs. The
@@ -256,6 +209,7 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 			[]byte(destSOCKS5),
 			[]byte(destConnect),
 			[]byte(unameSOCKS5),
+			[]byte(refusalIdentity(longLivedPlaintext, "transport-profile", destConnect)),
 			[]byte(sentinelSOCKS5),
 			[]byte(sentinelConnect),
 			[]byte(longLivedPlaintext))
@@ -265,39 +219,20 @@ func TestLongLivedBidirectionalCONNECT(t *testing.T) {
 	})
 }
 
-// openHTTPConnectTunnel opens the HTTP CONNECT framing leg: request
-// line + Proxy-Authorization only (the DP parses nothing else per
-// contracts/socks5-auth.md §"HTTP CONNECT path" step 1), then reads
-// the response strictly up to and including the header-terminating
-// blank line — byte-at-a-time, so not one tunnel byte is swallowed
-// into a discarded buffer (over-reading here would corrupt the
-// transparency evidence; ticket §Analysis redteam scope (b)).
-func openHTTPConnectTunnel(t *testing.T, h *dpharness.Harness, dest, token string) net.Conn {
+// openSOCKSTunnel uses complete synthetic partition framing on the real listener.
+func openSOCKSTunnel(t *testing.T, h *dpharness.Harness, dest, token string) net.Conn {
 	t.Helper()
-	conn := dialProxy(t, h)
-	req := fmt.Sprintf("CONNECT %s:443 HTTP/1.1\r\nProxy-Authorization: Bearer %s\r\n\r\n",
-		dest, token)
-	if _, err := conn.Write([]byte(req)); err != nil {
-		t.Fatalf("write CONNECT request: %v", err)
+	c := dialProxy(t, h)
+	t.Cleanup(func() { c.Close() })
+	doMethodNegotiation(t, c)
+	if !bytes.Equal(doSubnegotiation(t, c, refusalIdentity(token, "transport-profile", dest), token), []byte{1, 0}) {
+		t.Fatal("SOCKS auth failed")
 	}
-	var hdr []byte
-	one := make([]byte, 1)
-	for !bytes.HasSuffix(hdr, []byte("\r\n\r\n")) {
-		if len(hdr) > 8192 {
-			t.Fatalf("CONNECT response header block exceeded 8 KiB without a "+
-				"terminating blank line (got %d bytes so far)", len(hdr))
-		}
-		if _, err := io.ReadFull(conn, one); err != nil {
-			t.Fatalf("read CONNECT response (after %d bytes): %v", len(hdr), err)
-		}
-		hdr = append(hdr, one[0])
+	writeConnectRequest(t, c, dest, 443)
+	if !bytes.Equal(readN(t, c, 10), []byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0}) {
+		t.Fatal("SOCKS upstream admission failed")
 	}
-	statusLine, _, _ := bytes.Cut(hdr, []byte("\r\n"))
-	if want := "HTTP/1.1 200 Connection Established"; string(statusLine) != want {
-		t.Fatalf("CONNECT status line = %q, want %q (contracts/socks5-auth.md "+
-			"§\"HTTP CONNECT path\" auth-success shape)", statusLine, want)
-	}
-	return conn
+	return c
 }
 
 // driveBytePipe runs one leg's post-handshake exchange: a writer

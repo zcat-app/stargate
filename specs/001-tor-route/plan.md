@@ -22,7 +22,7 @@ The control plane runs headlessly in this slice — it loads bearer tokens from 
 YAML file at startup, pushes hashed tokens to the data plane via gRPC
 `ReloadTokens`, and emits `SidecarEvent`s — but exposes no admin UI beyond a
 healthcheck endpoint. Tor-port failures use fixed SOCKS5 replies. HTTP CONNECT is refused at first byte
-under the T172 target; T173 owns runtime conformance. The architecture §10 HTML
+under the T172 contract implemented by T173. The architecture §10 HTML
 error template remains a future-format renderer, not a Tor-port response.
 
 The vertical proves: (1) the data plane forwards bytes correctly through a real
@@ -135,7 +135,7 @@ The constitution amended on 2026-09-12 and `contracts/foundation-boundaries.md` 
 
 | Principle | State and required closure |
 |---|---|
-| I — dumb router | Negotiation/management scope clarified; T147 selected HTTP `C` refusal on Tor port 8881, T172 reconciles the contract, and T173 still owes implementation and deployed evidence. |
+| I — dumb router | Negotiation/management scope clarified; T147 selected HTTP `C` refusal on Tor port 8881, T172 reconciles the contract, and T173 records implementation and the scope of measured evidence. |
 | II — separation | CP authority, recovery/rollback and peer lifecycle incomplete: T138/T132/T135/T148/T159. |
 | III — privacy | Isolation, browser blocking, aggregate-only diagnostics and completed-hour publication: T136/T147/T152/T157/T158. |
 | IV — immutable updates | T160 delivers Tor package/content and dependency-source enforcement; remaining package/tool and release evidence is pending T141/T145/T081. |
@@ -186,8 +186,7 @@ stargate/
 │   ├── cmd/stargate-proxy/main.go                              (new)
 │   ├── internal/
 │   │   ├── bind/check.go             # bind-safety (FR-010)    (new)
-│   │   ├── listener/socks5.go        # port 8881 listener      (new)
-│   │   ├── listener/connect.go       # historical HTTP parser; remove in T173
+│   │   ├── listener/socks5.go        # SOCKS; HTTP C refused (T173)
 │   │   ├── auth/token.go             # constant-time auth      (new)
 │   │   ├── forward/tor.go            # SOCKS5h to tor:9050     (new)
 │   │   ├── controlclient/client.go   # gRPC client → CP        (new)
@@ -340,10 +339,10 @@ partition. HTTP `C` cannot carry trusted context in the existing client and must
 before auth, counters or upstream dial; no application-header inference, error body,
 route conversion or Direct fallback is allowed. Principle II keeps authenticated SOCKS
 forwarding alive across CP outage and ignores advisory sidecar events for admission.
-Principle V: current `listener/connect.go` still violates this target until T173, so
-neither this plan nor T172 certifies implementation. Principle VII: T173 must add the
-real-socket refusal regression red before the production change, while this document
-change uses consistency evidence. Principle VIII: T172 and T173 each need independent
+Principle V: T173 removes the conflicting HTTP path and records verification limits;
+T172 remains historical planning evidence. Principle VII: T173 preserves the named
+real-socket regression and its pre-fix failure before production edits; documentation
+uses consistency evidence. Principle VIII: T172 and T173 each need independent
 candidate-bound review. No Constitution amendment or risk acceptance is made.
 
 ---

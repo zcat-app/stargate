@@ -1,9 +1,9 @@
 ---
 id: T069
 title: 'Contract tests `tests/contract/error-template/reference_id_unique_test'
-status: pending
+status: deferred
 created: 2026-07-04
-last_updated: "2026-09-12"
+last_updated: "2026-09-21"
 source: tasks.md#T069
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
@@ -16,6 +16,9 @@ risk: low
 round_cap: 2
 spec_refs: []   # TODO: cite spec.md § at /start
 decision_refs: []
+deferred_on: T071
+deferred_reason: decomposed
+replaced_by: T071
 reviews: {}
 overrides: []
 aborted_attempts: []
@@ -57,3 +60,10 @@ Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
 ## T172 selected acceptance (supersedes conflicting historical task text)
 
 Test future HTTP renderer reference IDs directly: 1000 distinct IDs with the required distribution check, and repeated identical inputs yield unlinked IDs. No Tor-port HTTP request fixture is used.
+
+## T173 authorized refinement — superseded by T071
+
+This unimplemented test-only unit is consolidated into T071's atomic tests-first renderer
+change. Its complete assertions remain required there; it is not a done dependency and
+must not be delivered through permanent skips or a standalone red commit. T071 replaces
+this ticket in downstream blockers. Historical task text above records the original scope.

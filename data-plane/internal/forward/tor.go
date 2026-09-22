@@ -82,14 +82,9 @@ func New(upstream string, counts ByteCounter) *Tor {
 	return &Tor{upstream: upstream, counts: counts, dialTimeout: upstreamDialTimeout}
 }
 
-// Compile-time seam conformance with the landed inbound surfaces
-// (T042/T043): the SOCKS5 path fuses dial+bridge in Forwarder; the HTTP
-// CONNECT path needs the split Tunneler because its `200` status line
-// may only follow a successful upstream handshake; errors classify
-// through listener.RouteError via errors.As.
+// Compile-time conformance for the authenticated SOCKS path.
 var (
 	_ listener.Forwarder  = (*Tor)(nil)
-	_ listener.Tunneler   = (*Tor)(nil)
 	_ listener.RouteError = routeError{}
 )
 
@@ -153,20 +148,11 @@ func refusedByUpstream(err error) bool {
 		msg == "username/password authentication failed"
 }
 
-// dialUpstream opens the fixed upstream and completes the SOCKS5
-// handshake for target. uname non-empty sends it verbatim as the
-// upstream SOCKS5 username (FR-007 — the US2 IsolateSOCKSAuth key) with
-// an empty password (PLEN=0): the inbound PASSWD is the bearer token,
-// auth-layer material that is never re-sent upstream. uname empty (the
-// HTTP CONNECT path carries no username) offers NO_AUTH only — x/net
-// rejects an empty user/pass pair outright, and US2's per-first-party
-// isolation is SOCKS5-framed. The client is rebuilt per call because
-// x/net bakes the credentials into the dialer.
+// dialUpstream forwards the authenticated SOCKS partition intact with an empty
+// upstream password: the bearer never crosses the Tor boundary (Principle III).
+// The listener guarantees a nonempty username before this internal call.
 func (t *Tor) dialUpstream(uname []byte, target string) (net.Conn, error) {
-	var auth *proxy.Auth
-	if len(uname) > 0 {
-		auth = &proxy.Auth{User: string(uname)}
-	}
+	auth := &proxy.Auth{User: string(uname)}
 	network, address := "tcp", t.upstream
 	if strings.HasPrefix(address, "unix://") {
 		network = "unix"
@@ -222,7 +208,7 @@ func (c *countingConn) Write(p []byte) (int, error) {
 
 // Close flushes before the underlying close. bridge closes the upstream
 // from both pump goroutines, so the once-guard is what keeps the count
-// from doubling; every Forward/Pipe path closes this conn (the ownership
+// from doubling; every Forward path closes this conn (the ownership
 // contract this package's seams state), so the flush cannot be skipped.
 func (c *countingConn) Close() error {
 	c.flush.Do(func() {
@@ -248,22 +234,6 @@ func (t *Tor) Forward(client net.Conn, uname []byte, target string) error {
 		return err
 	}
 	bridge(client, up)
-	return nil
-}
-
-// Dial implements listener.Tunneler (HTTP CONNECT inbound path): open
-// the fixed upstream and complete the SOCKS5 handshake; the caller
-// writes `200` only after this succeeds (T043 response ordering).
-func (t *Tor) Dial(target string) (net.Conn, error) {
-	return t.dialUpstream(nil, target)
-}
-
-// Pipe implements listener.Tunneler's bridge phase with the same
-// semantics as bridge; the return is always nil because connect.go
-// must not inject bytes into an established tunnel (its own contract
-// note at the call site).
-func (t *Tor) Pipe(client, upstream net.Conn) error {
-	bridge(client, upstream)
 	return nil
 }
 

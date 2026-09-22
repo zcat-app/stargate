@@ -639,7 +639,7 @@ destructive change.
 A supported route returns its protocol-specific fixed failure response. Tor
 port 8881 supports authenticated SOCKS5: RFC 1928/1929 binary failures only.
 HTTP first byte `C` is refused silently before authentication or upstream dial
-under T172; current code conflicts until T173. The HTML template below is a
+under the T172 contract implemented by T173. The HTML template below is a
 future HTTP renderer format without a Tor ingress claim. Other routes require
 separate ingress contracts. No response may include upstream IPs, sidecar
 versions, exit identifiers, DNS answers or request-specific text.

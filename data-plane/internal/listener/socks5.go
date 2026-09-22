@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package listener implements the data plane's port-8881 inbound proxy
-// surface (FR-005): first-byte demultiplexing between SOCKS5 and HTTP
-// CONNECT, the SOCKS5 (RFC 1928 + RFC 1929) auth framing, and the
+// surface (FR-005): bounded protocol refusal and the SOCKS5 (RFC 1928 + RFC 1929) auth framing, and the
 // RFC 1928 §4 request-phase read. The byte-level contract is
 // specs/001-tor-route/contracts/socks5-auth.md.
 //
@@ -57,8 +56,6 @@ const (
 	repGeneralFailure = 0x01
 	repCommandNotSupp = 0x07
 	repAddressNotSupp = 0x08
-
-	asciiC = 0x43 // first byte of "CONNECT" — the HTTP CONNECT demux row
 )
 
 // Verifier is the auth seam (implemented by data-plane/internal/auth,
@@ -112,19 +109,11 @@ type Deps struct {
 	Auth    Verifier
 	Forward Forwarder
 	Audit   Audit
-
-	// Connect handles HTTP CONNECT framing (T043 listener/connect.go,
-	// closure-wired by T050). It receives the conn positioned AFTER the
-	// demux consumed the first 'C' byte, and owns the connection from
-	// that point. It inherits inboundHandshakeTimeout for its own
-	// framing phase and must clear the deadline before its byte-pipe
-	// phase, same as the SOCKS5 path.
-	Connect func(net.Conn)
 }
 
 // HandleConn serves one accepted port-8881 connection: it sniffs the
 // first byte and dispatches per the contract's demux table
-// (contracts/socks5-auth.md §"Two inbound protocols, one port").
+// (contracts/socks5-auth.md §"HTTP CONNECT refusal").
 // It owns conn for the connection's whole life and closes it on every
 // path.
 func HandleConn(conn net.Conn, d *Deps) {
@@ -138,10 +127,9 @@ func HandleConn(conn net.Conn, d *Deps) {
 	switch first[0] {
 	case socks5Version:
 		handleSOCKS5(conn, d)
-	case asciiC:
-		d.Connect(conn)
 	default:
-		// The client speaks neither supported protocol: silent close
+		// Unsupported ingress, including HTTP C, closes before auth,
+		// counters or upstream dial (T173; Constitution III). Silent close
 		// with zero response bytes — there is no agreed framing in
 		// which an error could be delivered (contract demux table,
 		// "anything else" row).

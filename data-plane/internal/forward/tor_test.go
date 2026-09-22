@@ -469,75 +469,8 @@ func TestForwardDialDeadlineIsRouteTimeout(t *testing.T) {
 	}
 }
 
-func TestDialNoUsernameOffersNoAuthAndBridges(t *testing.T) {
-	s := newStub(t, 0x00, false)
-	f := New(s.addr(), &stubCounter{})
-
-	up, err := f.Dial("example.org:80")
-	if err != nil {
-		t.Fatalf("Dial: %v", err)
-	}
-	defer up.Close()
-
-	offered, selected := s.greeting()
-	if bytes.Contains(offered, []byte{0x02}) {
-		t.Fatalf("greeting methods = %x, want NO_AUTH only (CONNECT carries no username)", offered)
-	}
-	if selected != 0x00 {
-		t.Fatalf("selected method = 0x%02x, want 0x00", selected)
-	}
-	if hasSub, uname, _ := s.subNegotiation(); hasSub {
-		t.Fatalf("sub-negotiation reached the upstream with UNAME %q; CONNECT path must not send one", uname)
-	}
-	if _, host, port := s.target(); host != "example.org" || port != 80 {
-		t.Fatalf("upstream target = %q:%d, want example.org:80", host, port)
-	}
-
-	// Pipe bridges after the handshake; teardown returns nil and the
-	// client conn stays the listener's.
-	inLn, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("inbound listen: %v", err)
-	}
-	t.Cleanup(func() { inLn.Close() })
-	errc := make(chan error, 1)
-	go func() {
-		c, err := inLn.Accept()
-		if err != nil {
-			errc <- err
-			return
-		}
-		errc <- f.Pipe(c, up)
-	}()
-	cli, err := net.Dial("tcp", inLn.Addr().String())
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
-	t.Cleanup(func() { cli.Close() })
-
-	if _, err := cli.Write([]byte("hello")); err != nil {
-		t.Fatalf("client write: %v", err)
-	}
-	got := make([]byte, 5)
-	if _, err := io.ReadFull(cli, got); err != nil {
-		t.Fatalf("client read (echo): %v", err)
-	}
-	if string(got) != "hello" {
-		t.Fatalf("echo = %q, want %q", got, "hello")
-	}
-	if err := cli.Close(); err != nil {
-		t.Fatalf("client close: %v", err)
-	}
-	select {
-	case err := <-errc:
-		if err != nil {
-			t.Fatalf("Pipe after teardown = %v, want nil", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("Pipe did not return after client close")
-	}
-}
-
+// T173 removes the NO_AUTH Dial/Pipe seam. The same-target refusal regression
+// and its real SOCKS partition/empty-password controls replace that old assertion.
 func TestProductionDialDeadlineIsThirtySeconds(t *testing.T) {
 	// contracts/socks5-auth.md §"Deadlines" row 1: the dial-and-handshake
 	// ceiling is 30 s, wired as the single named constant; row 2: no

@@ -41,7 +41,6 @@ import (
 	"github.com/zcat-app/stargate/data-plane/internal/bind"
 	"github.com/zcat-app/stargate/data-plane/internal/confinement"
 	"github.com/zcat-app/stargate/data-plane/internal/controlclient"
-	"github.com/zcat-app/stargate/data-plane/internal/errortpl"
 	"github.com/zcat-app/stargate/data-plane/internal/forward"
 	"github.com/zcat-app/stargate/data-plane/internal/listener"
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
@@ -212,19 +211,10 @@ func run() int {
 
 	verifier := auth.NewTokenVerifier(pepper, store)
 	forwarder := forward.New(upstream, counters)
-	renderer := &errortpl.Renderer{}
 	deps := &listener.Deps{
 		Auth:    verifier,
 		Forward: forwarder,
 		Audit:   counters,
-		Connect: func(conn net.Conn) {
-			listener.HandleConnect(conn, &listener.ConnectDeps{
-				Auth:     verifier,
-				Tunnel:   forwarder,
-				Audit:    counters,
-				Renderer: renderer,
-			})
-		},
 	}
 
 	log.Info("startup", "listener", proxyLis.Addr().String())

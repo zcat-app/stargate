@@ -1,43 +1,9 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// Contract test for the POSITIVE counter increments on the auth-passed
-// forwarding path — specs/001-tor-route/spec.md FR-008 (first half:
-// only auth-passing requests count), data-model.md §3 (the canonical
-// per-column rules: request_count +1 per authenticated SOCKS5/HTTP
-// CONNECT; byte_count += forwarded client↔upstream bytes in both
-// directions at request close; hour_bucket = unix-hour at increment
-// time; the synthesised error-template body is excluded from
-// byte_count), and contracts/control-grpc.md §"GetStatus (minimum
-// subset)" Tests row 2 (this file: 100 auth-passing CONNECTs, each
-// transferring exactly 2B; request_count delta exactly 100,
-// byte_count delta exactly 100 × 2B).
-//
-// Method: baseline GetStatus snapshot for (route='TOR', hour_bucket)
-// via the shared dpharness.Status probe (T025c's seam), then 50
-// authenticated SOCKS5 CONNECTs + 50 authenticated HTTP CONNECTs
-// against the AcceptAndRelay fake upstream (T019a), each writing a
-// known payload of exactly B=4096 bytes and reading exactly B back
-// (the echo books 2B through the DP's counting conn: B each way),
-// then a second snapshot. The error-template exclusion is degenerate
-// here (no error is ever triggered) and is asserted for completeness
-// via a side-channel: every byte the test reads off the tunnel
-// surface is captured and scanned for the errortpl.Template markers —
-// the captured template-byte count must be zero (Principle I: a
-// happy-path tunnel carries no DP-synthesised bytes). The journal
-// delta across the burst is held to the T025a shared allowlist:
-// counter writes emit no per-request log line (FR-008).
-//
-// Three-angle mapping of the FR-008 counter contract: T025c gates
-// must-NOT-increment on auth failure, this file gates must-increment
-// on auth pass + happy relay, T067b gates must-increment with
-// byte_count 0 on auth pass + route failure. Tasks.md T025d.
-//
-// Tests-first (Constitution Principle VII): content-gates on T042/
-// T045/T050 (dpharness boot minimum) plus T044 auth/token.go, T047
-// forward/tor.go, T045 controlclient/client.go, and T043
-// listener/connect.go; the test SKIPs until all land, then a counter
-// or log regression is FAIL, not SKIP.
+// Authenticated SOCKS request/byte counters: exactly 100 requests and 2B per
+// tunnel, with adjacent-hour accounting, byte equality and log/leak scans.
+// T173 migrates the former HTTP half without reducing the burst.
 package socks5
 
 import (
@@ -57,21 +23,10 @@ import (
 	"github.com/zcat-app/stargate/tests/internal/loginvariants"
 )
 
-// t025dLoadedToken is the 32-hex plaintext minted into the generation's
-// single verifier (FR-017's `^[0-9a-f]{32}$` format gate — the CONNECT
-// path's syntactic gate must pass so the HTTP leg's tunnels open).
-// Low-entropy alternating nibbles on purpose: test-only placeholder
-// (never deployed), and a high-entropy constant trips the pre-commit
-// gitleaks generic-api-key rule the same way T025c's fixture did.
-// Distinct from every sibling test's token constant so a corpus hit is
-// attributable to this file.
+// Synthetic bearer used only by this fixture.
 const t025dLoadedToken = "1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f"
 
-// t025dConnsPerFraming is the per-framing connection count the task
-// body fixes (N=50 SOCKS5 CONNECTs + N=50 HTTP CONNECTs = the 100
-// auth-passing CONNECTs of contracts/control-grpc.md §"GetStatus
-// (minimum subset)" Tests row 2). Sequential per the sibling-burst
-// shape (T025a/T025c); the concurrent variant is T079a's scope.
+// Retain both historical 50-request halves as authenticated SOCKS.
 const t025dConnsPerFraming = 50
 
 // t025dPayloadBytes is B — the exact per-direction payload size the
@@ -109,8 +64,7 @@ func TestAuthPassedCounterIncrements(t *testing.T) {
 	// Per-test content gates beyond the boot minimum inside
 	// dpharness.Start (T042/T045/T050): the auth surface, the forward
 	// path, the WatchEvents client (advisory; admission is not
-	// CP-gated per T090), and the HTTP CONNECT listener path for the
-	// second framing.
+	// CP-gated per T090). All successful admissions use SOCKS.
 	repoRoot := dpharness.FindRepoRoot(t)
 	dpharness.RequireFile(t,
 		filepath.Join(repoRoot, "data-plane", "internal", "auth", "token.go"),
@@ -122,9 +76,6 @@ func TestAuthPassedCounterIncrements(t *testing.T) {
 		filepath.Join(repoRoot, "data-plane", "internal", "controlclient", "client.go"),
 		"controlclient/client.go not implemented yet (T045 client side); "+
 			"needed to consume the WatchEvents stream (advisory; admission is not CP-gated per T090)")
-	dpharness.RequireFile(t,
-		filepath.Join(repoRoot, "data-plane", "internal", "listener", "connect.go"),
-		"listener/connect.go not implemented yet (T043); needed for the HTTP CONNECT framing")
 
 	// Fake upstream in AcceptAndRelay mode: completes the upstream
 	// SOCKS5 handshake, REP=0x00, then echoes. Every payload byte the
@@ -177,21 +128,13 @@ func TestAuthPassedCounterIncrements(t *testing.T) {
 	// run crosses an hour boundary, the adjacent h0+1).
 	h0 := uint64(time.Now().Unix() / 3600)
 
-	// The burst: 50 SOCKS5 + 50 HTTP CONNECT, alternating framings so
-	// both protocol surfaces interleave (i%2 covers each framing
-	// exactly 50 times). Every connection carries its own distinctive
-	// destination / UNAME / payload so a journal-corpus hit pins the
-	// leak to the specific iteration (T025a precedent).
+	// Every SOCKS connection has a distinct destination, partition and payload.
 	capture := &bytes.Buffer{} // every byte read off the tunnel surface
 	for i := 0; i < 2*t025dConnsPerFraming; i++ {
 		dest := fmt.Sprintf("t025d-dest-%03d.example.onion", i)
-		uname := fmt.Sprintf("t025d-uname-%03d", i)
+		uname := refusalIdentity(t025dLoadedToken, "counter-profile", dest)
 		payload := t025dPayload(i)
-		if i%2 == 0 {
-			t025dDriveSocks5Success(t, h, i, dest, uname, t025dLoadedToken, payload, capture)
-		} else {
-			t025dDriveHTTPConnectSuccess(t, h, i, dest, t025dLoadedToken, payload, capture)
-		}
+		t025dDriveSocks5Success(t, h, i, dest, uname, t025dLoadedToken, payload, capture)
 	}
 
 	// Post-burst quiesce (the T025c precedent): byte_count is handed
@@ -213,7 +156,7 @@ func TestAuthPassedCounterIncrements(t *testing.T) {
 		if afterReq != beforeReq+want {
 			t.Fatalf("auth-passed burst moved request_count by %d (baseline "+
 				"%d → %d, want exactly +%d) — FR-008 / data-model.md §3: "+
-				"every SOCKS5 or HTTP CONNECT that passes authentication "+
+				"every SOCKS5 CONNECT that passes authentication "+
 				"MUST increment request_count exactly once",
 				afterReq-beforeReq, beforeReq, afterReq, want)
 		}
@@ -302,7 +245,7 @@ func TestAuthPassedCounterIncrements(t *testing.T) {
 		for i := 0; i < 2*t025dConnsPerFraming; i++ {
 			loginvariants.AssertNoSecrets(t, delta,
 				[]byte(fmt.Sprintf("t025d-dest-%03d.example.onion", i)),
-				[]byte(fmt.Sprintf("t025d-uname-%03d", i)),
+				[]byte(refusalIdentity(t025dLoadedToken, "counter-profile", fmt.Sprintf("t025d-dest-%03d.example.onion", i))),
 				[]byte(fmt.Sprintf("t025d-body-%03d-", i)))
 		}
 		loginvariants.AssertNoSecrets(t, delta, []byte(t025dLoadedToken))
@@ -346,19 +289,6 @@ func t025dDriveSocks5Success(t *testing.T, h *dpharness.Harness, i int,
 			"a failed attempt increments nothing (contracts/socks5-auth.md "+
 			"§\"SOCKS5 request-phase failures (post-auth)\")", i, rep)
 	}
-	t025dExchangePayload(t, conn, i, payload, capture)
-}
-
-// t025dDriveHTTPConnectSuccess opens one authenticated HTTP CONNECT
-// tunnel (openHTTPConnectTunnel asserts the HTTP/1.1 200 Connection
-// Established success shape — the framing's success precondition) and
-// runs the payload exchange.
-func t025dDriveHTTPConnectSuccess(t *testing.T, h *dpharness.Harness, i int,
-	dest, plaintext string, payload []byte, capture *bytes.Buffer) {
-	t.Helper()
-	conn := openHTTPConnectTunnel(t, h, dest, plaintext)
-	defer func() { _ = conn.Close() }()
-	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 	t025dExchangePayload(t, conn, i, payload, capture)
 }
 

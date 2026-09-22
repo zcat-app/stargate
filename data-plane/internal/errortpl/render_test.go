@@ -23,8 +23,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/zcat-app/stargate/data-plane/internal/listener"
 )
 
 // refIDPattern is the §"Response body" LOCAL_REFERENCE_ID shape:
@@ -36,7 +34,7 @@ func renderAuthRequired(t *testing.T) []byte {
 	t.Helper()
 	var buf bytes.Buffer
 	r := &Renderer{}
-	if err := r.WriteFailure(&buf, listener.CodeAuthRequired); err != nil {
+	if err := r.WriteFailure(&buf, CodeAuthRequired); err != nil {
 		t.Fatalf("WriteFailure(AUTH_REQUIRED): %v", err)
 	}
 	return buf.Bytes()
@@ -141,14 +139,13 @@ func TestWriteFailureRefIDIsOnlyVariableBytes(t *testing.T) {
 
 // TestWriteFailureRouteCodesWriteNothing pins the T048/T071 scope
 // boundary: route codes are T071's wire shape; until that lands the
-// renderer writes ZERO bytes (the caller then closes silently —
-// HandleConnect ignores WriteFailure errors by contract) rather than
+// renderer writes ZERO bytes rather than
 // inventing a response outside the contract-review loop.
 func TestWriteFailureRouteCodesWriteNothing(t *testing.T) {
-	for _, code := range []listener.ErrorCode{
-		listener.CodeRouteDown,
-		listener.CodeRouteRefused,
-		listener.CodeRouteTimeout,
+	for _, code := range []ErrorCode{
+		CodeRouteDown,
+		CodeRouteRefused,
+		CodeRouteTimeout,
 	} {
 		var buf bytes.Buffer
 		r := &Renderer{}

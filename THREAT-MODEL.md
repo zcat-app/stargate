@@ -1225,21 +1225,28 @@ forwarded intact and that the bearer/password is not sent upstream. T126/T155 st
 same-target/distinct-partition circuit evidence with credential-fusion controls; synthetic
 username assertions alone cannot establish the whole browser-to-Tor path.
 
-**HTTP CONNECT gap and selected T172 target:** current authenticated HTTP CONNECT
-reaches `Tor.Dial` with no username and negotiates NO_AUTH upstream. Neither profile nor
-initiating site is available; this ingress does not meet the required partition guarantee.
-[T147](specs/001-tor-route/tickets/T147-resolve-connect-isolation-contract.md) recommends
-refusing HTTP CONNECT on Tor port 8881 (zero response bytes, no authentication/counters/upstream)
-and retaining the existing authenticated SOCKS5 contract. This is a reviewed-planning target,
-not a deployed repair: T172 records the normative and consumer target, while T173 owns tests-first
-implementation, coverage migration and deployed refusal evidence. Both block foundation
-closure. Clients without trustworthy first-party context remain unsupported; neither a
-destination-derived identity nor switching to Direct is a migration. The pre-release transition
-requires stopping old admission and restarting the DP, closing old-process tunnels; it
-makes no mixed-version safety claim. Existing bearer credentials, valid auth snapshots,
-fixed route binding and Tor configuration need no schema/config migration. They remain
-usable for SOCKS under normal generation rules, never as HTTP authorization. LAN/VPS
-live outcomes and post-repair browser/circuit evidence remain open.
+**HTTP CONNECT refusal (T173):** the production demux closes unsupported `C` input
+before authentication, counters or an upstream socket. The obsolete HTTP parser and
+`Tor.Dial`/NO_AUTH entry point are removed. The unchanged real-socket regression first
+failed through actual upstream admission and request increments, then passed with
+same-destination site/profile/device SOCKS controls, intact usernames and empty upstream
+passwords. Migrated coverage retains byte integrity, long-lived pipes, CP-outage/advisory
+independence, counters, log/leak invariants and upstream-close behavior.
+
+The [T173 evidence record](specs/001-tor-route/analysis/T173-connect-refusal-evidence.md)
+identifies the tested candidate and distinguishes socket tests from Local deployment proof.
+T172 remains the reviewed contract decision; neither it nor a passing unit suite proves
+real Tor circuit separation. Clients without trustworthy first-party context remain
+unsupported; destination-derived identity and switching to Direct are not migrations.
+Stop old admission and restart DP, closing old-process tunnels; no mixed-version safety
+claim is made. Bearer credentials, valid auth snapshots, fixed route binding and Tor
+configuration need no schema change and remain usable for SOCKS under normal generation
+rules. LAN/VPS and post-repair browser/circuit evidence remain T126/T155 obligations.
+
+The unused future HTTP renderer currently implements only AUTH_REQUIRED. T173 preserves
+its direct format/leak assertions and explicit unsupported-code errors; T071 owns the
+three route renderers with their positive tests in an atomic tests-first change. No HTML
+error response is reachable from Tor port 8881.
 
 Identity-unavailable browser cancellation and no-fallback packets remain T157 rather than being
 inferred from a non-SOCKS descriptor.
