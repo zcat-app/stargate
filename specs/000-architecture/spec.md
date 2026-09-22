@@ -336,7 +336,7 @@ duplicate the wire shape so a future minor cannot drift the two locations.
   authoritative pointer; T038/T045/T050 consume that document verbatim and
   add no wire-shape detail of their own.
 - A handshake failure is a startup error for the control plane and a
-  non-fatal degraded-mode warning for the data plane (it MUST keep
+  non-fatal silent degraded state for the data plane (it MUST keep
   forwarding — Principle II).
 
 ### 5.5 Failure semantics
@@ -434,21 +434,22 @@ CREATE TABLE aggregate_counters (
 
 Replace the per-event journal with completed-hour aggregates under Constitution III.
 Feature 001 fields, categories, retention and migration are specified in its
-`contracts/foundation-boundaries.md`; T152 owns production migration. No actor, token label,
+`contracts/foundation-boundaries.md`; T152 supplies the forward V002 migration, completed-hour writer and runtime suppression. No actor, token label,
 request identifier, per-event timestamp or arbitrary `detail_json` is permitted. Current
 static command errors and health enums are responses, not a retained history.
 
 ### 6.6 `configured_tokens` — manual `tokens.yaml` token records (T092)
 
-```
+```sql
 CREATE TABLE configured_tokens (
-  label          TEXT    NOT NULL PRIMARY KEY,    -- from tokens.yaml (non-empty, §1.1); NOT NULL closes SQLite's TEXT-PK NULL quirk (T100)
-  verifier       BLOB    NOT NULL,                -- 32-byte HMAC-SHA-256 tag under the pepper
-  created_at     INTEGER NOT NULL,                -- unix seconds (audit 'enrolled')
-  last_seen_hour INTEGER,                         -- hour-bucket of last auth pass (Principle III; nullable until first use)
-  revoked_at     INTEGER                          -- nullable; set when label disappears from tokens.yaml (audit 'revoked')
+  label TEXT NOT NULL PRIMARY KEY,
+  verifier BLOB NOT NULL
 );
 ```
+
+T152's V002 migration preserves only current credentials and deletes unnecessary
+creation/revocation/last-seen history. The generation singleton remains unchanged.
+
 
 > Added by T092 / sol-review M1. Manual tokens carry `(label, verifier)`
 > only — no device public key — so they cannot live in `enrolled_devices`

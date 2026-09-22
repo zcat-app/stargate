@@ -22,19 +22,37 @@ compose="compose/docker-compose.local.yml"
 env_file="compose/env/local.env.example"
 render="$(mktemp)" || exit 1
 build_log="$(mktemp)" || exit 1
+startup_db="$(mktemp)" || exit 1
 volumes=()
 cleanup() {
   docker rm -f "${project}-full" "${project}-keys" >/dev/null 2>&1 || true
   if (( ${#volumes[@]} )); then docker volume rm "${volumes[@]}" >/dev/null 2>&1 || true; fi
-  rm -f "$render" "$build_log"
+  rm -f "$render" "$build_log" "$startup_db"
 }
 trap cleanup EXIT INT TERM
 fail() { echo "FAIL: T167 CP mount: $*" >&2; exit 1; }
 app_started() {
   local name="$1" attempt
-  # Match init's 60-second startup allowance and stop early if Java exits.
+  # The startup banner is forbidden by Constitution III. A completed Flyway
+  # migration proves the real Quarkus application reached persistence startup.
+  # Each disposable container uses a distinct DB in its writable fixture mount;
+  # missing auth provisioning may then terminate it, as in the original probe.
   for attempt in {1..120}; do
-    if docker logs "$name" 2>&1 | grep -Fq '__  ____'; then return 0; fi
+    if docker cp "$name:/etc/stargate/keys/$name.db" "$startup_db" >/dev/null 2>&1; then
+      if python3 - "$startup_db" <<'CHECK'
+import sqlite3, sys
+try:
+    with sqlite3.connect('file:' + sys.argv[1] + '?mode=ro', uri=True) as conn:
+        row = conn.execute("SELECT success FROM flyway_schema_history WHERE version='002'").fetchone()
+        sys.exit(0 if row and row[0] else 1)
+except sqlite3.Error:
+    sys.exit(1)
+CHECK
+      then
+        [ -z "$(docker logs "$name" 2>&1)" ] || fail "actual CP launcher exported diagnostics"
+        return 0
+      fi
+    fi
     [ "$(docker inspect -f '{{.State.Running}}' "$name" 2>/dev/null)" = true ] || return 1
     sleep 0.5
   done
@@ -83,15 +101,22 @@ done < <(jq -r '.services["stargate-control"].volumes[] | [.source,.target,(.rea
 [ -n "$keys_mount" ] || fail "effective keys mount unavailable"
 [ -n "$config_physical" ] || fail "effective config mount unavailable"
 
+# Fixture provisioning only: permit the unprivileged CP to create its migration
+# evidence in these disposable keys volumes. No real auth material is mounted.
+docker run --rm --network none --read-only --user 0 --cap-drop ALL --cap-add CHOWN \
+  --security-opt no-new-privileges:true --mount "$keys_mount" --entrypoint sh "$image" \
+  -c 'chown 5101:5100 /etc/stargate/keys' || fail "fixture keys ownership"
+
 # The keys-only control proves this image can launch its actual Java entrypoint
 # with a read-only rootfs; it discriminates the nested mount from image failure.
 keys_result="$(docker run "${base_args[@]}" --mount "$keys_mount" \
+  -e "QUARKUS_DATASOURCE_JDBC_URL=jdbc:sqlite:/etc/stargate/keys/${project}-keys.db" \
   --name "${project}-keys" "$image" 2>&1)"; keys_rc=$?
 [ "$keys_rc" -eq 0 ] || fail "keys-only control did not launch (exit $keys_rc): $keys_result"
 keys_started="$(docker inspect -f '{{.State.StartedAt}}' "${project}-keys")"
 [ "$keys_started" != '0001-01-01T00:00:00Z' ] || fail "keys-only application process never started"
 app_started "${project}-keys" || fail "keys-only CP never reached Quarkus startup"
-echo "T167 keys-only control: Docker start succeeded; Java entrypoint reached ($keys_started)"
+echo "T167 keys-only control: Docker start succeeded; Quarkus migration reached ($keys_started)"
 
 # Reproduce the install-time provisioning against the disposable Compose
 # volume. On the pre-fix tree the helper is absent, leaving the falsifier's
@@ -101,7 +126,8 @@ if declare -F init_control_config_mountpoint >/dev/null; then
   init_control_config_mountpoint "$config_physical" \
     || fail "config volume mountpoint provisioning failed"
 fi
-full_result="$(docker run "${run_args[@]}" --name "${project}-full" "$image" 2>&1)"; full_rc=$?
+full_result="$(docker run "${run_args[@]}" \
+  -e "QUARKUS_DATASOURCE_JDBC_URL=jdbc:sqlite:/etc/stargate/keys/${project}-full.db" --name "${project}-full" "$image" 2>&1)"; full_rc=$?
 if [ "$full_rc" -ne 0 ]; then
   echo "T167 full CP mount exit=$full_rc: $full_result" >&2
   if [ "$full_rc" -eq 125 ] && [[ "$full_result" == *'/etc/stargate/keys'*'read-only file system'* ]]; then
@@ -125,4 +151,4 @@ app_started "${project}-full" || fail "full CP never reached Quarkus startup"
 actual_network="$(docker inspect -f '{{.HostConfig.NetworkMode}}' "${project}-full")"
 [ "$actual_network" = none ] || fail "CP actual network mode is $actual_network"
 declare -F init_control_config_mountpoint >/dev/null || fail "installer has no config mountpoint provisioner"
-echo "OK: T167 full CP mount set started Java entrypoint with actual sources, targets, and modes"
+echo "OK: T167 full CP mount set reached Quarkus migration with actual sources, targets, and modes; no process output"

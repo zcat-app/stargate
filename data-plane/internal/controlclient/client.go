@@ -12,7 +12,7 @@
 //
 // Reconnect policy per §"WatchEvents": exponential backoff, initial 1s,
 // cap 30s, jitter ±20%; a CP that is unreachable or fails the TLS
-// handshake (wire-auth.md §4) is a degraded-mode warning and the DP keeps
+// handshake (wire-auth.md §4) enters degraded state silently and the DP keeps
 // routing (arch §5.4; Principle II) — the loop is never fatal.
 package controlclient
 
@@ -51,11 +51,10 @@ var detailVocabulary = map[string]bool{
 const torSidecar = "tor"
 
 // errDetailViolation marks a stream torn down for an out-of-vocabulary
-// detail: the violation is already journaled at detection, so the Run loop
-// must not double-log it as a degradation.
+// detail. The stream closes without retaining the rejected event.
 var errDetailViolation = errors.New("sidecar event rejected: detail outside closed vocabulary")
 
-// EventSink is the advisory-application seam (T073 wires the audit-journal
+// EventSink is the advisory-application seam (T073 wires the aggregate
 // and status reporting application). The client guarantees the sink only
 // ever sees in-vocabulary tor events; nothing the sink does can gate
 // admission, because nothing in the forwarding path consults it.
@@ -74,7 +73,7 @@ type ClientConfig struct {
 	TLS *tls.Config
 	// Sink receives validated events (advisory only).
 	Sink EventSink
-	// Log is the DP journal logger (slog, no time= field — loginvariants).
+	// Log is retained for caller compatibility; event diagnostics are disabled (III).
 	Log *slog.Logger
 
 	// fastBackoff shrinks the backoff constants for in-process tests.
@@ -89,11 +88,8 @@ type Client struct {
 	conn   *grpc.ClientConn
 	events grpcpb.EventsClient
 	sink   EventSink
-	log    *slog.Logger
 	bo     *backoff
-	// degraded tracks the journal-visible channel state: the degraded-mode
-	// warning fires on the transition in, the recovery line on the first
-	// event after it. Owned by the single Run goroutine — no lock.
+	// Current channel state, owned by the Run goroutine; no history is retained.
 	degraded bool
 }
 
@@ -110,10 +106,6 @@ func NewClient(cfg ClientConfig, jitter func() float64) (*Client, error) {
 	}
 	if cfg.Sink == nil {
 		return nil, errors.New("controlclient: nil event sink")
-	}
-	log := cfg.Log
-	if log == nil {
-		log = slog.Default()
 	}
 	bo := newBackoff(backoffConfig{initial: time.Second, max: 30 * time.Second, jitterPct: 0.2}, jitter)
 	if cfg.fastBackoff {
@@ -135,14 +127,13 @@ func NewClient(cfg ClientConfig, jitter func() float64) (*Client, error) {
 		conn:   conn,
 		events: grpcpb.NewEventsClient(conn),
 		sink:   cfg.Sink,
-		log:    log,
 		bo:     bo,
 	}, nil
 }
 
 // Run consumes event streams until ctx is cancelled. Every stream failure
-// — dial, TLS handshake (wire-auth §4), or mid-stream drop — logs the
-// degraded-mode transition once and retries on the §"WatchEvents" backoff;
+// — dial, TLS handshake (wire-auth §4), or mid-stream drop — retries on
+// the §"WatchEvents" backoff;
 // the DP keeps routing throughout (Principle II): this loop gates nothing.
 func (c *Client) Run(ctx context.Context) {
 	for {
@@ -151,10 +142,7 @@ func (c *Client) Run(ctx context.Context) {
 			return
 		}
 		if !errors.Is(err, errDetailViolation) && !c.degraded {
-			// Transition into degraded mode, journaled once (not per
-			// retry). The error text is transport/TLS detail — never
-			// event or token content.
-			c.log.Warn("control channel degraded", "err", err.Error())
+			// Retain only current advisory state; no transport-error journal (III).
 			c.degraded = true
 		}
 		if !c.wait(ctx) {
@@ -165,7 +153,7 @@ func (c *Client) Run(ctx context.Context) {
 
 // streamOnce runs one WatchEvents stream to completion. A nil error means
 // the stream ended cleanly server-side (io.EOF-shaped); the Run loop
-// treats every error path identically (warn-once, backoff, retry).
+// treats every error path identically (backoff, retry).
 func (c *Client) streamOnce(ctx context.Context) error {
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -188,31 +176,22 @@ func (c *Client) streamOnce(ctx context.Context) error {
 }
 
 // deliver validates and forwards one event. It reports false when the
-// event violates the closed-vocabulary contract: the violation is
-// journaled (without the offending value — Principle III) and the stream
-// is cancelled, which the CP observes as a client-side close.
+// event violates the closed-vocabulary contract: the stream is cancelled,
+// which the CP observes as a client-side close. No journal is emitted (III).
 func (c *Client) deliver(ev *grpcpb.SidecarEvent, cancel context.CancelFunc) bool {
 	if ev.GetSidecar() != torSidecar {
 		// §"WatchEvents": other sidecars belong to later features — ignored.
 		return true
 	}
 	if !detailVocabulary[ev.GetDetail()] {
-		// Contract violation: journal it WITHOUT the detail value (any
-		// encoding — the vocabulary exists to keep sidecar free text out
-		// of this journal), then tear the stream down.
-		c.log.Error("sidecar event rejected", "kind", ev.GetKind().String(),
-			"err", "detail outside closed vocabulary")
+		// Refuse untrusted sidecar detail without retaining or echoing it (III).
 		cancel()
 		return false
 	}
 	if c.degraded {
-		c.log.Info("control channel recovered")
 		c.degraded = false
 	}
-	// Receipt line under the loginvariants sidecar_event class; the detail
-	// field is safe here because the value just passed the closed set.
-	c.log.Info("sidecar event", "sidecar", ev.GetSidecar(),
-		"kind", ev.GetKind().String(), "detail", ev.GetDetail())
+	// Advisory delivery does not authorize persistent lifecycle records (III).
 	c.sink.HandleSidecarEvent(ev)
 	return true
 }

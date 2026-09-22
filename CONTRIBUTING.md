@@ -379,8 +379,9 @@ is `scripts/verify.sh`.
   flag blocking-on-event-loop as a Major finding.
 - Persistence uses Hibernate Panache; migrations go through Flyway. Do
   not write raw `Statement` SQL outside migration scripts.
-- Log at `INFO` for admin actions, `DEBUG` for control-plane internals;
-  **never** log per-request data — that would violate Principle III.
+- Operational events contribute only to completed-hour aggregates (Principle III).
+  Runtime diagnostic stdout/stderr, framework logging and crash dumps are suppressed;
+  debug mode cannot enable a persistent administrative or request journal.
 
 ### Browser extension (JavaScript / TypeScript)
 

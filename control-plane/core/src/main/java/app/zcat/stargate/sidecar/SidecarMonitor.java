@@ -7,7 +7,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.function.LongSupplier;
 
-import org.jboss.logging.Logger;
 
 /**
  * Advisory Tor health-to-event reducer. T138 forbids treating an unavailable
@@ -16,7 +15,6 @@ import org.jboss.logging.Logger;
  */
 public final class SidecarMonitor implements AutoCloseable {
 
-    private static final Logger LOG = Logger.getLogger(SidecarMonitor.class);
 
     public static final String SIDECAR_TOR = "tor";
     public static final String DETAIL_CONTAINER_START = "container_start";
@@ -111,7 +109,7 @@ public final class SidecarMonitor implements AutoCloseable {
             try {
                 audit.write(ACTION_SIDECAR_UNHEALTHY, SIDECAR_TOR, "{\"kind\":\"UNHEALTHY\"}");
             } catch (RuntimeException failure) {
-                LOG.warn("sidecar tor: health audit sink unavailable");
+                // Preserve advisory availability without a diagnostic journal (II/III).
             }
         }
         previous = current;
@@ -121,7 +119,7 @@ public final class SidecarMonitor implements AutoCloseable {
                         "{\"generation\":" + generation.getAsLong() + "}");
                 pendingHealthyAudit = false;
             } catch (RuntimeException failure) {
-                LOG.warn("sidecar tor: health audit sink unavailable");
+                // Preserve advisory availability without a diagnostic journal (II/III).
             }
         }
     }
@@ -130,7 +128,7 @@ public final class SidecarMonitor implements AutoCloseable {
         try {
             events.publish(new Event(Instant.now(), SIDECAR_TOR, kind, detail));
         } catch (RuntimeException failure) {
-            LOG.warn("sidecar tor: event sink unavailable");
+                // Preserve advisory availability without a diagnostic journal (II/III).
         }
     }
 

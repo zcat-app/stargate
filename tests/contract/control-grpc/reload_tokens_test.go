@@ -210,9 +210,6 @@ func TestReloadTokens(t *testing.T) {
 		h.requireAuth(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1", true, "the new generation must be live despite the failed persist")
 		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", false, "the replaced generation must be gone despite the failed persist")
 
-		if !h.journalContains("snapshot") {
-			t.Error("journal has no snapshot-write-failure line — contract row 4 requires the failure to be journaled (a line class T025a's allowlist reserves)")
-		}
 		// Atomic write via os.Rename (data-model.md §1.4): a failed write
 		// must leave the previous snapshot intact, not truncated.
 		if got := h.readSnapshot(t).Generation; got != 1 {

@@ -123,8 +123,8 @@ func TestTorrcInvariants(t *testing.T) {
 				"CookieAuthFileGroupReadable "+strings.Join(args, " "))
 		}
 		if _, ok := directives["CookieAuthentication"]; !ok {
-			t.Errorf("CookieAuthFileGroupReadable present but "+
-				"CookieAuthentication absent — contracts/torrc.md invariant "+
+			t.Errorf("CookieAuthFileGroupReadable present but " +
+				"CookieAuthentication absent — contracts/torrc.md invariant " +
 				"#4 requires them together")
 		}
 	})
@@ -176,26 +176,23 @@ func TestTorrcInvariants(t *testing.T) {
 				"UseBridges "+strings.Join(args, " "))
 		}
 		if _, present := directives["Bridge"]; present {
-			t.Errorf("a Bridge directive line is present in wantTorrc — "+
-				"contracts/torrc.md invariant #7 forbids any Bridge line "+
-				"(privacy-load-bearing: a stray Bridge line routes traffic "+
+			t.Errorf("a Bridge directive line is present in wantTorrc — " +
+				"contracts/torrc.md invariant #7 forbids any Bridge line " +
+				"(privacy-load-bearing: a stray Bridge line routes traffic " +
 				"outside the v1 threat model)")
 		}
 	})
 
-	// Row 8 — Log notice stdout AND SafeLogging 1.
-	t.Run("Log_notice_stdout_and_SafeLogging_1", func(t *testing.T) {
+	// Row 8 — Log notice file /dev/null AND SafeLogging 1.
+	t.Run("Log_discard_and_SafeLogging_1", func(t *testing.T) {
 		logArgs, ok := directives["Log"]
 		if !ok {
 			t.Fatal("no Log directive line in wantTorrc — " +
-				"contracts/torrc.md invariant #8 requires Log notice stdout")
+				"contracts/torrc.md invariant #8 requires Log notice file /dev/null")
 		}
 		joined := strings.Join(logArgs, " ")
-		if !containsToken(joined, "notice") || !containsToken(joined, "stdout") {
-			t.Errorf("Log line %q is not `notice stdout` — "+
-				"contracts/torrc.md invariant #8 (Notice level is "+
-				"sufficient for the healthcheck's Bootstrapped 100%% probe)",
-				"Log "+joined)
+		if joined != "notice file /dev/null" {
+			t.Error("Tor diagnostic output must be discarded before retention (Constitution III)")
 		}
 		slArgs, ok := directives["SafeLogging"]
 		if !ok {
@@ -281,11 +278,11 @@ func TestTorrcInvariants(t *testing.T) {
 	// invariant rather than as a byte-offset diff.
 	t.Run("single_trailing_LF_no_CR", func(t *testing.T) {
 		if !strings.HasSuffix(wantTorrc, "\n") {
-			t.Errorf("wantTorrc does not end with a trailing \\n — "+
+			t.Errorf("wantTorrc does not end with a trailing \\n — " +
 				"contracts/torrc.md invariant #13 (no missing newline at EOF)")
 		}
 		if strings.HasSuffix(wantTorrc, "\n\n") {
-			t.Errorf("wantTorrc ends with two+ newlines — "+
+			t.Errorf("wantTorrc ends with two+ newlines — " +
 				"contracts/torrc.md invariant #13 requires exactly ONE " +
 				"trailing newline")
 		}
@@ -363,11 +360,11 @@ func containsToken(s, token string) bool {
 //   - email:        `local@host` with a dotted host tail
 //   - ipv4:         four dot-separated 0–255 octets, not bounded by other dots/digits
 //   - ipv6:         3–8 colon-separated hex groups; does NOT match `::`-compressed
-//                   forms (`::1`, `fe80::1`) — the current v1 golden has no IPv6
-//                   in comments, and matching compressed forms reliably requires
-//                   a much fuzzier pattern with higher false-positive risk. If a
-//                   future contract edit introduces IPv6 literals in comments,
-//                   widen this branch (and add a golden fixture) at that time.
+//     forms (`::1`, `fe80::1`) — the current v1 golden has no IPv6
+//     in comments, and matching compressed forms reliably requires
+//     a much fuzzier pattern with higher false-positive risk. If a
+//     future contract edit introduces IPv6 literals in comments,
+//     widen this branch (and add a golden fixture) at that time.
 //   - domain TLD:   a hostname followed by a common TLD from a small allowlist
 //   - secret key:   `token=`, `label=`, `user=`, `key=`, `secret=` (case-insensitive)
 //

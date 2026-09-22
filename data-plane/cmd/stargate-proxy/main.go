@@ -26,13 +26,14 @@ package main
 import (
 	"context"
 	"errors"
+	"golang.org/x/sys/unix"
+	"io"
 	"log/slog"
 	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"google.golang.org/grpc"
@@ -60,7 +61,24 @@ const (
 // process harness allows 3 s between SIGINT and SIGKILL.
 const gracefulStopGrace = 2 * time.Second
 
-func main() { os.Exit(run()) }
+func main() {
+	// Constitution III: close the diagnostic boundary before keys/config/network work.
+	// Raw runtime and dependency stderr must not become a container event journal.
+	fd, err := unix.Open(os.DevNull, unix.O_WRONLY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		os.Exit(1)
+	}
+	if unix.Dup2(fd, 1) != nil || unix.Dup2(fd, 2) != nil {
+		os.Exit(1)
+	}
+	// A launcher may have closed a standard descriptor; keep the replacement
+	// open in that case so later private files cannot occupy stdout/stderr.
+	if fd > 2 {
+		_ = unix.Close(fd)
+	}
+
+	os.Exit(run())
+}
 
 func run() int { return runWithCounters(audit.New) }
 
@@ -75,17 +93,8 @@ func trafficCountersEnabled(raw string) (bool, error) {
 }
 
 func runWithCounters(newCounters func() *audit.Counters) int {
-	// The DP journal (loginvariants): slog TextHandler on stderr with the
-	// time= attribute stripped — every line must stay inside the fixed
-	// line-class allowlist at ≥1h timestamp resolution (FR-008; arch §6.4).
-	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-			if len(groups) == 0 && a.Key == slog.TimeKey {
-				return slog.Attr{}
-			}
-			return a
-		},
-	}))
+	// Constitution III: the compatibility logger cannot retain event records.
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 
 	counterOption, configured := os.LookupEnv("STARGATE_TRAFFIC_COUNTERS")
 	if !configured {
@@ -93,11 +102,10 @@ func runWithCounters(newCounters func() *audit.Counters) int {
 	}
 	countersEnabled, err := trafficCountersEnabled(counterOption)
 	if err != nil {
-		log.Error("shutdown", "reason", err.Error())
 		return 1
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, unix.SIGTERM)
 	defer stop()
 
 	// --- (1) bind safety FIRST (FR-010): no listener exists
@@ -110,13 +118,9 @@ func runWithCounters(newCounters func() *audit.Counters) int {
 	listenAddr := envOr("STARGATE_LISTEN_ADDR", defaultListenAddr)
 	bindHost, _, err := net.SplitHostPort(listenAddr)
 	if err != nil {
-		log.Error("shutdown", "reason", "listen address "+listenAddr+": "+err.Error())
 		return 1
 	}
 	if err := bind.CheckListener(bindHost); err != nil {
-		// The startup class vocabulary has no fatal-boot line; the shutdown
-		// class (reason field) is the journal-visible exit record.
-		log.Error("shutdown", "reason", err.Error())
 		return 1
 	}
 
@@ -125,19 +129,16 @@ func runWithCounters(newCounters func() *audit.Counters) int {
 	// can expose connection paths outside older Landlock TCP mediation.
 	upstream := envOr("STARGATE_TOR_SOCKS_ADDR", defaultTorSOCKS)
 	if !strings.HasPrefix(upstream, "unix://") || !filepath.IsAbs(strings.TrimPrefix(upstream, "unix://")) || strings.ContainsRune(upstream, 0) {
-		log.Error("shutdown", "reason", "invalid Unix adapter configuration")
 		return 1
 	}
 	lc := net.ListenConfig{}
 	lc.SetMultipathTCP(false)
 	proxyLis, err := lc.Listen(ctx, "tcp", listenAddr)
 	if err != nil {
-		log.Error("shutdown", "reason", "listener unavailable")
 		return 1
 	}
 	defer proxyLis.Close()
 	if err := confinement.Apply(proxyLis.(*net.TCPListener)); err != nil {
-		log.Error("shutdown", "reason", "network confinement unavailable")
 		return 1
 	}
 
@@ -154,13 +155,11 @@ func runWithCounters(newCounters func() *audit.Counters) int {
 	stateDir := envOr("STARGATE_STATE_DIR", defaultStateDir)
 	controlclient.RestoreSnapshot(stateDir, store, log)
 
-	// Pepper: a wrong-length file is a corrupt install and fails loudly
-	// here (data-model.md §1.5/§1.7) — a silent boot would authenticate
-	// nothing forever.
+	// A wrong-length pepper fails startup (data-model.md §1.5/§1.7).
+	// Continuing would authenticate nothing forever.
 	keysDir := envOr("STARGATE_KEYS_DIR", auth.DefaultKeysDir)
 	pepper, err := auth.LoadPepper(keysDir)
 	if err != nil {
-		log.Error("shutdown", "reason", err.Error())
 		return 1
 	}
 
@@ -172,13 +171,7 @@ func runWithCounters(newCounters func() *audit.Counters) int {
 	// control.sock dialer below, the SERVER config for dp.sock. The
 	// pre-T130 wiring discarded the server half, so dp.sock served
 	// PLAINTEXT and the CP's mutual-TLS dial failed every push.
-	clientTLS, serverTLS, tlsErr := controlclient.DeriveDPTLS(keysDir)
-	if tlsErr != nil {
-		// The control_channel class's degraded line — the same vocabulary
-		// client.go journals on runtime channel loss. The error text is
-		// path/fs detail, never key material (Principle III).
-		log.Warn("control channel degraded", "err", tlsErr.Error())
-	}
+	clientTLS, serverTLS, _ := controlclient.DeriveDPTLS(keysDir)
 
 	ipcDir := envOr("STARGATE_IPC_DIR", defaultIPCDir)
 
@@ -200,23 +193,15 @@ func runWithCounters(newCounters func() *audit.Counters) int {
 	if serverTLS != nil {
 		sockLis, err := controlclient.Listen(ipcDir)
 		if err != nil {
-			log.Error("shutdown", "reason", err.Error())
 			return 1
 		}
 		ctl := controlclient.NewServer(store,
 			controlclient.SnapshotWriter(stateDir, log), counters.Snapshot, log)
 		grpcSrv, err = controlclient.NewGRPCServer(ctl, serverTLS)
 		if err != nil {
-			log.Error("shutdown", "reason", err.Error())
 			return 1
 		}
 		go func() { _ = grpcSrv.Serve(sockLis) }() // returns on GracefulStop/Stop
-	} else {
-		// FR-008 journal vocabulary: folds into the existing
-		// control_channel class (six-class allowlist — a new class is a
-		// Constitution-level change; T045's allowlist-amendment
-		// precedent, T130 round-1 review).
-		log.Warn("control channel degraded", "err", "dp.sock not served: no inter-plane TLS material (wire-auth.md §2.2 degraded mode; T130)")
 	}
 
 	// --- (5) control-plane client (T045): concurrent, advisory, never
@@ -230,9 +215,7 @@ func runWithCounters(newCounters func() *audit.Counters) int {
 			Sink:          sink,
 			Log:           log,
 		}, nil)
-		if err != nil {
-			log.Warn("control channel degraded", "err", err.Error())
-		} else {
+		if err == nil {
 			go client.Run(ctx)
 		}
 	}
@@ -244,8 +227,6 @@ func runWithCounters(newCounters func() *audit.Counters) int {
 		Forward: forwarder,
 		Audit:   counters,
 	}
-
-	log.Info("startup", "listener", proxyLis.Addr().String())
 
 	// --- (7) accept loop: forwarding begins with the first connection and
 	// is gated on nothing — no SidecarEvent, no CP dial, no channel state
@@ -268,20 +249,16 @@ func runWithCounters(newCounters func() *audit.Counters) int {
 		// Shutdown (SIGINT/SIGTERM): stop the signal notifications, tear
 		// the inter-plane server down gracefully (bounded — a wedged
 		// RPC must not hang the exit past the supervisor's grace), close
-		// the proxy listener so the accept loop unblocks, and journal the
-		// shutdown line.
+		// the proxy listener so the accept loop unblocks.
 		stop()
-	case err := <-acceptErr:
-		// The proxy listener died on its own — routing is down; journal
-		// and exit non-zero rather than spin.
-		log.Error("shutdown", "reason", err.Error())
+	case <-acceptErr:
+		// The proxy listener died on its own; exit non-zero rather than spin.
 		grpcGracefulStop(grpcSrv)
 		return 1
 	}
 
 	grpcGracefulStop(grpcSrv)
 	_ = proxyLis.Close()
-	log.Info("shutdown", "reason", "signal")
 	return 0
 }
 
@@ -302,9 +279,8 @@ func grpcGracefulStop(srv *grpc.Server) {
 }
 
 // advisorySink is the T050 placeholder for T073's advisory-event
-// application: the client journals every validated event's receipt
-// (sidecar_event class) and nothing in the forwarding path consults the
-// sink, so a no-op cannot gate admission (Principle II).
+// application. Nothing in the forwarding path consults the sink, so a
+// no-op cannot gate admission (Principle II).
 type advisorySink struct{}
 
 func (advisorySink) HandleSidecarEvent(*grpcpb.SidecarEvent) {}

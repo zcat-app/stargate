@@ -8,7 +8,7 @@
 // leaves the previous file intact). The process-level tiers are T020
 // (tests/contract/control-grpc/reload_tokens_test.go, whose harness reads
 // this exact file shape) and T020a (cold-start restore end-to-end, gated on
-// T050's boot sequence). The allowlist conformance of the emitted journal
+// T050's boot sequence). The silence of the process journal
 // lines is pinned where the allowlist lives:
 // tests/internal/loginvariants (separate module — the dependency arrow
 // must not invert).
@@ -60,8 +60,8 @@ func testGeneration(n uint64, count int) *auth.Generation {
 	return g
 }
 
-// journalLogger captures slog TextHandler output the way the DP journal
-// does in production (no time= — the same shape loginvariants scans).
+// journalLogger supplies a writable capture to prove operations stay silent
+// independently of production descriptor suppression.
 func journalLogger() (*slog.Logger, *bytes.Buffer) {
 	buf := &bytes.Buffer{}
 	return slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{ReplaceAttr: dropTime})), buf
@@ -271,8 +271,8 @@ func TestRestoreSnapshotInstallsGeneration(t *testing.T) {
 	if verifier.VerifyPassword([]byte("ffffffffffffffffffffffffffffffff")) {
 		t.Error("unrelated token authenticated after restore")
 	}
-	if !strings.Contains(buf.String(), "snapshot restored") {
-		t.Errorf("journal has no restore line; journal:\n%s", buf.String())
+	if buf.Len() != 0 {
+		t.Error("operational action emitted a journal record")
 	}
 }
 
@@ -315,8 +315,8 @@ func TestRestoreSnapshotIgnoresStaleV1(t *testing.T) {
 		t.Errorf("stale v1 snapshot was restored (%d / %d verifiers) — must be ignored, serving no tokens until the CP pushes",
 			got.Generation, len(got.Verifiers))
 	}
-	if !strings.Contains(buf.String(), "snapshot restore ignored") {
-		t.Errorf("v1 ignore carried no journal warning (§1.4 requires one); journal:\n%s", buf.String())
+	if buf.Len() != 0 {
+		t.Error("operational action emitted a journal record")
 	}
 }
 
@@ -344,8 +344,8 @@ func TestRestoreSnapshotIgnoresUnusableV2(t *testing.T) {
 				t.Errorf("unusable snapshot was restored (%d / %d verifiers) — serve no tokens instead of a partial trust state",
 					got.Generation, len(got.Verifiers))
 			}
-			if !strings.Contains(buf.String(), "snapshot restore ignored") {
-				t.Errorf("unusable snapshot carried no journal warning; journal:\n%s", buf.String())
+			if buf.Len() != 0 {
+				t.Error("operational action emitted a journal record")
 			}
 		})
 	}
@@ -381,7 +381,22 @@ func TestSnapshotWriterSeamConformsToServerContract(t *testing.T) {
 	if m := readMirror(t, dir); m.Generation != 7 {
 		t.Errorf("seam-written generation = %d, want 7", m.Generation)
 	}
-	if !strings.Contains(buf.String(), "snapshot written") {
-		t.Errorf("seam emitted no success journal line (loginvariants snapshot_write class); journal:\n%s", buf.String())
+	if buf.Len() != 0 {
+		t.Error("operational action emitted a journal record")
+	}
+}
+
+// Constitution III: even credential-state maintenance is not an event journal.
+func TestOperationalSnapshotWritesAreSilent(t *testing.T) {
+	dir := t.TempDir()
+	logger, out := journalLogger()
+	if err := SnapshotWriter(dir, logger)(testGeneration(8675309, 1)); err != nil {
+		t.Fatal(err)
+	}
+	if readMirror(t, dir).Generation != 8675309 {
+		t.Fatal("snapshot positive control failed")
+	}
+	if out.Len() != 0 {
+		t.Fatal("snapshot operation emitted a persistent diagnostic event")
 	}
 }

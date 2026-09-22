@@ -2,6 +2,8 @@
 # Copyright 2026 The Stargate Authors
 # SPDX-License-Identifier: Apache-2.0
 
+# Suppress shell startup errors and Tor diagnostics before any private state is read (III).
+exec >/dev/null 2>&1
 set -eu
 
 # T162 / Constitution III: Tor requires its native socket directory to be

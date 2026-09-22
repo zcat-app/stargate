@@ -100,23 +100,18 @@ public final class TokenLoaderContract {
     }
 
     /**
-     * Append-only audit port (data-model.md §4; arch §6.5). Matches the
-     * {@code write(action, target, detailJson)} shape tasks.md T036 pins
-     * for {@code AuditLogService}; the sink derives {@code actor}
-     * ({@code tokens.yaml} for the three token actions) from the action.
-     * {@code detail_json} is the fixed §4 vocabulary — never free text,
-     * never token bytes (§1.6).
+     * Operational-count port (data-model §4). The legacy argument shape is kept
+     * for source compatibility: production ignores target/detail immediately and
+     * retains only fixed-category counts after transaction commit and hour closure.
+     * Neither these arguments nor exceptions authorize per-event logging (III).
      */
     public interface AuditSink {
-
-        /** One audit row. Actions: {@code enrolled}, {@code revoked},
-         *  {@code config_error} (§4). */
         void write(String action, String target, String detailJson);
     }
 
     /**
-     * One persisted manual-token row (data-model.md §1.9): the audit-log
-     * key plus its 32-byte verifier under the install-time pepper (§1.5).
+     * One persisted manual-token row (data-model.md §1.9): the current
+     * configuration label plus its 32-byte verifier under the install-time pepper (§1.5).
      */
     public record StoredToken(String label, byte[] verifier) {
     }

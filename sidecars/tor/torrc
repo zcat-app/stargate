@@ -11,7 +11,7 @@ ClientUseIPv6 0
 AvoidDiskWrites 1
 UseBridges 0
 
-# Logging — Notice level to stdout for healthcheck parsing only.
-# Stargate does NOT consume Tor log lines as request data.
-Log notice stdout
+# Logging — diagnostics are discarded before retention (Constitution III).
+# Current health comes from the authenticated observer, not retained log lines.
+Log notice file /dev/null
 SafeLogging 1

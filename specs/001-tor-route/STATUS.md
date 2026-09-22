@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 45 |
+| pending | 44 |
 | in-progress | 1 |
-| in-review | 3 |
+| in-review | 4 |
 | escalated | 0 |
 | done | 151 |
 | deferred | 5 |
@@ -40,7 +40,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T146 | Correct init timeout diagnosis and isolate its fixture | Foundation audit remediation |  |  |
 | T150 | Define truthful mixed-tab route indicator semantics | Foundation audit remediation | ✓ |  |
 | T151 | Name the actual WebRTC remediation preference | Foundation audit remediation | ✓ |  |
-| T152 | Replace detailed operational journals with hourly aggregates | Foundation audit remediation | ✓ |  |
 | T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
@@ -54,6 +53,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T143 | Retire obsolete Java token-verifier constants | in-review | ✓ | Foundation audit remediation |
 | T148 | Reconcile peer certificate validity policy | in-progress | ✓ | Foundation audit remediation |
 | T149 | Finalize byte accounting after both forwarding pumps | in-review | ✓ | Foundation audit remediation |
+| T152 | Replace detailed operational journals with hourly aggregates | in-review | ✓ | Foundation audit remediation |
 | T158 | Publish only finalized aggregate counter buckets | in-review | ✓ | Foundation audit remediation |
 
 ---

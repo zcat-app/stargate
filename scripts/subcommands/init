@@ -96,7 +96,7 @@ esac
 
 # Services init waits on (mirrors compose/docker-compose.local.yml). The
 # health loop resolves each by `compose ps -q <service>` (B1: never guessed).
-SERVICES=(stargate-dp stargate-control tor)
+SERVICES=(stargate-dp stargate-control tor tor-observer)
 
 EXIT_PREFLIGHT=10
 EXIT_KEYGEN=20
@@ -535,24 +535,22 @@ build_observer_image() {
 # ---- 4. COMPOSE UP (arch §9.1 step 4) --------------------------------------
 # One authoritative compose command (project name + compose file + env file)
 # via compose_run (T088/B1). Bounded healthcheck wait; on timeout exit 40 and
-# LEAVE CONTAINERS UP (arch §9.2) so the operator can inspect `docker logs`.
+# LEAVE CONTAINERS UP (arch §9.2) for inspection of current state.
 # init never tears the stack down on failure (no destructive teardown on the
 # healthcheck-timeout path).
 compose_up() {
   note "building + starting stack (project $STARGATE_PROJECT, $STARGATE_COMPOSE_FILE)..."
   if ! compose_run up -d --build >/dev/null 2>&1; then
-    note "docker compose up failed (see logs)."
+    note "docker compose up failed."
     return "$EXIT_COMPOSE"
   fi
   return 0
 }
 
 # ---- 5. HEALTHCHECK WAIT (arch §9.1 step 4; arch §9.2 on timeout) ----------
-# Health discovery via `compose ps -q <service>` against the project — never
-# guessed container names like `<project>-stargate-dp-1` (B1). A "no
-# healthcheck defined" container is accepted as healthy once State.Running is
-# true (mirrors the T016 heuristic; real healthcheck: blocks are a separate
-# ticket).
+# Process discovery uses Compose service IDs. Running proves only process
+# presence; init also requires the observer's current authenticated Tor query.
+# No Docker health-probe history is enabled (Constitution III / T152).
 wait_healthy() {
   local deadline=$(( $(date +%s) + STARGATE_HEALTHCHECK_TIMEOUT ))
   note "waiting up to ${STARGATE_HEALTHCHECK_TIMEOUT}s for services to be healthy..."
@@ -569,12 +567,16 @@ wait_healthy() {
         *) all_ok=false ;;
       esac
     done
-    "$all_ok" && return 0
+    # -T disables the terminal, not stdin; a one-shot query must not consume caller input.
+    if "$all_ok" && compose_run exec -T tor-observer \
+        /opt/stargate/tor-observer --check-ready </dev/null >/dev/null 2>&1; then
+      return 0
+    fi
     sleep 2
   done
   note "healthcheck timeout — services did not all report healthy within ${STARGATE_HEALTHCHECK_TIMEOUT}s."
   note "Containers have been LEFT UP (arch §9.2) — inspect with:"
-  note "  $(compose_cmd) logs"
+  note "  $(compose_cmd) ps"
   return "$EXIT_HEALTHCHECK"
 }
 
@@ -647,8 +649,8 @@ print_status() {
   printf '  %-18s %-10s %-12s %s\n' "data plane"   "HEALTHY" "127.0.0.1" "proxy 8881 (Tor route)"
   printf '  %-18s %-10s %-12s %s\n' "control plane" "HEALTHY" "127.0.0.1" "gRPC control.sock"
   printf '  %-18s %-10s %-12s %s\n' "Tor sidecar"  "HEALTHY" "internal"  "SOCKS5 over DP-only UDS"
-  # Running alone does not prove Tor bootstrap or an authenticated sample.
-  printf '  %-18s %-10s %-12s %s\n' "Tor observer" "RUNNING" "internal" "authenticated advisory health"
+  # The bounded wait above required an authenticated current Tor sample.
+  printf '  %-18s %-10s %-12s %s\n' "Tor observer" "READY" "internal" "authenticated current Tor bootstrap"
   printf '\n'
   printf 'Admin enrollment: not yet implemented (deferred to the admin-UI feature).\n'
 }
@@ -672,7 +674,6 @@ generate_keys; rc=$?
 if host_boundary_required; then
   build_observer_image; rc=$?
   [ "$rc" -eq 0 ] || exit "$rc"
-  SERVICES+=(tor-observer)
 fi
 
 compose_up; rc=$?

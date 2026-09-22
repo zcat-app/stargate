@@ -5,7 +5,6 @@ package app.zcat.stargate.runtime;
 
 import java.util.List;
 
-import org.jboss.logging.Logger;
 
 import com.google.protobuf.ByteString;
 
@@ -25,7 +24,7 @@ import stargate.v1.ControlOuterClass.TokenVerifier;
  * <p><strong>Transport containment (§1.8 durability).</strong> A push that
  * cannot reach the data plane (UNAVAILABLE, deadline — e.g. the DP booted
  * after the CP; compose pins no CP→DP ordering) is contained HERE, not by a
- * crash-loop: the adapter logs the failure class and returns a non-stale
+ * crash-loop: the adapter returns a non-stale
  * result. The generation is already recorded when the loader pushes (§1.7
  * write order: store → generation → push), the DP keeps its last-known
  * verifier list and keeps serving port 8881 (Principle II), and the next
@@ -35,8 +34,6 @@ import stargate.v1.ControlOuterClass.TokenVerifier;
  * runs.
  */
 public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChannel {
-
-    private static final Logger LOG = Logger.getLogger(GrpcReloadChannel.class);
 
     private final ReloadTokensClient client;
 
@@ -49,11 +46,7 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
         try {
             return toPushResult(client.reload(generation, toVerifiers(verifiers)));
         } catch (StatusRuntimeException transport) {
-            // The transport exception's message is gRPC's own (status name +
-            // cause class) — it never carries request payload bytes.
-            LOG.warnf("ReloadTokens generation %d not delivered (%s) — the data plane keeps its "
-                    + "last-known verifier list; the next boot re-syncs (§1.8, Principle II)",
-                    generation, transport.getMessage());
+            // Preserve existing containment without a diagnostic journal (II/III).
             return new TokenLoaderContract.PushResult(false, generation);
         }
     }

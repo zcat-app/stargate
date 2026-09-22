@@ -97,13 +97,13 @@ expected="docker compose -p $STARGATE_PROJECT -f $STARGATE_COMPOSE_FILE --env-fi
 # ---- DAEMON-BACKED assertions: run real init against the fixture ----------
 # Helper: run the REAL dispatcher/init under a project, with the fixture.
 run_init() {
-  local project="$1"
+  local project="$1" readiness_timeout="${2:-40}"
   STARGATE_PROJECT="$project" \
   STARGATE_COMPOSE_FILE="$FIXTURE" \
   STARGATE_ENV_DIR="$TMP" \
   STARGATE_ENV_EXAMPLE="$FIXTURE-env-example-missing" \
   STARGATE_ENV_FILE="$TMP/$project.env" \
-  STARGATE_HEALTHCHECK_TIMEOUT=40 \
+  STARGATE_HEALTHCHECK_TIMEOUT="$readiness_timeout" \
     bash "$DISPATCHER" init
 }
 
@@ -270,6 +270,21 @@ out="$(run_init "$PROJ_A" 2>&1)"; rc=$?
   || bail "upgrade rotated pepper.key"
 [ "$(vol_sha "$observer_keys_a" observer.priv)" != "$observer_priv_a" ] \
   || bail "upgrade reused deleted observer private key"
+
+# T152: with running/no-health containers and the real DP fixture listener
+# accepting TCP, current NOT_READY/UNAVAILABLE must still prevent init success.
+STARGATE_PROJECT="$PROJ_A"; STARGATE_COMPOSE_FILE="$FIXTURE"; STARGATE_ENV_FILE="$TMP/$PROJ_A.env"; STARGATE_ENV_DIR="$TMP"
+observer_cid="$(compose_health_ids tor-observer)"
+[ -n "$observer_cid" ] || bail "T152 observer fixture absent"
+for current_rc in 1 2; do
+  docker exec "$observer_cid" sh -c 'printf "#!/bin/sh\nexit %s\n" "$1" > /opt/stargate/tor-observer' sh "$current_rc" \
+    || bail "T152 could not set current readiness fixture"
+  [ "$(docker inspect -f '{{.State.Running}}:{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$observer_cid")" = true:none ] \
+    || bail "T152 running/no-health precondition"
+  (exec 3<>/dev/tcp/127.0.0.1/8881) 2>/dev/null || bail "T152 DP TCP positive control"
+  out="$(run_init "$PROJ_A" 1 2>&1)"; rc=$?
+  [ "$rc" -eq 40 ] || bail "T152 current readiness exit $current_rc allowed init exit $rc, expected 40"
+done
 
 # --- Project isolation (B1): a second project is fully distinct -----------
 # Tear A down first (frees 127.0.0.1:8881 so B's stargate-dp can bind it; the

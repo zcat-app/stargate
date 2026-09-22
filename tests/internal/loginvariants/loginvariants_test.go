@@ -74,199 +74,14 @@ func (f *fakeReporter) Errorf(format string, args ...any) {
 	fmt.Fprintf(&f.errors, format+"\n", args...)
 }
 
-// TestAllowedLineClasses_AcceptsEachClass asserts each line of the
-// clean-journal fixture matches exactly one allowlist class. A line
-// matching zero classes is a false-negative (allowlist too tight); a
-// line matching two-or-more is a false-positive overlap (allowlist
-// patterns too broad). Either is a regression.
-func TestAllowedLineClasses_AcceptsEachClass(t *testing.T) {
-	for i, line := range strings.Split(cleanJournalFixture, "\n") {
-		matches := 0
-		firstMatch := ""
-		for _, c := range AllowedLineClasses {
-			if c.Pattern.MatchString(line) {
-				matches++
-				if firstMatch == "" {
-					firstMatch = c.Name
-				}
-			}
-		}
-		switch matches {
-		case 0:
-			t.Errorf("line %d %q matched zero allowlist classes — "+
-				"either the DP-emitted line shape drifted or the "+
-				"allowlist is too tight", i, line)
-		case 1:
-			// expected
-		default:
-			t.Errorf("line %d %q matched %d allowlist classes "+
-				"(%s first) — patterns overlap; tighten the looser "+
-				"one so each line class has exactly one home",
-				i, line, matches, firstMatch)
-		}
+func TestOnlyEmptyOperationalJournalIsAccepted(t *testing.T) {
+	var reporter fakeReporter
+	AssertOnlyAllowedLines(&reporter, "\n\r\n")
+	if reporter.failed {
+		t.Fatal("empty output rejected")
 	}
 }
 
-// TestAllowedLineClasses_AcceptsBareAndQuotedShapes pins the slog
-// TextHandler shape tolerance: every msg= value MUST match whether
-// the logger emits it bare (msg=startup) or quoted
-// (msg="startup"). This is what makes the allowlist robust to a
-// logger-config change without requiring an edit.
-// The trailing field is the class's own permitted field (T101 acceptance
-// #2 rejects extra fields), keeping this a positive control.
-func TestAllowedLineClasses_AcceptsBareAndQuotedShapes(t *testing.T) {
-	pairs := []struct {
-		bare      string
-		quoted    string
-		class     string
-		allowedKV string
-	}{
-		{`msg=startup`, `msg="startup"`, "startup", "listener=127.0.0.1:8881"},
-		{`msg=shutdown`, `msg="shutdown"`, "shutdown", "reason=signal"},
-	}
-	for _, p := range pairs {
-		for _, shape := range []string{p.bare, p.quoted} {
-			line := "level=info " + shape + " " + p.allowedKV
-			matched := false
-			for _, c := range AllowedLineClasses {
-				if c.Name == p.class && c.Pattern.MatchString(line) {
-					matched = true
-				}
-			}
-			if !matched {
-				t.Errorf("%s class did not match %q — every msg= value "+
-					"must accept both bare and quoted slog TextHandler "+
-					"shapes (a logger-config change must not require an "+
-					"allowlist edit)", p.class, line)
-			}
-		}
-	}
-}
-
-// TestAllowedLineClasses_RejectsPerRequestNoise asserts the
-// allowlist flags each of the per-request shapes it exists to forbid.
-// These are NOT in any allowed class — they are the breach surface
-// FR-008 exists to prevent. A regression that lets any of these
-// through is the very leak the allowlist was extracted to gate.
-func TestAllowedLineClasses_RejectsPerRequestNoise(t *testing.T) {
-	noise := []string{
-		// Per-request log shapes a naive DP might emit:
-		`level=info msg=CONNECT dst=example.onion port=443`,
-		`level=info msg=forwarded dst=example.onion bytes=1234`,
-		`level=info msg="request received" host=example.onion`,
-		`level=info routed host=example.onion bytes=1234`,
-		// Bare secret / destination bytes (no msg= field):
-		`forwarded 1234 bytes to example.onion`,
-		`a31f8c57e209b46d71c83e950af642d9882b64cf137ae5509e06bb41dc782f93`,
-		`connected to t025a-dest-042-example.onion`,
-		// A per-request-shaped line that happens to contain an
-		// allowlisted word as a substring — the anchored msg= field
-		// prevents this from matching:
-		`level=info msg=routed startup_ms=42 dst=example.onion`,
-		// Codereview round-1 finding: a per-request log line that
-		// contains a violation marker as a free-text field value
-		// (not inside msg="…") MUST NOT pass the allowlist.
-		`level=info msg=forwarded status=rejected dst=example.onion`,
-		`level=warn msg="route error" reason=violation bytes=1234`,
-		// stargate-redteam round-1 finding: a per-request log line
-		// with a violation marker INSIDE the msg="…" value MUST NOT
-		// pass either. The sidecar_event violation-marker
-		// alternation was removed entirely (rather than tightened
-		// to markers-inside-msg=) because T021's substring
-		// tolerance made any marker-in-msg= alternation
-		// exploitable. T070a will extend the allowlist with the
-		// exact violation-msg= phrasing T045 emits when it lands.
-		`level=info msg="request rejected" dst=example.onion`,
-		`level=warn msg="sidecar violation" detail=unknown dst=example.onion`,
-	}
-	for _, line := range noise {
-		var fr fakeReporter
-		AssertOnlyAllowedLines(&fr, line)
-		if !fr.failed {
-			t.Errorf("allowlist did not flag per-request noise %q — "+
-				"the patterns must require an anchored msg= field "+
-				"matching one of the five reserved classes; a "+
-				"substring coincidence (including a violation "+
-				"marker anywhere on the line) MUST NOT false-pass",
-				line)
-		}
-	}
-}
-
-// TestAllowedLineClasses_CleanJournalNoFindings asserts the layered
-// end-to-end check: a realistic secret-free journal composed of
-// every allowed class produces zero AssertOnlyAllowedLines findings.
-// This is the negative-control mirror of the contract test's
-// success-path assertion.
-func TestAllowedLineClasses_CleanJournalNoFindings(t *testing.T) {
-	var fr fakeReporter
-	AssertOnlyAllowedLines(&fr, cleanJournalFixture)
-	if fr.failed {
-		t.Errorf("AssertOnlyAllowedLines flagged the clean-journal "+
-			"fixture — every line in the fixture MUST match exactly "+
-			"one allowlist class; findings:\n%s", fr.errors.String())
-	}
-}
-
-// TestAllowedLineClasses_RejectsForbiddenExtraFields is the T101
-// regression for review A2's second false-assurance path: the allowlist
-// pattern matched any line carrying an allowed msg= value, so a
-// per-request field smuggled onto an allowed line —
-// `msg=startup dst=evil.onion` — passed undetected. Acceptance #2
-// requires field allowlisting: an allowed msg= with a forbidden field
-// MUST be flagged. Each case pairs an allowed msg= with a per-request
-// field the class's AllowedFields set does not name.
-//
-// Each diagnostic MUST NOT echo the field's value (the destination /
-// hash a future DP might log there) — that is the A2 third path,
-// gated separately by TestAssertOnlyAllowedLines_DiagnosticsIndexOnly.
-func TestAllowedLineClasses_RejectsForbiddenExtraFields(t *testing.T) {
-	cases := []struct {
-		name string
-		line string
-	}{
-		{"startup with destination", "level=info msg=startup dst=t025a-dest-042-example.onion"},
-		{"startup with bytes", "level=info msg=startup bytes=1234"},
-		{"shutdown with destination", "level=info msg=shutdown dst=t025a-dest-042-example.onion"},
-		{"tokens applied with destination", `level=info msg="tokens applied" generation=2 count=1 dst=t025a-dest-042-example.onion`},
-		{"sidecar event with bytes", `level=info msg="sidecar event" sidecar=tor kind=EVENT_KIND_HEALTHY bytes=1234`},
-		{"sidecar event rejected with destination", `level=error msg="sidecar event rejected" kind=EVENT_KIND_STARTED err="detail outside closed vocabulary" dst=t025a-dest-042-example.onion`},
-		{"control channel degraded with destination", `level=warn msg="control channel degraded" err="connection refused" dst=t025a-dest-042-example.onion`},
-		{"snapshot with destination", `level=warn msg="snapshot write failed" err="read-only" dst=t025a-dest-042-example.onion`},
-		{"snapshot restored with destination", `level=info msg="snapshot restored" generation=7 dst=t025a-dest-042-example.onion`},
-		{"snapshot restore ignored with destination", `level=warn msg="snapshot restore ignored" reason="schemaVersion 1" dst=t025a-dest-042-example.onion`},
-		{"snapshot restored with bytes", `level=info msg="snapshot restored" generation=7 bytes=1234`},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			var fr fakeReporter
-			AssertOnlyAllowedLines(&fr, c.line)
-			if !fr.failed {
-				t.Errorf("allowlist did not flag an allowed msg= carrying a "+
-					"forbidden per-request field — A2 false-assurance path #2; "+
-					"line (len=%d) class-allowed but field-unconstrained",
-					len(c.line))
-			}
-			// The field's VALUE is exactly the per-request surface FR-008
-			// exists to keep out of journals; echoing it in the failure
-			// re-leaks it into CI logs (A2 false-assurance path #3).
-			if msg := fr.errors.String(); strings.Contains(msg, "t025a-dest-042-example.onion") {
-				t.Errorf("failure diagnostic echoed the forbidden field's value "+
-					"— A2 path #3; the destination MUST NOT appear in CI output: %s",
-					msg)
-			}
-		})
-	}
-}
-
-// TestAssertOnlyAllowedLines_DiagnosticsIndexOnly is the T101 regression
-// for review A2's third false-assurance path: the prior diagnostic
-// printed the full rejected line via %q, which can echo a leaked
-// destination / token / UNAME straight into CI output. Acceptance #3:
-// diagnostics carry only source index, byte length, and rule ID — never
-// the rejected line or matched secret. A no-class line carrying a
-// secret-shaped marker exercises the diagnostic path directly (the line
-// is rejected regardless of the field-allowlisting landing).
 func TestAssertOnlyAllowedLines_DiagnosticsIndexOnly(t *testing.T) {
 	const secretValue = "a31f8c57e209b46d71c83e950af642d9882b64cf137ae5509e06bb41dc782f93"
 	line := "level=info msg=CONNECT dst=" + secretValue + " bytes=1234"
@@ -481,5 +296,15 @@ func TestAssertNoSecrets_NilAndEmptyIgnored(t *testing.T) {
 		t.Errorf("nil/empty secrets produced findings: %s — the scan "+
 			"must never treat an empty secret as "+
 			"matches-everything", fr.errors.String())
+	}
+}
+
+func TestOperationalJournalIsForbidden(t *testing.T) {
+	for _, line := range strings.Split(cleanJournalFixture, "\n") {
+		var reporter fakeReporter
+		AssertOnlyAllowedLines(&reporter, line)
+		if !reporter.failed {
+			t.Fatal("legacy operational journal was accepted")
+		}
 	}
 }

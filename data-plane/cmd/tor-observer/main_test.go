@@ -12,6 +12,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"golang.org/x/sys/unix"
 	"io"
 	"net"
 	"os"
@@ -378,5 +379,59 @@ func TestJavaClientInteropFixture(t *testing.T) {
 	cancel()
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The operator's one-shot mode reuses the authenticated, bounded native query.
+func TestInstallerReadinessExitCodes(t *testing.T) {
+	for _, tc := range []struct {
+		name, reply string
+		want        int
+	}{
+		{"ready", "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=done SUMMARY=\"Done\"\r\n250 OK\r\n", 0},
+		{"not-ready", "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=25 TAG=loading SUMMARY=\"Loading\"\r\n250 OK\r\n", 1},
+		{"unavailable", "551 unavailable\r\n", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, tc.reply)
+			if got := run(f.config, []string{"--check-ready"}); got != tc.want {
+				t.Fatalf("current readiness exit = %d, want %d", got, tc.want)
+			}
+			commands := f.fake.snapshot()
+			if len(commands) < 2 || !strings.HasPrefix(commands[0], "AUTHENTICATE ") || commands[1] != "GETINFO status/bootstrap-phase" {
+				t.Fatal("readiness bypassed authenticated fixed bootstrap query")
+			}
+		})
+	}
+	f := newFixture(t, "551 unavailable\r\n")
+	if got := run(f.config, []string{"--arbitrary-command"}); got != 2 {
+		t.Fatal("unknown mode was accepted")
+	}
+	if len(f.fake.snapshot()) != 0 {
+		t.Fatal("unknown mode touched Tor")
+	}
+}
+
+func TestInstallerReadinessDeadlineIncludesCookieIO(t *testing.T) {
+	fifo := filepath.Join(t.TempDir(), "cookie")
+	if err := unix.Mkfifo(fifo, 0600); err != nil {
+		t.Fatal(err)
+	}
+	// Release a blocked reader after the assertion, including on the pre-fix path.
+	defer func() {
+		f, err := os.OpenFile(fifo, os.O_RDWR, 0600)
+		if err == nil {
+			f.Close()
+		}
+	}()
+	done := make(chan int, 1)
+	go func() { done <- run(config{cookiePath: fifo}, []string{"--check-ready"}) }()
+	select {
+	case got := <-done:
+		if got != 2 {
+			t.Fatalf("blocked cookie exit = %d, want unavailable", got)
+		}
+	case <-time.After(torWindow + time.Second):
+		t.Fatal("installer readiness deadline did not bound cookie I/O")
 	}
 }

@@ -24,11 +24,8 @@
 // stargate-tor-config volume. The test brings up the production tor image
 // cold (no harness-seeded config) and asserts:
 //
-//  1. Docker State.Health.Status == healthy — the Dockerfile HEALTHCHECK
-//     reads the authoritative cookie path /var/lib/tor/control_auth_cookie
-//     and probes GETINFO status/bootstrap-phase (FR-014). Under FR-014 a
-//     persistent UNHEALTHY verdict drives routeEnableMask[TOR] to DISABLED
-//     → ROUTE_DOWN for every Tor-routed request.
+//  1. No Docker health-probe history is retained (Constitution III).
+//     Authenticated GETINFO still verifies live bootstrap independently.
 //  2. The control cookie is exactly at /var/lib/tor/control_auth_cookie
 //     (not /var/lib/tor/.tor/...) — DataDirectory /var/lib/tor is explicit
 //     in the baked torrc (invariant #11; sol-review B2+M3). The prior
@@ -39,10 +36,8 @@
 //
 // Control access: the cookie and private ControlSocket stay inside Tor.
 // This test runs the AUTHENTICATE+GETCONF+QUIT exchange in that container
-// as USER tor (which owns the cookie),
-// mirroring the sidecars/tor/Dockerfile HEALTHCHECK exactly. T062 will land
-// a Go-side TCP+cookie client in Phase 4 (US2); T032 (Phase 3) cannot
-// depend on it.
+// as USER tor (which owns the cookie). Production current health is served
+// by the isolated observer; Docker health probes retain no event history.
 //
 // NOT executed by the hermetic PR run of scripts/verify.sh: this file is
 // build-tagged `//go:build docker` (T076 §Acceptance #4 — live/Docker
@@ -93,17 +88,6 @@ const bootstrapDeadline = 5 * time.Minute
 // circuits.
 const bootstrapPollInterval = 2 * time.Second
 
-// healthDeadline caps the wait for Docker to report State.Health.Status ==
-// "healthy" after bootstrap completes. The Dockerfile HEALTHCHECK runs every
-// 30s (interval) with a 60s start-period; once Tor has bootstrapped
-// (PROGRESS=100), the next healthcheck run reports "healthy" — so one
-// interval (30s) plus margin suffices. 2 minutes is generous for slow
-// daemon response.
-const healthDeadline = 2 * time.Minute
-
-// healthPollInterval paces the State.Health.Status poll via the Docker SDK.
-const healthPollInterval = 5 * time.Second
-
 // getconfCases is the table of torrc directives this test GETCONFs over the
 // live control port, asserting Tor loaded what the image baked. The static
 // tests (T029 byte-match, T030 invariants, T031 no-bridges) gate the golden
@@ -128,8 +112,8 @@ var getconfCases = []struct {
 	{"ClientUseIPv6", "0", "#5", func(v string) bool { return v == "0" }},
 	{"AvoidDiskWrites", "1", "#6", func(v string) bool { return v == "1" }},
 	{"UseBridges", "0", "#7", func(v string) bool { return v == "0" }},
-	{"Log", "notice stdout", "#8", func(v string) bool {
-		return strings.Contains(v, "notice") && strings.Contains(v, "stdout")
+	{"Log", "notice file /dev/null", "#8", func(v string) bool {
+		return v == "notice file /dev/null"
 	}},
 	{"SafeLogging", "1", "#8", func(v string) bool { return v == "1" }},
 }
@@ -137,7 +121,7 @@ var getconfCases = []struct {
 // TestLiveSidecarGETCONFSocksPort gates FR-011 / contracts/torrc.md invariant
 // #1 at the live-sidecar layer: bring up the tor sidecar from the production
 // image (no harness-seeded config — the torrc is image-baked per T087/T089),
-// wait for bootstrap, then assert the Dockerfile HEALTHCHECK reports healthy,
+// wait for authenticated bootstrap, then assert no Docker health history,
 // the control cookie is at the authoritative path, and GETCONF for every
 // torrc directive matches the golden.
 //
@@ -145,10 +129,7 @@ var getconfCases = []struct {
 //   - TorBootstrapsWithImageBakedTorrc: the image-baked torrc parses cleanly
 //     and Tor reaches PROGRESS=100 (a syntactically invalid torrc or an
 //     unrecognised directive fails bootstrap or refuses to start).
-//   - ColdVolumeHealthcheckHealthy: Docker State.Health.Status == "healthy"
-//     — the Dockerfile HEALTHCHECK reads /var/lib/tor/control_auth_cookie
-//     (the authoritative path once DataDirectory /var/lib/tor is pinned)
-//     and probes GETINFO status/bootstrap-phase (FR-014).
+//   - NoDockerHealthHistory: Docker retains no timestamped health probes.
 //   - CookieAtAuthoritativePath: the control cookie is exactly at
 //     /var/lib/tor/control_auth_cookie and NOT at /var/lib/tor/.tor/...
 //     (the compile-time default $HOME/.tor = /var/lib/tor/.tor for USER tor
@@ -239,26 +220,26 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 		t.Logf("Tor bootstrapped: %s", strings.TrimSpace(phase))
 	})
 
-	// (3) Cold-volume healthcheck — the regression T087 exists to fix. The
-	// Dockerfile HEALTHCHECK reads /var/lib/tor/control_auth_cookie (the
-	// authoritative path once DataDirectory /var/lib/tor is pinned in the
-	// baked torrc) and probes GETINFO status/bootstrap-phase. Before T087,
-	// the cookie landed at /var/lib/tor/.tor/control_auth_cookie (compile-
-	// time default $HOME/.tor) and the HEALTHCHECK ALWAYS failed. Under
-	// FR-014 a persistent UNHEALTHY verdict drives routeEnableMask[TOR] to
-	// DISABLED → ROUTE_DOWN for every Tor-routed request.
-	t.Run("ColdVolumeHealthcheckHealthy", func(t *testing.T) {
-		status, err := waitForHealth(ctx, cli, liveComposeProject, "tor", healthDeadline)
-		if err != nil {
-			t.Fatalf("tor container did not reach State.Health.Status == healthy within %s: %v\n"+
-				"last health status: %s\n"+
-				"(the HEALTHCHECK reads /var/lib/tor/control_auth_cookie; if the cookie\n"+
-				"is at /var/lib/tor/.tor/... instead, DataDirectory /var/lib/tor is not\n"+
-				"in the image-baked torrc — invariant #11 regression. Check\n"+
-				"`docker compose -p %s logs tor` for healthcheck diagnostics)",
-				healthDeadline, err, status, liveComposeProject)
+	// The live authenticated bootstrap probe above retains the cold-volume
+	// cookie-path regression. Docker must not retain timestamped probe history.
+	t.Run("ColdVolumeHasNoDockerHealthHistory", func(t *testing.T) {
+		f := filters.NewArgs()
+		f.Add("label", "com.docker.compose.project="+liveComposeProject)
+		f.Add("label", "com.docker.compose.service=tor")
+		list, err := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: f})
+		if err != nil || len(list) != 1 {
+			t.Fatal("expected one Tor container", err)
 		}
-		t.Logf("OK: State.Health.Status == healthy")
+		inspected, err := cli.ContainerInspect(ctx, list[0].ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if inspected.State == nil || !inspected.State.Running {
+			t.Fatal("Tor is not running")
+		}
+		if inspected.State.Health != nil {
+			t.Fatal("Docker retained health-probe history")
+		}
 	})
 
 	// (4) Image-baked torrc byte-equality — the image /etc/tor/torrc
@@ -423,48 +404,6 @@ func waitForBootstrap(ctx context.Context, composeFile, envFile string, deadline
 		case <-deadlineCtx.Done():
 			return lastDiagnostics, deadlineCtx.Err()
 		case <-time.After(bootstrapPollInterval):
-		}
-	}
-}
-
-// waitForHealth polls the tor container's State.Health.Status via the Docker
-// SDK until it reports "healthy", or deadline elapses. The container is
-// located by compose labels (project + service) — NOT by the undocumented
-// `<project>-<service>-1` naming convention (same rationale as T019b's
-// lookupComposeNetwork). Returns the last-seen status for diagnostics on
-// timeout. A nil error means the container reached "healthy".
-func waitForHealth(ctx context.Context, cli *client.Client, project, service string, deadline time.Duration) (string, error) {
-	deadlineCtx, cancel := context.WithTimeout(ctx, deadline)
-	defer cancel()
-	f := filters.NewArgs()
-	f.Add("label", "com.docker.compose.project="+project)
-	f.Add("label", "com.docker.compose.service="+service)
-	var lastStatus string
-	for {
-		list, err := cli.ContainerList(deadlineCtx, container.ListOptions{All: true, Filters: f})
-		if err != nil {
-			return lastStatus, fmt.Errorf("ContainerList (%s by label): %w", service, err)
-		}
-		if len(list) == 0 {
-			lastStatus = "(container not found)"
-		} else {
-			insp, err := cli.ContainerInspect(deadlineCtx, list[0].ID)
-			if err != nil {
-				return lastStatus, fmt.Errorf("ContainerInspect %s: %w", list[0].ID, err)
-			}
-			if insp.State != nil && insp.State.Health != nil {
-				lastStatus = string(insp.State.Health.Status)
-				if lastStatus == "healthy" {
-					return lastStatus, nil
-				}
-			} else if insp.State != nil {
-				lastStatus = "State.Status=" + string(insp.State.Status) + " (no Health)"
-			}
-		}
-		select {
-		case <-deadlineCtx.Done():
-			return lastStatus, deadlineCtx.Err()
-		case <-time.After(healthPollInterval):
 		}
 	}
 }

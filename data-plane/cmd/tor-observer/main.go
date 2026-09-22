@@ -17,6 +17,7 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"errors"
+	"golang.org/x/sys/unix"
 	"io"
 	"net"
 	"os"
@@ -48,6 +49,20 @@ type config struct {
 }
 
 func main() {
+	// Constitution III: suppress dependency/runtime output before processing private state.
+	fd, err := unix.Open(os.DevNull, unix.O_WRONLY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		os.Exit(1)
+	}
+	if unix.Dup2(fd, 1) != nil || unix.Dup2(fd, 2) != nil {
+		os.Exit(1)
+	}
+	// A launcher may have closed a standard descriptor; keep the replacement
+	// open in that case so later private files cannot occupy stdout/stderr.
+	if fd > 2 {
+		_ = unix.Close(fd)
+	}
+
 	c := config{
 		healthSocket: "/run/stargate-tor-observer/health.sock",
 		torSocket:    "/run/tor-control/tor-control.sock",
@@ -55,12 +70,42 @@ func main() {
 		privateKey:   "/etc/stargate/observer-keys/observer.priv",
 		peerKey:      "/etc/stargate/observer-keys/cp.pub",
 	}
+	os.Exit(run(c, os.Args[1:]))
+}
+
+// Only the invoking operator can select the fixed one-shot readiness mode.
+// It executes inside the observer's existing authority, exposes no raw reply,
+// and inherits torHealth's four-second deadline (Constitution III / T152).
+func run(c config, args []string) int {
+	if len(args) == 1 && args[0] == "--check-ready" {
+		// File I/O can block independently of the socket deadline. A one-shot
+		// process must still exit; the buffered result cannot strand its sender.
+		sample := make(chan string, 1)
+		go func() { sample <- torHealth(c) }()
+		var current string
+		select {
+		case current = <-sample:
+		case <-time.After(torWindow):
+			return 2
+		}
+		switch current {
+		case readyReply:
+			return 0
+		case notReadyReply:
+			return 1
+		default:
+			return 2
+		}
+	}
+	if len(args) != 0 {
+		return 2
+	}
 	if err := serve(context.Background(), c, nil); err != nil {
 		// The service's startup failure is intentionally static: an arbitrary
 		// path or upstream error must not become a diagnostic detail stream.
-		_, _ = os.Stderr.WriteString("tor observer: unavailable\n")
-		os.Exit(1)
+		return 2
 	}
+	return 0
 }
 
 // serve accepts authenticated, one-shot requests. The ready channel is a

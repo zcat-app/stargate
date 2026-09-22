@@ -3,10 +3,8 @@
 
 package app.zcat.stargate.persistence;
 
-import java.time.Instant;
 import java.util.Collection;
 
-import org.jboss.logging.Logger;
 
 import app.zcat.stargate.auth.TokenLoaderContract;
 import app.zcat.stargate.persistence.entity.ConfiguredToken;
@@ -15,44 +13,13 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The production persistence adapters for the {@code tokens.yaml} loader
- * (T041): both the §1.9 {@code configured_tokens} store (arch §6.6) and the
- * §1.8 {@code token_generation} singleton (arch §6.7) behind the T035a ports
- * the loader (T035) binds. Wired by T041's runtime boot; schema owned by
- * Flyway ({@code V001__init.sql}) — this class writes DML only.
- *
- * <p><strong>Transactional shape (§1.7).</strong> The loader drives one
- * {@code begin()} / {@code commit()} window per successful load; every
- * {@code upsert}/{@code delete} and every §4 audit diff row the loader emits
- * inside that window JOIN the same JTA transaction — the {@code
- * AuditLogService.write} is {@code @Transactional}(REQUIRED), so a
- * {@code rollback()} discards the diff rows together with the store writes
- * (§4 atomicity; pinned by {@code SqliteTokenStateTest}). Reads
- * ({@code storedTokens}, {@code lastGeneration}) run outside the loader's
- * window — on the boot thread BEFORE {@code begin()}, and on the sidecar
- * monitor's poll thread via the generation supplier — so they open their own
- * short transaction when none is active.
- *
- * <p><strong>Row semantics (§1.9).</strong> {@code created_at} stamps once at
- * first sight and survives re-upserts (the pepper-rotation rewrite refreshes
- * only the verifier); {@code delete} is a soft delete — {@code revoked_at}
- * stamped, label removed from {@code storedTokens} (the loader's diff view);
- * a re-appearing label is un-revoked with its original {@code created_at}
- * (the PRIMARY KEY row is updated in place, matching the schema's one-row-
- * per-label contract).
- *
- * <p>{@code token_generation} is the singleton counter row (§1.8): absent row
- * reads as {@code 0} (the DB-wipe state — the loader then proposes 1 and the
- * DP-side reconciliation absorbs the CP-DB-restore case), and {@code record}
- * is an UPDATE-then-INSERT upsert so the singleton stays exactly one row. The
- * two native statements are the entire SQL surface for that table — a dead
- * entity class for a one-column singleton would outgrow its purpose.
+ * Current credential/generation storage (data-model §1.7–1.9). Operational counts
+ * join the transaction only after commit; rollback leaves no count or credential.
+ * Revoked rows are deleted instead of retaining per-device lifecycle history (III).
  */
 @Singleton
 public class SqliteTokenState
         implements TokenLoaderContract.ConfiguredTokenStore, TokenLoaderContract.GenerationStore {
-
-    private static final Logger LOG = Logger.getLogger(SqliteTokenState.class);
 
     private final EntityManager em;
     private final UserTransaction utx;
@@ -67,7 +34,7 @@ public class SqliteTokenState
     @Override
     public Collection<TokenLoaderContract.StoredToken> storedTokens() {
         return inTransaction(() -> em
-                .createQuery("SELECT c FROM ConfiguredToken c WHERE c.revokedAt IS NULL",
+                .createQuery("SELECT c FROM ConfiguredToken c",
                         ConfiguredToken.class)
                 .getResultList()
                 .stream()
@@ -90,10 +57,8 @@ public class SqliteTokenState
         if (row == null) {
             row = new ConfiguredToken();
             row.label = label;
-            row.createdAt = Instant.now().getEpochSecond();
         }
         row.verifier = verifier;
-        row.revokedAt = null; // a re-appearing label is un-revoked (§1.9; the diff logs `enrolled`)
         em.merge(row);
     }
 
@@ -101,8 +66,7 @@ public class SqliteTokenState
     public void delete(String label) {
         ConfiguredToken row = em.find(ConfiguredToken.class, label);
         if (row != null) {
-            row.revokedAt = Instant.now().getEpochSecond();
-            em.merge(row);
+            em.remove(row);
         }
     }
 
@@ -125,8 +89,7 @@ public class SqliteTokenState
         try {
             utx.rollback();
         } catch (Exception e) {
-            LOG.warnf("token store: rollback of the load transaction not applied (%s)",
-                    e.getClass().getSimpleName());
+            // No persistent diagnostic history; the original failure remains authoritative.
         }
     }
 

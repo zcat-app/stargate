@@ -60,6 +60,13 @@ services:
       - stargate-tor-state:/var/lib/tor
     restart: "no"
 
+  # Controlled current-readiness fixture for the real installer's exec call.
+  # A missing binary or nonzero exit must prevent installer success.
+  tor-observer:
+    image: *alpine
+    command: ["sh", "-c", "mkdir -p /opt/stargate; printf '#!/bin/sh\nexit 0\n' > /opt/stargate/tor-observer; chmod 0555 /opt/stargate/tor-observer; exec sleep 3600"]
+    restart: "no"
+
 volumes:
   # The seven named volumes from data-model.md §6; the real Compose adds
   # two T162 Tor fabric volumes. init initialises the roots of the five

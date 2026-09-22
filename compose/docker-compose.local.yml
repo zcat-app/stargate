@@ -12,6 +12,13 @@
 
 services:
   stargate-dp:
+    # Constitution III: no raw diagnostic or timestamped health-probe archive.
+    ulimits:
+      core: 0
+    logging:
+      driver: none
+    healthcheck:
+      disable: true
     build:
       context: ..
       dockerfile: data-plane/Dockerfile
@@ -42,6 +49,13 @@ services:
     restart: "no"
 
   stargate-control:
+    # Constitution III: no raw diagnostic or timestamped health-probe archive.
+    ulimits:
+      core: 0
+    logging:
+      driver: none
+    healthcheck:
+      disable: true
     build:
       context: ..
       dockerfile: control-plane/Dockerfile
@@ -69,6 +83,13 @@ services:
     restart: unless-stopped
 
   tor:
+    # Constitution III: no raw diagnostic or timestamped health-probe archive.
+    ulimits:
+      core: 0
+    logging:
+      driver: none
+    healthcheck:
+      disable: true
     build:
       context: ../sidecars/tor
       dockerfile: Dockerfile
@@ -93,6 +114,13 @@ services:
     restart: unless-stopped
 
   tor-observer:
+    # Constitution III: no raw diagnostic or timestamped health-probe archive.
+    ulimits:
+      core: 0
+    logging:
+      driver: none
+    healthcheck:
+      disable: true
     # init builds from the reviewed Dockerfile and writes the local immutable
     # image ID into its gitignored env file. A mutable tag is never deployed.
     image: ${STARGATE_OBSERVER_IMAGE:?run scripts/stargate init}

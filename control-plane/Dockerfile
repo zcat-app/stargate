@@ -27,11 +27,9 @@
 # Maven + JDK pinned together at the OCI layer rather than via a
 # wrapper that downloads Maven at build time.
 #
-# No EXPOSE and no HEALTHCHECK directive: per T003a, the Compose
-# healthcheck reaches /healthz (T040 HealthEndpoint) via the compose
-# network namespace, not via an image-level surface. No host port
-# mapping is ever introduced for the CP — Principle II keeps request
-# bytes out of this plane.
+# No EXPOSE or health-probe history (T152 / Constitution III). Current
+# health is an authenticated observation, not a Docker probe journal.
+# No host port mapping is introduced for the CP (Principle II).
 #
 # Native-image is explicitly out of scope here — plan.md "the JVM
 # build is what this feature exercises"; the constitution Sync
@@ -104,4 +102,5 @@ COPY --from=builder --chown=stargate-cp:stargate-ipc \
 
 USER stargate-cp
 WORKDIR /opt/stargate
-ENTRYPOINT ["java", "-jar", "/opt/stargate/quarkus-run.jar"]
+COPY --chmod=0555 control-plane/entrypoint.sh /opt/stargate/entrypoint.sh
+ENTRYPOINT ["/opt/stargate/entrypoint.sh"]

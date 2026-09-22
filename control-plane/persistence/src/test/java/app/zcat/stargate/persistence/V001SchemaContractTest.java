@@ -25,6 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
+ * Historical V001 baseline only. T152 migration and AuditLogServiceTest cover the active V002 schema.
  * Introspects every v1 table via SQLite {@code PRAGMA} and asserts the
  * installed schema matches the amended data model exactly: columns, declared
  * types, NOT NULL, column defaults, PRIMARY KEY membership, UNIQUE indexes, and
@@ -57,7 +58,7 @@ class V001SchemaContractTest {
     void migrate() {
         Path dbFile = tempDir.resolve("stargate-control.db");
         url = "jdbc:sqlite:" + dbFile.toAbsolutePath();
-        Flyway flyway = Flyway.configure().dataSource(url, "", "").load();
+        Flyway flyway = Flyway.configure().dataSource(url, "", "").target("001").load();
         flyway.migrate();
     }
 

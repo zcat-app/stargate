@@ -6,8 +6,8 @@
 // specs/001-tor-route/data-model.md §1.4 (schemaVersion 2, verifiers-only —
 // NEVER the pepper or plaintext; stale v1 ignored, not misparsed),
 // §1.3 (generation / atomic swap), contracts/control-grpc.md §"ReloadTokens"
-// row 4 (persist before the OK response; a failed persist is journaled and
-// the response stays OK — in-memory truth wins), and arch §5.5 (control
+// row 4 (persist before the OK response; the existing failure response stays
+// OK while in-memory truth wins; no event journal is permitted), and arch §5.5 (control
 // plane down at startup → continue from the last-known snapshot).
 //
 // The snapshot holds derived material only (base64 HMAC-SHA-256 tags): the
@@ -53,23 +53,10 @@ type snapshotV2Item struct {
 	Verifier string `json:"verifier"`
 }
 
-// SnapshotWriter returns the persist seam server.go's ReloadTokens calls
-// after the in-memory swap: write to dir, journal the outcome under the
-// loginvariants snapshot_write line class. T050 constructs it with the
-// resolved state dir; the closure binds the dir so the seam signature
-// stays SnapshotFunc.
-func SnapshotWriter(dir string, log *slog.Logger) SnapshotFunc {
-	return func(g *auth.Generation) error {
-		if err := WriteSnapshot(dir, g); err != nil {
-			return err
-		}
-		// Success line: msg only — generation/count ride the adjacent
-		// "tokens applied" line (reload_tokens_apply class), and this
-		// class's AllowedFields reserves err/reason/generation for the
-		// restore half.
-		log.Info("snapshot written")
-		return nil
-	}
+// SnapshotWriter binds the persisted auth-cache directory. The compatibility
+// logger argument is unused: maintenance cannot emit an event journal (III).
+func SnapshotWriter(dir string, _ *slog.Logger) SnapshotFunc {
+	return func(g *auth.Generation) error { return WriteSnapshot(dir, g) }
 }
 
 // WriteSnapshot atomically persists g to dir/dp-snapshot.json (§1.4):
@@ -136,47 +123,34 @@ func WriteSnapshot(dir string, g *auth.Generation) error {
 //     a warning condition;
 //   - file present but unusable — stale schemaVersion, corrupt JSON,
 //     unparsable loadedAt, or any verifier not exactly 32 base64 bytes —
-//     → warning ("snapshot restore ignored", §1.4 requires the warning),
-//     store untouched. No partial trust: one bad verifier rejects the
+//     → store untouched, with no diagnostic record (Constitution III). No partial trust: one bad verifier rejects the
 //     whole file, because a half-restored set silently authenticates a
 //     subset of the operator's tokens;
-//   - file valid → the generation is swapped in atomically and the
-//     restart journal carries "snapshot restored" with the generation
-//     (the §1.3 restart-log use of loadedAt; the timestamp itself is NOT
-//     journaled — it is finer-grained than the ≥1h aggregate the journal
-//     scan permits).
+//   - file valid → the generation is swapped in atomically without a journal.
 //
 // Restore never fails the boot: a broken cache must not take routing down
 // with it (arch §5.5; Principle II).
-func RestoreSnapshot(dir string, tokens *auth.TokenStore, log *slog.Logger) {
+func RestoreSnapshot(dir string, tokens *auth.TokenStore, _ *slog.Logger) {
 	raw, err := os.ReadFile(filepath.Join(dir, snapshotFileName))
 	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Warn("snapshot restore ignored", "reason", err.Error())
-		}
 		return
 	}
 
 	var sf snapshotFile
 	if err := json.Unmarshal(raw, &sf); err != nil {
-		log.Warn("snapshot restore ignored", "reason", "unparsable json")
 		return
 	}
 	if sf.SchemaVersion != snapshotSchemaVersion {
-		log.Warn("snapshot restore ignored", "reason", fmt.Sprintf("schemaVersion %d", sf.SchemaVersion))
 		return
 	}
 	loadedAt, err := time.Parse(time.RFC3339, sf.LoadedAt)
 	if err != nil {
-		log.Warn("snapshot restore ignored", "reason", "loadedAt unparsable")
 		return
 	}
 	verifiers := make([][]byte, 0, len(sf.Verifiers))
-	for i, item := range sf.Verifiers {
+	for _, item := range sf.Verifiers {
 		v, err := base64.StdEncoding.DecodeString(item.Verifier)
 		if err != nil || len(v) != verifierLen {
-			// Index and byte count only — never the bytes (§1.6).
-			log.Warn("snapshot restore ignored", "reason", fmt.Sprintf("verifier %d: %d bytes", i, len(v)))
 			return
 		}
 		verifiers = append(verifiers, v)
@@ -187,5 +161,4 @@ func RestoreSnapshot(dir string, tokens *auth.TokenStore, log *slog.Logger) {
 		Verifiers:  verifiers,
 		LoadedAt:   loadedAt,
 	})
-	log.Info("snapshot restored", "generation", sf.Generation)
 }

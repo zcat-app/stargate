@@ -1017,9 +1017,8 @@ func TestReloadTokensSnapshotFailureStillOK(t *testing.T) {
 	if got := s.tokens.Current().Generation; got != 1 {
 		t.Errorf("in-memory generation = %d, want 1 (in-memory truth wins)", got)
 	}
-	logged := logBuf.String()
-	if !strings.Contains(logged, "snapshot write failed") {
-		t.Errorf("journal has no snapshot-write-failure line — contract row 4 requires it; journal:\n%s", logged)
+	if logBuf.Len() != 0 {
+		t.Error("operational action emitted a journal record")
 	}
 	// Index-only hygiene: the failure line names the error class, never the
 	// verifier bytes.
@@ -1092,12 +1091,11 @@ func TestReloadTokensLogsApply(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	logged := logBuf.String()
-	if !strings.Contains(logged, `msg="tokens applied"`) {
-		t.Errorf("no reload_tokens_apply journal line; journal:\n%s", logged)
+	if logBuf.Len() != 0 {
+		t.Error("operational action emitted a journal record")
 	}
-	if !strings.Contains(logged, "generation=3") || !strings.Contains(logged, "count=1") {
-		t.Errorf("apply line missing generation/count fields; journal:\n%s", logged)
+	if logBuf.Len() != 0 {
+		t.Error("operational action emitted a journal record")
 	}
 	if bytes.Contains(logBuf.Bytes(), tok) {
 		t.Error("journal echoes verifier bytes (Principle III; contracts/control-grpc.md §ReloadTokens no-logging bullet)")

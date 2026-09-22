@@ -39,9 +39,9 @@ ClientUseIPv6 0
 AvoidDiskWrites 1
 UseBridges 0
 
-# Logging — Notice level to stdout for healthcheck parsing only.
-# Stargate does NOT consume Tor log lines as request data.
-Log notice stdout
+# Logging — diagnostics are discarded before retention (Constitution III).
+# Current health comes from the authenticated observer, not retained log lines.
+Log notice file /dev/null
 SafeLogging 1
 ```
 
@@ -56,7 +56,7 @@ SafeLogging 1
 | 5 | `ClientUseIPv6 0`                                                                   | FR-011 — avoid dual-stack ambiguity in the local profile; v1 is IPv4-only.                                                                         |
 | 6 | `AvoidDiskWrites 1`                                                                 | FR-011, THREAT-MODEL §3.1 — minimise incidental writes; guard state still persists by design (THREAT-MODEL §4.2 "Stargate-specific notes").       |
 | 7 | `UseBridges 0` and no `Bridge` lines anywhere in the file                           | FR-011, spec Assumption "No bridges". Bridge support is a separate feature spec.                                                                  |
-| 8 | `Log notice stdout` and `SafeLogging 1` | The Tor-native healthcheck queries its private control socket for bootstrap state; `SafeLogging 1` scrubs sensitive fields from operator-visible logs. |
+| 8 | `Log notice file /dev/null` and `SafeLogging 1` | Tor diagnostics are discarded before container capture; the authenticated observer supplies current health without Docker probe history. `SafeLogging 1` remains enabled. |
 | 9 | NO `HiddenServiceDir` or `HiddenServicePort` directives                             | This feature is a *client* of onion services, not a service.                                                                                       |
 | 10 | NO `ExitPolicy` overrides                                                           | This feature does not run an exit node.                                                                                                            |
 | 11 | `DataDirectory /var/lib/tor` is explicit                                            | The image entrypoint runs `tor -f /etc/tor/torrc` WITHOUT `--defaults-torrc /etc/tor/torrc-defaults`, so Debian's defaults file (which would set `DataDirectory /var/lib/tor`) is never loaded (T087 / sol-review B2+M3). Without an explicit directive Tor falls back to its compile-time default of `$HOME/.tor` = `/var/lib/tor/.tor` for USER `tor`, landing the control cookie at `/var/lib/tor/.tor/control_auth_cookie` — not the `/var/lib/tor/control_auth_cookie` the healthcheck and T062's control-port helper assume. Pinning `DataDirectory /var/lib/tor` here makes the cookie path deterministic and keeps guard state on the `stargate-tor-state` volume (mounted at `/var/lib/tor`).                       |
@@ -99,8 +99,10 @@ Spins up the Tor sidecar container with the image-baked config, waits for
 bootstrap, then queries the private control socket via `GETCONF SocksPort` and
 asserts the response contains `IsolateClientAddr` and `IsolateSOCKSAuth`.
 This verifies the config Tor actually loaded matches what the image
-baked in. (T087 adds a cold-volume companion that asserts Docker
-`State.Health.Status == healthy` without harness-seeded config.)
+baked in. The cold-volume probe retains authenticated bootstrap/cookie-path verification
+and asserts that Docker has no health-probe history (T152); the observer supplies current health.
+The installer requires its fixed one-shot `--check-ready` sample before declaring the Tor route ready;
+running containers and a listening DP alone are insufficient.
 
 ### `isolate_socks_auth_effect_test.go`
 

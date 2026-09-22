@@ -273,8 +273,8 @@ func waitDial(t *testing.T, f *fakeCP, n int) *fakeStream {
 // --- the consumer loop -------------------------------------------------------
 
 func TestClientConsumesEventsAdvisory(t *testing.T) {
-	// Contract: events reach the sink (advisory status/audit hints) and are
-	// journaled as receipts; nothing in the path gates anything else — the
+	// Contract: events reach the sink (advisory status/audit hints) without
+	// diagnostic receipts; nothing in the path gates anything else — the
 	// consumer only ever calls the sink (T073 wires the audit application).
 	dp, cp := newKeyFixture(t), newKeyFixture(t)
 	keysDir := writeKeysDir(t, dp, cp)
@@ -297,8 +297,8 @@ func TestClientConsumesEventsAdvisory(t *testing.T) {
 	if got := sink.events[0].GetDetail(); got != "container_start" {
 		t.Errorf("sink saw detail %q, want container_start (advisory pass-through)", got)
 	}
-	if !bytes.Contains(logBuf.Bytes(), []byte(`msg="sidecar event"`)) {
-		t.Errorf("no sidecar_event receipt journal line; journal:\n%s", logBuf.String())
+	if logBuf.Len() != 0 {
+		t.Error("operational action emitted a journal record")
 	}
 
 	cancel()
@@ -337,8 +337,8 @@ func TestClientIgnoresForeignSidecars(t *testing.T) {
 
 func TestClientRejectsOutOfVocabularyDetail(t *testing.T) {
 	// Contract row 2 / closed-vocabulary clause: an out-of-vocabulary detail
-	// is a violation — the DP closes the stream and journals the violation
-	// WITHOUT echoing the offending value (Principle III; T021's
+	// is a violation — the DP closes the stream without recording or
+	// echoing the offending value (Principle III; T021's
 	// assertDetailRejected asserts the process-level shape of this).
 	dp, cp := newKeyFixture(t), newKeyFixture(t)
 	keysDir := writeKeysDir(t, dp, cp)
@@ -363,11 +363,10 @@ func TestClientRejectsOutOfVocabularyDetail(t *testing.T) {
 		t.Error("DP did not close the stream after an out-of-vocabulary detail")
 	}
 	logged := logBuf.String()
-	if !bytes.Contains(logBuf.Bytes(), []byte("rejected")) {
-		t.Errorf("journal has no violation marker for the forbidden detail; journal:\n%s", logged)
+	if logBuf.Len() != 0 {
+		t.Error("operational action emitted a journal record")
 	}
-	// The violation must be journaled without the offending free text —
-	// the vocabulary exists to keep sidecar log lines out of the DP journal.
+	// Neither the violation nor the offending free text may enter a journal.
 	if bytes.Contains(logBuf.Bytes(), []byte(freeText)) {
 		t.Errorf("journal echoes the forbidden detail verbatim (Principle III); journal:\n%s", logged)
 	}
@@ -431,12 +430,8 @@ func TestClientDegradedModeWarning(t *testing.T) {
 	defer cancel()
 	client.Run(ctx) // returns when ctx expires — the loop survived a dead CP
 
-	logged := logBuf.String()
-	if !bytes.Contains(logBuf.Bytes(), []byte("control channel degraded")) {
-		t.Errorf("no degraded-mode warning journaled (acceptance #6); journal:\n%s", logged)
-	}
-	if n := bytes.Count(logBuf.Bytes(), []byte("control channel degraded")); n != 1 {
-		t.Errorf("degraded warning fired %d times — the transition is journaled once, not per retry; journal:\n%s", n, logged)
+	if logBuf.Len() != 0 {
+		t.Error("operational action emitted a journal record")
 	}
 }
 

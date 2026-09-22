@@ -2,7 +2,8 @@
 
 > **T156:** `contracts/foundation-boundaries.md` governs auth rollback/recovery and aggregate
 > data. Earlier lifecycle diagrams/SQL field sketches are current implementation history where
-> they describe per-event logging or automatic renumbering of stale auth; T152/T159 replace them.
+> they describe automatic renumbering of stale auth (T159). T152 replaces operational
+> journals with the implemented §4 aggregate schema and current-only §1.9 auth records.
 
 **Status**: Complete
 
@@ -14,7 +15,7 @@ field is materially new to this feature and is covered below.
 
 Persistent storage shapes (SQLite schema) are defined in architecture
 spec §6 once for the whole project; this feature populates only
-`audit_log` and (indirectly, via `tokens.yaml`) `enrolled_devices`, plus
+`operational_aggregates` and `configured_tokens` (from `tokens.yaml`), plus
 maintains the in-memory token list and the data-plane snapshot file.
 
 ---
@@ -98,7 +99,7 @@ Format:
 
 ```yaml
 tokens:
-  - label: alice-laptop                              # free-form, audit-log only
+  - label: alice-laptop                              # free-form, current auth configuration only
     token: 9f2c3a14b8d7e60f5a3c2e1d0b9c8a7f          # 32-char lowercase hex
   - label: alice-desktop
     token: 1a2b3c4d5e6f70819a8b7c6d5e4f3a2b
@@ -108,10 +109,10 @@ Validation rules:
 
 | Field   | Rule                                                                                 | Failure behaviour                                                                                       |
 |---------|--------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| `label` | Non-empty, ≤64 UTF-8 chars, no NUL bytes. Must be unique within the file.            | Reject the record. Log a warning with **label only** (never the token bytes). Continue with other records. |
-| `token` | Exactly 32 chars, matching `^[0-9a-f]{32}$`. (FR-017: 128-bit hex from `openssl rand -hex 16`.) | Reject the record. Log a warning **without the offending token bytes** (record index + label only). Continue with other records. |
-| File    | Valid YAML; `tokens` key present and a sequence. A successfully parsed explicit empty list (`tokens: []`) is permitted and is the **revoke-all** path (FR-018). | Log a warning; push an empty generation. Data plane returns `AUTH_REQUIRED` on all requests. |
-| File    | Missing (first-boot: the file does not exist yet).                                   | Log a warning (path only, no token context — there are none); write **no** audit row (the legitimate first-boot state is also "file does not exist yet"); **do NOT call `ReloadTokens`** — the DP keeps its last-known list and keeps serving (Principle II). (T092 / sol-review M1; §1.6; §4 first-boot exemption.) |
+| `label` | Non-empty, ≤64 UTF-8 chars, no NUL bytes. Must be unique within the file.            | Reject the record and increment volatile `config_error`; no label/detail is retained. Continue with other records. |
+| `token` | Exactly 32 chars, matching `^[0-9a-f]{32}$`. (FR-017: 128-bit hex from `openssl rand -hex 16`.) | Reject the record and increment volatile `config_error`; no label/index/detail is retained. Continue with other records. |
+| File    | Valid YAML; `tokens` key present and a sequence. A successfully parsed explicit empty list (`tokens: []`) is permitted and is the **revoke-all** path (FR-018). | Count revoked credentials without identity/detail; push an empty generation. Data plane returns `AUTH_REQUIRED` on all requests. |
+| File    | Missing (first-boot: the file does not exist yet).                                   | Emit no diagnostic or operational count (the legitimate first-boot state is also "file does not exist yet"); **do NOT call `ReloadTokens`** — the DP keeps its last-known list and keeps serving (Principle II). (T092 / sol-review M1; §1.6; §4 first-boot exemption.) |
 | File    | Unreadable (I/O error other than not-exists, e.g. `AccessDeniedException`).          | Increment the hourly `config_error` category; no event/detail row; **do NOT call `ReloadTokens`** — the DP keeps its last-known list and keeps serving (Principle II). (T092 / sol-review M1; §1.6.) |
 | File    | Unparseable YAML, or fails validation so no record set can be derived.               | Increment the hourly `config_error` category; no event/detail row; **do NOT call `ReloadTokens`** — the DP keeps its last-known list and keeps serving. Only a successfully parsed explicit empty list revokes all. (T092 / sol-review M1; §1.6.) |
 
@@ -163,7 +164,7 @@ Fields:
 |---------------|------------------|--------------------------------------------------------------------------------------|
 | `generation`  | `uint64`         | Monotonic; assigned by the control plane from its persisted record (§1.7).           |
 | `verifiers`   | `[]Verifier`     | The complete current set. Replaces the previous generation atomically.               |
-| `loadedAt`    | `time.Time`      | Wall-clock when the data plane received the generation (used only for journal logs at restart, NOT per-request). |
+| `loadedAt`    | `time.Time`      | Current snapshot creation time; not an expiry or an event-history record. Never emitted to diagnostics. |
 
 Replacement semantics: the data plane's `tokenStore` holds a single
 `*Generation` pointer guarded by an atomic load/store. `ReloadTokens`
@@ -204,7 +205,7 @@ data-plane cold start when the control plane is unreachable (arch §5.5
 "Control plane down at startup"). The snapshot is rewritten atomically
 every time `ReloadTokens` succeeds. `schemaVersion` bumped 1 → 2 by T092
 (reflects the `hash`+`salt` → `verifier` shape change); a cold start that
-reads a stale `schemaVersion: 1` snapshot MUST ignore it (log a warning,
+reads a stale `schemaVersion: 1` snapshot MUST ignore it silently (
 serve no tokens until the CP pushes a fresh generation) rather than
 misparse it — parsing v1 `{hash, salt}` pairs as v2 verifiers would
 authenticate nothing and silently break routing.
@@ -273,7 +274,7 @@ and is a misconfiguration surfaced as "all auth fails" at first boot.
   `current_generation`, and leaves the active generation unchanged.
 - **Failure semantics (T092 / sol-review M1).** A missing, unreadable,
   invalid, or unparseable `tokens.yaml` makes the CP increment the hourly `config_error` aggregate
-  audit row (sub-kind `io` | `validation` | `parse`) and **NOT call
+  category (no sub-kind, line, label or detail retained) and **NOT call
   `ReloadTokens`** — the DP keeps its last-known list and keeps serving port
   8881 (Constitution Principle II "continue routing"). Only a
   successfully-parsed explicit empty list (`tokens: []`) is the revoke-all
@@ -331,16 +332,18 @@ require fabricating a nonexistent key. T092 therefore introduces a dedicated
 reserved for the future dashboard-enrollment feature, which is the only
 path that actually has a device public key.
 
-| Column          | Type    | Notes                                                                                  |
-|-----------------|---------|----------------------------------------------------------------------------------------|
-| `label`         | TEXT    | From `tokens.yaml`; unique; audit-log key. Same validation as §1.1.                    |
-| `verifier`      | BLOB    | 32-byte HMAC-SHA-256 tag under the pepper (§1.5).                                      |
-| `created_at`    | INTEGER | Unix seconds; set when the label is first seen (audit `enrolled`).                     |
-| `last_seen_hour`| INTEGER | Hour-bucket of last auth pass (Principle III ≥1h). Nullable until first use.           |
-| `revoked_at`    | INTEGER | Nullable; set when the label disappears from `tokens.yaml` (audit `revoked`).          |
+| Column | Type | Notes |
+|---|---|---|
+| `label` | TEXT | Current token configuration key, unique and non-null; never an operational label. |
+| `verifier` | BLOB | Current 32-byte HMAC-SHA-256 verifier under the installation pepper. |
 
-Full DDL lands in arch §6.6 and `V001__init.sql` in lock-step with this
-section (T092). **Rejected alternative** (recorded so it is not re-litigated
+V002 preserves active `(label, verifier)` records and the generation singleton. It deletes
+revoked records and removes creation/revocation/last-seen columns: those were operational
+history rather than required authentication state. A revoke deletes the record; a subsequent
+explicit enrollment inserts current state afresh. Transaction rollback still restores the
+previous credential set. The unrelated future `enrolled_devices` scaffold has no v1 writer.
+
+**Rejected alternative** (recorded so it is not re-litigated
 later): making `enrolled_devices.pubkey` nullable to host manual records.
 Rejected because it muddies `enrolled_devices`'s contract (a device row
 without a device key is not a device row) and leaves a NOT-NULL `token_hash`
@@ -373,10 +376,10 @@ failure. Absence or staleness of a sidecar event can never deny admission.
 
 **Advisory consumption (audit + status only).** The data plane MUST
 always attempt the upstream dial on every admitted request.
-`SidecarEvent`s feed the audit journal (`sidecar_healthy` /
+`SidecarEvent`s feed volatile operational counters (`sidecar_healthy` /
 `sidecar_unhealthy` rows per §4) and may drive status reporting; they
 MUST NOT influence the admission decision or short-circuit the dial.
-A `STOPPED` / `CRASHED` event is recorded in the audit log and may
+A `STOPPED` / `CRASHED` event may update a completed-hour category and may
 surface "sidecar unhealthy" in status, but the data plane still dials
 the DP-only Tor SOCKS fabric socket — a stale or forged event cannot suppress a dial that would
 succeed (Constitution Principle II: "a compromise of the management UI
@@ -440,15 +443,70 @@ so a future persistence consumer must expire whole rows and must never poll for 
 
 ---
 
-## 4. Operational aggregates (T156; implementation T152)
+## 4. Operational aggregates (T152)
 
-The previous timestamped `audit_log` rows are superseded. Permitted retained fields are
-`hour_bucket`, fixed `category`, and `count`, finalized only after the hour closes; no token
-labels, actor, generation, per-event time, detail JSON or arbitrary text. Categories, retention
-and cleanup are fixed in `contracts/foundation-boundaries.md` §Aggregate data policy.
-The existing code/schema must migrate under T152. A fixed vocabulary alone did not make the
-old per-event journal conform to Constitution III. No browsing-log leak is inferred merely
-from old administrative timestamps; the retention is nevertheless outside the required policy.
+The forward `V002__operational_aggregates.sql` migration drops `audit_log` and its triggers.
+V001 remains an immutable migration fixture; its historical append-only/schema tests target
+V001 explicitly, while migration and aggregate-service tests exercise the active schema.
+Flyway retains version/checksum/success as schema identity; V002 replaces installation actor,
+time and duration with fixed placeholders, including later migration inserts. Validation still
+checks the original migration checksums. These fields carry no installation event history.
+
+```sql
+CREATE TABLE operational_aggregates (
+  hour_bucket INTEGER NOT NULL, -- UTC start, integer multiple of 3600
+  category TEXT NOT NULL,       -- fixed five-category vocabulary below
+  count INTEGER NOT NULL,      -- nonnegative signed 64-bit counter, saturating on overflow
+  PRIMARY KEY (hour_bucket, category)
+) WITHOUT ROWID;
+```
+
+SQL CHECKs enforce these types/ranges and the vocabulary: `enrolled`, `revoked`, `config_error`,
+`sidecar_healthy`, `sidecar_unhealthy`. UPDATE is refused and duplicate inserts/replacements
+leave the original record intact. DELETE is permitted for retention. No surrogate/sequence
+ID, actor, token/device label, per-event timestamp, generation or arbitrary detail is present.
+
+`AuditLogService` is the sole operational counter writer. Its existing in-process
+`write(action, target, detailJson)` seam remains source compatible; only the allowlisted action
+is used. The other two arguments are discarded immediately, never put into accumulator or
+transaction state. An invalid category raises a static error without echoing input. Existing
+loader/parser tests can inspect transient caller arguments; those fixtures are not a storage
+contract or permission to retain them.
+
+A transaction stores only a five-counter vector in transaction-local memory. Only a successful
+commit contributes it, using the UTC hour at completion. Rollback and rollback-only transactions
+contribute nothing. Standalone sidecar/configuration events count in their observation hour.
+Counters remain volatile until that hour closes; crash/restart can lose the open hour and
+unpersisted completed counts. Operational counts describe observations made by this running
+CP, not a durable event journal or an uninterrupted monitoring guarantee.
+
+A one-second worker finalizes eligible buckets and expires retention; it also runs at startup.
+No new event is needed to close an hour. Failed writes retry the same immutable bucket, with
+at most seven days of pending hourly vectors. Counts are never moved into a different hour to
+hide clock regression. A future export must call the same finalization/expiry boundary before
+querying rows; there is no production operational export API in feature 001 yet.
+
+The most recent completed hour retains a zero `enrolled` counter when no enrollment was
+observed. This valid aggregate supplies a restart clock boundary even after older nonzero
+counts expire. Other zero categories may be omitted. Within a collection lifetime, backwards
+clock readings contribute no new events until they catch up; startup reads the maximum retained
+hour and cannot reopen it, including for a category previously absent from that hour.
+
+Rows expire when `hour_bucket + 3600 + 7 days <= latest observed time`. The running worker
+removes them on its next tick (normally within one second); startup removes rows aged during
+an outage before use. A stopped/unwritable database cannot erase itself. No export may bypass
+expiry. `stargate.operational.retention-enabled=false` deletes all operational rows at startup
+and collects none. Disabling retention/deleting the database deliberately ends that collection
+lifetime and its clock checkpoint; a later explicit re-enable starts a new lifetime. Host-wide
+clock/state rollback is not a forensic or tamper-proof chronology guarantee.
+
+Java/Go operational diagnostics are silent. DP admission, credential application, sidecar
+advisory delivery and static IPC failures keep their existing behavior. Go process descriptors
+and Java/Tor entrypoints suppress native/framework stdout/stderr before private state is read;
+Compose disables raw logging, core dumps and Docker health-history capture. Current Tor health
+still comes from the authenticated observer; installer readiness requires its bounded one-shot
+`--check-ready` query to return READY. Cleanup of legacy SQLite WAL, container archives
+and backups is specified in THREAT-MODEL §5.18; no forensic host-erasure claim is made.
 
 ---
 

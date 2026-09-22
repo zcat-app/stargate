@@ -632,26 +632,13 @@ class InterPlaneWireTest {
         }
     }
 
-    // --- §5.2 newer-major journal record ------------------------------------------
-
     @Test
-    void newerMajorRejectionJournaled() {
-        // wire-auth.md §5.2 (arch §5.5 row 4): the newer-peer rejection is
-        // logged to the journal — the record carries the peer major.
-        List<String> records = new java.util.ArrayList<>();
-        StargateProtoVersion.journalSinkForTests = records::add;
-        try {
-            Metadata headers = new Metadata();
-            headers.put(StargateProtoVersion.META_MAJOR, "2");
-            Status rejection = StargateProtoVersion.checkProtoVersion(headers);
-            assertEquals(Status.Code.FAILED_PRECONDITION, rejection.getCode(),
-                    "the newer-major rejection stays FailedPrecondition");
-            assertEquals(1, records.size(), "exactly one journal record for the rejection");
-            assertTrue(records.get(0).contains("peer major 2"),
-                    "the journal record must carry the peer major");
-        } finally {
-            StargateProtoVersion.journalSinkForTests = null;
-        }
+    void newerMajorRejectionRemainsFailedPrecondition() {
+        Metadata headers = new Metadata();
+        headers.put(StargateProtoVersion.META_MAJOR, "2");
+        Status rejection = StargateProtoVersion.checkProtoVersion(headers);
+        assertEquals(Status.Code.FAILED_PRECONDITION, rejection.getCode());
+        assertEquals("stargate: peer major 2 > server major 1", rejection.getDescription());
     }
 
     // --- close() hygiene ------------------------------------------------------------

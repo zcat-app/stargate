@@ -363,7 +363,7 @@ tests-first suite (Principle VII) before implementation lands.
   `ControlSocket /var/lib/tor/control/tor-control.sock`, `CookieAuthentication 1`,
   `CookieAuthFileGroupReadable 1`, `DataDirectory /var/lib/tor`,
   `ClientUseIPv6 0`, `AvoidDiskWrites 1`, `UseBridges 0`,
-  `Log notice stdout`, `SafeLogging 1`. For this static Tor-only slice
+  `Log notice file /dev/null`, `SafeLogging 1` (T152 / Constitution III). For this static Tor-only slice
   the safe `torrc` is **baked into the Tor image at build time**
   (`sidecars/tor/Dockerfile`, T087) and loaded by the entrypoint at
   container start; the control plane does NOT render `torrc` at boot
@@ -422,7 +422,7 @@ tests-first suite (Principle VII) before implementation lands.
   short-circuit the upstream dial. The data plane MUST always attempt
   the fixed Tor fabric dial on every admitted request; the dial result
   alone selects `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`.
-  `SidecarEvent`s feed the audit journal (completed-hour operational categories under data-model.md §4) and status reporting only — a stale or
+  `SidecarEvent`s feed operational counts (completed-hour operational categories under data-model.md §4) and status reporting only — a stale or
   forged event cannot suppress a dial that would succeed (Principle II:
   a compromise of the management UI cannot silently corrupt routing
   decisions). `RESTARTED` is informational.
@@ -475,8 +475,8 @@ tests-first suite (Principle VII) before implementation lands.
   file at a documented path (`/etc/stargate/tokens.yaml` inside the
   control-plane container; mounted from a named volume the user
   populates manually for v1). The file format MUST be a list of token
-  records, each with a label (free-form string, used in the audit
-  log) and the **plaintext token** (the control plane computes the
+  records, each with a label (free-form string, used only in current authentication
+  configuration) and the **plaintext token** (the control plane computes the
   verifier `HMAC-SHA-256(pepper, token)` under the 32-byte install-time
   pepper at read time and never persists the plaintext beyond the file
   the user supplies; T092 — Argon2id is retired, see data-model.md §1.5

@@ -320,22 +320,6 @@ func assertForwards(t *testing.T, h *dpHarness, plaintext, why string) {
 	}
 }
 
-// journalHasDetailViolation reports whether the captured journal contains
-// a marker that only a contract-violation line for an out-of-vocabulary
-// detail value would contain. The contract does not pin the exact line
-// shape; this checks a set of plausible violation phrasings rather than
-// the bare substring "detail", which an event-receipt log line could also
-// match (and which would therefore never catch a DP that logs the receipt
-// but not the violation).
-func (h *dpHarness) journalHasDetailViolation() bool {
-	for _, marker := range []string{"violation", "unknown detail", "invalid detail", "forbidden detail", "rejected"} {
-		if h.journalContains(marker) {
-			return true
-		}
-	}
-	return false
-}
-
 // --- shared helper (reused by T070b sub-test (e)) -------------------------
 
 // assertDetailRejected sends a SidecarEvent with the given detail value
@@ -373,33 +357,10 @@ func assertDetailRejected(t *testing.T, h *dpHarness, fakeCP *fakeEventsServer, 
 	case <-time.After(10 * time.Second):
 		t.Errorf("DP did not close the stream after forbidden detail %q within 10s — contract requires unknown detail to be treated as a violation", detail)
 	}
-	// The DP MUST journal the violation (a line class T025a's allowlist
-	// reserves). The marker set matches plausible violation-line phrasings
-	// without matching event-receipt lines.
-	//
-	// Poll to a deadline instead of reading once (T116): after the DP
-	// closes the stream, the journal line still has to travel child
-	// stdout → pipe → the harness pump goroutine → lockedBuffer; under
-	// scheduler delay a one-shot read races the pump and fails with the
-	// marker absent at check time yet present in the failure dump
-	// (~2/10 full-suite runs on 2026-09-05). Same 10s budget as the
-	// stream-close wait above; waitFor Fatalfs with the journal on
-	// timeout, and a timeout with the marker absent from that dump is a
-	// REAL regression (the DP stopped journaling violations) and must
-	// fail. Order pinned by T116 §Acceptance 1: close-stream wait →
-	// marker poll → leak scan (the scan below runs only once the marker
-	// is confirmed present, so its verdict is about a journal that
-	// actually carries the violation line).
-	waitFor(t, "journal to record the contract-violation marker", 10*time.Second, h.journal, h.journalHasDetailViolation)
-	// The closed-vocabulary gate exists so sidecar free text never reaches
-	// the DP journal. The violation must be journaled WITHOUT the offending
-	// value — a DP that logs "rejected: detail=\"could not bind...\"" would
-	// pass the marker check above while leaking the exact text the
-	// vocabulary exists to keep out (constitution Principle III). Reuses
-	// the canonical loginvariants scanner (T101 acceptance #1) so a DP
-	// that logs the value in raw/hex/base64/decimal is caught too. Failure
-	// messages are encoding-name-only (no byte values) per the established
-	// index-only hygiene.
+	// The real stream close above proves rejection. Retention must remain empty,
+	// including at final process shutdown (the shared harness drains then checks it).
+	loginvariants.AssertOnlyAllowedLines(t, h.journal.String())
+
 	if leaks := loginvariants.FindSecretLeaks(h.journal.String(), []byte(detail)); len(leaks) != 0 {
 		t.Errorf("journal echoes forbidden detail verbatim (%s) — closed-vocabulary violation must be journaled without the offending sidecar free-text (constitution Principle III)", strings.Join(leaks, ", "))
 	}

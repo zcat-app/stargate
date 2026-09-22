@@ -10,7 +10,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
-import org.jboss.logging.Logger;
 
 import app.zcat.stargate.auth.HmacVerifierMinter;
 import app.zcat.stargate.auth.TokenLoader;
@@ -52,12 +51,12 @@ import stargate.v1.EventsOuterClass.SidecarEvent;
  *   <li>load {@code tokens.yaml} once (T035; FR-018) — the loader persists
  *       the diff, bumps the §1.8 generation, and pushes
  *       {@code ReloadTokens} (T038) strictly last. A missing, unreadable, or
- *       invalid file warns and does NOT push (the DP keeps its last-known
+ *       invalid file does NOT push (the DP keeps its last-known
  *       list and keeps serving — Principle II; only a successfully-parsed
  *       explicit {@code tokens: []} is the revoke-all path). A broken store
- *       (infrastructure, not configuration) is contained with a loud error:
- *       the CP stays up degraded rather than crash-looping, which the
- *       operator could not distinguish from a DP outage.</li>
+ *       during this load is contained without a diagnostic journal. This
+ *       containment does not cover startup: Flyway and the operational sink
+ *       require usable SQLite state before this bootstrap runs.</li>
  * </ol>
  *
  * <p><strong>Pepper discipline (T092 a/b).</strong> The pepper crosses
@@ -74,7 +73,6 @@ import stargate.v1.EventsOuterClass.SidecarEvent;
 @QuarkusMain
 public class StargateControlPlane implements QuarkusApplication {
 
-    private static final Logger LOG = Logger.getLogger(StargateControlPlane.class);
 
     @Inject
     AuditLogService auditService;
@@ -185,10 +183,7 @@ public class StargateControlPlane implements QuarkusApplication {
             try {
                 loader.load(); // never throws on file input (FR-018); push happens inside, §1.7 last
             } catch (RuntimeException brokenInfrastructure) {
-                LOG.errorf(brokenInfrastructure, "tokens.yaml load failed on infrastructure (%s) — "
-                        + "the control plane continues degraded and the data plane keeps its "
-                        + "last-known token list (Principle II; the next boot's §1.8 read re-syncs)",
-                        brokenInfrastructure.getClass().getSimpleName());
+                // Preserve the last valid DP state without retaining infrastructure details (II/III).
             }
             return new BootHandle(server, monitor, client);
         } catch (RuntimeException failure) {

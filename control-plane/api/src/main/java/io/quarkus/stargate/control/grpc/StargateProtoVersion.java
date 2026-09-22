@@ -15,9 +15,6 @@ import io.grpc.CallOptions;
 import io.grpc.Channel;
 import io.grpc.Status;
 
-import java.lang.System.Logger.Level;
-import java.util.function.Consumer;
-
 /**
  * The control plane's compiled-in wire version — the single source location
  * for the version metadata a future {@code stargate.v2} bump touches exactly
@@ -55,14 +52,6 @@ public final class StargateProtoVersion {
     private StargateProtoVersion() {
     }
 
-    /** The CP journal channel for §5.2/§5.5 row-4 mismatch records (the CP is
-     * allowed to log; Principle I's no-log rule binds only the data plane). */
-    private static final System.Logger JOURNAL = System.getLogger(StargateProtoVersion.class.getName());
-
-    /** Test seam (package-private): when set, §5.2 newer-major journal records
-     * go here instead of the system logger. Null in production. */
-    static volatile @org.jspecify.annotations.Nullable Consumer<String> journalSinkForTests;
-
     /**
      * The §5.3 server interceptor (unary AND streaming — one grpc-java
      * interceptor shape covers both): runs the §5.2 rejection rule BEFORE any
@@ -91,7 +80,7 @@ public final class StargateProtoVersion {
     /**
      * The §5.2 rejection rule. Equal major accepts any minor (additive minors
      * are compatible, arch §5.3); the minor is not gated. Messages match the
-     * DP's Go interceptor so both planes' journals carry the same shape.
+     * DP's Go interceptor so both planes return the same rejection status.
      *
      * @return the rejection status, or {@code null} when the RPC is accepted
      */
@@ -113,25 +102,11 @@ public final class StargateProtoVersion {
                     .withDescription("stargate: peer major " + peerMajor + " < server major " + MAJOR);
         }
         if (peerMajor > MAJOR) {
-            // arch §5.5 row 4: a newer peer is rejected, logged to the journal,
-            // and never downgraded to. On the CP-as-client this rejection
-            // surfaces as a startup error (T041's boot path).
-            journal("stargate: rejected newer peer major " + peerMajor + " > server major " + MAJOR
-                    + " (wire-auth.md §5.2 / arch §5.5 row 4)");
+            // A newer peer is rejected without downgrade or a diagnostic journal (III).
             return Status.FAILED_PRECONDITION
                     .withDescription("stargate: peer major " + peerMajor + " > server major " + MAJOR);
         }
         return null;
-    }
-
-    /** One journal record for the §5.2 newer-major rejection path. */
-    private static void journal(String record) {
-        Consumer<String> sink = journalSinkForTests;
-        if (sink != null) {
-            sink.accept(record);
-        } else {
-            JOURNAL.log(Level.WARNING, record);
-        }
     }
 
     /**

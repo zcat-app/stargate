@@ -42,7 +42,7 @@ const verifierLen = 32
 
 // SnapshotFunc is the dp-snapshot.json persist seam (T046's snapshot.go):
 // contract row 4 — called after the in-memory swap, before the OK response;
-// a failure is journaled and the response stays OK (in-memory truth wins;
+// a failure stays silent and the response stays OK (in-memory truth wins;
 // the snapshot is only a cold-start cache).
 type SnapshotFunc func(*auth.Generation) error
 
@@ -61,7 +61,6 @@ type Server struct {
 	tokens  *auth.TokenStore
 	persist SnapshotFunc
 	status  StatusFunc
-	log     *slog.Logger
 
 	// reloadMu serialises the stale-check→swap→persist triple per RPC.
 	// Without it, two concurrent ReloadTokens could interleave swap(A)
@@ -72,8 +71,8 @@ type Server struct {
 
 // NewServer wires the DP-side Control service. T050 supplies the boot's
 // TokenStore, T046's snapshot writer, and T049's counter snapshot source.
-func NewServer(tokens *auth.TokenStore, persist SnapshotFunc, status StatusFunc, log *slog.Logger) *Server {
-	return &Server{tokens: tokens, persist: persist, status: status, log: log}
+func NewServer(tokens *auth.TokenStore, persist SnapshotFunc, status StatusFunc, _ *slog.Logger) *Server {
+	return &Server{tokens: tokens, persist: persist, status: status}
 }
 
 // ReloadTokens atomically swaps the bearer-token generation
@@ -83,11 +82,9 @@ func NewServer(tokens *auth.TokenStore, persist SnapshotFunc, status StatusFunc,
 //   - request generation ≤ current → APPLY_STATUS_STALE_GENERATION with
 //     current_generation echoed (T092 reconciliation) and no change;
 //   - otherwise the store pointer swaps and the snapshot persists BEFORE
-//     the OK response; a persist failure is journaled and stays OK (row 4).
+//     the OK response; a persist failure stays silent and stays OK (row 4).
 //
-// Verifier bytes are never logged (Principle III; the contract's
-// no-logging bullet — labels, pepper, and bytes all stay out of the
-// journal; the swap line carries only the generation and count).
+// No operational event is logged, including successful swaps (Principle III).
 func (s *Server) ReloadTokens(_ context.Context, req *grpcpb.ReloadTokensRequest) (*grpcpb.ReloadTokensResponse, error) {
 	current := s.tokens.Current()
 
@@ -130,13 +127,10 @@ func (s *Server) ReloadTokens(_ context.Context, req *grpcpb.ReloadTokensRequest
 		AppliedGeneration: gen.Generation,
 		Status:            grpcpb.ApplyStatus_APPLY_STATUS_OK,
 	}
-	if err := s.persist(gen); err != nil {
-		// Contract row 4: in-memory truth wins; the failure is journaled
-		// under the snapshot_write line class (loginvariants). The error
-		// text is an fs/path error — never token bytes.
-		s.log.Error("snapshot write failed", "err", err.Error())
-	}
-	s.log.Info("tokens applied", "generation", gen.Generation, "count", len(gen.Verifiers))
+	// Preserve the existing row-4 in-memory acknowledgement policy; T132 owns
+	// durable recovery semantics. Failure cannot emit an operational journal.
+	_ = s.persist(gen)
+
 	return resp, nil
 }
 
@@ -227,7 +221,7 @@ func StreamProtoVersionInterceptor(srv any, ss grpc.ServerStream, _ *grpc.Stream
 
 // checkProtoVersion is the §5.2 rejection rule shared by both interceptor
 // shapes. Equal major accepts any minor (additive minors are compatible,
-// arch §5.3); the minor is debug-logged for diagnostics, never gated.
+// arch §5.3); the minor is never gated.
 func checkProtoVersion(md metadata.MD) error {
 	values := md.Get(protoversion.MetaMajor)
 	if len(values) == 0 {
@@ -244,13 +238,9 @@ func checkProtoVersion(md metadata.MD) error {
 		return status.Errorf(codes.FailedPrecondition,
 			"stargate: peer major %d < server major %d", peerMajor, protoversion.Major)
 	case peerMajor > protoversion.Major:
-		// arch §5.5 row 4: a newer peer is rejected, logged, and — on the
-		// DP — never degrades proxy forwarding (Principle II).
+		// A newer peer is rejected without degrading forwarding (Principle II).
 		return status.Errorf(codes.FailedPrecondition,
 			"stargate: peer major %d > server major %d", peerMajor, protoversion.Major)
-	}
-	if minor := md.Get(protoversion.MetaMinor); len(minor) > 0 {
-		slog.Debug("stargate: peer minor", "minor", minor[0])
 	}
 	return nil
 }

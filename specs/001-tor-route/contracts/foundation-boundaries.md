@@ -225,11 +225,15 @@ day bound is a contract choice, not permission to collect more detailed data for
 
 Current static redacted errors and finite health state are direct responses, not persistent
 journals. Raw sidecar output and application debug stdout/stderr may not bypass the policy.
-T152 inventories and repairs every operational writer, including diagnostic/container capture;
+T152 implements the operational writer and diagnostic/container capture boundaries described
+in data-model §4. It retains a zero enrollment counter for the latest completed hour as a
+clock checkpoint, never as an event. The one-second worker expires rows at runtime and startup;
+exports must enforce expiry before reading. Disabling retention ends the collection lifetime;
 T158 covers traffic counter RPC semantics. Migration stops detailed writes, removes retained
 legacy rows and handles SQLite WAL/backups under an explicit operator cleanup procedure. Do
 not promise forensic erasure on host storage; report that residue and prevent further exports.
-Existing operational rows are a known implementation gap, not constitutional accepted risk.
+V002 removes legacy event rows; copies outside the migrated live database remain operator cleanup
+work, never constitutional accepted risk or proof of forensic erasure.
 
 ## Browser failure and truthful UI — T150/T151/T157
 

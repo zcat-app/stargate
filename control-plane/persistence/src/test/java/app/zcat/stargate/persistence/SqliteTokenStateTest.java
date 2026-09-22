@@ -68,27 +68,15 @@ class SqliteTokenStateTest {
         return out;
     }
 
-    private int countAuditRows() {
-        try (Connection c = dataSource.getConnection();
-                Statement s = c.createStatement();
-                ResultSet rs = s.executeQuery("SELECT COUNT(*) FROM audit_log")) {
-            rs.next();
-            return rs.getInt(1);
-        } catch (SQLException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
     private @Nullable Row readTokenRow(String label) {
         try (Connection c = dataSource.getConnection();
                 Statement s = c.createStatement();
-                ResultSet rs = s.executeQuery("SELECT label, verifier, created_at, revoked_at "
+                ResultSet rs = s.executeQuery("SELECT label, verifier "
                         + "FROM configured_tokens WHERE label = '" + label + "'")) {
             if (!rs.next()) {
                 return null;
             }
-            return new Row(rs.getString(1), rs.getBytes(2), rs.getLong(3),
-                    rs.getObject(4) == null ? null : rs.getLong(4));
+            return new Row(rs.getString(1), rs.getBytes(2));
         } catch (SQLException e) {
             throw new IllegalStateException(e);
         }
@@ -118,7 +106,7 @@ class SqliteTokenStateTest {
         }
     }
 
-    private record Row(String label, byte[] verifier, long createdAt, @Nullable Long revokedAt) {
+    private record Row(String label, byte[] verifier) {
     }
 
     // --- port conformance --------------------------------------------------------
@@ -190,7 +178,7 @@ class SqliteTokenStateTest {
     // --- §1.9 configured_tokens ----------------------------------------------------
 
     @Test
-    void upsertStampsCreatedAtOnceAndRefreshesVerifier() {
+    void upsertStoresOnlyCurrentCredentialAndRefreshesVerifier() {
         String label = "created-at-probe-" + System.nanoTime();
         // upsert/delete are the loader's in-window writes (§1.7): each probe
         // drives them through the same begin/commit shape the loader uses.
@@ -199,20 +187,15 @@ class SqliteTokenStateTest {
         state.commit();
         Row first = readTokenRow(label);
         assertNotNull(first, "the row persists");
-        assertTrue(first.createdAt() > 0, "created_at stamped at first sight (§1.9)");
         assertTrue(java.util.Arrays.equals(VERIFIER_A, first.verifier()), "verifier persisted");
-        assertNull(first.revokedAt(), "a live record has no revoked_at");
 
         state.begin();
         state.upsert(label, VERIFIER_B);
         state.commit();
         Row second = readTokenRow(label);
         assertNotNull(second, "the re-upserted row persists");
-        assertEquals(first.createdAt(), second.createdAt(),
-                "re-upserting the same label keeps created_at (§1.9: stamped once)");
         assertTrue(java.util.Arrays.equals(VERIFIER_B, second.verifier()),
                 "the fresh verifier overwrites (§1.7 full-set rewrite — the pepper-rotation property)");
-        assertNull(second.revokedAt());
 
         List<String> labels = state.storedTokens().stream()
                 .map(TokenLoaderContract.StoredToken::label)
@@ -221,7 +204,7 @@ class SqliteTokenStateTest {
     }
 
     @Test
-    void deleteStampsRevokedAtAndRemovesFromStoredLabels() {
+    void deleteRemovesCredentialWithoutRetainingRevocationHistory() {
         String label = "revoke-probe-" + System.nanoTime();
         state.begin();
         state.upsert(label, VERIFIER_A);
@@ -229,40 +212,30 @@ class SqliteTokenStateTest {
         state.commit();
 
         Row row = readTokenRow(label);
-        assertNotNull(row, "delete is a soft delete — the row remains (§1.9 revoked_at)");
-        assertNotNull(row.revokedAt(), "revoked_at stamped on removal (§1.9)");
+        assertNull(row, "revocation must not retain per-device operational history");
         assertTrue(state.storedTokens().stream().noneMatch(t -> t.label().equals(label)),
                 "a deleted label leaves the diff view (§1.4/§1.9)");
     }
 
-    // --- the §1.7 transactional window: audit rows join the store transaction ------
-
     @Test
-    void auditRowsInsideTheStoreWindowCommit() {
-        int before = countAuditRows();
-        String label = "audit-commit-probe-" + System.nanoTime();
-
+    void rollbackDiscardsCredentialChangesAndOperationalCounts() throws Exception {
+        audit.close();
+        var clock = new AuditLogServiceTest.MutableClock();
+        clock.seconds = 1_900_000_800L;
+        audit.initialize(clock, true);
+        String label = "rollback-credential";
         state.begin();
-        audit.write("enrolled", label, "{\"source\":\"tokens.yaml\",\"generation\":42}");
-        state.commit();
-
-        assertEquals(before + 1, countAuditRows(),
-                "the diff row written inside begin/commit persists (§1.7 — the loader's window)");
-    }
-
-    @Test
-    void rollbackDiscardsBothStoreWritesAndAuditRows() {
-        int before = countAuditRows();
-        String label = "audit-rollback-probe-" + System.nanoTime();
-
-        state.begin();
-        audit.write("enrolled", label, "{\"source\":\"tokens.yaml\",\"generation\":43}");
+        audit.write("enrolled", label, "legacy detail discarded");
         state.upsert(label, VERIFIER_A);
         state.rollback();
-
-        assertEquals(before, countAuditRows(),
-                "a rollback discards the diff rows with the store writes (§4 atomicity)");
-        assertNull(readTokenRow(label), "the upsert is discarded too");
+        assertNull(readTokenRow(label));
         assertTrue(state.storedTokens().stream().noneMatch(t -> t.label().equals(label)));
+        clock.seconds += 3600;
+        audit.flush();
+        try (Connection c = dataSource.getConnection(); var st = c.createStatement();
+                var rs = st.executeQuery("SELECT COALESCE(SUM(count),0) FROM operational_aggregates WHERE hour_bucket=1900000800")) {
+            assertTrue(rs.next());
+            assertEquals(0, rs.getLong(1), "rollback contributes no finalized count");
+        }
     }
 }

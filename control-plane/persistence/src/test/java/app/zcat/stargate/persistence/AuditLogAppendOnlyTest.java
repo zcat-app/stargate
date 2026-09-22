@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
+ * Historical V001 baseline only. T152 migration and AuditLogServiceTest cover the active V002 schema.
  * Append-only enforcement for {@code audit_log} (arch §6.5 "Inserts only; no
  * UPDATE/DELETE in code paths"; Constitution Principle III — privacy-preserving
  * <em>by construction</em>). The schema MUST reject {@code UPDATE} and
@@ -47,7 +48,7 @@ class AuditLogAppendOnlyTest {
     void migrateAndSeed() throws SQLException {
         Path dbFile = tempDir.resolve("stargate-control.db");
         url = "jdbc:sqlite:" + dbFile.toAbsolutePath();
-        Flyway flyway = Flyway.configure().dataSource(url, "", "").load();
+        Flyway flyway = Flyway.configure().dataSource(url, "", "").target("001").load();
         flyway.migrate();
         // Seed one row so UPDATE/DELETE have a concrete target. This is the
         // documented enrolled-action shape (data-model.md §4).

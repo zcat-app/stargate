@@ -45,7 +45,10 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -202,14 +205,10 @@ func t020aDialAuthenticatedConnect(t *testing.T, h *dpHarness, plaintext string)
 	return conn
 }
 
-// t020aWaitRestored polls for T046's implemented restore journal line.
-// The boot sequence (T050) invokes RestoreSnapshot before the listener
-// opens, but the probe polls rather than assuming the ordering.
+// The authenticated response is the restore observation; no diagnostic journal is permitted.
 func t020aWaitRestored(t *testing.T, h *dpHarness) {
 	t.Helper()
-	waitFor(t, "journal to record the snapshot restore", 20*time.Second, h.journal, func() bool {
-		return h.journalContains("snapshot restored")
-	})
+	h.requireAuth(t, t020aPlaintextP1, true, "restored credential must authorize admission")
 }
 
 func TestColdStartSnapshotRestore(t *testing.T) {
@@ -250,18 +249,39 @@ func TestColdStartSnapshotRestore(t *testing.T) {
 	// controlclient unit tests (injected rng) and T021 row 3's live
 	// reconnect; this sub-test pins the cold-start survival property.
 	t.Run("Port8881ServesDuringWatchEventsBackoff", func(t *testing.T) {
-		h := startDPWithSeed(t, "", nil, func(stateDir, keysDir string) {
+		attempts := make(chan struct{}, 16)
+		h := startDPWithSeed(t, "", func(ipcDir string) {
+			// A refusing TLS endpoint proves the real WatchEvents retry loop is active.
+			listener, err := net.Listen("unix", filepath.Join(ipcDir, "control.sock"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { listener.Close() })
+			go func() {
+				for {
+					conn, err := listener.Accept()
+					if err != nil {
+						return
+					}
+					conn.Close()
+					select {
+					case attempts <- struct{}{}:
+					default:
+					}
+				}
+			}()
+		}, func(stateDir, keysDir string) {
 			seedV2Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
 			seedInterPlaneKeys(t, keysDir)
 		})
-
-		// The degraded-mode warning is client.go's warn-once transition on
-		// the first failed dial; its appearance proves the client is up,
-		// so the serving probes below coexist with a live retry loop
-		// rather than passing vacuously.
-		waitFor(t, "the WatchEvents client to enter degraded mode", 20*time.Second, h.journal, func() bool {
-			return h.journalContains("control channel degraded")
-		})
+		for i := 0; i < 2; i++ {
+			select {
+			case <-attempts:
+				h.requireAuth(t, t020aPlaintextP1, true, "admission survives a failed CP handshake")
+			case <-time.After(10 * time.Second):
+				t.Fatal("WatchEvents retry was not observed at the real Unix socket")
+			}
+		}
 
 		deadline := time.Now().Add(2500 * time.Millisecond)
 		probes := 0
@@ -414,10 +434,6 @@ func TestColdStartSnapshotRestore(t *testing.T) {
 			seedV1Snapshot(t, stateDir, t020aPlaintextP1)
 		})
 
-		waitFor(t, "journal to record the v1 snapshot ignore", 20*time.Second, h.journal, func() bool {
-			return h.journalContains("snapshot restore ignored")
-		})
-
 		// Serve NO tokens: not even the plaintext whose verifier the v1
 		// file plausibly carries (a misparse would resurface it — the
 		// seeded hash is the real verifier bytes), and no other either
@@ -488,4 +504,40 @@ func TestT168SandboxUnixRestart(t *testing.T) {
 	}
 	roundtrip()
 	t.Log("authenticated forwarding survives Unix upstream recreation with CP absent")
+}
+
+// Positive control: the ordinary Go runtime really emits diagnostics on SIGQUIT.
+func TestRuntimeDiagnosticControlChild(t *testing.T) {
+	if os.Getenv("T152_RUNTIME_DIAGNOSTIC_CHILD") != "1" {
+		return
+	}
+	_ = syscall.Kill(os.Getpid(), syscall.SIGQUIT)
+	time.Sleep(time.Second)
+	os.Exit(90)
+}
+
+func TestDPDiscardsRuntimeCrashDiagnostics(t *testing.T) {
+	child := exec.Command(os.Args[0], "-test.run=^TestRuntimeDiagnosticControlChild$")
+	child.Env = append(os.Environ(), "T152_RUNTIME_DIAGNOSTIC_CHILD=1", "GOTRACEBACK=single")
+	captured, err := child.CombinedOutput()
+	if err == nil || !strings.Contains(string(captured), "SIGQUIT") {
+		t.Fatal("runtime diagnostic positive control did not produce a SIGQUIT record")
+	}
+	h := startDP(t)
+	process, err := os.FindProcess(h.pid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := process.Signal(syscall.SIGQUIT); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "DP to terminate after SIGQUIT", 5*time.Second, h.journal, func() bool {
+		c, err := net.DialTimeout("tcp", h.proxyAddr, 50*time.Millisecond)
+		if err != nil {
+			return true
+		}
+		c.Close()
+		return false
+	})
+	// Harness cleanup waits for process AND output pumps, then forbids every line.
 }

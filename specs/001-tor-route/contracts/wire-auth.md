@@ -87,7 +87,7 @@ The derived certificate is a minimal self-signed X.509 v3 leaf. Fields:
 
 A plane that fails to read its private key, fails to parse the key, or fails
 to derive the certificate treats it as a **startup error** (CP) or a
-**degraded-mode warning** (DP keeps routing per Constitution Principle II;
+**silent degraded state** (DP keeps routing per Constitution Principle II;
 the §5.5 cold-start path remains in effect for proxy traffic).
 
 ### 2.3 Determinism note (Constitution VI)
@@ -203,10 +203,10 @@ the operator-visible rotation event — see §6.
   standard TLS alert for cert-validation failure). No application RPC is
   dispatched.
 - A missing or unreadable `<peer>.pub`: treated as a startup error (CP) or
-  degraded-mode warning (DP). The DP keeps routing against the upstream dial
+  silent degraded state (DP). The DP keeps routing against the upstream dial
   (Constitution Principle II); the CP fails fast.
 - A pinned-key file that is not a parseable Ed25519 public key: startup
-  error (CP) / degraded-mode warning (DP). The installer (`scripts/subcommands/init`)
+  error (CP) / silent degraded state (DP). The installer (`scripts/subcommands/init`)
   owns the format guarantee; the contract test under
   `tests/contract/stargate-cli/init_test.sh` M4 pins the four key filenames.
 
@@ -281,12 +281,12 @@ compiled proto package. For an incoming RPC:
 - `x-stargate-proto-major` > receiver major → reject with
   `codes.FailedPrecondition`. This is the **arch §5.5 row 4** schema-version
   mismatch path: a newer CP offering an unknown major is rejected by the DP
-  (and vice-versa); the rejection is logged to the journal and, on the CP,
+  (and vice-versa); the rejection is a direct static response and, on the CP,
   surfaces as a startup error. On the DP it MUST NOT degrade proxy
   forwarding (Principle II).
 - `x-stargate-proto-major` == receiver major → accept regardless of minor
-  (additive minor versions are compatible, arch §5.3). The minor is logged
-  for diagnostics but is not a gate.
+  (additive minor versions are compatible, arch §5.3). The minor is neither logged
+  nor an admission gate.
 
 The `x-stargate-capabilities` field is advisory in v1 (the server accepts
 the union and never rejects on capability mismatch in v1); the rejection

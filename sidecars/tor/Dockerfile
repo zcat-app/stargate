@@ -41,21 +41,9 @@
 # (contracts/torrc.md invariant #11 — DataDirectory /var/lib/tor is
 # explicit because the entrypoint does not load Debian's torrc-defaults).
 #
-# HEALTHCHECK design note: contracts/torrc.md invariant #8 renders
-# `Log notice stdout`. The task body phrases the healthcheck as
-# "parsing for 'Bootstrapped 100%' against `Log notice stdout`". A
-# literal stdout-grep is NOT viable inside the container: /proc/1/fd/1
-# yields only NEW log lines after the reader opens, so once Tor has
-# finished bootstrapping and goes idle the healthcheck would silently
-# fail forever. The robust in-container probe is the private control socket
-# (`GETINFO status/bootstrap-phase` over cookie auth), which the
-# contract already enables (ControlSocket /var/lib/tor/control/tor-control.sock,
-# CookieAuthentication 1, CookieAuthFileGroupReadable 1). The control
-# control interface is the authoritative source Tor itself uses to report bootstrap
-# state; the stdout `Bootstrapped 100%` line is derived from the same
-# internal state, so probing the control port is at least as strong.
-# The contract's stdout logging is preserved unchanged — it remains
-# the source of operator-visible logs via `docker logs`.
+# T152: current health is served by the authenticated observer. Docker health
+# probes retain timestamped history and are disabled; Tor diagnostics are
+# discarded in the entrypoint and torrc before any container retention boundary.
 #
 # Pins resolved empirically at /start from authoritative live sources:
 #   - debian:12-slim digest: docker buildx imagetools inspect (registry)
@@ -214,18 +202,5 @@ USER tor
 # `tor -f /etc/tor/torrc` loads the baked config at container start.
 ENTRYPOINT ["/usr/local/bin/stargate-tor-entrypoint"]
 
-# Health: probe the private control socket for bootstrap completion. Reads the
-# auth cookie (owned by `tor`, so USER tor can read it directly),
-# AUTHENTICATEs, asks GETINFO status/bootstrap-phase, and greps the
-# response for PROGRESS=100. Exits non-zero if Tor is not yet (or no
-# longer) bootstrapped. start-period=60s gives Tor room to bootstrap
-# before the first unhealthy verdict.
-#
-# Runtime deps: nc (from netcat-openbsd, explicitly installed above) +
-# od/tr/printf/grep (from coreutils, shipped by the debian:12-slim base).
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD COOKIE_HEX="$(od -An -tx1 /var/lib/tor/control_auth_cookie | tr -d ' \n')" \
-        && { printf 'AUTHENTICATE %s\r\n' "$COOKIE_HEX"; \
-             printf 'GETINFO status/bootstrap-phase\r\n'; \
-             printf 'QUIT\r\n'; \
-           } | nc -U /var/lib/tor/control/tor-control.sock | grep -q 'BOOTSTRAP.*PROGRESS=100'
+# Constitution III: no timestamped Docker health-probe journal.
+HEALTHCHECK NONE

@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
+ * Historical V001 baseline only. T152 migration and AuditLogServiceTest cover the active V002 schema.
  * Exercises the exact insert/update/delete DML shapes the repositories will
  * consume, against a fresh Flyway-migrated SQLite database. This pins that the
  * schema actually accepts the field sets the data model documents — not just
@@ -55,7 +56,7 @@ class RepositoryShapeContractTest {
     void migrate() {
         Path dbFile = tempDir.resolve("stargate-control.db");
         url = "jdbc:sqlite:" + dbFile.toAbsolutePath();
-        Flyway flyway = Flyway.configure().dataSource(url, "", "").load();
+        Flyway flyway = Flyway.configure().dataSource(url, "", "").target("001").load();
         flyway.migrate();
     }
 

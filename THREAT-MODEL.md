@@ -1513,6 +1513,98 @@ constrained by reviewer-role denies. A malicious process with host access or a
 write-and-restore attack is outside the snapshot checks' guarantee. No Docker
 or replacement containment infrastructure is required for review.
 
+### 5.18 Operational records, diagnostics and legacy cleanup (T152)
+
+**Boundary and information retained.** The CP retains completed UTC-hour category counts,
+never an administrative event journal. A database reader can see hourly enrollment/revocation,
+configuration-error and sidecar-health counts for up to seven days, but no actor, label,
+per-event time, generation or detail. The five-category schema and exact retention/clock rules
+are in feature 001 data-model §4. Counts describe CP observations, may lose unpersisted data on
+crash, and provide neither browsing anonymity evidence nor an uninterrupted audit trail.
+
+The newest completed hour includes an `enrolled=0` row when appropriate; this is a real zero
+aggregate and preserves the restart clock boundary after older counts expire. Clock regression
+drops observations until the clock catches up, never reopens a published hour or updates a
+previous count. Disabling retention deletes operational state and ends that collection lifetime;
+re-enabling starts another. Host/root rollback of all state or operator-supplied false time is
+not a tamper-resistant chronology claim. During CP outage no operational aggregation runs;
+this cannot gate DP authentication/admission or established pipes (Principle II).
+
+**Implemented boundaries in the T152 candidate.** V002 drops detailed `audit_log` and its
+append-only triggers, keeps current manual `(label, verifier)` credentials and auth generation,
+and removes revoked credential history and unnecessary lifecycle timestamps. Flyway keeps
+schema identity/checksums while installation actor/time/duration become fixed placeholders;
+the migration test confirms normal checksum validation still works. The operational
+sink holds only category counts, joins JTA at successful completion, publishes immutable closed
+hours, retries bounded pending counters, and expires old rows on its one-second worker and at
+startup. SQLite must be usable at startup: a failure while loading the persisted
+clock boundary can abort CP initialization; the loader's later failure containment does not
+promise CP boot availability. The DP continues independently. No production operational export endpoint exists yet; any future reader must enforce
+expiry before export. A stopped/unwritable database cannot run cleanup; normal retention is
+not a claim of erasure during an outage.
+
+| Writer / capture | Enforcement and preserved behavior |
+|---|---|
+| Java token loader, sidecar monitor, persistence and reload/runtime adapters | No application journal; only fixed categories enter the hourly sink. Current auth/generation behavior remains. |
+| Java protocol-version diagnostic / Quarkus/JVM/native output | Production journal sink removed; framework logs disabled; entrypoint redirects both descriptors before JVM startup, clears JVM-option injection variables and disables error/core/heap dump output. Static authenticated IPC failures remain responses. |
+| Go proxy/controlclient/snapshot and observer | Event log calls removed; process stdout/stderr descriptors point to `/dev/null` before config/keys/network startup. Snapshot/current-auth and advisory event behavior remain. |
+| Tor and shell entrypoint | Tor logs target `/dev/null`; both shell descriptors are discarded before startup/private-state reads. Native protocol state remains separately trusted under §5.8. |
+| Docker capture | All four services set logging `none`, core limit zero and healthcheck disabled. Authenticated observer health replaces Docker's timestamped health-probe history. Installer readiness uses the observer's fixed one-shot `--check-ready` mode and requires READY, not merely running containers. |
+
+**Verification layers.** Real SQLite/JTA regressions cover aggregation, commit/rollback,
+retention, migration and clock/restart behavior. Go unit and process/socket contracts check
+silence while preserving auth, snapshots and rejected-stream closure; former log-based waits
+use those behaviors. Launcher probes use controlled writers and a positive capture control;
+Docker probes independently verify the capture configuration and empty archives. These are
+implementation-boundary tests, not live Tor anonymity, host forensic erasure or LAN/VPS evidence.
+Executed commands/results and remaining release-cadence checks belong to reviews/T152/README.md.
+
+The installer invokes the observer inside its existing container/authority with
+`--check-ready`. It obtains only exit 0 (READY), 1 (NOT_READY), or 2 (UNAVAILABLE/invalid mode),
+never cookie bytes or Tor text. The query has a four-second whole-process bound, including
+cookie I/O; the installer retries within its readiness window. A sample already in progress
+can finish up to four seconds after the window, plus the existing two-second retry interval.
+A running DP listener is checked separately and cannot substitute for Tor bootstrap readiness.
+The observer's authenticated CP protocol and its authority/mounts are unchanged.
+
+**Legacy cleanup procedure.** Stop old CP instances and any reader/exporter of the old database
+before upgrading. Deploy the matching new source/images together; do not roll an old writer
+back onto V002. Flyway's V001 checksum remains unchanged and V002 runs before normal CP startup.
+It enables SQLite `secure_delete` on its migration connection and drops the detailed tables.
+An already-open SQLite reader may still hold its pre-migration snapshot: close it before claiming
+live-copy cleanup. Old backups, container archives and volume/filesystem snapshots are not
+rewritten by a schema migration and must never be included in a normal aggregate export.
+
+With all writers/readers stopped, run against the affected database using a local SQLite tool:
+
+```sql
+PRAGMA wal_checkpoint(TRUNCATE);
+VACUUM;
+PRAGMA wal_checkpoint(TRUNCATE);
+```
+
+Check each checkpoint's busy result is zero. If another connection prevents completion, stop
+that connection and retry; do not delete `-wal` or `-shm` by hand because committed auth state
+may still depend on them. Verify the active schema has no `audit_log`, current credentials and
+generation are intact, and old marker data is absent from the live logical database. Only then
+resume the new CP. The migration test exercises V001→V002 with WAL enabled and preserved auth.
+SQLite explains [secure deletion and checkpoints](https://www.sqlite.org/pragma.html); these
+operations concern SQLite's live files, not all physical copies.
+
+Remove retired Stargate containers through Docker after confirming the replacement works;
+changing the logging driver does not sanitize old containers' archives. Delete or explicitly
+quarantine old DB exports, filesystem/volume snapshots and log backups under the operator's
+backup policy; do not restore them into a new deployment or re-export them as aggregates.
+Retain only current credentials/configuration needed for recovery. SSD wear leveling, host
+journald/audit facilities, swap, hypervisor snapshots, engine-native lifecycle metadata and
+host/root monitoring are outside forensic erasure guarantees. T152 prevents new Stargate
+operational journals; it neither erases host observations nor infers a browsing-log leak merely
+from old administrative timestamps.
+
+This repair enforces an existing boundary; it introduces no new route, external communication,
+cryptographic identity or relaxed guarantee. Ordinary independent ticket reviews remain
+required, and Constitution VIII's external human review gate still applies before release.
+
 ## 6. What Stargate does not protect against
 
 The Non-Goals from the constitution, restated in user-facing terms. Each
@@ -1682,9 +1774,9 @@ Inter-plane keys live on the Stargate host (architecture spec §4.3).
 Admin WebAuthn credentials live on user authenticators; the ed25519
 fallback is a private key in a user wallet. Compromise of the host or
 of admin credentials gives an attacker the ability to enroll devices,
-toggle routes, and read aggregate counters. The audit log records
-admin actions (architecture spec §6 `audit_log`), but the log lives in
-the same DB the attacker can read or wipe.
+toggle routes, and read aggregate counters. T152 retains only completed-hour
+operational counts (§5.18), in the same DB the attacker can read or wipe.
+It provides no tamper-proof administrative chronology.
 
 **Mitigation today**: WebAuthn as the primary admin auth raises the
 bar above passwords; aggregate counters at hour resolution mean an

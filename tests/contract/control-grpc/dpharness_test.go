@@ -193,6 +193,7 @@ func startDPWithSeed(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir s
 
 	cmd := exec.Command(builtDPPath)
 	cmd.Env = append(os.Environ(),
+		"GOTRACEBACK=single", // SIGQUIT probe must exercise runtime output before the sink discards it.
 		"STARGATE_IPC_DIR="+ipcDir,
 		"STARGATE_STATE_DIR="+stateDir,
 		"STARGATE_KEYS_DIR="+keysDir,
@@ -209,7 +210,10 @@ func startDPWithSeed(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir s
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("starting data-plane process: %v", err)
 	}
-	t.Cleanup(func() { stopDP(t, cmd, journal) })
+	t.Cleanup(func() {
+		stopDP(t, cmd, journal)
+		loginvariants.AssertOnlyAllowedLines(t, journal.String())
+	})
 
 	sockPath := filepath.Join(ipcDir, "dp.sock")
 	waitFor(t, "dp.sock to appear", 20*time.Second, journal, func() bool {
@@ -270,7 +274,7 @@ func stopDP(t *testing.T, cmd *exec.Cmd, journal *lockedBuffer) {
 	}
 	_ = cmd.Process.Signal(os.Interrupt)
 	done := make(chan struct{})
-	go func() { _, _ = cmd.Process.Wait(); close(done) }()
+	go func() { _ = cmd.Wait(); close(done) }()
 	select {
 	case <-done:
 	case <-time.After(3 * time.Second):
@@ -463,12 +467,6 @@ func verifiersEqual(b64 string, raw []byte) bool {
 func assertNoSecretLeak(t *testing.T, h *dpHarness, secrets ...[]byte) {
 	t.Helper()
 	loginvariants.AssertNoSecrets(t, h.journal.String(), secrets...)
-}
-
-// journalContains reports whether the captured journal has the substring,
-// case-insensitively.
-func (h *dpHarness) journalContains(needle string) bool {
-	return strings.Contains(strings.ToLower(h.journal.String()), strings.ToLower(needle))
 }
 
 // lockedBuffer is a mutex-guarded byte buffer safe for concurrent writes

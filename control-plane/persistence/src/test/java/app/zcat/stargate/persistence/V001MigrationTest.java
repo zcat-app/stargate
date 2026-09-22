@@ -52,7 +52,7 @@ class V001MigrationTest {
 
         // Flyway applies the migration located under
         // src/main/resources/db/migration/ on the classpath.
-        Flyway flyway = Flyway.configure().dataSource(url, "", "").load();
+        Flyway flyway = Flyway.configure().dataSource(url, "", "").target("001").load();
         flyway.migrate();
 
         Set<String> tables = userTables(url);
@@ -73,7 +73,7 @@ class V001MigrationTest {
         Path dbFile = tempDir.resolve("stargate-control.db");
         String url = "jdbc:sqlite:" + dbFile.toAbsolutePath();
 
-        Flyway flyway = Flyway.configure().dataSource(url, "", "").load();
+        Flyway flyway = Flyway.configure().dataSource(url, "", "").target("001").load();
         flyway.migrate();
 
         // Flyway's own schema-history table must record exactly V001 at
@@ -88,6 +88,76 @@ class V001MigrationTest {
             // verbatim ("001"), not as a normalised integer ("1").
             assertEquals("001", rs.getString("version"), "first installed version");
             assertEquals(1, rs.getInt("success"), "first migration recorded as success");
+        }
+    }
+
+    @Test
+    void legacyMigrationRemovesOperationalHistoryButPreservesCurrentAuth() throws Exception {
+        String url = "jdbc:sqlite:" + tempDir.resolve("legacy.db");
+        Flyway.configure().dataSource(url, "", "").target("001").load().migrate();
+        try (Connection c = DriverManager.getConnection(url); var st = c.createStatement()) {
+            st.execute("PRAGMA journal_mode=WAL");
+            st.execute("INSERT INTO audit_log(ts, actor, action, target, detail_json) "
+                    + "VALUES(123, 'legacy-actor', 'enrolled', 'legacy-label', 'legacy-private-detail')");
+            st.execute("INSERT INTO configured_tokens(label,verifier,created_at) VALUES('active', zeroblob(32),123)");
+            st.execute("INSERT INTO configured_tokens(label,verifier,created_at,revoked_at) VALUES('revoked',zeroblob(32),123,456)");
+            st.execute("INSERT INTO token_generation(generation) VALUES(42)");
+        }
+        Path backup = tempDir.resolve("retired-backup.db");
+        Files.copy(tempDir.resolve("legacy.db"), backup);
+        try (Connection walKeeper = DriverManager.getConnection(url)) {
+        // Keep one connection open so WAL cleanup is an explicit operation, not
+        // merely SQLite's automatic checkpoint when its last connection closes.
+        assertTrue(!walKeeper.isClosed());
+        Flyway.configure().dataSource(url, "", "").load().migrate();
+        assertTrue(!userTables(url).contains("audit_log"), "legacy per-event journal must be removed");
+        try (Connection c = DriverManager.getConnection(url); var st = c.createStatement()) {
+            try (var rs = st.executeQuery("SELECT label FROM configured_tokens")) {
+                assertTrue(rs.next());
+                assertEquals("active", rs.getString(1));
+                assertTrue(!rs.next(), "revoked token history must not survive migration");
+            }
+            try (var rs = st.executeQuery("SELECT generation FROM token_generation")) {
+                assertTrue(rs.next());
+                assertEquals(42, rs.getLong(1), "migration preserves auth authority");
+            }
+            try (var rs = st.executeQuery("PRAGMA table_info(configured_tokens)")) {
+                Set<String> columns = new HashSet<>();
+                while (rs.next()) columns.add(rs.getString("name"));
+                assertEquals(Set.of("label", "verifier"), columns);
+            }
+            try (var checkpoint = st.executeQuery("PRAGMA wal_checkpoint(TRUNCATE)")) {
+                assertTrue(checkpoint.next());
+                assertEquals(0, checkpoint.getInt(1), "no reader may block cleanup");
+            }
+            st.execute("VACUUM");
+            try (var checkpoint = st.executeQuery("PRAGMA wal_checkpoint(TRUNCATE)")) {
+                assertTrue(checkpoint.next()); assertEquals(0, checkpoint.getInt(1));
+            }
+        }
+        }
+        String live = new String(Files.readAllBytes(tempDir.resolve("legacy.db")),
+                java.nio.charset.StandardCharsets.ISO_8859_1);
+        String retired = new String(Files.readAllBytes(backup), java.nio.charset.StandardCharsets.ISO_8859_1);
+        assertTrue(!live.contains("legacy-private-detail"), "live SQLite pages cleaned, not forensic host erasure");
+        assertTrue(retired.contains("legacy-private-detail"), "backups remain explicit operator cleanup work");
+    }
+
+    @Test
+    void migrationBookkeepingRetainsSchemaIdentityWithoutInstallHistory() throws Exception {
+        String url = "jdbc:sqlite:" + tempDir.resolve("schema-identity.db");
+        Flyway flyway = Flyway.configure().dataSource(url, "", "").load();
+        flyway.migrate();
+        flyway.validate();
+        try (Connection c = DriverManager.getConnection(url); var st = c.createStatement();
+                var rows = st.executeQuery("SELECT installed_by, installed_on, execution_time "
+                        + "FROM flyway_schema_history")) {
+            while (rows.next()) {
+                assertEquals("1970-01-01 00:00:00", rows.getString(2),
+                        "schema checksums do not authorize an installation event journal");
+                assertEquals("stargate", rows.getString(1));
+                assertEquals(0, rows.getInt(3));
+            }
         }
     }
 
