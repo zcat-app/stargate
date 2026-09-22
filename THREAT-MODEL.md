@@ -1233,6 +1233,17 @@ same-destination site/profile/device SOCKS controls, intact usernames and empty 
 passwords. Migrated coverage retains byte integrity, long-lived pipes, CP-outage/advisory
 independence, counters, log/leak invariants and upstream-close behavior.
 
+**Forwarding accounting repair (T149):** terminal shutdown now interrupts pending client
+I/O and closes the upstream before waiting for both forwarding pumps. Only then is the
+complete upstream-read/write total added once to the hourly aggregate. Deterministic
+paused-I/O regressions cover the concurrent-close loss, and blocked-read/write probes cover
+shutdown in both directions. This preserves the existing upstream-boundary byte definition,
+opaque payload handling and listener ownership of client Close; it adds no idle deadline or
+request log. This is an implementation repair within the existing transport boundary, not a
+new trust boundary. It does not repair current-hour counter exposure: immutable completed-hour
+publication remains T158's obligation. See the
+[T149 evidence](specs/001-tor-route/analysis/T149-accounting-evidence.md) for the local evidence layer.
+
 The [T173 evidence record](specs/001-tor-route/analysis/T173-connect-refusal-evidence.md)
 identifies the tested candidate and distinguishes socket tests from Local deployment proof.
 T172 remains the reviewed contract decision; neither it nor a passing unit suite proves

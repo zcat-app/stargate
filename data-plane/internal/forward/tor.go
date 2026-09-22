@@ -151,7 +151,7 @@ func refusedByUpstream(err error) bool {
 // dialUpstream forwards the authenticated SOCKS partition intact with an empty
 // upstream password: the bearer never crosses the Tor boundary (Principle III).
 // The listener guarantees a nonempty username before this internal call.
-func (t *Tor) dialUpstream(uname []byte, target string) (net.Conn, error) {
+func (t *Tor) dialUpstream(uname []byte, target string) (*countingConn, error) {
 	auth := &proxy.Auth{User: string(uname)}
 	network, address := "tcp", t.upstream
 	if strings.HasPrefix(address, "unix://") {
@@ -206,15 +206,13 @@ func (c *countingConn) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// Close flushes before the underlying close. bridge closes the upstream
-// from both pump goroutines, so the once-guard is what keeps the count
-// from doubling; every Forward path closes this conn (the ownership
-// contract this package's seams state), so the flush cannot be skipped.
-func (c *countingConn) Close() error {
+// finalize runs only after both pumps have stopped (or before either starts).
+// Closing the socket alone does not join Read/Write's accounting increments:
+// T149 / data-model.md §3 requires their complete total at request close.
+func (c *countingConn) finalize() {
 	c.flush.Do(func() {
 		c.counts.AddForwardedBytes(c.read.Load() + c.written.Load())
 	})
-	return c.Conn.Close()
 }
 
 // Forward implements listener.Forwarder (SOCKS5 inbound path): dial the
@@ -231,6 +229,7 @@ func (t *Tor) Forward(client net.Conn, uname []byte, target string) error {
 	}
 	if _, err := client.Write(successReply[:]); err != nil {
 		up.Close()
+		up.finalize()
 		return err
 	}
 	bridge(client, up)
@@ -241,14 +240,25 @@ func (t *Tor) Forward(client net.Conn, uname []byte, target string) error {
 // closes the upstream — the only conn this package owns; the client's
 // close stays with the listener. Pipe errors are deliberately swallowed:
 // a mid-tunnel break ends the connection, it does not become a reply.
-// The client→upstream goroutine may outlive the return by one pending
-// client Read — HandleConn's deferred client Close unblocks it, so
-// nothing outlives the connection.
-func bridge(client, upstream net.Conn) {
+// Cancel pending client I/O before joining: the listener cannot close its
+// connection until Forward returns. The deadline is shutdown-only, never an
+// idle timeout on a live tunnel (socks5-auth.md §Deadlines).
+func bridge(client net.Conn, upstream *countingConn) {
+	defer upstream.finalize()
+	var stop sync.Once
+	shutdown := func() {
+		stop.Do(func() {
+			upstream.Close()
+			_ = client.SetDeadline(time.Now())
+		})
+	}
+	done := make(chan struct{})
 	go func() {
+		defer close(done)
 		_, _ = io.Copy(upstream, client)
-		upstream.Close()
+		shutdown()
 	}()
 	_, _ = io.Copy(client, upstream)
-	upstream.Close()
+	shutdown()
+	<-done
 }

@@ -1,9 +1,9 @@
 ---
 id: "T149"
 title: "Finalize byte accounting after both forwarding pumps"
-status: "pending"
+status: in-review
 created: "2026-09-12"
-last_updated: "2026-09-12"
+last_updated: 2026-09-22
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
@@ -34,9 +34,18 @@ Transport Minor m2: a net.Pipe scheduling probe delivered five bytes while final
 
 ## Analysis
 
-- Must hold: the ticket acceptance and cited constitutional properties.
-- Gated: existing baseline verify is green; it did not catch the audited issue.
-- Residue: the specific missing property in Context; the acceptance probes below must discriminate it. Investigation-only tickets must resolve the design before authorizing production changes.
+- Must hold: all completed upstream Read/Write results contribute exactly once to the
+  request-close byte total (data-model.md §3); shutdown cancels blocked I/O before joining
+  both pumps. Client Close ownership stays with the listener. No live-tunnel idle timeout,
+  payload interpretation, logging or counter-schema change (Constitution I/III).
+- Gated: existing forward/audit and SOCKS counter contracts cover ordinary bidirectional
+  totals, handshake exclusion, hourly shape and byte/log invariants. They did not force
+  successful I/O to race the final accounting flush.
+- Residue: `TestConcurrentCloseWaitsForAccounting` forces that interleaving for both reads
+  and writes and checks one exact final flush (Acceptance 1).
+  `TestBridgeCancelsBlockedIOBeforeJoining` covers blocked reads and writes on both
+  endpoints (Acceptance 2). Real-socket forward and SOCKS contracts retain Acceptance 3
+  coverage. Completed-hour publication remains the separately assigned T158 gap.
 
 ## Acceptance
 
@@ -57,3 +66,5 @@ regression before the fix; tests_first is empty because the named regression
 is authored within this ticket rather than a separate test ticket. For design
 work, no production implementation is authorized until its stated decision
 boundary is satisfied. Preserve approved historical commits.
+
+Tests-first evidence and scope limits: [T149 evidence](../analysis/T149-accounting-evidence.md).

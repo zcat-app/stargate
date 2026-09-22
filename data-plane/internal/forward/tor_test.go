@@ -474,8 +474,8 @@ func TestForwardDialDeadlineIsRouteTimeout(t *testing.T) {
 func TestProductionDialDeadlineIsThirtySeconds(t *testing.T) {
 	// contracts/socks5-auth.md §"Deadlines" row 1: the dial-and-handshake
 	// ceiling is 30 s, wired as the single named constant; row 2: no
-	// post-handshake deadline exists (asserted structurally — no code
-	// path sets one after dialUpstream returns).
+	// live-tunnel idle deadline exists. bridge's terminal deadline only
+	// cancels pending I/O after a pump has finished.
 	if upstreamDialTimeout != 30*time.Second {
 		t.Fatalf("upstreamDialTimeout = %v, want 30s", upstreamDialTimeout)
 	}
@@ -531,8 +531,8 @@ func TestByteFlushAtCloseBothDirections(t *testing.T) {
 	if err := <-errc; err != nil {
 		t.Fatalf("Forward: %v", err)
 	}
-	// bridge closes the upstream from BOTH pump goroutines; a flush per
-	// close would double the count to 92. Exactly 46 pins flush-once.
+	// Both pumps can request shutdown; a flush per pump would double the
+	// count to 92. Exactly 46 pins flush-once.
 	if got := counts.total(); got != 46 {
 		t.Fatalf("counter = %d after close, want exactly 46 (2×23 forwarded bytes, flushed once)", got)
 	}
