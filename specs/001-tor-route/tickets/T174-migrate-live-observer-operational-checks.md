@@ -1,7 +1,7 @@
 ---
 id: "T174"
 title: "Migrate live observer checks to silent operational boundaries"
-status: in-review
+status: done
 created: "2026-09-22"
 last_updated: 2026-09-22
 source: "T152 round-2 GLM review of b0c86f2196a6e58fa02753c2ded961d06b2573245f981e8f73797beed78b9111"
@@ -18,7 +18,7 @@ spec_refs: [".specify/memory/constitution.md Principles II/III/V/VII", "specs/00
 decision_refs: []
 remediates: "T152"
 tests_first: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-22, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

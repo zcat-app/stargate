@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 42 |
+| pending | 43 |
 | in-progress | 0 |
-| in-review | 3 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 156 |
+| done | 159 |
 | deferred | 5 |
-| **total** | **206** |
+| **total** | **207** |
 
 ---
 
@@ -41,16 +41,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T151 | Name the actual WebRTC remediation preference | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
+| T175 | Align live quickstart wording with scoped route indicators | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T150 | Define truthful mixed-tab route indicator semantics | in-review | ✓ | Foundation audit remediation |
-| T153 | Surface incompatible peer versions at CP startup | in-review | ✓ | Foundation audit remediation |
-| T174 | Migrate live observer checks to silent operational boundarie | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -68,7 +65,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_156 ticket(s) done._
+_159 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -209,7 +206,9 @@ _156 ticket(s) done._
 - T147 — Resolve HTTP CONNECT first-party isolation
 - T148 — Reconcile peer certificate validity policy
 - T149 — Finalize byte accounting after both forwarding pumps
+- T150 — Define truthful mixed-tab route indicator semantics
 - T152 — Replace detailed operational journals with hourly aggregates
+- T153 — Surface incompatible peer versions at CP startup
 - T156 — Strengthen constitution and reconcile implementation prerequisites
 - T158 — Publish only finalized aggregate counter buckets
 - T160 — Prepare Tor security upgrade with enforced package content pins
@@ -226,3 +225,4 @@ _156 ticket(s) done._
 - T171 — Separate topology probe launch and fixture timing
 - T172 — Reconcile Tor HTTP CONNECT refusal contracts
 - T173 — Refuse unpartitioned HTTP CONNECT on the Tor listener
+- T174 — Migrate live observer checks to silent operational boundaries
