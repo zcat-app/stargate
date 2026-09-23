@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 43 |
-| in-progress | 0 |
+| pending | 42 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 159 |
@@ -41,13 +41,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T151 | Name the actual WebRTC remediation preference | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
-| T175 | Align live quickstart wording with scoped route indicators | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T175 | Align live quickstart wording with scoped route indicators | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

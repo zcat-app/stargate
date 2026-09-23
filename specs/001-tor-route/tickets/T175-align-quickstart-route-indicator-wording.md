@@ -1,9 +1,9 @@
 ---
 id: "T175"
 title: "Align live quickstart wording with scoped route indicators"
-status: "pending"
+status: in-progress
 created: "2026-09-23"
-last_updated: "2026-09-23"
+last_updated: 2026-09-23
 source: "T150 round-2 GLM Minor; candidate b7b1b4407a7a11fd4c165ad6c6ebe9107a71659578648a9b3f10f973b4d0207f"
 phase: "Foundation audit remediation"
 story: "-"
@@ -63,5 +63,12 @@ quickstart instructions. No existing runtime-test expectation changes are author
 
 ## Notes
 
-Filed after T150's focused commit from the reviewers' recorded Minor follow-up. This ticket
-is pending work and does not claim the documentation inconsistency has been repaired.
+Filed after T150's focused commit from the reviewers' recorded Minor follow-up. The initial
+ticket record made no claim that the documentation inconsistency had already been repaired.
+
+Consistency check (2026-09-23): current operator/release Markdown outside historical task,
+ticket and review evidence was searched for the retired `Route: Tor` / `Route: Direct
+(unrouted)` quotations and the replacement `Main navigation decision:` prefixes. Quickstart
+Step 6 was the only current unqualified quotation. Its replacement matches spec.md §Per-tab
+indicator scope, THREAT-MODEL.md §4.2, and the canonical strings in `popup.js` and
+`popup.test.js`; no additional follow-up is required. Historical evidence remains unchanged.

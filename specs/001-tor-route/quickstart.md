@@ -200,8 +200,12 @@ In Mullvad Browser, navigate to:
 https://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/
 ```
 
-The Stargate popup icon should show **Route: Tor** for this tab.
-DuckDuckGo's onion mirror renders.
+The Stargate popup should show **Main navigation decision: Tor**, followed by
+**Other requests may use different routes. Connection success is not verified.**
+This reports only the latest observed main-navigation request's routing
+decision; it does not claim that every request in the tab used Tor or prove a
+successful connection or page load. Separately, DuckDuckGo's onion mirror
+should render.
 
 If the page does not render:
 
