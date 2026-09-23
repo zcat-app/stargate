@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 42 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 159 |
+| done | 160 |
 | deferred | 5 |
 | **total** | **207** |
 
@@ -46,9 +46,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T175 | Align live quickstart wording with scoped route indicators | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -66,7 +64,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_159 ticket(s) done._
+_160 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -227,3 +225,4 @@ _159 ticket(s) done._
 - T172 — Reconcile Tor HTTP CONNECT refusal contracts
 - T173 — Refuse unpartitioned HTTP CONNECT on the Tor listener
 - T174 — Migrate live observer checks to silent operational boundaries
+- T175 — Align live quickstart wording with scoped route indicators

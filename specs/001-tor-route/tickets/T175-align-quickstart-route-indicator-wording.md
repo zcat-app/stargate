@@ -1,7 +1,7 @@
 ---
 id: "T175"
 title: "Align live quickstart wording with scoped route indicators"
-status: in-progress
+status: done
 created: "2026-09-23"
 last_updated: 2026-09-23
 source: "T150 round-2 GLM Minor; candidate b7b1b4407a7a11fd4c165ad6c6ebe9107a71659578648a9b3f10f973b4d0207f"
@@ -18,7 +18,7 @@ spec_refs: ["specs/001-tor-route/spec.md §Per-tab indicator scope", "THREAT-MOD
 decision_refs: []
 remediates: "T150"
 tests_first: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-23, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
