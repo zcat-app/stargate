@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 41 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 160 |
+| done | 161 |
 | deferred | 5 |
 | **total** | **207** |
 
@@ -45,9 +45,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T151 | Name the actual WebRTC remediation preference | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -65,7 +63,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_160 ticket(s) done._
+_161 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -207,6 +205,7 @@ _160 ticket(s) done._
 - T148 — Reconcile peer certificate validity policy
 - T149 — Finalize byte accounting after both forwarding pumps
 - T150 — Define truthful mixed-tab route indicator semantics
+- T151 — Name the actual WebRTC remediation preference
 - T152 — Replace detailed operational journals with hourly aggregates
 - T153 — Surface incompatible peer versions at CP startup
 - T156 — Strengthen constitution and reconcile implementation prerequisites
