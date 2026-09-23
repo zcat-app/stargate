@@ -182,6 +182,9 @@ public class StargateControlPlane implements QuarkusApplication {
                     audit, new GrpcReloadChannel(client), new HmacVerifierMinter(pepper));
             try {
                 loader.load(); // never throws on file input (FR-018); push happens inside, §1.7 last
+            } catch (GrpcReloadChannel.IncompatiblePeerVersionException incompatiblePeer) {
+                // Wire-auth §5.2: version rejection is a startup error, not an outage.
+                throw incompatiblePeer;
             } catch (RuntimeException brokenInfrastructure) {
                 // Preserve the last valid DP state without retaining infrastructure details (II/III).
             }

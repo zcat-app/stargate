@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-22
+**Last updated:** 2026-09-23
 
 ---
 
@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 44 |
+| pending | 43 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 2 |
 | escalated | 0 |
 | done | 156 |
 | deferred | 5 |
@@ -40,7 +40,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T146 | Correct init timeout diagnosis and isolate its fixture | Foundation audit remediation |  |  |
 | T150 | Define truthful mixed-tab route indicator semantics | Foundation audit remediation | ✓ |  |
 | T151 | Name the actual WebRTC remediation preference | Foundation audit remediation | ✓ |  |
-| T153 | Surface incompatible peer versions at CP startup | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
 
@@ -50,6 +49,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
+| T153 | Surface incompatible peer versions at CP startup | in-review | ✓ | Foundation audit remediation |
 | T174 | Migrate live observer checks to silent operational boundarie | in-review | ✓ | Foundation audit remediation |
 
 ---

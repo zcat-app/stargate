@@ -1358,6 +1358,15 @@ inter-plane UDS sockets (`/run/stargate/control.sock` or
   / `-minor` / `-capabilities` gRPC metadata; a server interceptor rejects
   an unknown major with `FailedPrecondition` before invoking application
   behaviour (arch §5.5 row 4).
+- **T153 startup rejection:** an authenticated peer's `FailedPrecondition` on
+  the startup token push aborts CP bootstrap with `INCOMPATIBLE_PEER_VERSION`
+  and tears down its partial services. No peer description, trailers or cause
+  are retained in that error; production diagnostic output stays suppressed.
+  Temporary transport outages remain contained and DP forwarding is independent.
+  `PeerVersionStartupTest` exercises both mismatch directions, compatible dispatch,
+  transient failure, redaction and listener cleanup over real mTLS/UDS with a
+  Java peer fixture. Missing/invalid token input makes no push and therefore
+  discovers no mismatch; retry/reconciliation remains T132's separate work.
 - **Mode/group dial gate** (`0660` + `stargate-ipc` GID) is the outer
   defence that keeps the dial surface small in the local profile; the
   mutual-pin is the load-bearing auth gate.

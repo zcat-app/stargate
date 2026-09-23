@@ -293,6 +293,15 @@ the union and never rejects on capability mismatch in v1); the rejection
 machinery is reserved for a future major. v1 implementations MUST still send
 the field so the v2 cut can start enforcing it without a wire-shape change.
 
+On the CP's startup `ReloadTokens` call, `FailedPrecondition` aborts bootstrap
+with the fixed local error `INCOMPATIBLE_PEER_VERSION`; peer description,
+trailers and cause are discarded. Partial CP surfaces are closed and the
+application exits unsuccessfully. Runtime diagnostic output remains suppressed
+(Principle III); this is a startup failure, not a persistent error journal.
+Transient transport outage remains contained. No extra probe is introduced:
+missing/invalid token input still does not push, so it cannot discover version
+incompatibility at that boot. No rejection changes DP forwarding or retained auth state.
+
 ### 5.3 The interceptor
 
 Both server endpoints (`ControlGrpcService` on the CP, the DP's

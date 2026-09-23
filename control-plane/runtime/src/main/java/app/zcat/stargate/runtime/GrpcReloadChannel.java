@@ -9,6 +9,7 @@ import java.util.List;
 import com.google.protobuf.ByteString;
 
 import app.zcat.stargate.auth.TokenLoaderContract;
+import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.quarkus.stargate.control.grpc.ReloadTokensClient;
 import stargate.v1.ControlOuterClass.ApplyStatus;
@@ -31,7 +32,8 @@ import stargate.v1.ControlOuterClass.TokenVerifier;
  * boot's §1.8 read re-syncs — the same shape the loader's bounded stale
  * retry exhausts into. A STALE reply, by contrast, maps through verbatim so
  * the loader's reconciliation handshake (adopt {@code current + 1}, retry)
- * runs.
+ * runs. A {@code FAILED_PRECONDITION} version rejection instead aborts CP
+ * startup with a static error (wire-auth §5.2), without retaining peer detail.
  */
 public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChannel {
 
@@ -46,8 +48,19 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
         try {
             return toPushResult(client.reload(generation, toVerifiers(verifiers)));
         } catch (StatusRuntimeException transport) {
+            if (Status.fromThrowable(transport).getCode() == Status.Code.FAILED_PRECONDITION) {
+                // Wire-auth §5.2 reserves this rejection for incompatible IPC versions.
+                // Do not attach the peer exception: its description/trailers are untrusted (III).
+                throw new IncompatiblePeerVersionException();
+            }
             // Preserve existing containment without a diagnostic journal (II/III).
             return new TokenLoaderContract.PushResult(false, generation);
+        }
+    }
+
+    static final class IncompatiblePeerVersionException extends IllegalStateException {
+        IncompatiblePeerVersionException() {
+            super("INCOMPATIBLE_PEER_VERSION");
         }
     }
 
