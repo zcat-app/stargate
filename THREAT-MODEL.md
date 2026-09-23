@@ -725,6 +725,14 @@ six relays (three on each side) selected by Tor's path-selection algorithm
 
 **Stargate-specific notes**:
 
+- **Popup scope (T150):** the per-tab label reports only the latest observed main-navigation
+  request decision, including redirect targets. Onion images cannot make a Direct main request
+  appear Tor-routed; Direct subresources cannot change an onion main request's Tor decision.
+  The popup explicitly states that other requests may use different routes and connection success
+  is unverified. Unknown/pending/unreadable state makes no route claim. This in-memory decision
+  is neither measured mixed-resource coverage nor proof of tunnel establishment, successful load
+  or whole-tab protection (Principles III/V). Router/popup unit regressions cover this display
+  contract; live network outcomes and browser failure enforcement remain T157/T155 obligations.
 - The data plane forwards SOCKS5 with the SOCKS5 username set to the
   first-party domain (architecture spec §14.3). For onion services, the
   "first-party domain" is the onion address itself, giving distinct

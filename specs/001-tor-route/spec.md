@@ -97,7 +97,7 @@ renders the page. A simultaneous `tcpdump` / Wireshark capture on the
    (`docker-compose.local.yml` up, Tor sidecar HEALTHY, bearer token
    present in the extension), **When** the user opens a known `.onion`
    URL in Mullvad Browser, **Then** the page renders, the extension's
-   per-tab indicator shows route = Tor, and the SOCKS tunnel carries page bytes without a
+   per-tab indicator shows the main-navigation decision = Tor (scope below), and the SOCKS tunnel carries page bytes without a
    Stargate failure reply.
 2. **Given** the same stack, **When** the user opens
    `http://check.torproject.org` via the onion mirror (or, equivalently,
@@ -111,6 +111,28 @@ renders the page. A simultaneous `tcpdump` / Wireshark capture on the
    either capture, and no TCP connect to a destination outside the
    current Tor consensus appears on the egress NIC during the routed
    request window.
+
+---
+
+### Per-tab indicator scope — T150
+
+The indicator describes the latest observed top-level navigation request's routing decision
+(`type: main_frame`, `frameId: 0`) for the active tab, including redirect targets. It is not
+a whole-tab protection indicator or proof of successful tunnel establishment. Subresources,
+subframes and workers cannot replace this decision. A Direct main request with an onion image
+therefore remains Direct (unrouted); an onion main request with a Direct image remains Tor.
+Both display: `Other requests may use different routes. Connection success is not verified.`
+
+Canonical prefixes are `Main navigation decision: Tor`,
+`Main navigation decision: Direct (unrouted)` and `Main navigation decision: Unknown`.
+Only a recorded Tor decision permits the Tor label; a recorded non-Tor decision permits the
+Direct (unrouted) label. Unknown tabs, pending decisions, missing or malformed replies and
+unreadable background state display Unknown without throwing or deriving a route from the URL.
+New main requests replace the old decision immediately with pending state; delayed completions
+cannot overwrite a newer decision or repopulate a closed tab. Popup refreshes similarly discard
+older replies. State stays in background memory and is removed on tab close or background restart.
+This scope supersedes the unqualified labels in historical T034c/T057 task text and walkthroughs.
+It changes no route descriptors, hardening gates or T157 failure-enforcement obligations.
 
 ---
 

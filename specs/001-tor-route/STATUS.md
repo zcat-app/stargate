@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 43 |
+| pending | 42 |
 | in-progress | 0 |
-| in-review | 2 |
+| in-review | 3 |
 | escalated | 0 |
 | done | 156 |
 | deferred | 5 |
@@ -38,7 +38,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
 | T145 | Test Maven wrapper checksum enforcement | Foundation audit remediation |  |  |
 | T146 | Correct init timeout diagnosis and isolate its fixture | Foundation audit remediation |  |  |
-| T150 | Define truthful mixed-tab route indicator semantics | Foundation audit remediation | ✓ |  |
 | T151 | Name the actual WebRTC remediation preference | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
@@ -49,6 +48,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
+| T150 | Define truthful mixed-tab route indicator semantics | in-review | ✓ | Foundation audit remediation |
 | T153 | Surface incompatible peer versions at CP startup | in-review | ✓ | Foundation audit remediation |
 | T174 | Migrate live observer checks to silent operational boundarie | in-review | ✓ | Foundation audit remediation |
 

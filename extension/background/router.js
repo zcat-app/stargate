@@ -262,11 +262,23 @@
     }
   }
 
-  browser.proxy.onRequest.addListener(async function proxyOnRequest(details) {
-    const decision = await route(details);
-    if (validTabId(details.tabId)) {
-      tabDecisions.set(details.tabId, decision.routed ? 'tor' : 'unrouted');
+  async function routeWithIndicator(details) {
+    if (!validTabId(details.tabId) || details.type !== 'main_frame' || details.frameId !== 0) {
+      return route(details);
     }
+    // T150 / Principles III and V: only main-navigation decisions are displayed.
+    // Object identity prevents an old async result reviving a replaced/closed tab.
+    const current = { route: undefined };
+    tabDecisions.set(details.tabId, current);
+    const decision = await route(details);
+    if (tabDecisions.get(details.tabId) === current) {
+      current.route = decision.routed ? 'tor' : 'unrouted';
+    }
+    return decision;
+  }
+
+  browser.proxy.onRequest.addListener(async function proxyOnRequest(details) {
+    const decision = await routeWithIndicator(details);
     if (!decision.routed) return DIRECT;
     return {
       type: 'socks',
@@ -281,12 +293,7 @@
   browser.webRequest.onBeforeRequest.addListener(
     function stargateOnBeforeRequest(details) {
       if (validTabId(details.tabId)) {
-        route(details).then((decision) => {
-          tabDecisions.set(
-            details.tabId,
-            decision.routed ? 'tor' : 'unrouted'
-          );
-        });
+        void routeWithIndicator(details);
       }
       return {};
     },
@@ -339,7 +346,7 @@
     if (message.type !== GET_ROUTE) return undefined;
     const tabId = message.tabId;
     if (!validTabId(tabId)) return undefined;
-    const decision = tabDecisions.get(tabId);
+    const decision = tabDecisions.get(tabId)?.route;
     if (decision === 'tor') return Promise.resolve({ route: 'tor' });
     if (decision === 'unrouted') return Promise.resolve({ route: 'unrouted' });
     return Promise.resolve(undefined);

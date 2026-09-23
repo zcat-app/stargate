@@ -1,40 +1,10 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 //
-// popup.test.js — Principle-VII unit test for the extension's per-tab
-// route indicator (`popup/popup.js`; US1 acceptance scenario 1's
-// observable surface — tasks.md T034c cases (a)–(d)).
-//
-// Boundary under test (T034c §Analysis — the pinned surface): popup.js
-// is a self-contained classic script (zero new context globals) that
-// renders at load, writes `textContent` of the `route-indicator`
-// element, and touches only `tabs.query({active:true,currentWindow:
-// true})`, `tabs.onUpdated.addListener` and `runtime.sendMessage`. The
-// popup↔background transport is pinned here because no spec text names
-// it and MV2 leaves no alternative (research.md §2 — no
-// `storage.session`; the `webRequest.onBeforeRequest` cache is
-// background-page memory a separate popup document cannot read):
-// `runtime.sendMessage({type:'stargate:getRoute', tabId})`, answered
-// `{route:'tor'}` iff the background's cache holds a confirmed Tor
-// decision for that tab, and nothing meaningful otherwise. The display
-// mapping is fail-closed: `Route: Tor` iff `route === 'tor'`; every
-// absent, malformed, or failed answer renders `Route: Direct
-// (unrouted)` — a wrong-positive tells the user they are routed when
-// they aren't (case (d)'s stated failure), a wrong-negative is mere
-// annoyance. The popup never derives routing from the tab URL: the
-// background's routing decision (T054) is the single authority.
-//
-// The canonical label strings are hard-coded from tasks.md T057 ("the
-// canonical labels; drift between them and T034c's assertions fails
-// CI"); quickstart.md Step 6 corroborates the Tor label in operator
-// prose. No data-model § pins the labels, so this suite IS the machine
-// side of that coupling.
-//
-// MV2 popup scripts load as browser global scripts, not ES modules, so
-// the test loads popup.js via vm.runInNewContext() with a synthesized
-// sandbox (`browser` access-recording, minimal `document`, `console`).
-// No UMD wrapper or module shim is added to the extension (research.md
-// §10). Node built-ins only — no third-party deps, no package.json.
+// Tests the main-navigation decision display contract in spec.md §Per-tab
+// indicator scope (T150). The background is the routing authority; the popup
+// only queries the active tab and writes textContent. Node VM mocks exercise
+// message failures and ordering, not real browser transport or tunnel success.
 
 'use strict';
 
@@ -60,9 +30,11 @@ const HTML_ABSENT =
 const implPresent = () => fs.existsSync(POPUP_PATH);
 const htmlPresent = () => fs.existsSync(POPUP_HTML_PATH);
 
-// Canonical labels (tasks.md T057 is the normative source — see header).
-const LABEL_TOR = 'Route: Tor';
-const LABEL_DIRECT = 'Route: Direct (unrouted)';
+// Canonical labels from spec.md §Per-tab indicator scope (T150).
+const SCOPE = ' Other requests may use different routes. Connection success is not verified.';
+const LABEL_TOR = 'Main navigation decision: Tor' + SCOPE;
+const LABEL_DIRECT = 'Main navigation decision: Direct (unrouted)' + SCOPE;
+const LABEL_UNKNOWN = 'Main navigation decision: Unknown' + SCOPE;
 
 // Pinned protocol (T034c §Analysis finding 1).
 const GET_ROUTE = 'stargate:getRoute';
@@ -309,7 +281,7 @@ test('sameTabOnionToClearnetNavigationClearsStaleTorLabel', { skip: skip() }, as
   state.reply = () => Promise.resolve(undefined);
   await fireOnUpdated(h, 7, { url: 'https://example.com/other' }, state.activeTab);
   assert.strictEqual(
-    renderedLabel(h), LABEL_DIRECT,
+    renderedLabel(h), LABEL_UNKNOWN,
     'body case (c): after an in-tab navigation the label updates with no ' +
       'stale `Route: Tor` carry-over from the previous navigation'
   );
@@ -333,7 +305,7 @@ test('sameTabClearnetToOnionNavigationShowsTorOnFreshCacheAnswer', { skip: skip(
   requireConformance(h.sandbox);
   await drain();
   assert.strictEqual(
-    renderedLabel(h), LABEL_DIRECT,
+    renderedLabel(h), LABEL_UNKNOWN,
     'precondition: the unrouted tab shows the safe default'
   );
   // The mirror of case (c): navigation arrives on the same tab and the
@@ -354,7 +326,7 @@ test('sameTabClearnetToOnionNavigationShowsTorOnFreshCacheAnswer', { skip: skip(
   );
 });
 
-test('coldStartEmptyCacheShowsExactUnroutedLabel', { skip: skip() }, async () => {
+test('coldStartEmptyCacheShowsUnknownLabel', { skip: skip() }, async () => {
   const state = {
     activeTab: { id: 7, url: 'https://example.com/' },
     // Cold start: the onBeforeRequest cache holds nothing for this tab,
@@ -365,7 +337,7 @@ test('coldStartEmptyCacheShowsExactUnroutedLabel', { skip: skip() }, async () =>
   requireConformance(h.sandbox);
   await drain();
   assert.strictEqual(
-    renderedLabel(h), LABEL_DIRECT,
+    renderedLabel(h), LABEL_UNKNOWN,
     'body case (d): the popup MUST NOT display "Tor" without a confirmed ' +
       'routing decision for the current tab — a wrong-positive would tell ' +
       'the user they are routed when they are not'
@@ -389,7 +361,7 @@ test('nonTorRepliesNeverRenderTorLabel', { skip: skip() }, async () => {
     requireConformance(h.sandbox);
     await drain();
     assert.strictEqual(
-      renderedLabel(h), LABEL_DIRECT,
+      renderedLabel(h), reply && reply.route === 'unrouted' ? LABEL_DIRECT : LABEL_UNKNOWN,
       `reply ${JSON.stringify(reply)} on an onion tab must render the safe ` +
         'default — `Route: Tor` requires exactly route === \'tor\' ' +
         '(T034c §Analysis fail-closed display mapping)'
@@ -397,7 +369,7 @@ test('nonTorRepliesNeverRenderTorLabel', { skip: skip() }, async () => {
   }
 });
 
-test('sendMessageFailureRendersUnroutedWithoutThrowing', { skip: skip() }, async () => {
+test('sendMessageFailureRendersUnknownWithoutThrowing', { skip: skip() }, async () => {
   const state = {
     activeTab: { id: 7, url: `https://${ONION}/page` },
     // Background page gone/reloading: the ask rejects. If the
@@ -409,7 +381,7 @@ test('sendMessageFailureRendersUnroutedWithoutThrowing', { skip: skip() }, async
   requireConformance(h.sandbox);
   await drain();
   assert.strictEqual(
-    renderedLabel(h), LABEL_DIRECT,
+    renderedLabel(h), LABEL_UNKNOWN,
     'a failed ask degrades to the safe default — never an unhandled ' +
       'rejection on the popup document, never "Tor" (T034b ' +
       'apiReadFailureFailsClosedWithoutThrowing precedent)'
@@ -428,14 +400,14 @@ test('backgroundTabUpdateNeverRerendersActiveIndicator', { skip: skip() }, async
   requireConformance(h.sandbox);
   await drain();
   assert.strictEqual(
-    renderedLabel(h), LABEL_DIRECT,
+    renderedLabel(h), LABEL_UNKNOWN,
     'precondition: the active clearnet tab shows the safe default'
   );
   // A background tab navigates to an onion site while the popup is open
   // on the clearnet active tab.
   await fireOnUpdated(h, 9, { url: `https://${ONION}/` }, { id: 9, url: `https://${ONION}/` });
   assert.strictEqual(
-    renderedLabel(h), LABEL_DIRECT,
+    renderedLabel(h), LABEL_UNKNOWN,
     'another tab navigating to .onion must not move the active tab\'s ' +
       'indicator — cross-tab bleed is the case-(d) wrong-positive reached ' +
       'sideways (T034c §Analysis per-tab binding). The contract is the ' +
@@ -527,4 +499,34 @@ test('popupHtmlProvidesPinnedIndicatorElement', { skip: !htmlPresent() && HTML_A
       '(T034c §Analysis "Pinned surface"); id drift is a CI-caught ' +
       'contract break in either direction'
   );
+});
+
+
+test('lateTorReplyCannotOverwriteNewerUnknownRefresh', async () => {
+  let resolveOld;
+  const state = {
+    activeTab: { id: 7 },
+    reply: () => new Promise((resolve) => { resolveOld = resolve; }),
+  };
+  const h = loadPopup(state);
+  await drain();
+  state.reply = () => Promise.reject(new Error('background unavailable'));
+  await fireOnUpdated(h, 7, { status: 'loading' }, state.activeTab);
+  resolveOld({ route: 'tor' });
+  await drain();
+  assert.strictEqual(renderedLabel(h), LABEL_UNKNOWN);
+});
+
+test('refreshClearsTorWhileTheNewDecisionIsUnreadable', async () => {
+  let resolveNew;
+  const state = { activeTab: { id: 7 }, reply: () => Promise.resolve({ route: 'tor' }) };
+  const h = loadPopup(state);
+  await drain();
+  assert.strictEqual(renderedLabel(h), LABEL_TOR);
+  state.reply = () => new Promise((resolve) => { resolveNew = resolve; });
+  await fireOnUpdated(h, 7, { status: 'loading' }, state.activeTab);
+  assert.strictEqual(renderedLabel(h), LABEL_UNKNOWN);
+  resolveNew({ route: 'unrouted' });
+  await drain();
+  assert.strictEqual(renderedLabel(h), LABEL_DIRECT);
 });

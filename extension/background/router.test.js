@@ -1201,3 +1201,126 @@ test('routerContributesZeroNewGlobalsToTheSharedScope', () => {
       'shared MV2 background scope (T034g)'
   );
 });
+
+
+// T150: main-navigation scope must survive mixed requests through either
+// callback, and the actual popup must consume that scoped decision.
+for (const writer of ['proxy', 'webRequest']) {
+  for (const mainTor of [false, true]) {
+    test(`mixedTabMainNavigationScope-${writer}-${mainTor ? 'onionMain' : 'directMain'}`, async () => {
+      const loaded = loadHardenedTokened();
+      await drain();
+      const mainURL = mainTor ? `https://${ONION_A}/` : 'https://example.com/';
+      const resourceURL = mainTor ? 'https://example.com/image' : `https://${ONION_B}/image`;
+      const write = loaded.recorded[writer][0];
+      await write(mainFrame(mainURL));
+      const expectedRoute = mainTor ? 'tor' : 'unrouted';
+      await waitForCachedRoute(loaded.onMessage, 7, expectedRoute);
+      await write(subresource(resourceURL, mainURL));
+      // Wait until the old implementation's async subresource write has completed.
+      // WebCrypto can outlast drain(); observe its opposite value or exhaust bounded turns.
+      await waitForCachedRoute(loaded.onMessage, 7, mainTor ? 'unrouted' : 'tor');
+      assert.deepStrictEqual(plain(await loaded.onMessage({ type: GET_ROUTE, tabId: 7 })),
+        { route: expectedRoute });
+      const indicator = {};
+      vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../popup/popup.js'), 'utf8'), {
+        document: { getElementById: () => indicator },
+        browser: {
+          tabs: { query: async () => [{ id: 7 }], onUpdated: { addListener() {} } },
+          runtime: { sendMessage: loaded.onMessage },
+        },
+      });
+      await drain();
+      assert.strictEqual(indicator.textContent,
+        `Main navigation decision: ${mainTor ? 'Tor' : 'Direct (unrouted)'}` +
+        ' Other requests may use different routes. Connection success is not verified.');
+    });
+  }
+
+  test(`subresourceAloneCannotClaimMainNavigation-${writer}`, async () => {
+    const loaded = loadHardenedTokened();
+    await drain();
+    await loaded.recorded[writer][0](subresource(`https://${ONION_A}/x`, 'https://example.com/'));
+    await waitForCachedRoute(loaded.onMessage, 7, 'tor');
+    assert.strictEqual(await loaded.onMessage({ type: GET_ROUTE, tabId: 7 }), undefined);
+  });
+
+  for (const replacement of ['navigation', 'close']) {
+    test(`lateMainDecisionCannotRestoreStaleTor-${writer}-${replacement}`, async () => {
+      let releaseSign;
+      const loaded = loadRouter({
+        hardeningOk: true,
+        crypto: {
+          getRandomValues: webcrypto.getRandomValues.bind(webcrypto),
+          subtle: {
+            importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
+            sign(...args) {
+              return new Promise((resolve, reject) => {
+                releaseSign = () => webcrypto.subtle.sign(...args).then(resolve, reject);
+              });
+            },
+          },
+        },
+      });
+      await drain();
+      const write = loaded.recorded[writer][0];
+      const onMessage = loaded.recorded.message[0];
+      const pending = write(mainFrame(`https://${ONION_A}/`));
+      for (let i = 0; i < 100 && !releaseSign; i += 1) await drain(1);
+      assert.ok(releaseSign, 'positive control: Tor decision waits for HMAC');
+      if (replacement === 'navigation') {
+        await write(mainFrame('https://example.com/'));
+        await waitForCachedRoute(onMessage, 7, 'unrouted');
+      } else {
+        loaded.recorded.tabRemoved[0](7);
+      }
+      await releaseSign();
+      await pending;
+      await drain();
+      assert.deepStrictEqual(plain(await onMessage({ type: GET_ROUTE, tabId: 7 })),
+        replacement === 'navigation' ? { route: 'unrouted' } : undefined);
+    });
+  }
+}
+
+for (const writer of ['proxy', 'webRequest']) {
+  test(`pendingMainNavigationClearsExistingTor-${writer}`, async () => {
+    let holdSign = false;
+    let releaseSign;
+    const loaded = loadRouter({
+      hardeningOk: true,
+      crypto: {
+        getRandomValues: webcrypto.getRandomValues.bind(webcrypto),
+        subtle: {
+          importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
+          sign(...args) {
+            if (!holdSign) return webcrypto.subtle.sign(...args);
+            return new Promise((resolve, reject) => {
+              releaseSign = () => webcrypto.subtle.sign(...args).then(resolve, reject);
+            });
+          },
+        },
+      },
+    });
+    await drain();
+    const write = loaded.recorded[writer][0];
+    const onMessage = loaded.recorded.message[0];
+    await write(mainFrame(`https://${ONION_A}/`));
+    assert.deepStrictEqual(plain(await waitForCachedRoute(onMessage, 7, 'tor')),
+      { route: 'tor' }, 'positive control: the prior main decision is Tor');
+
+    holdSign = true;
+    const pending = write(mainFrame(`https://${ONION_B}/`));
+    for (let i = 0; i < 100 && !releaseSign; i += 1) await drain(1);
+    assert.ok(releaseSign, 'positive control: the replacement decision is suspended');
+    try {
+      assert.strictEqual(await onMessage({ type: GET_ROUTE, tabId: 7 }), undefined,
+        'a pending main navigation must not retain the previous Tor decision');
+    } finally {
+      await releaseSign();
+      await pending;
+    }
+    assert.deepStrictEqual(plain(await waitForCachedRoute(onMessage, 7, 'tor')),
+      { route: 'tor' }, 'the replacement publishes its own decision after completion');
+  });
+}
