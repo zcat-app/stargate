@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 42 |
-| in-progress | 0 |
+| pending | 41 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 160 |
@@ -38,7 +38,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
 | T145 | Test Maven wrapper checksum enforcement | Foundation audit remediation |  |  |
 | T146 | Correct init timeout diagnosis and isolate its fixture | Foundation audit remediation |  |  |
-| T151 | Name the actual WebRTC remediation preference | Foundation audit remediation | ✓ |  |
 | T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
 
@@ -46,7 +45,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T151 | Name the actual WebRTC remediation preference | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

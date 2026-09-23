@@ -190,7 +190,7 @@ test('hardenedProfileAuditsCleanAndSilent', { skip: !implPresent() && IMPL_ABSEN
   assert.strictEqual(recorded.storageSets.length, 0, 'no failure record on a hardened profile');
 });
 
-test('webrtcEnabledFailsClosedAndDialogNamesWebrtc', { skip: !implPresent() && IMPL_ABSENT }, async () => {
+test('webrtcEnabledFailsClosedAndDialogNamesActualPref', { skip: !implPresent() && IMPL_ABSENT }, async () => {
   const { sandbox, recorded } = loadHardening({ peerConnectionEnabled: true });
   requireConformance(sandbox);
   await sandbox.auditHardening();
@@ -208,8 +208,24 @@ test('webrtcEnabledFailsClosedAndDialogNamesWebrtc', { skip: !implPresent() && I
     assert.ok(payload && typeof payload.message === 'string', 'dialog payload carries a message string');
     assert.match(payload.message, /webrtc/i, 'dialog names WebRTC as the runtime-blocked surface');
     assert.match(
-      payload.message, /peerConnectionEnabled/i,
-      'dialog names the remediation (arch §14.5 failure UX item 1)'
+      payload.message, /media\.peerconnection\.enabled[^.]*false/i,
+      'dialog names the actual about:config remediation (arch §14.5 Part 1)'
+    );
+    assert.doesNotMatch(
+      payload.message, /privacy\.network\.peerConnectionEnabled/,
+      'dialog must not present the WebExtensions API path as an about:config preference'
+    );
+    assert.match(
+      payload.message, /about:config/i,
+      'dialog identifies where the Firefox preference is configured'
+    );
+    assert.match(
+      payload.message, /restart/i,
+      'dialog preserves the browser restart instruction'
+    );
+    assert.match(
+      payload.message, /verified outside the extension at each Stargate release/i,
+      'dialog preserves the release-only boundary for the remaining hardening surfaces'
     );
     assert.strictEqual(
       payload.requireInteraction, true,
@@ -263,15 +279,49 @@ test('webrtcPrefUnsetFailsClosed', { skip: !implPresent() && IMPL_ABSENT }, asyn
     'the pref is reachable but unset: only peerConnectionEnabled === false is hardened'
   );
   assert.ok(recorded.notifications.length >= 1, 'unset-hardening failure is surfaced');
+  for (const payload of recorded.notifications) {
+    assert.doesNotMatch(
+      payload.message, /WebRTC is enabled/i,
+      'an unset API value must not be reported as a measured enabled state'
+    );
+    assert.match(
+      payload.message, /could not verify WebRTC is disabled/i,
+      'an unset API value is reported as unknown while routing remains fail-closed'
+    );
+  }
 });
 
 test('apiReadFailureFailsClosedWithoutThrowing', { skip: !implPresent() && IMPL_ABSENT }, async () => {
-  const { sandbox } = loadHardening({ rejectRead: true });
+  const { sandbox, recorded } = loadHardening({ rejectRead: true });
   requireConformance(sandbox);
   // An API misbehaviour (permission, unavailable) must degrade to
   // fail-closed, never to an unhandled rejection on the background page.
   await sandbox.auditHardening();
+  await drain();
   assert.strictEqual(sandbox.hardeningOk, FAIL_CLOSED, 'API read failure fails closed');
+  assert.ok(recorded.notifications.length >= 1, 'unreadable API state is surfaced');
+  for (const payload of recorded.notifications) {
+    assert.doesNotMatch(
+      payload.message, /WebRTC is enabled/i,
+      'a failed API read must not be reported as a measured enabled state'
+    );
+    assert.match(
+      payload.message, /could not verify WebRTC is disabled/i,
+      'a failed API read is reported as unknown while routing remains fail-closed'
+    );
+    assert.match(
+      payload.message, /media\.peerconnection\.enabled[^.]*false/i,
+      'unknown-state remediation still names the actual Firefox preference'
+    );
+    assert.match(
+      payload.message, /restart/i,
+      'unknown-state remediation preserves restart guidance'
+    );
+    assert.match(
+      payload.message, /verified outside the extension at each Stargate release/i,
+      'unknown-state dialog preserves the release-only hardening boundary'
+    );
+  }
 });
 
 test('auditRunsAtScriptLoadWithoutExplicitCall', { skip: !implPresent() && IMPL_ABSENT }, async () => {

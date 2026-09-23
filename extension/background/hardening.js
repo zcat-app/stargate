@@ -78,13 +78,19 @@ var auditHardening = async function auditHardening() {
   // release cadence; naming them is neither needed nor safe, since the
   // only runtime-true sentence about them is the one this copy makes.
   try {
+    const notificationMessage = readError === null && readValue === true
+      ? 'WebRTC is enabled, so Stargate has blocked all non-Direct routes. ' +
+        'To restore them, set media.peerconnection.enabled to false in ' +
+        'about:config and restart the browser. '
+      : 'Stargate could not verify WebRTC is disabled, so all non-Direct ' +
+        'routes remain blocked. To restore them, confirm ' +
+        'media.peerconnection.enabled is false in about:config and restart ' +
+        'the browser. ';
     await browser.notifications.create({
       type: 'basic',
       title: 'Stargate: non-Direct routing blocked',
       message:
-        'WebRTC is enabled, so Stargate has blocked all non-Direct routes. ' +
-        'To restore them, set privacy.network.peerConnectionEnabled to ' +
-        'false in about:config and restart the browser. WebRTC is the ' +
+        notificationMessage + 'WebRTC is the ' +
         'only hardening surface this extension can verify at runtime; ' +
         'the rest of the hardened profile is verified outside the ' +
         'extension at each Stargate release.',
