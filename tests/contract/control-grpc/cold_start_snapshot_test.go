@@ -12,9 +12,8 @@
 // auth/reply bytes on port 8881, ReloadTokens on dp.sock,
 // dp-snapshot.json bytes, and the captured journal.
 //
-// The seeded snapshot is the schemaVersion 2 verifiers-only shape
-// (data-model.md §1.4, amended by T092 — superseding this ticket's
-// pre-T092 "{hash, salt}" wording) carrying the base64 HMAC-SHA-256 tag
+// The seeded snapshot is the schemaVersion 3 durable auth-set-v1 shape
+// (data-model.md §1.4, amended by T159) carrying the base64 HMAC-SHA-256 tag
 // of a known plaintext minted under the harness pepper (§1.5). The
 // sub-test for the T092 amendment seeds the retired v1 shape and asserts
 // it is ignored, never misparsed.
@@ -66,26 +65,29 @@ const (
 	t020aSnapshotGen = uint64(7)
 )
 
-// seedV2Snapshot writes a schemaVersion 2 dp-snapshot.json (data-model.md
-// §1.4) carrying the single verifier minted under the harness pepper for
+// seedV3Snapshot writes a schemaVersion 3 dp-snapshot.json (data-model.md
+// §1.4) carrying the single verifier and auth-set-v1 commitment for
 // plaintext, at the given generation — the exact shape T046's writer
 // persists and T046's RestoreSnapshot consumes at cold start.
-func seedV2Snapshot(t *testing.T, stateDir string, generation uint64, plaintext string) {
+func seedV3Snapshot(t *testing.T, stateDir string, generation uint64, plaintext string) {
 	t.Helper()
+	token := mintToken(t, plaintext)
 	doc := map[string]any{
-		"schemaVersion": 2,
-		"generation":    generation,
-		"loadedAt":      "2026-05-17T14:00:00Z",
+		"schemaVersion":  3,
+		"authSetVersion": 1,
+		"generation":     generation,
+		"commitment":     base64.StdEncoding.EncodeToString(authSetCommitment([]*grpcpb.TokenVerifier{token})),
+		"loadedAt":       "2026-05-17T14:00:00Z",
 		"verifiers": []map[string]string{
-			{"verifier": base64.StdEncoding.EncodeToString(mintToken(t, plaintext).GetVerifier())},
+			{"verifier": base64.StdEncoding.EncodeToString(token.GetVerifier())},
 		},
 	}
 	blob, err := json.Marshal(doc)
 	if err != nil {
-		t.Fatalf("marshalling v2 snapshot: %v", err)
+		t.Fatalf("marshalling v3 snapshot: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(stateDir, "dp-snapshot.json"), blob, 0o600); err != nil {
-		t.Fatalf("writing seeded v2 snapshot: %v", err)
+		t.Fatalf("writing seeded v3 snapshot: %v", err)
 	}
 }
 
@@ -218,7 +220,7 @@ func TestColdStartSnapshotRestore(t *testing.T) {
 	// generation NUMBER is live, not just the verifier set.
 	t.Run("RestoresSnapshotWithCPUnreachable", func(t *testing.T) {
 		h := startDPWithSeed(t, "", nil, func(stateDir, _ string) {
-			seedV2Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
+			seedV3Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
 		})
 		t020aWaitRestored(t, h)
 
@@ -271,7 +273,7 @@ func TestColdStartSnapshotRestore(t *testing.T) {
 				}
 			}()
 		}, func(stateDir, keysDir string) {
-			seedV2Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
+			seedV3Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
 			seedInterPlaneKeys(t, keysDir)
 		})
 		for i := 0; i < 2; i++ {
@@ -303,7 +305,7 @@ func TestColdStartSnapshotRestore(t *testing.T) {
 	// beyond the current generation (data-model.md §1.3).
 	t.Run("NewGenerationReplacesColdStartSnapshot", func(t *testing.T) {
 		h := startDPWithSeed(t, "", nil, func(stateDir, _ string) {
-			seedV2Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
+			seedV3Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
 		})
 		t020aWaitRestored(t, h)
 
@@ -321,10 +323,10 @@ func TestColdStartSnapshotRestore(t *testing.T) {
 		h.requireAuth(t, t020aPlaintextP1, false, "the cold-start snapshot's plaintext must stop authenticating once a fresh generation lands")
 
 		// Persist-before-OK (contract row 4): the snapshot file was
-		// rewritten to the new generation, still the v2 verifier shape.
+		// rewritten to the new generation in the durable schema-v3 shape.
 		snap := h.readSnapshot(t)
-		if snap.SchemaVersion != 2 {
-			t.Errorf("rewritten snapshot schemaVersion = %d, want 2", snap.SchemaVersion)
+		if snap.SchemaVersion != 3 || snap.AuthSetVersion != 1 {
+			t.Errorf("rewritten snapshot versions = %d/%d, want 3/1", snap.SchemaVersion, snap.AuthSetVersion)
 		}
 		if snap.Generation != t020aSnapshotGen+1 {
 			t.Errorf("rewritten snapshot generation = %d, want %d", snap.Generation, t020aSnapshotGen+1)
@@ -353,7 +355,7 @@ func TestColdStartSnapshotRestore(t *testing.T) {
 		t.Cleanup(func() { _ = upstream.Close() })
 
 		h := startDPWithSeed(t, upstreamAddr, nil, func(stateDir, _ string) {
-			seedV2Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
+			seedV3Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
 		})
 
 		conn := t020aDialAuthenticatedConnect(t, h, t020aPlaintextP1)
@@ -395,7 +397,7 @@ func TestColdStartSnapshotRestore(t *testing.T) {
 		requireForwardPath(t)
 
 		h := startDPWithSeed(t, "", nil, func(stateDir, _ string) {
-			seedV2Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
+			seedV3Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
 		})
 
 		conn := t020aDialAuthenticatedConnect(t, h, t020aPlaintextP1)
@@ -470,7 +472,7 @@ func TestT168SandboxUnixRestart(t *testing.T) {
 	}
 	defer func() { _ = upstream.Close() }()
 	h := startDPWithSeed(t, target, nil, func(stateDir, _ string) {
-		seedV2Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
+		seedV3Snapshot(t, stateDir, t020aSnapshotGen, t020aPlaintextP1)
 	})
 	roundtrip := func() {
 		c := t020aDialAuthenticatedConnect(t, h, t020aPlaintextP1)

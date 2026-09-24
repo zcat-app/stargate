@@ -3,11 +3,10 @@
 
 // snapshot.go — the dp-snapshot.json persistence layer (T046): the atomic
 // cold-start cache behind server.go's SnapshotFunc seam. Contract:
-// specs/001-tor-route/data-model.md §1.4 (schemaVersion 2, verifiers-only —
-// NEVER the pepper or plaintext; stale v1 ignored, not misparsed),
+// specs/001-tor-route/data-model.md §1.4 (schemaVersion 3, verifiers-only —
+// NEVER the pepper or plaintext; legacy schemas ignored, not misparsed),
 // §1.3 (generation / atomic swap), contracts/control-grpc.md §"ReloadTokens"
-// row 4 (persist before the OK response; the existing failure response stays
-// OK while in-memory truth wins; no event journal is permitted), and arch §5.5 (control
+// row 4 (durable persist before in-memory swap and acknowledgment), and arch §5.5 (control
 // plane down at startup → continue from the last-known snapshot).
 //
 // The snapshot holds derived material only (base64 HMAC-SHA-256 tags): the
@@ -16,12 +15,16 @@
 package controlclient
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/zcat-app/stargate/data-plane/internal/auth"
@@ -33,20 +36,24 @@ import (
 // contract-harness env contract).
 const snapshotFileName = "dp-snapshot.json"
 
-// snapshotSchemaVersion is the v2 shape T092 introduced: verifiers[] of
-// 32-byte HMAC tags, no per-token salt. A file claiming any other version
-// is ignored at restore (never misparsed — parsing v1 {hash,salt} pairs as
-// verifiers would authenticate nothing and silently break routing, §1.4).
-const snapshotSchemaVersion = 2
+const (
+	// Schema 3 adds the versioned exact-content commitment required before a
+	// T159 durable acknowledgment. Legacy schemas cannot prove that property.
+	snapshotSchemaVersion = 3
+	authSetVersion        = 1
+	sha256CommitmentLen   = sha256.Size
+)
 
 // snapshotFile is the on-disk §1.4 shape. LoadedAt is an RFC 3339 string
 // (not time.Time) so a malformed timestamp is a restore-rejecting
 // validation failure instead of a silent zero time.
 type snapshotFile struct {
-	SchemaVersion int              `json:"schemaVersion"`
-	Generation    uint64           `json:"generation"`
-	LoadedAt      string           `json:"loadedAt"`
-	Verifiers     []snapshotV2Item `json:"verifiers"`
+	SchemaVersion  int              `json:"schemaVersion"`
+	AuthSetVersion int              `json:"authSetVersion"`
+	Generation     uint64           `json:"generation"`
+	Commitment     string           `json:"commitment"`
+	LoadedAt       string           `json:"loadedAt"`
+	Verifiers      []snapshotV2Item `json:"verifiers"`
 }
 
 type snapshotV2Item struct {
@@ -66,15 +73,18 @@ func SnapshotWriter(dir string, _ *slog.Logger) SnapshotFunc {
 // returns an error carrying the operation and path only — never material
 // bytes (§1.6; Principle III).
 //
-// The fsync before rename is what makes the cache survive a power cut as
-// a coherent file instead of a renamed-but-empty inode; the directory
-// entry itself is not fsynced — the snapshot is a cache whose loss only
-// costs tokens until the CP re-pushes (row 4), not a source of truth.
+// The file fsync makes the renamed inode coherent; the directory fsync makes
+// that rename durable before the caller may publish or acknowledge the new
+// generation. A directory-sync failure leaves the candidate pending: the
+// file may already be visible, but its durability has not been acknowledged.
 func WriteSnapshot(dir string, g *auth.Generation) error {
+	commitment := authSetCommitment(g.Verifiers)
 	sf := snapshotFile{
-		SchemaVersion: snapshotSchemaVersion,
-		Generation:    g.Generation,
-		LoadedAt:      g.LoadedAt.Format(time.RFC3339),
+		SchemaVersion:  snapshotSchemaVersion,
+		AuthSetVersion: authSetVersion,
+		Generation:     g.Generation,
+		Commitment:     base64.StdEncoding.EncodeToString(commitment),
+		LoadedAt:       g.LoadedAt.Format(time.RFC3339),
 		// Non-nil even for a revoke-all generation: §1.4's verifiers is
 		// an array, and json.Marshal renders a nil slice as null.
 		Verifiers: make([]snapshotV2Item, 0, len(g.Verifiers)),
@@ -110,7 +120,37 @@ func WriteSnapshot(dir string, g *auth.Generation) error {
 		os.Remove(tmp.Name())
 		return fmt.Errorf("renaming snapshot into place %s: %w", final, err)
 	}
+	dirFile, err := os.Open(dir)
+	if err != nil {
+		return fmt.Errorf("opening snapshot directory %s: %w", dir, err)
+	}
+	if err := dirFile.Sync(); err != nil {
+		dirFile.Close()
+		return fmt.Errorf("syncing snapshot directory %s: %w", dir, err)
+	}
+	if err := dirFile.Close(); err != nil {
+		return fmt.Errorf("closing snapshot directory %s: %w", dir, err)
+	}
 	return nil
+}
+
+// authSetCommitment implements control-grpc.md's order-independent,
+// duplicate-preserving auth-set-v1 commitment.
+func authSetCommitment(verifiers [][]byte) []byte {
+	members := make([][]byte, len(verifiers))
+	for i, verifier := range verifiers {
+		members[i] = append([]byte(nil), verifier...)
+	}
+	sort.Slice(members, func(i, j int) bool { return bytes.Compare(members[i], members[j]) < 0 })
+	h := sha256.New()
+	h.Write(append([]byte("stargate-auth-set-v1"), 0))
+	var count [8]byte
+	binary.BigEndian.PutUint64(count[:], uint64(len(members)))
+	h.Write(count[:])
+	for _, member := range members {
+		h.Write(member)
+	}
+	return h.Sum(nil)
 }
 
 // RestoreSnapshot installs the cold-start generation from
@@ -140,7 +180,7 @@ func RestoreSnapshot(dir string, tokens *auth.TokenStore, _ *slog.Logger) {
 	if err := json.Unmarshal(raw, &sf); err != nil {
 		return
 	}
-	if sf.SchemaVersion != snapshotSchemaVersion {
+	if sf.SchemaVersion != snapshotSchemaVersion || sf.AuthSetVersion != authSetVersion || sf.Generation == 0 {
 		return
 	}
 	loadedAt, err := time.Parse(time.RFC3339, sf.LoadedAt)
@@ -154,6 +194,11 @@ func RestoreSnapshot(dir string, tokens *auth.TokenStore, _ *slog.Logger) {
 			return
 		}
 		verifiers = append(verifiers, v)
+	}
+	commitment, err := base64.StdEncoding.DecodeString(sf.Commitment)
+	if err != nil || len(commitment) != sha256CommitmentLen ||
+		!bytes.Equal(commitment, authSetCommitment(verifiers)) {
+		return
 	}
 
 	tokens.Swap(&auth.Generation{

@@ -30,7 +30,7 @@ maintains the in-memory token list and the data-plane snapshot file.
 > allocation is an unbounded memory-DoS vector — 200 concurrent one-token
 > auths allocate ~12.8 GiB (sol-review B5). A single HMAC tag per request
 > makes per-request allocation O(1) regardless of N or flood size. A
-> persistent CP generation record + reconciliation handshake replaces the
+> persistent CP generation record + exact durable-authority replay replaces the
 > prior "CP restart re-hashes and pushes generation 1" path that silently
 > revoked every client (sol-review M1). See SECURITY-DECISIONS.md §"Bearer-
 > token verifier: HMAC-SHA-256 + install-time pepper (T092)" for the
@@ -62,19 +62,18 @@ maintains the in-memory token list and the data-plane snapshot file.
    │    call ReloadTokens (DP keeps last-known)   │
    │  - verifier = HMAC-SHA-256(pepper, token)    │
    │  - drop plaintext from the mutable buffer    │
-   │  - persist generation+verifiers to           │
-   │    configured_tokens; bump token_generation  │
+   │  - reserve changed generation, then persist   │
+   │    the full configured_tokens candidate      │
    │  - Increment hourly operational counts       │
    └────────────────────────┬─────────────────────┘
                             │ gRPC ReloadTokens(generation, verifiers[])
                             ▼
    ┌──────────────────────────────────────────────┐
    │  Data plane — auth.tokenStore                │
-   │  - if generation <= current: STALE, reply    │
-   │    current_generation for CP retry           │
-   │  - else atomic-swap to new generation        │
-   │  - write dp-snapshot.json (verifiers ONLY)   │
-   │  - acknowledge applied_generation            │
+   │  - equal exact: rewrite snapshot + ACK        │
+   │  - equal conflict/lower: STALE, no mutation  │
+   │  - higher: write+sync snapshot, then swap     │
+   │  - acknowledge exact generation+commitment   │
    └────────────────────────┬─────────────────────┘
                             │ per-request lookup
                             ▼
@@ -173,11 +172,21 @@ requests holding the previous generation pointer complete against it;
 new requests pick up the new pointer. The previous pointer is then
 garbage-collected.
 
-**Reconciliation handshake (T156 target; T159 implementation).** Stale/equal generations
-remain rejected, but a restored older credential set MUST NOT be silently promoted by adding
-one to the DP's current generation. T159 records authoritative-content reconciliation, durable
-acknowledgment and explicit operator rollback recovery on both peers before code. Automatic
-reconnect remains required; automatic reauthorization from stale state is prohibited.
+**Durable authority handshake (T159).** A generation is acknowledged only as
+the exact `auth-set-v1` verifier multiset commitment after its snapshot is
+durable. Exact same-generation replay first rewrites the active snapshot, then
+is idempotently acknowledged; equal-generation
+different content and lower generations are conflicts. The CP replays an
+unchanged durable candidate at the same generation and never promotes rejected
+content by adding one to the DP's current generation. A coalescing local-IPC
+redelivery worker retries a pending exact candidate while the CP remains up, so
+DP restart does not require CP restart. After acknowledgment, the CP retains
+the latest non-stale exact authority in process memory and queues it once when
+the authenticated local channel becomes READY after a peer-side disconnect.
+The client's scheduled 55-second channel retirement creates a fresh readiness
+baseline and neither sends `ReloadTokens` nor rewrites the DP snapshot. This
+repairs a DP-only restart with lost/invalid snapshot state without periodic
+application RPCs. Automatic reauthorization from stale state is prohibited.
 
 ### 1.4 `dp-snapshot.json` (data-plane on-disk cache, arch §5.5)
 
@@ -188,8 +197,10 @@ Schema (informal):
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
+  "authSetVersion": 1,
   "generation": 7,
+  "commitment": "<base64 32 B auth-set-v1 SHA-256 commitment>",
   "loadedAt": "2026-05-17T14:00:00Z",
   "verifiers": [
     { "verifier": "<base64 32 B HMAC-SHA-256 tag>" }
@@ -199,16 +210,19 @@ Schema (informal):
 
 Note: no route-admission state is in the snapshot. See §2 for the rationale (cold start unconditionally attempts the fixed upstream; admission is never gated on a control-plane event — Constitution Principle II).
 
-The snapshot contains **verifiers only** — never plaintext, never the
-pepper, and (amended by T092) no per-token salt. It is restored at
+The snapshot contains **verifiers and their credential-derived commitment
+only** — never plaintext, never the pepper, and no per-token salt. It is restored at
 data-plane cold start when the control plane is unreachable (arch §5.5
 "Control plane down at startup"). The snapshot is rewritten atomically
-every time `ReloadTokens` succeeds. `schemaVersion` bumped 1 → 2 by T092
-(reflects the `hash`+`salt` → `verifier` shape change); a cold start that
-reads a stale `schemaVersion: 1` snapshot MUST ignore it silently (
-serve no tokens until the CP pushes a fresh generation) rather than
-misparse it — parsing v1 `{hash, salt}` pairs as v2 verifiers would
-authenticate nothing and silently break routing.
+before every new-generation durable acknowledgment: temp-file write and
+fsync, rename, then containing-directory fsync precede the in-memory swap.
+Schema 3 adds `authSetVersion: 1` and the recomputed commitment. Schema 1 and
+2 snapshots are incompatible and ignored silently: an old DP could report OK
+without a successful snapshot write, so schema 2 cannot prove acknowledged
+authority through this transition. Missing, corrupt, incompatible,
+zero-generation, or commitment-mismatched state restores no authority and
+admits nobody. A valid schema-3 empty set is durable revoke-all. Once seeded,
+a valid schema-3 snapshot preserves normal CP-down cold-start admission.
 
 ### 1.5 Verifier construction — HMAC-SHA-256 over the install-time pepper
 
@@ -269,9 +283,10 @@ and is a misconfiguration surfaced as "all auth fails" at first boot.
   `detail_json`.
 - The data plane never sees plaintext tokens (only verifiers) over the RPC.
 - Token format violations never log the offending bytes.
-- `generation` is monotonic; the data plane rejects a `ReloadTokens` RPC
-  with `generation <= currentGeneration`, replies with its
-  `current_generation`, and leaves the active generation unchanged.
+- `generation` is monotonic. Exact same-generation/content replay is
+  idempotently acknowledged; equal-generation different content and all
+  lower generations are rejected without mutation. `current_generation` is
+  diagnostic and never authorizes CP renumbering.
 - **Failure semantics (T092 / sol-review M1).** A missing, unreadable,
   invalid, or unparseable `tokens.yaml` makes the CP increment the hourly `config_error` aggregate
   category (no sub-kind, line, label or detail retained) and **NOT call
@@ -308,19 +323,18 @@ Argon2id provided was unnecessary for a random token (THREAT-MODEL §5.14).
 ### 1.8 Control-plane generation record (`token_generation`)
 
 A single persisted row is the source of truth for the monotonic generation
-counter, so a CP restart proposes `last + 1` instead of restarting at 1
-(which would be stale the moment the DP has accepted any generation ≥ 1 and
-would silently revoke every client via the reconciliation handshake —
-sol-review M1).
+counter, so a CP restart can replay the persisted candidate at its assigned
+generation instead of restarting at 1 (which would be stale the moment the DP
+has accepted any generation ≥ 1 — sol-review M1).
 
 | Concern            | Rule                                                                                                                                                                                |
 |--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Shape              | `token_generation(generation INTEGER PRIMARY KEY)` singleton row in the CP SQLite DB (arch §6.7). The PRIMARY KEY column holds exactly one row, `generation`, the last-assigned value.     |
-| Read               | At CP start, `TokenLoader` reads `generation`. The proposal for this boot is `generation + 1`.                                                                                       |
-| Write              | After a successful `tokens.yaml` parse, the CP writes the new verifiers to `configured_tokens`, bumps `token_generation.generation` to the proposal, then issues `ReloadTokens`.    |
-| Stale recovery | Refuse stale credential contents; T159 specifies current-authority reconciliation and explicit rollback recovery. No automatic old-content `current + 1` promotion. |
+| Read               | At CP start, `TokenLoader` reads `generation` and current `configured_tokens`. Exact unchanged verifier content replays that generation; changed content proposes `generation + 1`. |
+| Write              | After a successful changed `tokens.yaml` parse, the CP reserves the next generation before changing verifier rows, commits the full candidate, then issues durable `ReloadTokens`. A crash before row commit may consume a number but cannot bind new content to an old number. Delivery/ack loss leaves the exact candidate pending for same-generation replay/redelivery. |
+| Stale recovery | Refuse stale credential contents. No rejection, timeout, response field, or restart automatically promotes old content to `current + 1`. Explicit rollback is offline and operator-confirmed. |
 | DB-wipe recovery | Missing CP authority does not authorize an empty or old list. T159 defines explicit recovery; retain valid DP state meanwhile. |
-| Durability         | The generation is durable state, not a cache. Losing it does NOT revoke clients (the DP keeps serving) but DOES require the reconciliation path above to re-sync.                    |
+| Durability         | The generation is durable state, not a cache. Losing it does NOT revoke clients (the DP keeps serving) and does NOT authorize automatic reseeding; use the explicit offline recovery procedure. A running CP redelivers its intact pending candidate when DP IPC returns and retains the latest acknowledged non-stale authority for one event-driven replay after a peer-side authenticated-channel disconnect. Scheduled local channel retirement sends no reload. |
 
 ### 1.9 `configured_tokens` — the manual-YAML token record (T092 / sol-review M1)
 

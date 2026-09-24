@@ -1,7 +1,7 @@
 ---
 id: "T159"
 title: "Preserve acknowledged auth state across rollback and restart"
-status: pending
+status: in-progress
 created: "2026-09-12"
 last_updated: 2026-09-24
 source: "specs/001-tor-route/contracts/foundation-boundaries.md"
@@ -114,3 +114,10 @@ refinement makes the two surviving findings explicit acceptance requirements: di
 55-second channel retirement from a peer disconnect, and replace adapter-only rollback simulations
 with abruptly killed production SQLite/JTA child processes reopened against their original files.
 The archived round-3 verdict remains the falsifier; scope stays at the existing 21 paths.
+
+The targeted repair distinguishes each physical client-channel epoch: scheduled local retirement
+starts a fresh READY baseline and cannot enqueue authority, while an observed peer outage remains
+latched across local retirement and replays once after recovery. The persistence regression now
+uses four production SQLite/JTA crash pairs (reservation and committed-candidate boundaries for
+both revocation and generation-zero enrollment), forcibly terminates the writer process, and
+reopens the same database files in a fresh process without rollback or cleanup.

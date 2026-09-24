@@ -111,8 +111,9 @@ func (ApplyStatus) EnumDescriptor() ([]byte, []int) {
 
 type ReloadTokensRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Generation    uint64                 `protobuf:"varint,1,opt,name=generation,proto3" json:"generation,omitempty"` // monotonic; CP proposal = persisted last + 1
-	Tokens        []*TokenVerifier       `protobuf:"bytes,2,rep,name=tokens,proto3" json:"tokens,omitempty"`
+	Generation    uint64                 `protobuf:"varint,1,opt,name=generation,proto3" json:"generation,omitempty"` // legacy mirror of durable.generation
+	Tokens        []*TokenVerifier       `protobuf:"bytes,2,rep,name=tokens,proto3" json:"tokens,omitempty"`          // MUST be empty in auth-set-v1
+	Durable       *DurableAuthSet        `protobuf:"bytes,3,opt,name=durable,proto3" json:"durable,omitempty"`        // mandatory T159 durable-authority envelope
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -161,6 +162,85 @@ func (x *ReloadTokensRequest) GetTokens() []*TokenVerifier {
 	return nil
 }
 
+func (x *ReloadTokensRequest) GetDurable() *DurableAuthSet {
+	if x != nil {
+		return x.Durable
+	}
+	return nil
+}
+
+// T159's synchronized pre-release durable-authority transition. Version 1
+// commits the exact verifier multiset; order is immaterial and duplicates are
+// preserved. A peer that does not understand this envelope cannot acknowledge
+// durable application.
+type DurableAuthSet struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	SemanticsVersion uint32                 `protobuf:"varint,1,opt,name=semantics_version,json=semanticsVersion,proto3" json:"semantics_version,omitempty"` // exactly 1 for auth-set-v1
+	Generation       uint64                 `protobuf:"varint,2,opt,name=generation,proto3" json:"generation,omitempty"`                                     // nonzero; must equal request.generation
+	Tokens           []*TokenVerifier       `protobuf:"bytes,3,rep,name=tokens,proto3" json:"tokens,omitempty"`
+	Commitment       []byte                 `protobuf:"bytes,4,opt,name=commitment,proto3" json:"commitment,omitempty"` // 32-byte auth-set-v1 SHA-256 commitment
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *DurableAuthSet) Reset() {
+	*x = DurableAuthSet{}
+	mi := &file_stargate_v1_control_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DurableAuthSet) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DurableAuthSet) ProtoMessage() {}
+
+func (x *DurableAuthSet) ProtoReflect() protoreflect.Message {
+	mi := &file_stargate_v1_control_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DurableAuthSet.ProtoReflect.Descriptor instead.
+func (*DurableAuthSet) Descriptor() ([]byte, []int) {
+	return file_stargate_v1_control_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *DurableAuthSet) GetSemanticsVersion() uint32 {
+	if x != nil {
+		return x.SemanticsVersion
+	}
+	return 0
+}
+
+func (x *DurableAuthSet) GetGeneration() uint64 {
+	if x != nil {
+		return x.Generation
+	}
+	return 0
+}
+
+func (x *DurableAuthSet) GetTokens() []*TokenVerifier {
+	if x != nil {
+		return x.Tokens
+	}
+	return nil
+}
+
+func (x *DurableAuthSet) GetCommitment() []byte {
+	if x != nil {
+		return x.Commitment
+	}
+	return nil
+}
+
 // T092: HMAC-SHA-256 tag under the install-time pepper. No per-token salt
 // (single shared pepper). Renamed from TokenHash; the old `salt` field is
 // dropped (breaking pre-release change; see file header + SECURITY-DECISIONS.md).
@@ -173,7 +253,7 @@ type TokenVerifier struct {
 
 func (x *TokenVerifier) Reset() {
 	*x = TokenVerifier{}
-	mi := &file_stargate_v1_control_proto_msgTypes[1]
+	mi := &file_stargate_v1_control_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -185,7 +265,7 @@ func (x *TokenVerifier) String() string {
 func (*TokenVerifier) ProtoMessage() {}
 
 func (x *TokenVerifier) ProtoReflect() protoreflect.Message {
-	mi := &file_stargate_v1_control_proto_msgTypes[1]
+	mi := &file_stargate_v1_control_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -198,7 +278,7 @@ func (x *TokenVerifier) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TokenVerifier.ProtoReflect.Descriptor instead.
 func (*TokenVerifier) Descriptor() ([]byte, []int) {
-	return file_stargate_v1_control_proto_rawDescGZIP(), []int{1}
+	return file_stargate_v1_control_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *TokenVerifier) GetVerifier() []byte {
@@ -209,17 +289,19 @@ func (x *TokenVerifier) GetVerifier() []byte {
 }
 
 type ReloadTokensResponse struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	AppliedGeneration uint64                 `protobuf:"varint,1,opt,name=applied_generation,json=appliedGeneration,proto3" json:"applied_generation,omitempty"`
-	Status            ApplyStatus            `protobuf:"varint,2,opt,name=status,proto3,enum=stargate.v1.ApplyStatus" json:"status,omitempty"`
-	CurrentGeneration uint64                 `protobuf:"varint,3,opt,name=current_generation,json=currentGeneration,proto3" json:"current_generation,omitempty"` // T092: DP's current generation; set on STALE so the CP can retry with current + 1
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	AppliedGeneration     uint64                 `protobuf:"varint,1,opt,name=applied_generation,json=appliedGeneration,proto3" json:"applied_generation,omitempty"`
+	Status                ApplyStatus            `protobuf:"varint,2,opt,name=status,proto3,enum=stargate.v1.ApplyStatus" json:"status,omitempty"`
+	CurrentGeneration     uint64                 `protobuf:"varint,3,opt,name=current_generation,json=currentGeneration,proto3" json:"current_generation,omitempty"`             // diagnostic only; MUST NOT drive CP renumbering
+	AcknowledgmentVersion uint32                 `protobuf:"varint,4,opt,name=acknowledgment_version,json=acknowledgmentVersion,proto3" json:"acknowledgment_version,omitempty"` // exactly 1 only after durable application
+	Commitment            []byte                 `protobuf:"bytes,5,opt,name=commitment,proto3" json:"commitment,omitempty"`                                                     // exact acknowledged auth-set-v1 commitment
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ReloadTokensResponse) Reset() {
 	*x = ReloadTokensResponse{}
-	mi := &file_stargate_v1_control_proto_msgTypes[2]
+	mi := &file_stargate_v1_control_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -231,7 +313,7 @@ func (x *ReloadTokensResponse) String() string {
 func (*ReloadTokensResponse) ProtoMessage() {}
 
 func (x *ReloadTokensResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stargate_v1_control_proto_msgTypes[2]
+	mi := &file_stargate_v1_control_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -244,7 +326,7 @@ func (x *ReloadTokensResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReloadTokensResponse.ProtoReflect.Descriptor instead.
 func (*ReloadTokensResponse) Descriptor() ([]byte, []int) {
-	return file_stargate_v1_control_proto_rawDescGZIP(), []int{2}
+	return file_stargate_v1_control_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ReloadTokensResponse) GetAppliedGeneration() uint64 {
@@ -268,6 +350,20 @@ func (x *ReloadTokensResponse) GetCurrentGeneration() uint64 {
 	return 0
 }
 
+func (x *ReloadTokensResponse) GetAcknowledgmentVersion() uint32 {
+	if x != nil {
+		return x.AcknowledgmentVersion
+	}
+	return 0
+}
+
+func (x *ReloadTokensResponse) GetCommitment() []byte {
+	if x != nil {
+		return x.Commitment
+	}
+	return nil
+}
+
 type StatusRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -276,7 +372,7 @@ type StatusRequest struct {
 
 func (x *StatusRequest) Reset() {
 	*x = StatusRequest{}
-	mi := &file_stargate_v1_control_proto_msgTypes[3]
+	mi := &file_stargate_v1_control_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -288,7 +384,7 @@ func (x *StatusRequest) String() string {
 func (*StatusRequest) ProtoMessage() {}
 
 func (x *StatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_stargate_v1_control_proto_msgTypes[3]
+	mi := &file_stargate_v1_control_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -301,7 +397,7 @@ func (x *StatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusRequest.ProtoReflect.Descriptor instead.
 func (*StatusRequest) Descriptor() ([]byte, []int) {
-	return file_stargate_v1_control_proto_rawDescGZIP(), []int{3}
+	return file_stargate_v1_control_proto_rawDescGZIP(), []int{4}
 }
 
 type StatusResponse struct {
@@ -313,7 +409,7 @@ type StatusResponse struct {
 
 func (x *StatusResponse) Reset() {
 	*x = StatusResponse{}
-	mi := &file_stargate_v1_control_proto_msgTypes[4]
+	mi := &file_stargate_v1_control_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -325,7 +421,7 @@ func (x *StatusResponse) String() string {
 func (*StatusResponse) ProtoMessage() {}
 
 func (x *StatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_stargate_v1_control_proto_msgTypes[4]
+	mi := &file_stargate_v1_control_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -338,7 +434,7 @@ func (x *StatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
 func (*StatusResponse) Descriptor() ([]byte, []int) {
-	return file_stargate_v1_control_proto_rawDescGZIP(), []int{4}
+	return file_stargate_v1_control_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StatusResponse) GetCounters() []*RouteCounter {
@@ -360,7 +456,7 @@ type RouteCounter struct {
 
 func (x *RouteCounter) Reset() {
 	*x = RouteCounter{}
-	mi := &file_stargate_v1_control_proto_msgTypes[5]
+	mi := &file_stargate_v1_control_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -372,7 +468,7 @@ func (x *RouteCounter) String() string {
 func (*RouteCounter) ProtoMessage() {}
 
 func (x *RouteCounter) ProtoReflect() protoreflect.Message {
-	mi := &file_stargate_v1_control_proto_msgTypes[5]
+	mi := &file_stargate_v1_control_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -385,7 +481,7 @@ func (x *RouteCounter) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RouteCounter.ProtoReflect.Descriptor instead.
 func (*RouteCounter) Descriptor() ([]byte, []int) {
-	return file_stargate_v1_control_proto_rawDescGZIP(), []int{5}
+	return file_stargate_v1_control_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RouteCounter) GetRoute() string {
@@ -420,18 +516,32 @@ var File_stargate_v1_control_proto protoreflect.FileDescriptor
 
 const file_stargate_v1_control_proto_rawDesc = "" +
 	"\n" +
-	"\x19stargate/v1/control.proto\x12\vstargate.v1\"i\n" +
+	"\x19stargate/v1/control.proto\x12\vstargate.v1\"\xa0\x01\n" +
 	"\x13ReloadTokensRequest\x12\x1e\n" +
 	"\n" +
 	"generation\x18\x01 \x01(\x04R\n" +
 	"generation\x122\n" +
-	"\x06tokens\x18\x02 \x03(\v2\x1a.stargate.v1.TokenVerifierR\x06tokens\"+\n" +
+	"\x06tokens\x18\x02 \x03(\v2\x1a.stargate.v1.TokenVerifierR\x06tokens\x125\n" +
+	"\adurable\x18\x03 \x01(\v2\x1b.stargate.v1.DurableAuthSetR\adurable\"\xb1\x01\n" +
+	"\x0eDurableAuthSet\x12+\n" +
+	"\x11semantics_version\x18\x01 \x01(\rR\x10semanticsVersion\x12\x1e\n" +
+	"\n" +
+	"generation\x18\x02 \x01(\x04R\n" +
+	"generation\x122\n" +
+	"\x06tokens\x18\x03 \x03(\v2\x1a.stargate.v1.TokenVerifierR\x06tokens\x12\x1e\n" +
+	"\n" +
+	"commitment\x18\x04 \x01(\fR\n" +
+	"commitment\"+\n" +
 	"\rTokenVerifier\x12\x1a\n" +
-	"\bverifier\x18\x01 \x01(\fR\bverifier\"\xa6\x01\n" +
+	"\bverifier\x18\x01 \x01(\fR\bverifier\"\xfd\x01\n" +
 	"\x14ReloadTokensResponse\x12-\n" +
 	"\x12applied_generation\x18\x01 \x01(\x04R\x11appliedGeneration\x120\n" +
 	"\x06status\x18\x02 \x01(\x0e2\x18.stargate.v1.ApplyStatusR\x06status\x12-\n" +
-	"\x12current_generation\x18\x03 \x01(\x04R\x11currentGeneration\"\x0f\n" +
+	"\x12current_generation\x18\x03 \x01(\x04R\x11currentGeneration\x125\n" +
+	"\x16acknowledgment_version\x18\x04 \x01(\rR\x15acknowledgmentVersion\x12\x1e\n" +
+	"\n" +
+	"commitment\x18\x05 \x01(\fR\n" +
+	"commitment\"\x0f\n" +
 	"\rStatusRequest\"G\n" +
 	"\x0eStatusResponse\x125\n" +
 	"\bcounters\x18\x01 \x03(\v2\x19.stargate.v1.RouteCounterR\bcounters\"\x89\x01\n" +
@@ -464,29 +574,32 @@ func file_stargate_v1_control_proto_rawDescGZIP() []byte {
 }
 
 var file_stargate_v1_control_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_stargate_v1_control_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_stargate_v1_control_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_stargate_v1_control_proto_goTypes = []any{
 	(ApplyStatus)(0),             // 0: stargate.v1.ApplyStatus
 	(*ReloadTokensRequest)(nil),  // 1: stargate.v1.ReloadTokensRequest
-	(*TokenVerifier)(nil),        // 2: stargate.v1.TokenVerifier
-	(*ReloadTokensResponse)(nil), // 3: stargate.v1.ReloadTokensResponse
-	(*StatusRequest)(nil),        // 4: stargate.v1.StatusRequest
-	(*StatusResponse)(nil),       // 5: stargate.v1.StatusResponse
-	(*RouteCounter)(nil),         // 6: stargate.v1.RouteCounter
+	(*DurableAuthSet)(nil),       // 2: stargate.v1.DurableAuthSet
+	(*TokenVerifier)(nil),        // 3: stargate.v1.TokenVerifier
+	(*ReloadTokensResponse)(nil), // 4: stargate.v1.ReloadTokensResponse
+	(*StatusRequest)(nil),        // 5: stargate.v1.StatusRequest
+	(*StatusResponse)(nil),       // 6: stargate.v1.StatusResponse
+	(*RouteCounter)(nil),         // 7: stargate.v1.RouteCounter
 }
 var file_stargate_v1_control_proto_depIdxs = []int32{
-	2, // 0: stargate.v1.ReloadTokensRequest.tokens:type_name -> stargate.v1.TokenVerifier
-	0, // 1: stargate.v1.ReloadTokensResponse.status:type_name -> stargate.v1.ApplyStatus
-	6, // 2: stargate.v1.StatusResponse.counters:type_name -> stargate.v1.RouteCounter
-	1, // 3: stargate.v1.Control.ReloadTokens:input_type -> stargate.v1.ReloadTokensRequest
-	4, // 4: stargate.v1.Control.GetStatus:input_type -> stargate.v1.StatusRequest
-	3, // 5: stargate.v1.Control.ReloadTokens:output_type -> stargate.v1.ReloadTokensResponse
-	5, // 6: stargate.v1.Control.GetStatus:output_type -> stargate.v1.StatusResponse
-	5, // [5:7] is the sub-list for method output_type
-	3, // [3:5] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	3, // 0: stargate.v1.ReloadTokensRequest.tokens:type_name -> stargate.v1.TokenVerifier
+	2, // 1: stargate.v1.ReloadTokensRequest.durable:type_name -> stargate.v1.DurableAuthSet
+	3, // 2: stargate.v1.DurableAuthSet.tokens:type_name -> stargate.v1.TokenVerifier
+	0, // 3: stargate.v1.ReloadTokensResponse.status:type_name -> stargate.v1.ApplyStatus
+	7, // 4: stargate.v1.StatusResponse.counters:type_name -> stargate.v1.RouteCounter
+	1, // 5: stargate.v1.Control.ReloadTokens:input_type -> stargate.v1.ReloadTokensRequest
+	5, // 6: stargate.v1.Control.GetStatus:input_type -> stargate.v1.StatusRequest
+	4, // 7: stargate.v1.Control.ReloadTokens:output_type -> stargate.v1.ReloadTokensResponse
+	6, // 8: stargate.v1.Control.GetStatus:output_type -> stargate.v1.StatusResponse
+	7, // [7:9] is the sub-list for method output_type
+	5, // [5:7] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_stargate_v1_control_proto_init() }
@@ -500,7 +613,7 @@ func file_stargate_v1_control_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_stargate_v1_control_proto_rawDesc), len(file_stargate_v1_control_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

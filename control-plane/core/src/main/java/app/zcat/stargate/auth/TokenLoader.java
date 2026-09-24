@@ -12,6 +12,8 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
@@ -58,17 +60,16 @@ import org.yaml.snakeyaml.nodes.SequenceNode;
  * verifier is whatever the minter returns ({@code HMAC-SHA-256(pepper, token)},
  * §1.5, in production).
  *
- * <p><strong>Write order (§1.7).</strong> Store (full current record set,
- * unchanged labels rewritten with fresh verifiers — the pepper-rotation
- * property) → generation record → {@code ReloadTokens}. On a stale reply
- * (T035 note (c), §1.3/§1.8 reconciliation) the loader adopts the DP's
- * reported {@code currentGeneration + 1}, records it, and retries — bounded,
- * because the handshake is deterministic under the single-CP topology and the
- * cap only stops a misbehaving DP reply from spinning the CP.
+ * <p><strong>Write order (§1.7).</strong> Reserve a changed candidate's next
+ * generation → store its full record set → {@code ReloadTokens}. Reserving
+ * first may consume a number if the store write fails, but prevents a crash
+ * from pairing new credential content with an old generation. An exact
+ * unchanged durable candidate replays at the same generation. Rejection,
+ * missing acknowledgment or transport loss never relabels content at a
+ * DP-reported generation; the persisted candidate remains pending for exact
+ * replay.
  */
 public final class TokenLoader {
-
-
     // data-model.md §4 audit vocabulary — fixed enum, never free text. The
     // literals mirror AuditLogService's constants (core cannot depend on
     // persistence; the sink validates the vocabulary independently).
@@ -87,15 +88,6 @@ public final class TokenLoader {
 
     /** §1.1 label row: at most 64 UTF-8 chars. */
     private static final int LABEL_MAX_CODE_POINTS = 64;
-
-    /**
-     * §1.3/§1.8 reconciliation bound: the deterministic retry (adopt the DP's
-     * reported {@code current + 1}) converges in one round under the
-     * single-CP topology; the cap stops a misbehaving DP reply from spinning
-     * the CP. Exhaustion leaves the DP on its previous generation — the next
-     * boot reconciles again (§1.8 durability: losing sync never revokes).
-     */
-    private static final int MAX_PUSH_ATTEMPTS = 3;
 
     private final Path tokensYaml;
 
@@ -281,29 +273,50 @@ public final class TokenLoader {
             return;
         }
 
-        // §1.8: propose the persisted last + 1 — a restarted CP never restarts
-        // at 1 (that would be stale the moment the DP accepted ≥ 1 and would
-        // silently revoke every client via the reconciliation handshake).
-        long generation = generations.lastGeneration() + 1;
+        long storedGeneration = generations.lastGeneration();
+        Collection<TokenLoaderContract.StoredToken> storedTokens = store.storedTokens();
+        // A nonempty candidate without its generation is incomplete authority,
+        // not first boot. Fail closed instead of inventing generation 1.
+        if (storedGeneration == 0 && !storedTokens.isEmpty()) {
+            return;
+        }
 
         // §4 label diff: enrolled = new this load, revoked = stored but absent.
         Set<String> newLabels = new LinkedHashSet<>();
         for (TokenRecord record : valid) {
             newLabels.add(record.label());
         }
-        Set<String> storedLabels = new LinkedHashSet<>(store.storedLabels());
+        Set<String> storedLabels = new LinkedHashSet<>();
+        for (TokenLoaderContract.StoredToken stored : storedTokens) {
+            storedLabels.add(stored.label());
+        }
 
         List<byte[]> verifiers = new ArrayList<>(valid.size());
+        for (TokenRecord record : valid) {
+            byte[] plaintext = record.token().getBytes(StandardCharsets.UTF_8);
+            byte[] verifier = minter.mint(plaintext);
+            Arrays.fill(plaintext, (byte) 0);
+            verifiers.add(verifier);
+        }
+
+        boolean sameContent = storedGeneration > 0 && sameVerifierMultiset(storedTokens, verifiers);
+        if (storedGeneration > 0 && sameStoredRecords(storedTokens, valid, verifiers)) {
+            reload.push(storedGeneration, verifiers);
+            return;
+        }
+        long generation = sameContent ? storedGeneration : storedGeneration + 1;
+
+        // Reserve before mutating candidate rows. A crash after reservation
+        // may consume a generation; a crash after candidate commit can never
+        // leave new content paired with the prior generation (T159).
+        if (generation != storedGeneration) {
+            generations.record(generation);
+        }
+
         store.begin();
         try {
-            for (TokenRecord record : valid) {
-                byte[] plaintext = record.token().getBytes(StandardCharsets.UTF_8);
-                byte[] verifier = minter.mint(plaintext);
-                // §1.1: the mutable HMAC input buffer is cleared before the
-                // next record is processed — the narrowed erasure claim.
-                Arrays.fill(plaintext, (byte) 0);
-                store.upsert(record.label(), verifier);
-                verifiers.add(verifier);
+            for (int i = 0; i < valid.size(); i++) {
+                store.upsert(valid.get(i).label(), verifiers.get(i));
             }
             for (String label : newLabels) {
                 if (!storedLabels.contains(label)) {
@@ -323,32 +336,43 @@ public final class TokenLoader {
             throw failure;
         }
 
-        // §1.7 write order: store, then generation, then ReloadTokens — the
-        // push is the last action of a successful load.
-        generations.record(generation);
-        push(generation, verifiers);
+        // §1.7 write order: generation reservation, store, then ReloadTokens
+        // — the push is the last action of a successful load.
+        reload.push(generation, verifiers);
     }
 
-    /**
-     * Issues {@code ReloadTokens} and reconciles a stale rejection
-     * (T035 note (c), §1.3/§1.8): adopt the DP's reported
-     * {@code currentGeneration + 1}, record it as the last-assigned value,
-     * and retry. Bounded by {@link #MAX_PUSH_ATTEMPTS}; exhaustion leaves the
-     * DP on its previous generation (availability first, Principle II) and
-     * the next boot's §1.8 read re-syncs.
-     */
-    private void push(long generation, List<byte[]> verifiers) {
-        TokenLoaderContract.PushResult result = reload.push(generation, verifiers);
-        for (int attempt = 1; result.stale() && attempt < MAX_PUSH_ATTEMPTS; attempt++) {
-            long adopted = result.currentGeneration() + 1;
-
-            generations.record(adopted);
-            generation = adopted;
-            result = reload.push(generation, verifiers);
+    private static boolean sameVerifierMultiset(
+            Collection<TokenLoaderContract.StoredToken> storedTokens, List<byte[]> desired) {
+        List<byte[]> stored = storedTokens.stream().map(TokenLoaderContract.StoredToken::verifier)
+                .map(bytes -> bytes.clone()).sorted(Arrays::compareUnsigned).toList();
+        List<byte[]> proposed = desired.stream().map(bytes -> bytes.clone())
+                .sorted(Arrays::compareUnsigned).toList();
+        if (stored.size() != proposed.size()) {
+            return false;
         }
-        if (result.stale()) {
-
+        for (int i = 0; i < stored.size(); i++) {
+            if (!Arrays.equals(stored.get(i), proposed.get(i))) {
+                return false;
+            }
         }
+        return true;
+    }
+
+    private static boolean sameStoredRecords(Collection<TokenLoaderContract.StoredToken> storedTokens,
+            List<TokenRecord> desired, List<byte[]> verifiers) {
+        if (storedTokens.size() != desired.size()) {
+            return false;
+        }
+        var storedByLabel = new HashMap<String, byte[]>();
+        for (TokenLoaderContract.StoredToken stored : storedTokens) {
+            storedByLabel.put(stored.label(), stored.verifier());
+        }
+        for (int i = 0; i < desired.size(); i++) {
+            if (!Arrays.equals(storedByLabel.get(desired.get(i).label()), verifiers.get(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** One §4 config_error row with a parser-reported line. */

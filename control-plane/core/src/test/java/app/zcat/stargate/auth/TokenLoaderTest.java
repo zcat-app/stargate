@@ -29,6 +29,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.jspecify.annotations.Nullable;
 import org.yaml.snakeyaml.Yaml;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
@@ -515,13 +516,9 @@ class TokenLoaderTest {
         assertNoPlaintextEscapes(h);
     }
 
-    /**
-     * §1.8 restart-safety through the real loader: a load over a persisted
-     * record proposes {@code last + 1}; a SECOND loader instance over the
-     * same persisted state (a restarted CP) proposes {@code 8 + 1} — never 1.
-     */
+    /** T159: an unchanged durable candidate replays the SAME generation. */
     @Test
-    void restartProposesLastGenerationPlusOne(@TempDir Path dir) throws Throwable {
+    void restartReplaysUnchangedCandidateWithoutRenumbering(@TempDir Path dir) throws Throwable {
         Path file = writeTokens(dir, tokensFile(LABEL_A, TOKEN_A));
 
         Harness first = runLoad(file, Map.of(LABEL_A, STALE_VERIFIER), 7L);
@@ -531,13 +528,71 @@ class TokenLoaderTest {
 
         // Simulated CP restart: a NEW loader over the SAME persisted state.
         Harness restarted = runLoad(file, first.store.currentRows(), first.gens.last);
-        assertEquals(9L, restarted.gens.recordedValue,
-            "§1.8: the restarted CP proposes last + 1, NOT 1 (sol-review M1)");
+        assertFalse(restarted.gens.recordedSet,
+            "unchanged content must not assign another generation");
+        assertEquals(List.of(), restarted.store.upsertedLabels,
+            "same-generation replay does not rewrite the durable candidate");
         assertEquals(1, restarted.reload.pushes.size());
-        assertEquals(9L, restarted.reload.pushes.get(0).generation());
+        assertEquals(8L, restarted.reload.pushes.get(0).generation(),
+            "restart replays the pending/current candidate verbatim");
 
         assertNoPlaintextEscapes(first);
         assertNoPlaintextEscapes(restarted);
+    }
+
+    @Test
+    void staleResponseNeverRelabelsRejectedContent(@TempDir Path dir) throws Throwable {
+        Path file = writeTokens(dir, tokensFile(LABEL_A, TOKEN_A));
+        Harness h = runLoad(file, Map.of(), 0L,
+            new TokenLoaderContract.PushResult(true, 5L));
+
+        assertEquals(List.of(1L), h.reload.pushes.stream().map(CapturedPush::generation).toList(),
+            "a stale reply is a conflict, never permission to retry at current+1");
+        assertEquals(1L, h.gens.recordedValue,
+            "the durable candidate keeps its originally assigned generation");
+    }
+
+    @Test
+    void pendingCandidateReplaysSameGenerationAfterRestart(@TempDir Path dir) throws Throwable {
+        Path file = writeTokens(dir, tokensFile(LABEL_A, TOKEN_A));
+        var pending = new TokenLoaderContract.PushResult(false, 0L);
+        Harness first = runLoad(file, Map.of(LABEL_A, STALE_VERIFIER), 7L, pending);
+        Harness restarted = runLoad(file, first.store.currentRows(), first.gens.last, pending);
+
+        assertEquals(8L, first.reload.pushes.get(0).generation());
+        assertEquals(8L, restarted.reload.pushes.get(0).generation(),
+            "transport loss/missing ack remains pending at the exact candidate generation");
+        assertFalse(restarted.gens.recordedSet,
+            "pending replay must not consume another generation number");
+    }
+
+    @Test
+    void incompleteGenerationZeroAuthorityFailsClosed(@TempDir Path dir) throws Throwable {
+        Path file = writeTokens(dir, tokensFile(LABEL_A, TOKEN_A));
+        Harness h = runLoad(file, Map.of(LABEL_A, STALE_VERIFIER), 0L);
+
+        assertTrue(h.reload.pushes.isEmpty(),
+            "stored credentials without a generation must never be relabelled as generation 1");
+        assertFalse(h.gens.recordedSet, "incomplete authority cannot assign a generation");
+        assertEquals(List.of(), h.store.upsertedLabels);
+    }
+
+    @Test
+    void generationReservationPrecedesCandidateWriteAndRecoversCrash(@TempDir Path dir)
+            throws Throwable {
+        Path file = writeTokens(dir, tokensFile(LABEL_B, TOKEN_B));
+        Harness changed = runLoad(file, Map.of(LABEL_A, expectedVerifier(TOKEN_A)), 7L);
+        assertTrue(changed.journal.firstIndexOf("gen.record(8)")
+                < changed.journal.firstIndexOf("store.begin"),
+            "generation reservation must precede candidate mutation so no new content can retain generation 7");
+
+        // Crash after reservation but before store commit leaves old rows with
+        // generation 8. Restart safely consumes 9 for the still-changed YAML.
+        Harness restarted = runLoad(file, Map.of(LABEL_A, expectedVerifier(TOKEN_A)), 8L);
+        assertEquals(9L, restarted.gens.recordedValue);
+        assertEquals(9L, restarted.reload.pushes.get(0).generation());
+        assertEquals(Set.of(hex(expectedVerifier(TOKEN_B))),
+            hexSet(restarted.reload.pushes.get(0).verifiers()));
     }
 
     // --- reflective probe (the self-skip + conformance gate) ----------------
@@ -602,6 +657,11 @@ class TokenLoaderTest {
      */
     private Harness runLoad(Path tokensYaml, Map<String, byte[]> initialStore, long lastGeneration)
             throws Throwable {
+        return runLoad(tokensYaml, initialStore, lastGeneration, null);
+    }
+
+    private Harness runLoad(Path tokensYaml, Map<String, byte[]> initialStore, long lastGeneration,
+            TokenLoaderContract.@Nullable PushResult forcedResult) throws Throwable {
         Class<?> cls = loaderClass().orElse(null);
         assumeTrue(cls != null, SKIP_UNTIL_T035);
 
@@ -614,7 +674,7 @@ class TokenLoaderTest {
                 + ". A genuinely different surface is a refine escalation against T035a, "
                 + "not a test edit (T035a §Out-of-scope)."));
 
-        Harness h = new Harness(initialStore, lastGeneration);
+        Harness h = new Harness(initialStore, lastGeneration, forcedResult);
         Object[] args = new Object[ctor.getParameterCount()];
         for (int i = 0; i < args.length; i++) {
             Class<?> p = ctor.getParameterTypes()[i];
@@ -672,11 +732,12 @@ class TokenLoaderTest {
         final FakeReload reload;
         final FakeMinter minter;
 
-        Harness(Map<String, byte[]> initialStore, long lastGeneration) {
+        Harness(Map<String, byte[]> initialStore, long lastGeneration,
+                TokenLoaderContract.@Nullable PushResult forcedResult) {
             store = new FakeStore(journal, initialStore);
             gens = new FakeGens(journal, lastGeneration);
             audit = new FakeAudit(journal);
-            reload = new FakeReload(journal);
+            reload = new FakeReload(journal, forcedResult);
             minter = new FakeMinter(journal);
         }
     }
@@ -796,9 +857,11 @@ class TokenLoaderTest {
     private static final class FakeReload implements TokenLoaderContract.ReloadChannel {
         final Journal journal;
         final List<CapturedPush> pushes = new ArrayList<>();
+        final TokenLoaderContract.@Nullable PushResult forcedResult;
 
-        FakeReload(Journal journal) {
+        FakeReload(Journal journal, TokenLoaderContract.@Nullable PushResult forcedResult) {
             this.journal = journal;
+            this.forcedResult = forcedResult;
         }
 
         @Override
@@ -806,7 +869,9 @@ class TokenLoaderTest {
             pushes.add(new CapturedPush(generation,
                 verifiers.stream().map(byte[]::clone).toList()));
             journal.add("reload.push(" + generation + "," + verifiers.size() + ")");
-            return new TokenLoaderContract.PushResult(false, generation);
+            return forcedResult == null
+                ? new TokenLoaderContract.PushResult(false, generation)
+                : forcedResult;
         }
     }
 

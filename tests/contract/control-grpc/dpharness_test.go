@@ -39,7 +39,9 @@ package controlgrpc
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -48,6 +50,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -76,6 +79,7 @@ type dpHarness struct {
 	journal   *lockedBuffer
 	pid       int    // DP process PID; T022 reads /proc/<pid>/net/tcp
 	ipcDir    string // dir hosting dp.sock + where control.sock is dialed
+	cmd       *exec.Cmd
 }
 
 func (h *dpHarness) snapshotPath() string {
@@ -129,6 +133,18 @@ func startDPWithUpstream(t *testing.T, upstreamAddr string, beforeBoot func(ipcD
 // cmd.Start(), with both resolved dirs; nil is the no-op (the
 // startDPWithUpstream shape).
 func startDPWithSeed(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir string), seed func(stateDir, keysDir string)) *dpHarness {
+	return startDPProcess(t, upstreamAddr, beforeBoot, "", seed)
+}
+
+// startDPWithState boots a new process against the exact existing state
+// directory. It is the crash/restart probe: no snapshot bytes are copied or
+// reconstructed between the two processes.
+func startDPWithState(t *testing.T, stateDir string) *dpHarness {
+	return startDPProcess(t, "", nil, stateDir, nil)
+}
+
+func startDPProcess(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir string),
+	stateDir string, seed func(stateDir, keysDir string)) *dpHarness {
 	t.Helper()
 	repoRoot := findRepoRoot(t)
 
@@ -172,7 +188,9 @@ func startDPWithSeed(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir s
 		t.Fatalf("mktemp ipc dir: %v", err)
 	}
 	t.Cleanup(func() { os.RemoveAll(ipcDir) })
-	stateDir := t.TempDir()
+	if stateDir == "" {
+		stateDir = t.TempDir()
+	}
 	keysDir := t.TempDir()
 	// T130: dp.sock is a mutual-TLS surface — the DP serves it ONLY with
 	// TLS material, so the harness seeds the full inter-plane key set
@@ -261,6 +279,21 @@ func startDPWithSeed(t *testing.T, upstreamAddr string, beforeBoot func(ipcDir s
 		journal:   journal,
 		pid:       cmd.Process.Pid,
 		ipcDir:    ipcDir,
+		cmd:       cmd,
+	}
+}
+
+// killAndWait models abrupt process death and confirms the original process
+// is fully reaped before another process opens the same state directory.
+func (h *dpHarness) killAndWait(t *testing.T) {
+	t.Helper()
+	if err := h.cmd.Process.Kill(); err != nil {
+		t.Fatalf("SIGKILL acknowledged DP: %v", err)
+	}
+	if err := h.cmd.Wait(); err == nil {
+		t.Fatal("SIGKILL acknowledged DP unexpectedly exited successfully")
+	} else if _, ok := err.(*exec.ExitError); !ok {
+		t.Fatalf("wait for SIGKILLed DP: %v", err)
 	}
 }
 
@@ -301,8 +334,48 @@ func (h *dpHarness) reloadErr(gen uint64, tokens []*grpcpb.TokenVerifier) (*grpc
 		"x-stargate-proto-minor", "0",
 		"x-stargate-capabilities", "reload-tokens,watch-events,get-status-minimum")
 	return h.client.ReloadTokens(ctx,
-		&grpcpb.ReloadTokensRequest{Generation: gen, Tokens: tokens},
+		&grpcpb.ReloadTokensRequest{
+			Generation: gen,
+			Durable: &grpcpb.DurableAuthSet{
+				SemanticsVersion: 1,
+				Generation:       gen,
+				Tokens:           tokens,
+				Commitment:       authSetCommitment(tokens),
+			},
+		},
 		grpc.WaitForReady(true))
+}
+
+func (h *dpHarness) reloadLegacyErr(gen uint64, tokens []*grpcpb.TokenVerifier) (*grpcpb.ReloadTokensResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	ctx = metadata.AppendToOutgoingContext(ctx,
+		"x-stargate-proto-major", "1",
+		"x-stargate-proto-minor", "0",
+		"x-stargate-capabilities", "reload-tokens,watch-events,get-status-minimum")
+	return h.client.ReloadTokens(ctx, &grpcpb.ReloadTokensRequest{
+		Generation: gen,
+		Tokens:     tokens,
+	}, grpc.WaitForReady(true))
+}
+
+// authSetCommitment independently implements the contract's auth-set-v1
+// commitment for real-process requests and seeded snapshots.
+func authSetCommitment(tokens []*grpcpb.TokenVerifier) []byte {
+	members := make([][]byte, 0, len(tokens))
+	for _, token := range tokens {
+		members = append(members, append([]byte(nil), token.GetVerifier()...))
+	}
+	sort.Slice(members, func(i, j int) bool { return string(members[i]) < string(members[j]) })
+	h := sha256.New()
+	h.Write(append([]byte("stargate-auth-set-v1"), 0))
+	var count [8]byte
+	binary.BigEndian.PutUint64(count[:], uint64(len(members)))
+	h.Write(count[:])
+	for _, member := range members {
+		h.Write(member)
+	}
+	return h.Sum(nil)
 }
 
 func (h *dpHarness) reload(t *testing.T, gen uint64, tokens []*grpcpb.TokenVerifier) *grpcpb.ReloadTokensResponse {
@@ -404,13 +477,15 @@ func (h *dpHarness) requireAuth(t *testing.T, plaintext string, want bool, why s
 	}
 }
 
-// snapshotFile mirrors data-model.md §1.4's informal schema (amended
-// by T092: schemaVersion 2, verifier-only — no per-token salt).
+// snapshotFile mirrors data-model.md §1.4's schemaVersion 3 durable-authority
+// shape: verifier-only plus its versioned commitment, with no per-token salt.
 type snapshotFile struct {
-	SchemaVersion int    `json:"schemaVersion"`
-	Generation    uint64 `json:"generation"`
-	LoadedAt      string `json:"loadedAt"`
-	Verifiers     []struct {
+	SchemaVersion  int    `json:"schemaVersion"`
+	AuthSetVersion int    `json:"authSetVersion"`
+	Generation     uint64 `json:"generation"`
+	Commitment     string `json:"commitment"`
+	LoadedAt       string `json:"loadedAt"`
+	Verifiers      []struct {
 		Verifier string `json:"verifier"`
 	} `json:"verifiers"`
 }

@@ -14,16 +14,22 @@
 // T093 (remediates: T020) reworked this suite off the retired
 // grpcpb.TokenHash{hash,salt} onto grpcpb.TokenVerifier{verifier} + the
 // HMAC mint helper (data-model.md §1.5, amended by T092 / sol-review
-// B5+M1): single shared pepper, no per-token salt, schemaVersion 2
-// verifier-only snapshot, and the reconciliation-retry sub-test (row 6).
+// B5+M1): single shared pepper, no per-token salt, schemaVersion 3
+// verifier-only snapshot, and durable replay/conflict sub-test (row 6).
 package controlgrpc
 
 import (
+	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
+	integration "github.com/zcat-app/stargate/tests/integration"
 )
 
 func TestReloadTokens(t *testing.T) {
@@ -43,12 +49,15 @@ func TestReloadTokens(t *testing.T) {
 		if resp.GetAppliedGeneration() != 1 {
 			t.Errorf("applied_generation = %d, want 1", resp.GetAppliedGeneration())
 		}
+		if resp.GetAcknowledgmentVersion() != 1 || string(resp.GetCommitment()) != string(authSetCommitment([]*grpcpb.TokenVerifier{tokA})) {
+			t.Fatal("generation 1 lacked the exact durable auth-set-v1 acknowledgment")
+		}
 
 		// Persist-before-return: the snapshot must already hold the new
 		// generation in the data-model.md §1.4 shape when the RPC returns.
 		snap := h.readSnapshot(t)
-		if snap.SchemaVersion != 2 {
-			t.Errorf("snapshot schemaVersion = %d, want 2 (T092 verifier-only shape)", snap.SchemaVersion)
+		if snap.SchemaVersion != 3 || snap.AuthSetVersion != 1 {
+			t.Errorf("snapshot versions = %d/%d, want 3/1", snap.SchemaVersion, snap.AuthSetVersion)
 		}
 		if snap.Generation != 1 {
 			t.Errorf("snapshot generation = %d, want 1", snap.Generation)
@@ -85,11 +94,9 @@ func TestReloadTokens(t *testing.T) {
 			[]byte("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"), []byte("b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"))
 	})
 
-	// Contract row 2: request.generation <= current →
-	// APPLY_STATUS_STALE_GENERATION and no state change. Covers both the
-	// equal and the strictly-lower shape of "<=". T092: the response
-	// also echoes current_generation so a stale CP can reconcile.
-	t.Run("StaleGenerationRejected", func(t *testing.T) {
+	// Contract row 2: exact same-generation content is idempotent; equal
+	// different content and lower generations are conflicts with no mutation.
+	t.Run("ReplayAndStaleConflict", func(t *testing.T) {
 		h := startDP(t)
 		tokA := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
 		tokB := mintToken(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1")
@@ -101,6 +108,12 @@ func TestReloadTokens(t *testing.T) {
 			t.Fatalf("setup: generation 2 status = %v, want APPLY_STATUS_OK", resp.GetStatus())
 		}
 		before := h.snapshotBytes(t)
+		replay := h.reload(t, 2, []*grpcpb.TokenVerifier{tokB})
+		if replay.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK ||
+			replay.GetAcknowledgmentVersion() != 1 ||
+			string(replay.GetCommitment()) != string(authSetCommitment([]*grpcpb.TokenVerifier{tokB})) {
+			t.Fatal("exact same-generation replay was not durably acknowledged")
+		}
 
 		for _, staleGen := range []uint64{2, 1} {
 			resp := h.reload(t, staleGen, []*grpcpb.TokenVerifier{tokC})
@@ -112,11 +125,10 @@ func TestReloadTokens(t *testing.T) {
 			if resp.GetAppliedGeneration() != 2 {
 				t.Errorf("generation %d applied_generation = %d, want 2 (unchanged)", staleGen, resp.GetAppliedGeneration())
 			}
-			// T092 reconciliation field: current_generation echoes the
-			// DP's current generation so a stale CP can retry with
-			// current + 1 (contracts/control-grpc.md §"ReloadTokens" row 2).
+			// current_generation is diagnostic only; it must never authorize
+			// a retry that relabels the stale content.
 			if resp.GetCurrentGeneration() != 2 {
-				t.Errorf("generation %d current_generation = %d, want 2 (T092 reconciliation echo)", staleGen, resp.GetCurrentGeneration())
+				t.Errorf("generation %d current_generation = %d, want 2 (diagnostic echo)", staleGen, resp.GetCurrentGeneration())
 			}
 		}
 
@@ -180,44 +192,121 @@ func TestReloadTokens(t *testing.T) {
 			[]byte("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"), []byte("b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"))...)
 	})
 
-	// Contract row 4: snapshot persist failure → still APPLY_STATUS_OK
-	// (in-memory truth wins; the snapshot is only a cold-start cache) and
-	// a snapshot-write-failure journal line. The read-only parent dir here
-	// is the local-process equivalent of the contract's read-only mount.
-	t.Run("SnapshotPersistFailureStillOK", func(t *testing.T) {
-		if os.Geteuid() == 0 {
-			t.Skip("running as root: a read-only parent dir does not block root writes, so the persist-failure simulation cannot work")
+	t.Run("SerializedOldControlPlaneToNewDataPlaneFailsClosed", func(t *testing.T) {
+		h := startDP(t)
+		tok := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
+		resp, err := h.reloadLegacyErr(1, []*grpcpb.TokenVerifier{tok})
+		if resp != nil || status.Code(err) != codes.FailedPrecondition {
+			t.Fatalf("legacy serialized request = %v / %v, want nil / FailedPrecondition",
+				resp, status.Code(err))
 		}
+		if snapshot := h.snapshotBytes(t); snapshot != nil {
+			t.Fatal("legacy request created authority state on the new DP")
+		}
+		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", false,
+			"a missing durable envelope must never authorize its legacy verifier")
+	})
+
+	// Contract row 4: a real filesystem failure returns non-success and
+	// leaves the previous in-memory authority live. The final-path directory
+	// obstruction works for uid 0 as well as unprivileged test runners.
+	t.Run("SnapshotPersistFailureIsPending", func(t *testing.T) {
 		h := startDP(t)
 		tokA := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
 		tokB := mintToken(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1")
 		h.reload(t, 1, []*grpcpb.TokenVerifier{tokA})
 
-		if err := os.Chmod(h.stateDir, 0o555); err != nil {
-			t.Fatalf("chmod state dir read-only: %v", err)
+		previous := h.snapshotBytes(t)
+		path := h.snapshotPath()
+		backup := filepath.Join(h.stateDir, "acknowledged.snapshot")
+		if err := os.Rename(path, backup); err != nil {
+			t.Fatalf("preserve acknowledged snapshot: %v", err)
 		}
-		// Restore before t.TempDir's removal (LIFO ordering) so cleanup
-		// can delete the directory.
-		t.Cleanup(func() { _ = os.Chmod(h.stateDir, 0o755) })
+		if err := os.Mkdir(path, 0o700); err != nil {
+			t.Fatalf("obstruct snapshot final path: %v", err)
+		}
+		restored := false
+		t.Cleanup(func() {
+			if !restored {
+				_ = os.Remove(path)
+				_ = os.Rename(backup, path)
+			}
+		})
 
-		resp := h.reload(t, 2, []*grpcpb.TokenVerifier{tokB})
-		if resp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
-			t.Fatalf("status with unwritable snapshot dir = %v, want APPLY_STATUS_OK (in-memory truth wins)", resp.GetStatus())
+		resp, err := h.reloadErr(2, []*grpcpb.TokenVerifier{tokB})
+		if status.Code(err) != codes.Unavailable || resp != nil {
+			t.Fatalf("persist failure = response %v / code %v, want nil / Unavailable", resp, status.Code(err))
 		}
-		if resp.GetAppliedGeneration() != 2 {
-			t.Errorf("applied_generation = %d, want 2", resp.GetAppliedGeneration())
-		}
-		h.requireAuth(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1", true, "the new generation must be live despite the failed persist")
-		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", false, "the replaced generation must be gone despite the failed persist")
+		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", true, "previous acknowledged authority must remain live after failed persistence")
+		h.requireAuth(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1", false, "unacknowledged candidate must not become live")
 
-		// Atomic write via os.Rename (data-model.md §1.4): a failed write
-		// must leave the previous snapshot intact, not truncated.
-		if got := h.readSnapshot(t).Generation; got != 1 {
-			t.Errorf("on-disk snapshot generation after failed persist = %d, want 1 (previous content intact)", got)
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(backup, path); err != nil {
+			t.Fatal(err)
+		}
+		restored = true
+		if got := h.snapshotBytes(t); string(got) != string(previous) {
+			t.Error("restored acknowledged snapshot bytes changed during failed delivery")
 		}
 
 		assertNoSecretLeak(t, h, tokA.GetVerifier(), tokB.GetVerifier(),
 			[]byte("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"), []byte("b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"))
+	})
+
+	t.Run("AcknowledgedRevocationSurvivesSIGKILLRestart", func(t *testing.T) {
+		h := startDP(t)
+		tokA := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
+		h.reload(t, 1, []*grpcpb.TokenVerifier{tokA})
+		revoked := h.reload(t, 2, nil)
+		if revoked.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK || revoked.GetAcknowledgmentVersion() != 1 {
+			t.Fatal("revoke-all was not durably acknowledged")
+		}
+		h.killAndWait(t)
+		restarted := startDPWithState(t, h.stateDir)
+		restarted.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", false,
+			"acknowledged revocation must survive process crash and CP-down restart")
+		replay := restarted.reload(t, 2, nil)
+		if replay.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK || replay.GetAcknowledgmentVersion() != 1 {
+			t.Fatal("restarted revoke-all authority was not idempotently acknowledged")
+		}
+	})
+
+	t.Run("EstablishedPipeSurvivesRevocation", func(t *testing.T) {
+		requireForwardPath(t)
+		upstream := integration.NewServer(integration.AcceptAndRelay)
+		upstreamAddr, err := upstream.Start()
+		if err != nil {
+			t.Fatalf("starting fake upstream: %v", err)
+		}
+		t.Cleanup(func() { _ = upstream.Close() })
+
+		h := startDPWithUpstream(t, upstreamAddr, nil)
+		tokA := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
+		tokB := mintToken(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1")
+		h.reload(t, 1, []*grpcpb.TokenVerifier{tokA})
+
+		pipe := t020aDialAuthenticatedConnect(t, h, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
+		defer pipe.Close()
+		reply := make([]byte, 10)
+		if _, err := io.ReadFull(pipe, reply); err != nil || reply[1] != 0x00 {
+			t.Fatalf("establish relay pipe: reply=% x err=%v", reply, err)
+		}
+
+		h.reload(t, 2, []*grpcpb.TokenVerifier{tokB})
+		payload := []byte("t159-established-pipe")
+		if _, err := pipe.Write(payload); err != nil {
+			t.Fatalf("write established pipe after reload: %v", err)
+		}
+		echo := make([]byte, len(payload))
+		if _, err := io.ReadFull(pipe, echo); err != nil || string(echo) != string(payload) {
+			t.Fatalf("established pipe did not survive reload: err=%v", err)
+		}
+		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", false,
+			"revoked credential must fail new admission while its established pipe survives")
+		h.requireAuth(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1", true,
+			"replacement credential must authorize new admission")
 	})
 
 	// Contract row 5: generations N and N+1 pushed in parallel converge
@@ -264,13 +353,9 @@ func TestReloadTokens(t *testing.T) {
 			[]byte("a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"), []byte("b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"), []byte("c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2"))
 	})
 
-	// Contract row 6 (T092 reconciliation retry): a CP that proposes a
-	// generation the DP already has receives APPLY_STATUS_STALE_GENERATION
-	// + current_generation = N, then re-proposes N + 1 and receives
-	// APPLY_STATUS_OK. Asserts the reconciliation handshake converges —
-	// a restarted CP that reads its persisted record and proposes
-	// last+1 never silently revokes clients (data-model.md §1.3/§1.8).
-	t.Run("ReconciliationRetryConverges", func(t *testing.T) {
+	// Contract row 6: restoring stale CP content cannot ratchet it past a
+	// later acknowledged revocation. Only exact current content replays.
+	t.Run("RestoredStaleAuthorityCannotRenumber", func(t *testing.T) {
 		h := startDP(t)
 		tokA := mintToken(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0")
 		tokB := mintToken(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1")
@@ -280,35 +365,30 @@ func TestReloadTokens(t *testing.T) {
 		h.reload(t, 1, []*grpcpb.TokenVerifier{tokA})
 		h.reload(t, 2, []*grpcpb.TokenVerifier{tokB})
 
-		// A restarted CP with a stale persisted record proposes a
-		// generation the DP already has. The DP MUST reject it as stale
-		// AND report its current generation so the CP can retry
-		// deterministically (contracts/control-grpc.md §"ReloadTokens"
-		// contract bullet + row 6).
+		// A restored CP proposes old content at both its original generation
+		// and the DP's current generation. Neither may be relabelled.
+		lower := h.reload(t, 1, []*grpcpb.TokenVerifier{tokA})
+		if lower.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_STALE_GENERATION {
+			t.Fatalf("lower stale proposal status = %v, want STALE", lower.GetStatus())
+		}
 		staleResp := h.reload(t, 2, []*grpcpb.TokenVerifier{tokA})
 		if staleResp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_STALE_GENERATION {
 			t.Fatalf("stale proposal (gen 2, current 2) status = %v, want APPLY_STATUS_STALE_GENERATION", staleResp.GetStatus())
 		}
-		current := staleResp.GetCurrentGeneration()
-		if current != 2 {
-			t.Fatalf("stale response current_generation = %d, want 2 (T092 reconciliation echo)", current)
+		if staleResp.GetAcknowledgmentVersion() != 0 {
+			t.Fatal("conflicting stale content carried a durable acknowledgment marker")
 		}
-
-		// The CP adopts current + 1 and retries; the retry MUST apply.
-		retryResp := h.reload(t, current+1, []*grpcpb.TokenVerifier{tokB})
-		if retryResp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
-			t.Fatalf("reconciliation retry (gen %d) status = %v, want APPLY_STATUS_OK", current+1, retryResp.GetStatus())
-		}
-		if retryResp.GetAppliedGeneration() != current+1 {
-			t.Errorf("retry applied_generation = %d, want %d", retryResp.GetAppliedGeneration(), current+1)
+		replay := h.reload(t, 2, []*grpcpb.TokenVerifier{tokB})
+		if replay.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK || replay.GetAcknowledgmentVersion() != 1 {
+			t.Fatal("exact current authority did not replay idempotently")
 		}
 
 		// The converged generation's token list is live; the stale
 		// proposal's tokens never became live.
 		h.requireAuth(t, "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1", true, "the reconciled generation's plaintext must be live")
 		h.requireAuth(t, "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0", false, "the stale proposal's plaintext must not be live")
-		if got := h.readSnapshot(t).Generation; got != current+1 {
-			t.Errorf("snapshot generation after reconciliation = %d, want %d", got, current+1)
+		if got := h.readSnapshot(t).Generation; got != 2 {
+			t.Errorf("snapshot generation after stale restore attempts = %d, want 2", got)
 		}
 
 		assertNoSecretLeak(t, h, tokA.GetVerifier(), tokB.GetVerifier(),

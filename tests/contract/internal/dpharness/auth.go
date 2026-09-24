@@ -31,10 +31,12 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/binary"
 	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -154,6 +156,34 @@ func MintToken(t *testing.T, plaintext string) *grpcpb.TokenVerifier {
 	return &grpcpb.TokenVerifier{Verifier: mac.Sum(nil)}
 }
 
+// DurableRequest builds the mandatory T159 auth-set-v1 envelope. The legacy
+// token list stays empty, so an old DP can install at most revoke-all and can
+// never see the candidate verifier material.
+func DurableRequest(generation uint64, tokens []*grpcpb.TokenVerifier) *grpcpb.ReloadTokensRequest {
+	members := make([][]byte, 0, len(tokens))
+	for _, token := range tokens {
+		members = append(members, append([]byte(nil), token.GetVerifier()...))
+	}
+	sort.Slice(members, func(i, j int) bool { return string(members[i]) < string(members[j]) })
+	h := sha256.New()
+	h.Write(append([]byte("stargate-auth-set-v1"), 0))
+	var count [8]byte
+	binary.BigEndian.PutUint64(count[:], uint64(len(members)))
+	h.Write(count[:])
+	for _, member := range members {
+		h.Write(member)
+	}
+	return &grpcpb.ReloadTokensRequest{
+		Generation: generation,
+		Durable: &grpcpb.DurableAuthSet{
+			SemanticsVersion: 1,
+			Generation:       generation,
+			Tokens:           tokens,
+			Commitment:       h.Sum(nil),
+		},
+	}
+}
+
 // Reload pushes a fresh token generation to the data plane via the
 // ReloadTokens RPC (hosted on dp.sock per T045). Returns the apply
 // response so the caller can assert APPLY_STATUS_OK or
@@ -220,6 +250,6 @@ func ReloadErr(h *Harness, generation uint64, tokens []*grpcpb.TokenVerifier) (*
 	defer closeFn()
 	client := grpcpb.NewControlClient(conn)
 	return client.ReloadTokens(ctx,
-		&grpcpb.ReloadTokensRequest{Generation: generation, Tokens: tokens},
+		DurableRequest(generation, tokens),
 		grpc.WaitForReady(true))
 }

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Unit tests for the dp-snapshot.json persistence layer (T046 snapshot.go):
-// data-model.md §1.4 (schemaVersion 2, verifier-only, atomic os.Rename
-// write, stale-v1 ignored rather than misparsed) and contracts/control-grpc.md
-// §"ReloadTokens" row 4 (persist before the OK response; a failed persist
-// leaves the previous file intact). The process-level tiers are T020
+// data-model.md §1.4 (schemaVersion 3, verifier commitment, atomic os.Rename
+// + directory fsync, stale schemas ignored rather than misparsed) and contracts/control-grpc.md
+// §"ReloadTokens" row 4 (persist before visibility or acknowledgment; a
+// failed persist leaves the active in-memory authority unchanged). The process-level tiers are T020
 // (tests/contract/control-grpc/reload_tokens_test.go, whose harness reads
 // this exact file shape) and T020a (cold-start restore end-to-end, gated on
 // T050's boot sequence). The silence of the process journal
@@ -19,11 +19,13 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -77,10 +79,12 @@ func dropTime(groups []string, a slog.Attr) slog.Attr {
 // snapshotMirror is the test's independent copy of the §1.4 shape — the
 // tests pin the spec's on-disk contract, not the implementation's struct.
 type snapshotMirror struct {
-	SchemaVersion int          `json:"schemaVersion"`
-	Generation    uint64       `json:"generation"`
-	LoadedAt      string       `json:"loadedAt"`
-	Verifiers     []mirrorItem `json:"verifiers"`
+	SchemaVersion  int          `json:"schemaVersion"`
+	AuthSetVersion int          `json:"authSetVersion"`
+	Generation     uint64       `json:"generation"`
+	Commitment     string       `json:"commitment"`
+	LoadedAt       string       `json:"loadedAt"`
+	Verifiers      []mirrorItem `json:"verifiers"`
 }
 
 // mirrorItem is the §1.4 verifier entry: an object with one base64 field.
@@ -118,6 +122,52 @@ func listDirNames(t *testing.T, dir string) []string {
 	return names
 }
 
+func mirrorCommitment(verifiers [][]byte) []byte {
+	members := make([][]byte, len(verifiers))
+	for i, verifier := range verifiers {
+		members[i] = append([]byte(nil), verifier...)
+	}
+	sort.Slice(members, func(i, j int) bool { return bytes.Compare(members[i], members[j]) < 0 })
+	h := sha256.New()
+	h.Write(append([]byte("stargate-auth-set-v1"), 0))
+	var count [8]byte
+	binary.BigEndian.PutUint64(count[:], uint64(len(members)))
+	h.Write(count[:])
+	for _, member := range members {
+		h.Write(member)
+	}
+	return h.Sum(nil)
+}
+
+func TestAuthSetCommitmentReferenceVectors(t *testing.T) {
+	ascending := make([]byte, 32)
+	descending := make([]byte, 32)
+	for i := range ascending {
+		ascending[i] = byte(i)
+		descending[i] = byte(255 - i)
+	}
+	cases := []struct {
+		name      string
+		verifiers [][]byte
+		wantHex   string
+	}{
+		{"empty", nil, "d1a4d9356a1106626240b962a184f79428f0a4bc69fae59633b599df95411675"},
+		{"one fixed member", [][]byte{ascending}, "0c649950e636116a68b5a738b8f2772a8a8e86147c2e9a552329c600f16793d1"},
+		{"unsorted duplicate members", [][]byte{descending, ascending, descending}, "090dc7c7c4c28962f5ebe37fb34db11a67afffa98c8b5a1784587e1aa2f2c4c0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			want, err := hex.DecodeString(tc.wantHex)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := authSetCommitment(tc.verifiers); !bytes.Equal(got, want) {
+				t.Errorf("auth-set-v1 commitment does not match the pinned contract vector")
+			}
+		})
+	}
+}
+
 // --- write path ----------------------------------------------------------------
 
 func TestWriteSnapshotShapeAndFidelity(t *testing.T) {
@@ -134,8 +184,8 @@ func TestWriteSnapshotShapeAndFidelity(t *testing.T) {
 	}
 
 	m := readMirror(t, dir)
-	if m.SchemaVersion != 2 {
-		t.Errorf("schemaVersion = %d, want 2 (T092 verifier-only shape)", m.SchemaVersion)
+	if m.SchemaVersion != 3 || m.AuthSetVersion != 1 {
+		t.Errorf("snapshot versions = %d/%d, want schema 3 / auth-set 1", m.SchemaVersion, m.AuthSetVersion)
 	}
 	if m.Generation != 7 {
 		t.Errorf("generation = %d, want 7", m.Generation)
@@ -145,6 +195,10 @@ func TestWriteSnapshotShapeAndFidelity(t *testing.T) {
 	}
 	if len(m.Verifiers) != 2 {
 		t.Fatalf("verifiers count = %d, want 2", len(m.Verifiers))
+	}
+	commitment, err := base64.StdEncoding.DecodeString(m.Commitment)
+	if err != nil || !bytes.Equal(commitment, mirrorCommitment(g.Verifiers)) {
+		t.Error("snapshot commitment does not bind the exact auth-set-v1 verifier multiset")
 	}
 	for i, want := range g.Verifiers {
 		got, err := base64.StdEncoding.DecodeString(m.Verifiers[i].Verifier)
@@ -320,16 +374,21 @@ func TestRestoreSnapshotIgnoresStaleV1(t *testing.T) {
 	}
 }
 
-func TestRestoreSnapshotIgnoresUnusableV2(t *testing.T) {
+func TestRestoreSnapshotIgnoresIncompatibleOrUnusableState(t *testing.T) {
+	emptyCommitment := base64.StdEncoding.EncodeToString(mirrorCommitment(nil))
 	cases := []struct {
 		name    string
 		content string
 	}{
-		{"corrupt json", `{"schemaVersion":2,"generation":9,`},
-		{"unknown schema version", `{"schemaVersion":3,"generation":9,"loadedAt":"2026-09-03T12:00:00Z","verifiers":[]}`},
-		{"wrong-length verifier", `{"schemaVersion":2,"generation":9,"loadedAt":"2026-09-03T12:00:00Z","verifiers":[{"verifier":"` + base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 17)) + `"}]}`},
-		{"non-base64 verifier", `{"schemaVersion":2,"generation":9,"loadedAt":"2026-09-03T12:00:00Z","verifiers":[{"verifier":"!!!!not-base64!!!!"}]}`},
-		{"unparsable loadedAt", `{"schemaVersion":2,"generation":9,"loadedAt":"yesterday","verifiers":[]}`},
+		{"corrupt json", `{"schemaVersion":3,"generation":9,`},
+		{"legacy schema v2", `{"schemaVersion":2,"generation":9,"loadedAt":"2026-09-03T12:00:00Z","verifiers":[]}`},
+		{"unknown schema version", `{"schemaVersion":4,"generation":9,"loadedAt":"2026-09-03T12:00:00Z","verifiers":[]}`},
+		{"zero generation", `{"schemaVersion":3,"authSetVersion":1,"generation":0,"commitment":"` + emptyCommitment + `","loadedAt":"2026-09-03T12:00:00Z","verifiers":[]}`},
+		{"wrong auth-set version", `{"schemaVersion":3,"authSetVersion":2,"generation":9,"commitment":"` + emptyCommitment + `","loadedAt":"2026-09-03T12:00:00Z","verifiers":[]}`},
+		{"wrong commitment", `{"schemaVersion":3,"authSetVersion":1,"generation":9,"commitment":"` + base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)) + `","loadedAt":"2026-09-03T12:00:00Z","verifiers":[]}`},
+		{"wrong-length verifier", `{"schemaVersion":3,"authSetVersion":1,"generation":9,"commitment":"` + emptyCommitment + `","loadedAt":"2026-09-03T12:00:00Z","verifiers":[{"verifier":"` + base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 17)) + `"}]}`},
+		{"non-base64 verifier", `{"schemaVersion":3,"authSetVersion":1,"generation":9,"commitment":"` + emptyCommitment + `","loadedAt":"2026-09-03T12:00:00Z","verifiers":[{"verifier":"!!!!not-base64!!!!"}]}`},
+		{"unparsable loadedAt", `{"schemaVersion":3,"authSetVersion":1,"generation":9,"commitment":"` + emptyCommitment + `","loadedAt":"yesterday","verifiers":[]}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -356,7 +415,8 @@ func TestRestoreSnapshotAcceptsEmptyVerifierSet(t *testing.T) {
 	// restoring it must yield generation N with nothing authenticating,
 	// not an ignored file (which would resurrect generation 0).
 	dir := t.TempDir()
-	writeRawSnapshot(t, dir, `{"schemaVersion":2,"generation":12,"loadedAt":"2026-09-03T12:00:00Z","verifiers":[]}`)
+	// Literal base64 of the contract's independently derived empty-set vector.
+	writeRawSnapshot(t, dir, `{"schemaVersion":3,"authSetVersion":1,"generation":12,"commitment":"0aTZNWoRBmJiQLlioYT3lCjwpLxp+uWWM7WZ35VBFnU=","loadedAt":"2026-09-03T12:00:00Z","verifiers":[]}`)
 
 	tokens := auth.NewTokenStore()
 	log, _ := journalLogger()

@@ -4,12 +4,19 @@
 package io.quarkus.stargate.control.grpc;
 
 import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.List;
-import java.util.function.Supplier;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
+import io.grpc.ConnectivityState;
 import io.grpc.ManagedChannel;
 import io.grpc.StatusRuntimeException;
 import io.grpc.netty.NettyChannelBuilder;
@@ -18,7 +25,10 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.epoll.EpollDomainSocketChannel;
 import io.netty.channel.unix.DomainSocketAddress;
 
+import com.google.protobuf.ByteString;
+
 import stargate.v1.ControlGrpc;
+import stargate.v1.ControlOuterClass.DurableAuthSet;
 import stargate.v1.ControlOuterClass.ReloadTokensRequest;
 import stargate.v1.ControlOuterClass.ReloadTokensResponse;
 import stargate.v1.ControlOuterClass.TokenVerifier;
@@ -38,12 +48,9 @@ import stargate.v1.ControlOuterClass.TokenVerifier;
  * interceptor are installed here on the ONLY channel this class can produce,
  * so no call can bypass them (wire-auth.md §4/§5.3).
  *
- * <p>Per-call semantics are the DP server's contract: atomic swap,
- * stale-generation rejection with the T092 {@code current_generation}
- * reconciliation field, {@code APPLY_STATUS_*} — this class passes requests
- * and responses through verbatim and never inspects verifier bytes (those
- * come from the T035 loader, already HMAC tags — this client treats them as
- * opaque 32-byte blobs).
+ * <p>Per-call semantics are the DP server's T159 durable-authority contract.
+ * This client commits the opaque verifier multiset in the mandatory
+ * auth-set-v1 envelope and keeps the legacy token list empty.
  */
 public final class ReloadTokensClient implements AutoCloseable {
 
@@ -51,8 +58,9 @@ public final class ReloadTokensClient implements AutoCloseable {
      * sequence indefinitely (T041 pushes during startup). Transport policy,
      * not wire shape. */
     private static final long DEADLINE_SECONDS = 10;
+    private static final int AUTH_SET_VERSION = 1;
 
-    private ManagedChannel channel;
+    private ChannelEpoch channel;
     private final Supplier<ManagedChannel> channelFactory;
     private final EventLoopGroup eventLoopGroup;
     private final Duration lifetime;
@@ -66,21 +74,82 @@ public final class ReloadTokensClient implements AutoCloseable {
         this.channel = openChannel();
     }
 
-    private ManagedChannel openChannel() {
+    private ChannelEpoch openChannel() {
         ManagedChannel opened = channelFactory.get();
+        ChannelEpoch epoch = new ChannelEpoch(opened);
         // Local forced shutdown: an uncooperative server cannot retain an
         // authenticated connection indefinitely (wire-auth §2.4).
-        var expiry = eventLoopGroup.next().schedule(opened::shutdownNow, lifetime.toNanos(), TimeUnit.NANOSECONDS);
+        var expiry = eventLoopGroup.next().schedule(
+                () -> retireLocally(epoch), lifetime.toNanos(), TimeUnit.NANOSECONDS);
         expiry.addListener(result -> {
-            if (!result.isSuccess()) { opened.shutdownNow(); }
+            if (!result.isSuccess()) { retireLocally(epoch); }
         });
-        return opened;
+        return epoch;
     }
 
-    private synchronized ManagedChannel currentChannel() {
+    private synchronized void retireLocally(ChannelEpoch epoch) {
+        if (closed || epoch.value.isShutdown()) {
+            return;
+        }
+        // Mark the exact epoch before shutdown so reconnect observation can
+        // distinguish our credential-lifetime rotation from a peer outage.
+        epoch.locallyRetired = true;
+        epoch.value.shutdownNow();
+    }
+
+    private synchronized ChannelEpoch currentEpoch() {
         if (closed) { throw new IllegalStateException("reload client is closed"); }
-        if (channel.isShutdown()) { channel = openChannel(); }
+        if (channel.value.isShutdown()) { channel = openChannel(); }
         return channel;
+    }
+
+    private ManagedChannel currentChannel() {
+        return currentEpoch().value;
+    }
+
+    /**
+     * Registers an event-driven callback for authenticated-channel recovery.
+     * The initial READY edge and this client's scheduled channel retirement
+     * are deliberately ignored; only READY after a peer-side disconnect
+     * counts as a reconnect. Calling {@link ManagedChannel#getState(boolean)}
+     * keeps the local UDS channel attempting recovery without application-
+     * level polling traffic.
+     */
+    public void onReconnect(Runnable callback) {
+        ChannelEpoch watched = currentEpoch();
+        ConnectivityState state = watched.value.getState(true);
+        watchConnectivity(watched, state, state == ConnectivityState.READY, false, callback);
+    }
+
+    private void watchConnectivity(ChannelEpoch watched, ConnectivityState observed,
+            boolean sawReady, boolean reconnectPending, Runnable callback) {
+        watched.value.notifyWhenStateChanged(observed, () -> {
+            ChannelEpoch active;
+            synchronized (this) {
+                if (closed) {
+                    return;
+                }
+                active = currentEpoch();
+            }
+            ConnectivityState next = active.value.getState(true);
+            boolean channelChanged = !active.equals(watched);
+            boolean localReplacement = channelChanged && watched.locallyRetired;
+            boolean peerDisconnected = sawReady
+                    && ((!channelChanged && next != ConnectivityState.READY)
+                            || (channelChanged && !watched.locallyRetired));
+            boolean nextReconnectPending = reconnectPending || peerDisconnected;
+            // A locally rotated channel establishes its own READY baseline.
+            // Preserve a real outage already latched in reconnectPending, but
+            // do not manufacture one from the replacement's IDLE/CONNECTING
+            // states.
+            boolean nextSawReady = (!localReplacement && sawReady)
+                    || next == ConnectivityState.READY;
+            if (next == ConnectivityState.READY && nextReconnectPending) {
+                callback.run();
+                nextReconnectPending = false;
+            }
+            watchConnectivity(active, next, nextSawReady, nextReconnectPending, callback);
+        });
     }
 
     /**
@@ -125,38 +194,83 @@ public final class ReloadTokensClient implements AutoCloseable {
         return new ReloadTokensClient(channelFactory, group, lifetime);
     }
 
+    /** One response paired with the exact commitment placed on its request. */
+    public record ReloadAttempt(ReloadTokensResponse response, ByteString commitment) {
+    }
+
     /**
      * Pushes one token generation to the DP. Throws {@link StatusRuntimeException}
      * on transport/handshake failure (UNAVAILABLE) or deadline exhaustion —
      * callers (T041) decide the retry policy; no retry lives here.
      *
-     * @param generation the CP's proposed generation (persisted last + 1)
+     * @param generation the CP's proposed generation
      * @param tokens     the HMAC-SHA-256 verifiers, opaque to this client
-     * @return the DP's response — {@code applied_generation}, {@code status},
-     *         and the T092 {@code current_generation} reconciliation field
+     * @return the DP's exact durable-authority response
      */
     public ReloadTokensResponse reload(long generation, List<TokenVerifier> tokens) {
+        return reloadAttempt(generation, tokens).response();
+    }
+
+    public ReloadAttempt reloadAttempt(long generation, List<TokenVerifier> tokens) {
+        ByteString commitment = authSetCommitment(tokens);
         ReloadTokensRequest request = ReloadTokensRequest.newBuilder()
                 .setGeneration(generation)
-                .addAllTokens(tokens)
+                .setDurable(DurableAuthSet.newBuilder()
+                        .setSemanticsVersion(AUTH_SET_VERSION)
+                        .setGeneration(generation)
+                        .addAllTokens(tokens)
+                        .setCommitment(commitment))
                 .build();
-        return ControlGrpc.newBlockingStub(currentChannel()).withDeadlineAfter(DEADLINE_SECONDS, TimeUnit.SECONDS)
+        ReloadTokensResponse response = ControlGrpc.newBlockingStub(currentChannel())
+                .withDeadlineAfter(DEADLINE_SECONDS, TimeUnit.SECONDS)
                 .reloadTokens(request);
+        return new ReloadAttempt(response, commitment);
+    }
+
+    /** control-grpc.md auth-set-v1 commitment; duplicates are preserved. */
+    static ByteString authSetCommitment(List<TokenVerifier> tokens) {
+        List<byte[]> members = new ArrayList<>(tokens.size());
+        for (TokenVerifier token : tokens) {
+            members.add(token.getVerifier().toByteArray());
+        }
+        members.sort(Arrays::compareUnsigned);
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update("stargate-auth-set-v1".getBytes(StandardCharsets.US_ASCII));
+            digest.update((byte) 0);
+            digest.update(ByteBuffer.allocate(Long.BYTES).putLong(members.size()).array());
+            for (byte[] member : members) {
+                digest.update(member);
+            }
+            return ByteString.copyFrom(digest.digest());
+        } catch (NoSuchAlgorithmException unavailable) {
+            throw new AssertionError("SHA-256 unavailable", unavailable);
+        }
     }
 
     @Override
     public synchronized void close() {
         closed = true;
-        channel.shutdownNow();
+        channel.value.shutdownNow();
         try {
             // A stubborn channel must not plant a phantom interrupt on the
             // caller's thread — at close() time the process teardown makes it
             // moot; only a REAL interrupt (the catch below) sets the flag.
-            channel.awaitTermination(5, TimeUnit.SECONDS);
+            channel.value.awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
         eventLoopGroup.shutdownGracefully(0, 5, TimeUnit.SECONDS)
                 .awaitUninterruptibly(5, TimeUnit.SECONDS);
+    }
+
+    /** One physical channel lifetime; local retirement is epoch-specific. */
+    private static final class ChannelEpoch {
+        private final ManagedChannel value;
+        private boolean locallyRetired;
+
+        private ChannelEpoch(ManagedChannel value) {
+            this.value = value;
+        }
     }
 }

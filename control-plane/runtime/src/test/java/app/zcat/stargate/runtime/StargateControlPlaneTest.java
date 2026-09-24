@@ -13,17 +13,21 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPair;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 
@@ -35,6 +39,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import app.zcat.stargate.auth.HmacVerifierMinter;
 import app.zcat.stargate.auth.TokenLoaderContract;
+import app.zcat.stargate.persistence.SqliteTokenState;
 import app.zcat.stargate.sidecar.SidecarMonitor;
 import io.grpc.Metadata;
 import io.grpc.ServerCall;
@@ -48,6 +53,10 @@ import io.netty.channel.unix.DomainSocketAddress;
 import io.quarkus.stargate.control.grpc.ControlGrpcService;
 import io.quarkus.stargate.control.grpc.CpTls;
 import io.quarkus.stargate.control.grpc.ReloadTokensClient;
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
+import jakarta.inject.Inject;
 import stargate.v1.ControlGrpc;
 import stargate.v1.ControlOuterClass;
 import stargate.v1.EventsOuterClass;
@@ -98,17 +107,18 @@ import stargate.v1.EventsOuterClass;
 class StargateControlPlaneTest {
 
     private static final int PEPPER_LEN = 32;
-    private static final byte[] TEST_PEPPER = repeat((byte) 0x5a, PEPPER_LEN);
+    static final byte[] TEST_PEPPER = repeat((byte) 0x5a, PEPPER_LEN);
 
     /** The repo's documented example bearer token (allowlisted; inlined). */
-    private static final String EXAMPLE_HEX = "1a2b3c4d5e6f70819a8b7c6d5e4f3a2b";
+    static final String EXAMPLE_HEX = "1a2b3c4d5e6f70819a8b7c6d5e4f3a2b";
+    private static final String REPLACEMENT_HEX = "2b3c4d5e6f70819a8b7c6d5e4f3a2b1c";
 
     @TempDir
     Path tmp;
 
     // --- fixtures --------------------------------------------------------------
 
-    private static byte[] repeat(byte b, int n) {
+    static byte[] repeat(byte b, int n) {
         byte[] out = new byte[n];
         Arrays.fill(out, b);
         return out;
@@ -141,7 +151,11 @@ class StargateControlPlaneTest {
 
     /** The stargate-keys volume shape bootstrap reads: cp.priv / cp.pub / dp.pub. */
     private Path keysDir() throws IOException {
-        Path keys = Files.createDirectories(tmp.resolve("keys"));
+        return writeKeys(tmp);
+    }
+
+    static Path writeKeys(Path root) throws IOException {
+        Path keys = Files.createDirectories(root.resolve("keys"));
         KeyPair cp = ed25519();
         KeyPair dp = ed25519();
         writePem(keys.resolve("cp.priv"), "PRIVATE KEY", cp.getPrivate().getEncoded());
@@ -179,8 +193,16 @@ class StargateControlPlaneTest {
                 runDir().resolve("observer.sock"), Duration.ofSeconds(10));
     }
 
+    private static ReloadTokensClient shortLivedReloadClient(Path keys, Path dpSock,
+            Duration lifetime) throws Exception {
+        var factory = ReloadTokensClient.class.getDeclaredMethod("create",
+                Path.class, Path.class, Path.class, Duration.class);
+        factory.setAccessible(true);
+        return (ReloadTokensClient) factory.invoke(null, keys, dpSock, keys.resolve("dp.pub"), lifetime);
+    }
+
     /** Reference §1.5 mint — mirrors TokenLifecycleContractTest cross-module. */
-    private static byte[] referenceMint(byte[] pepper, String token) {
+    static byte[] referenceMint(byte[] pepper, String token) {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");
             mac.init(new SecretKeySpec(pepper, "HmacSHA256"));
@@ -197,12 +219,13 @@ class StargateControlPlaneTest {
         final List<String> upserts = new CopyOnWriteArrayList<>();
         final List<String> deletes = new CopyOnWriteArrayList<>();
         final List<Long> recorded = new CopyOnWriteArrayList<>();
+        final List<TokenLoaderContract.StoredToken> stored = new CopyOnWriteArrayList<>();
         long lastGeneration;
         volatile RuntimeException beginFailure;
 
         @Override
         public java.util.Collection<TokenLoaderContract.StoredToken> storedTokens() {
-            return List.of();
+            return List.copyOf(stored);
         }
 
         @Override
@@ -216,11 +239,14 @@ class StargateControlPlaneTest {
         @Override
         public void upsert(String label, byte[] verifier) {
             upserts.add(label);
+            stored.removeIf(row -> row.label().equals(label));
+            stored.add(new TokenLoaderContract.StoredToken(label, verifier.clone()));
         }
 
         @Override
         public void delete(String label) {
             deletes.add(label);
+            stored.removeIf(row -> row.label().equals(label));
         }
 
         @Override
@@ -250,7 +276,8 @@ class StargateControlPlaneTest {
 
     /**
      * A DP stand-in on dp.sock — the mirror of the real DP server (T045): DP
-     * identity cert, clients pinned against cp.pub, answering OK. Records
+     * identity cert, clients pinned against cp.pub, returning an exact T159
+     * durable acknowledgment unless the stale fixture is selected. Records
      * every ReloadTokensRequest so the test can assert what crossed the wire.
      */
     private static final class RecordingDp implements AutoCloseable {
@@ -272,16 +299,21 @@ class StargateControlPlaneTest {
         }
 
         static RecordingDp start(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub) throws Exception {
-            return start(dpSock, keysDir, dpPubPath, cpPub, false);
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, false);
         }
 
         static RecordingDp startWithDelayedStaleThenOk(
                 Path dpSock, Path keysDir, Path dpPubPath, Path cpPub) throws Exception {
-            return start(dpSock, keysDir, dpPubPath, cpPub, true);
+            return start(dpSock, keysDir, dpPubPath, cpPub, true, false);
+        }
+
+        static RecordingDp startLegacy(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub)
+                throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, true);
         }
 
         private static RecordingDp start(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub,
-                boolean delayedStaleThenOk) throws Exception {
+                boolean delayedStaleThenOk, boolean legacyResponse) throws Exception {
             // The DP stand-in's identity: a cert carrying the pinned dp keypair,
             // derived through the public file-based path (deriveCpIdentity's CN
             // is cosmetic — §3 pins the public key, not the name).
@@ -305,22 +337,21 @@ class StargateControlPlaneTest {
                                     StreamObserver<ControlOuterClass.ReloadTokensResponse> response) {
                                 captured.add(request);
                                 int attempt = attempts.incrementAndGet();
-                                if (delayedStaleThenOk) {
-                                    try {
-                                        Thread.sleep(TimeUnit.SECONDS.toMillis(attempt == 1 ? 6 : 5));
-                                    } catch (InterruptedException e) {
-                                        Thread.currentThread().interrupt();
-                                        response.onError(e);
-                                        return;
-                                    }
-                                }
                                 var reply = ControlOuterClass.ReloadTokensResponse.newBuilder();
                                 if (delayedStaleThenOk && attempt == 1) {
                                     reply.setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_STALE_GENERATION)
                                             .setCurrentGeneration(5);
-                                } else {
+                                } else if (legacyResponse) {
                                     reply.setAppliedGeneration(request.getGeneration())
                                             .setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_OK);
+                                } else {
+                                    reply.setAppliedGeneration(request.getGeneration())
+                                            .setCurrentGeneration(request.getGeneration())
+                                            .setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_OK);
+                                    if (request.hasDurable()) {
+                                        reply.setAcknowledgmentVersion(1)
+                                                .setCommitment(request.getDurable().getCommitment());
+                                    }
                                 }
                                 response.onNext(reply.build());
                                 response.onCompleted();
@@ -536,8 +567,13 @@ class StargateControlPlaneTest {
             assertEquals(1, dp.requests.size(), "exactly one ReloadTokens push");
             ControlOuterClass.ReloadTokensRequest request = dp.requests.get(0);
             assertEquals(1L, request.getGeneration(), "generation = persisted 0 + 1 (§1.8)");
-            assertEquals(1, request.getTokensCount());
-            byte[] verifier = request.getTokens(0).getVerifier().toByteArray();
+            assertEquals(0, request.getTokensCount(),
+                    "legacy token list stays empty so an old DP sees revoke-all only");
+            assertTrue(request.hasDurable(), "the mandatory auth-set-v1 envelope is present");
+            assertEquals(1, request.getDurable().getSemanticsVersion());
+            assertEquals(1L, request.getDurable().getGeneration());
+            assertEquals(1, request.getDurable().getTokensCount());
+            byte[] verifier = request.getDurable().getTokens(0).getVerifier().toByteArray();
             assertArrayEquals(referenceMint(TEST_PEPPER, EXAMPLE_HEX), verifier,
                     "the pushed verifier is HMAC-SHA-256(pepper, token) (§1.5)");
             assertFalse(Arrays.equals(TEST_PEPPER, verifier),
@@ -548,7 +584,219 @@ class StargateControlPlaneTest {
     }
 
     @Test
-    void staleReconciliationGetsFreshDeadlineForTheNextAttempt() throws Exception {
+    void reloadClientMatchesPinnedAuthSetCommitmentVector() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-vector.sock");
+        byte[] ascending = new byte[32];
+        byte[] descending = new byte[32];
+        for (int i = 0; i < 32; i++) {
+            ascending[i] = (byte) i;
+            descending[i] = (byte) (255 - i);
+        }
+        var tokens = List.of(descending, ascending, descending).stream()
+                .map(bytes -> ControlOuterClass.TokenVerifier.newBuilder()
+                        .setVerifier(com.google.protobuf.ByteString.copyFrom(bytes))
+                        .build())
+                .toList();
+        try (RecordingDp dp = RecordingDp.start(dpSock, keys, keys.resolve("dp.pub"),
+                        keys.resolve("cp.pub"));
+                ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            client.reload(1L, tokens);
+            assertEquals(1, dp.requests.size());
+            assertArrayEquals(
+                    HexFormat.of().parseHex("090dc7c7c4c28962f5ebe37fb34db11a67afffa98c8b5a1784587e1aa2f2c4c0"),
+                    dp.requests.get(0).getDurable().getCommitment().toByteArray(),
+                    "Java auth-set-v1 encoding must match the contract's independent duplicate/sort vector");
+        }
+    }
+
+    @Test
+    void pendingCandidateRedeliversWhenDataPlaneReturns() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-late.sock");
+        try (ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client);
+            byte[] verifier = repeat((byte) 0x2a, 32);
+            TokenLoaderContract.PushResult pending = channel.push(3L, List.of(verifier));
+            assertEquals(0L, pending.currentGeneration(), "initial absent-DP delivery is pending");
+
+            try (RecordingDp dp = RecordingDp.start(dpSock, keys, keys.resolve("dp.pub"),
+                    keys.resolve("cp.pub"))) {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                while (dp.requests.isEmpty() && System.nanoTime() < deadline) {
+                    Thread.sleep(20);
+                }
+                assertEquals(1, dp.requests.size(),
+                        "the current durable candidate is delivered when DP returns without restarting CP");
+                assertEquals(3L, dp.requests.get(0).getGeneration());
+                assertArrayEquals(verifier,
+                        dp.requests.get(0).getDurable().getTokens(0).getVerifier().toByteArray());
+            }
+        }
+    }
+
+    @Test
+    void runningControlPlaneReconcilesRestartedRealDataPlane() throws Exception {
+        Path keys = keysDir();
+        Files.write(keys.resolve("pepper.key"), TEST_PEPPER);
+        pepperFile(TEST_PEPPER);
+        Path tokens = tokensFile("tokens:\n  - label: replacement\n    token: "
+                + REPLACEMENT_HEX + "\n");
+        Path dpSock = runDir().resolve("dp.sock");
+        Path stateDir = Files.createDirectories(tmp.resolve("dp-state"));
+
+        byte[] oldVerifier = referenceMint(TEST_PEPPER, EXAMPLE_HEX);
+        byte[] oldCommitment = referenceSingleCommitment(oldVerifier);
+        String snapshot = "{\"schemaVersion\":3,\"authSetVersion\":1,\"generation\":1,"
+                + "\"commitment\":\"" + Base64.getEncoder().encodeToString(oldCommitment) + "\","
+                + "\"loadedAt\":\"2026-09-24T00:00:00Z\",\"verifiers\":[{\"verifier\":\""
+                + Base64.getEncoder().encodeToString(oldVerifier) + "\"}]}";
+        Files.writeString(stateDir.resolve("dp-snapshot.json"), snapshot, StandardCharsets.US_ASCII);
+
+        RecordingState authority = new RecordingState();
+        authority.lastGeneration = 1L;
+        authority.stored.add(new TokenLoaderContract.StoredToken("old", oldVerifier));
+        try (StargateControlPlane.BootHandle handle = StargateControlPlane.bootstrap(
+                cfg(tokens, keys, dpSock), new RecordingAudit(), authority, authority)) {
+            assertEquals(List.of(2L), authority.recorded,
+                    "the unavailable-DP revocation candidate is durably assigned once");
+
+            Path goDir = Path.of("../../data-plane").toAbsolutePath().normalize();
+            ProcessBuilder fixtureBuilder = new ProcessBuilder("go", "test", "./internal/controlclient",
+                    "-run", "^TestJavaReloadInteropFixture$", "-count=1", "-timeout=30s")
+                    .directory(goDir.toFile())
+                    .redirectErrorStream(true)
+                    .redirectOutput(tmp.resolve("dp-run.log").toFile());
+            fixtureBuilder.environment().put("T159_JAVA_INTEROP_DIR", tmp.toString());
+            Process dp = fixtureBuilder.start();
+            try {
+                long readyDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+                while (!Files.exists(tmp.resolve("ready")) && dp.isAlive()
+                        && System.nanoTime() < readyDeadline) {
+                    Thread.sleep(20);
+                }
+                assertTrue(Files.exists(tmp.resolve("ready")),
+                        "real Go DP control server starts: " + Files.readString(tmp.resolve("dp-run.log")));
+                byte[] replacement = referenceMint(TEST_PEPPER, REPLACEMENT_HEX);
+                String replacementB64 = Base64.getEncoder().encodeToString(replacement);
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+                boolean reconciled = false;
+                while (System.nanoTime() < deadline && dp.isAlive()) {
+                    String current = Files.readString(stateDir.resolve("dp-snapshot.json"));
+                    reconciled = current.contains("\"generation\":2")
+                            && current.contains(replacementB64)
+                            && !current.contains(Base64.getEncoder().encodeToString(oldVerifier));
+                    if (reconciled) {
+                        break;
+                    }
+                    Thread.sleep(50);
+                }
+                assertTrue(reconciled,
+                        "running CP must replace the restarted real DP's stale generation without CP restart; "
+                                + Files.readString(tmp.resolve("dp-run.log")));
+            } finally {
+                Files.write(tmp.resolve("stop"), new byte[0]);
+                if (!dp.waitFor(5, TimeUnit.SECONDS)) {
+                    dp.destroyForcibly();
+                    dp.waitFor(5, TimeUnit.SECONDS);
+                }
+            }
+
+            // After that exact authority was acknowledged, lose the DP cache
+            // and restart only the DP. The running CP must retain and resend
+            // generation 2 on the authenticated channel's reconnect edge.
+            Files.deleteIfExists(tmp.resolve("ready"));
+            Files.deleteIfExists(tmp.resolve("stop"));
+            Files.delete(stateDir.resolve("dp-snapshot.json"));
+            Process restarted = fixtureBuilder.start();
+            try {
+                long readyDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+                while (!Files.exists(tmp.resolve("ready")) && restarted.isAlive()
+                        && System.nanoTime() < readyDeadline) {
+                    Thread.sleep(20);
+                }
+                assertTrue(Files.exists(tmp.resolve("ready")),
+                        "restarted Go DP control server starts: "
+                                + Files.readString(tmp.resolve("dp-run.log")));
+                String replacementB64 = Base64.getEncoder().encodeToString(
+                        referenceMint(TEST_PEPPER, REPLACEMENT_HEX));
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+                boolean reconciled = false;
+                while (System.nanoTime() < deadline && restarted.isAlive()) {
+                    Path snapshotPath = stateDir.resolve("dp-snapshot.json");
+                    if (Files.exists(snapshotPath)) {
+                        String current = Files.readString(snapshotPath);
+                        reconciled = current.contains("\"generation\":2")
+                                && current.contains(replacementB64);
+                    }
+                    if (reconciled) {
+                        break;
+                    }
+                    Thread.sleep(50);
+                }
+                assertTrue(reconciled,
+                        "acknowledged authority must repopulate a restarted DP with lost state; "
+                                + Files.readString(tmp.resolve("dp-run.log")));
+            } finally {
+                Files.write(tmp.resolve("stop"), new byte[0]);
+                if (!restarted.waitFor(5, TimeUnit.SECONDS)) {
+                    restarted.destroyForcibly();
+                    restarted.waitFor(5, TimeUnit.SECONDS);
+                }
+            }
+        }
+    }
+
+    @Test
+    void localChannelRetirementDoesNotReplayButPeerRestartDoes() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-retirement.sock");
+        RecordingDp initial = RecordingDp.start(
+                dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
+        try (ReloadTokensClient client = shortLivedReloadClient(
+                keys, dpSock, Duration.ofMillis(500))) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client);
+            try {
+                TokenLoaderContract.PushResult result = channel.push(8L,
+                        List.of(repeat((byte) 0x48, 32)));
+                assertEquals(8L, result.currentGeneration());
+                Thread.sleep(1_300);
+                assertEquals(1, initial.requests.size(),
+                        "scheduled client channel retirement must not replay current authority");
+            }
+            finally {
+                initial.close();
+            }
+
+            Files.deleteIfExists(dpSock);
+            // Keep the peer down through another client-side retirement. A
+            // real outage already observed must remain pending across that
+            // local epoch change.
+            Thread.sleep(700);
+            try (RecordingDp restarted = RecordingDp.start(
+                    dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"))) {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                while (restarted.requests.isEmpty() && System.nanoTime() < deadline) {
+                    Thread.sleep(20);
+                }
+                assertEquals(1, restarted.requests.size(),
+                        "a real peer restart still replays the retained current authority");
+                assertEquals(8L, restarted.requests.get(0).getGeneration());
+            }
+        }
+    }
+
+    private static byte[] referenceSingleCommitment(byte[] verifier) throws NoSuchAlgorithmException {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        digest.update("stargate-auth-set-v1".getBytes(StandardCharsets.US_ASCII));
+        digest.update((byte) 0);
+        digest.update(ByteBuffer.allocate(Long.BYTES).putLong(1L).array());
+        digest.update(verifier);
+        return digest.digest();
+    }
+
+    @Test
+    void staleAuthorityIsNotRenumberedOrRetried() throws Exception {
         Path keys = keysDir();
         pepperFile(TEST_PEPPER);
         Path tokens = tokensFile("tokens:\n  - label: laptop\n    token: " + EXAMPLE_HEX + "\n");
@@ -559,13 +807,31 @@ class StargateControlPlaneTest {
                 StargateControlPlane.BootHandle handle = StargateControlPlane.bootstrap(
                         cfg(tokens, keys, dpSock), new RecordingAudit(), state, state)) {
             assertNotNull(handle);
-            assertEquals(List.of(1L, 6L),
+            assertEquals(List.of(1L),
                     dp.requests.stream().map(ControlOuterClass.ReloadTokensRequest::getGeneration).toList(),
-                    "the loader adopts current_generation + 1 for its bounded stale retry");
-            assertEquals(List.of(1L, 6L), dp.completedGenerations,
-                    "both delayed RPCs complete because the retry receives a fresh deadline");
-            assertEquals(List.of(1L, 6L), state.recorded,
-                    "the existing generation-recording policy is preserved");
+                    "rejected content is never relabelled at current_generation + 1");
+            assertEquals(List.of(1L), dp.completedGenerations);
+            assertEquals(List.of(1L), state.recorded,
+                    "the pending candidate retains its originally assigned generation");
+        }
+    }
+
+    @Test
+    void serializedNewControlPlaneToLegacyResponseStaysPending() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-legacy.sock");
+        try (RecordingDp legacy = RecordingDp.startLegacy(dpSock, keys, keys.resolve("dp.pub"),
+                        keys.resolve("cp.pub"));
+                ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client);
+            TokenLoaderContract.PushResult result = channel.push(4L,
+                    List.of(repeat((byte) 0x31, 32)));
+            assertFalse(result.stale());
+            assertEquals(0L, result.currentGeneration(),
+                    "serialized markerless legacy OK is pending, never durable success");
+            assertEquals(0, legacy.requests.get(0).getTokensCount(),
+                    "the legacy field exposes at most revoke-all to an old DP");
+            assertTrue(legacy.requests.get(0).hasDurable());
         }
     }
 
@@ -657,9 +923,32 @@ class StargateControlPlaneTest {
         var ok = ControlOuterClass.ReloadTokensResponse.newBuilder()
                 .setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_OK)
                 .setAppliedGeneration(5)
+                .setCurrentGeneration(5)
+                .setAcknowledgmentVersion(1)
+                .setCommitment(com.google.protobuf.ByteString.copyFrom(repeat((byte) 0x4a, 32)))
                 .build();
         TokenLoaderContract.PushResult okMapped = GrpcReloadChannel.toPushResult(ok);
         assertFalse(okMapped.stale(), "OK maps to stale=false");
+        assertEquals(5L, okMapped.currentGeneration(), "recognized durable ack carries generation");
+
+        var legacyOk = ControlOuterClass.ReloadTokensResponse.newBuilder()
+                .setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_OK)
+                .setAppliedGeneration(5)
+                .build();
+        TokenLoaderContract.PushResult pending = GrpcReloadChannel.toPushResult(legacyOk);
+        assertFalse(pending.stale());
+        assertEquals(0L, pending.currentGeneration(),
+                "markerless old-DP OK is pending, never durable acknowledgment");
+
+        var expectedCommitment = com.google.protobuf.ByteString.copyFrom(repeat((byte) 0x4a, 32));
+        var wrongCommitment = ok.toBuilder()
+                .setCommitment(com.google.protobuf.ByteString.copyFrom(repeat((byte) 0x4b, 32)))
+                .build();
+        TokenLoaderContract.PushResult mismatched = GrpcReloadChannel.toPushResult(
+                5L, expectedCommitment, wrongCommitment);
+        assertFalse(mismatched.stale());
+        assertEquals(0L, mismatched.currentGeneration(),
+                "a marked OK for different content is pending, never an exact durable acknowledgment");
     }
 
     @Test
@@ -671,6 +960,8 @@ class StargateControlPlaneTest {
             TokenLoaderContract.PushResult result = channel.push(3, List.of(repeat((byte) 0x2a, 32)));
             assertNotNull(result, "the transport failure is contained, never thrown (§1.8)");
             assertFalse(result.stale(), "a contained failure is not a stale rejection");
+            assertEquals(0L, result.currentGeneration(),
+                    "transport failure is pending, not acknowledged at the requested generation");
         }
         assertFalse(Thread.currentThread().isInterrupted(), "containment leaves no phantom interrupt");
     }
@@ -690,5 +981,112 @@ class StargateControlPlaneTest {
         assertNotEquals(0, input[0],
                 "the minter does NOT clear its input buffer — the clear is the loader's "
                         + "mint-then-clear step (§1.1 narrowed claim; T035a non-tautology)");
+    }
+}
+
+/**
+ * T159's restored-authority probe uses the production SQLite/JTA adapter,
+ * production bootstrap, and production Go control server together. Keeping
+ * this Quarkus test beside the plain bootstrap suite preserves one reviewed
+ * path while preventing its container lifecycle from slowing every unit test.
+ */
+@QuarkusTest
+@TestProfile(T159ProductionAuthorityRecoveryTest.Profile.class)
+class T159ProductionAuthorityRecoveryTest {
+
+    @Inject
+    SqliteTokenState state;
+
+    @TempDir
+    Path tmp;
+
+    @Test
+    void restoredProductionSqliteAuthorityCannotReauthorizeRevokedToken() throws Exception {
+        Path keys = StargateControlPlaneTest.writeKeys(tmp);
+        Files.write(keys.resolve("pepper.key"), StargateControlPlaneTest.TEST_PEPPER);
+        Path pepperFile = tmp.resolve("pepper.key");
+        Files.write(pepperFile, StargateControlPlaneTest.TEST_PEPPER);
+        Path tokensFile = tmp.resolve("tokens.yaml");
+        Files.writeString(tokensFile,
+                "tokens:\n  - label: restored-old\n    token: "
+                        + StargateControlPlaneTest.EXAMPLE_HEX + "\n",
+                StandardCharsets.UTF_8);
+
+        byte[] revokedVerifier = StargateControlPlaneTest.referenceMint(
+                StargateControlPlaneTest.TEST_PEPPER, StargateControlPlaneTest.EXAMPLE_HEX);
+        state.record(1L);
+        state.begin();
+        state.upsert("restored-old", revokedVerifier);
+        state.commit();
+
+        // The injected production adapter represents the restored CP: its
+        // durable DB/configuration still contains generation 1 and the
+        // credential that the newer DP authority revoked at generation 2.
+        SqliteTokenState restored = state;
+        assertEquals(1L, restored.lastGeneration());
+        assertEquals(List.of("restored-old"), restored.storedTokens().stream()
+                .map(TokenLoaderContract.StoredToken::label).toList());
+
+        Path stateDir = Files.createDirectories(tmp.resolve("dp-state"));
+        Files.writeString(stateDir.resolve("dp-snapshot.json"),
+                "{\"schemaVersion\":3,\"authSetVersion\":1,\"generation\":2,"
+                        + "\"commitment\":\"0aTZNWoRBmJiQLlioYT3lCjwpLxp+uWWM7WZ35VBFnU=\","
+                        + "\"loadedAt\":\"2026-09-24T00:00:00Z\",\"verifiers\":[]}",
+                StandardCharsets.US_ASCII);
+        Files.writeString(tmp.resolve("auth-probe"), StargateControlPlaneTest.EXAMPLE_HEX,
+                StandardCharsets.US_ASCII);
+        Path runDir = Files.createDirectories(tmp.resolve("run"));
+        Path log = tmp.resolve("dp-run.log");
+        ProcessBuilder fixture = new ProcessBuilder("go", "test", "./internal/controlclient",
+                "-run", "^TestJavaReloadInteropFixture$", "-count=1", "-timeout=30s")
+                .directory(Path.of("../../data-plane").toAbsolutePath().normalize().toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(log.toFile());
+        fixture.environment().put("T159_JAVA_INTEROP_DIR", tmp.toString());
+        Process dp = fixture.start();
+        try {
+            long readyDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+            while (!Files.exists(tmp.resolve("ready")) && dp.isAlive()
+                    && System.nanoTime() < readyDeadline) {
+                Thread.sleep(20);
+            }
+            assertTrue(Files.exists(tmp.resolve("ready")),
+                    "real Go DP starts: " + Files.readString(log));
+
+            var cfg = new StargateControlPlane.BootConfig(tokensFile, pepperFile, keys,
+                    runDir.resolve("control.sock"), runDir.resolve("dp.sock"),
+                    runDir.resolve("observer.sock"), Duration.ofSeconds(10));
+            try (StargateControlPlane.BootHandle ignored = StargateControlPlane.bootstrap(
+                    cfg, (action, target, detail) -> { }, restored, restored)) {
+                assertEquals(1L, restored.lastGeneration(),
+                        "stale restored content is never relabeled above DP generation 2");
+                String current = Files.readString(stateDir.resolve("dp-snapshot.json"));
+                assertTrue(current.contains("\"generation\":2"));
+                assertTrue(current.contains("\"verifiers\":[]"));
+                assertFalse(current.contains(Base64.getEncoder().encodeToString(revokedVerifier)),
+                        "the restored production CP must not reintroduce the revoked verifier");
+            }
+        } finally {
+            Files.write(tmp.resolve("stop"), new byte[0]);
+            if (!dp.waitFor(5, TimeUnit.SECONDS)) {
+                dp.destroyForcibly();
+                dp.waitFor(5, TimeUnit.SECONDS);
+            }
+        }
+
+        String authResult = Files.readString(tmp.resolve("auth-result"));
+        assertTrue(authResult.contains("generation=2"));
+        assertTrue(authResult.contains("authorized=false"),
+                "the real Go verifier rejects the credential from the restored stale CP");
+    }
+
+    public static final class Profile implements QuarkusTestProfile {
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(
+                    "quarkus.datasource.jdbc.url", "jdbc:sqlite:target/t159-production-authority.db",
+                    "quarkus.flyway.clean-at-start", "true",
+                    "quarkus.flyway.clean-disabled", "false");
+        }
     }
 }

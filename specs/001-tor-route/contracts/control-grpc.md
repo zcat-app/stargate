@@ -19,6 +19,11 @@ RPCs below requires either (a) an additive minor change with backwards-
 compatibility tests, or (b) a major version bump to `stargate.v2` with
 documented migration (constitution Inter-Plane Contract section).
 
+T159 makes one synchronized pre-release exception inside `stargate.v1`: the
+legacy scalar fields remain only as a fail-closed bridge while the mandatory
+`auth-set-v1` envelope and acknowledgment replace their semantics. This is a
+stop-the-world two-peer transition, not a rolling-compatible additive minor.
+
 ---
 
 ## RPCs used by this feature
@@ -35,8 +40,8 @@ rpc ReloadTokens(ReloadTokensRequest) returns (ReloadTokensResponse);
 > tag under a shared install-time pepper, not an Argon2id hash. `TokenHash`
 > is renamed `TokenVerifier` and drops its `salt` field (single shared
 > pepper → no per-token salt), carrying only the 32-byte verifier. The
-> response gains a `current_generation` field so a stale CP can reconcile
-> against the DP's truth and retry. This breaking pre-release contract
+> response gains a `current_generation` diagnostic field. T159 later forbids
+> using it to renumber rejected content. This breaking pre-release contract
 > change is recorded as an amendment NOTE (SECURITY-DECISIONS.md §"Bearer-
 > token verifier: HMAC-SHA-256 + install-time pepper (T092)"), NOT a
 > `stargate.v2` bump — no consumers exist today and semver-on-amendments
@@ -47,8 +52,16 @@ rpc ReloadTokens(ReloadTokensRequest) returns (ReloadTokensResponse);
 
 ```proto
 message ReloadTokensRequest {
-  uint64 generation = 1;              // monotonic; CP proposal = persisted last + 1
-  repeated TokenVerifier tokens = 2;
+  uint64 generation = 1;              // legacy mirror of durable.generation
+  repeated TokenVerifier tokens = 2;  // empty in auth-set-v1; old DP sees revoke-all only
+  DurableAuthSet durable = 3;          // mandatory versioned authority envelope
+}
+
+message DurableAuthSet {
+  uint32 semantics_version = 1;        // exactly 1
+  uint64 generation = 2;              // nonzero; equals request.generation
+  repeated TokenVerifier tokens = 3;
+  bytes commitment = 4;               // 32-byte auth-set-v1 commitment
 }
 
 message TokenVerifier {
@@ -62,7 +75,9 @@ message TokenVerifier {
 message ReloadTokensResponse {
   uint64 applied_generation = 1;
   ApplyStatus status = 2;
-  uint64 current_generation = 3;      // DP current generation; stale content cannot be renumbered into authority (T159)
+  uint64 current_generation = 3;      // diagnostic only; never a CP renumbering instruction
+  uint32 acknowledgment_version = 4;  // exactly 1 after durable application
+  bytes commitment = 5;               // acknowledged auth-set-v1 commitment
 }
 
 enum ApplyStatus {
@@ -75,20 +90,68 @@ enum ApplyStatus {
 
 **Contract**:
 
-- The data plane MUST atomically swap to the new generation before
-  returning `APPLY_STATUS_OK`. In-flight requests holding the previous
-  generation continue against it.
-- If `request.generation <= currentGeneration`, the data plane MUST
-  return `APPLY_STATUS_STALE_GENERATION`, set `current_generation` to its
-  current generation (for authority reconciliation under T159), and leave
-  the current generation unchanged.
-- Each `TokenVerifier.verifier` MUST be exactly 32 bytes; mismatch returns
-  `APPLY_STATUS_INVALID` with no generation change.
-- On `APPLY_STATUS_OK`, the data plane MUST persist the new
-  generation to `dp-snapshot.json` (verifiers only — never the pepper)
-  before reporting durable application. Persistence failure MUST NOT report durable success
-  or allow acknowledged revocation to revert on restart. T159 specifies failure responses,
-  in-memory state and crash recovery with a reviewed peer transition before implementation.
+- `durable.semantics_version` MUST be `1`; `durable.generation` MUST be
+  nonzero and equal the legacy `request.generation`; the legacy `tokens`
+  list MUST be empty. A missing/unknown durable envelope is a static
+  `FAILED_PRECONDITION` before mutation. Other malformed fields return
+  `APPLY_STATUS_INVALID` without a durable acknowledgment.
+- `auth-set-v1` is SHA-256 over ASCII `stargate-auth-set-v1` followed by one
+  zero byte, the verifier count as an unsigned 64-bit big-endian integer,
+  then the lexicographically sorted 32-byte verifier members concatenated.
+  Duplicates are preserved. The DP recomputes and constant-shape compares
+  the 32-byte commitment; mismatch changes nothing. Commitments are
+  credential-derived private state and MUST NOT enter logs or errors.
+  Independently derived reference vectors (lowercase hex) are:
+
+  | Verifier input | `auth-set-v1` commitment |
+  |---|---|
+  | empty set | `d1a4d9356a1106626240b962a184f79428f0a4bc69fae59633b599df95411675` |
+  | one member containing bytes `00` through `1f` | `0c649950e636116a68b5a738b8f2772a8a8e86147c2e9a552329c600f16793d1` |
+  | input order `[ff..e0, 00..1f, ff..e0]` | `090dc7c7c4c28962f5ebe37fb34db11a67afffa98c8b5a1784587e1aa2f2c4c0` |
+
+  The third vector pins unsigned lexicographic sorting and duplicate
+  preservation; it is the two members ordered as `00..1f, ff..e0, ff..e0`
+  before hashing.
+- For a generation greater than the current generation, the DP writes a
+  valid schema-v3 snapshot, fsyncs the file, renames it, and fsyncs the
+  containing directory before swapping the in-memory pointer. Only then may
+  it return `APPLY_STATUS_OK`, `acknowledgment_version=1`, the exact applied
+  generation, and exact commitment. A persistence failure returns a static
+  non-success gRPC status and leaves the active in-memory generation unchanged.
+- A request equal to the current generation is idempotently acknowledged only
+  when its commitment and verifier multiset equal the current state. Before
+  that acknowledgment the DP rewrites and syncs the current snapshot, repairing
+  a newer candidate that may have reached rename before a prior directory-sync
+  failure. Equal generation with different content and every lower generation
+  return `APPLY_STATUS_STALE_GENERATION` without mutation. `current_generation`
+  is diagnostic only and MUST NOT be used to relabel rejected content.
+- Each durable `TokenVerifier.verifier` MUST be exactly 32 bytes. A valid
+  empty durable set is revoke-all authority; generation zero is never an
+  authority generation.
+- The CP reserves a changed candidate's next generation before changing its
+  stored verifier rows, then delivers only after the row transaction commits.
+  A crash before row commit may consume a generation number; it cannot pair
+  new content with the old number. If the desired verifier multiset equals a
+  stored candidate, restart replays the same generation. Rejection, timeout,
+  missing/wrong acknowledgment, or crash stays pending and never adopts
+  `DP.current_generation + 1`. While the CP remains running, one coalescing
+  redelivery worker retries the latest exact candidate over local IPC with
+  exponential backoff capped at five seconds; stale conflict and client close
+  terminate that candidate's retry. After acknowledgment, the running CP keeps
+  the latest non-stale exact authority in memory and queues it once when the
+  authenticated local channel reaches READY after a peer-side disconnect.
+  The client's scheduled 55-second credential-lifetime channel retirement
+  establishes a fresh READY baseline and MUST NOT issue `ReloadTokens` or
+  rewrite the DP snapshot. This event-driven peer-recovery replay repairs a
+  DP-only restart with missing/invalid state; it adds no periodic application
+  RPC, proxy probe, or public-network traffic.
+- Mixed peers fail closed: a new CP sends no legacy tokens, so an old DP can
+  install at most revoke-all and cannot return a recognized acknowledgment;
+  a new DP rejects an old CP's missing envelope before mutation. Deploy by
+  stopping both planes and replacing them together. Legacy schema-v2
+  snapshots are incompatible and deny until a matching new CP reseeds.
+- In-flight requests holding the previous generation pointer complete against
+  it. Reload adds no CP call to an established application byte pipe.
 - The data plane MUST NOT log the verifier bytes, the pepper, or any
   token label (labels are not in the message anyway, by design —
   labels remain auth-configuration state and MUST NOT enter any audit log).
@@ -97,20 +160,42 @@ enum ApplyStatus {
 
 1. Happy path: new generation applied; subsequent inbound proxy auth
    uses the new verifiers.
-2. Stale generation: `request.generation = currentGeneration` →
-   `APPLY_STATUS_STALE_GENERATION`, current generation unchanged,
-   `current_generation` echoes the DP's current generation (T092
-   reconciliation field).
-3. Invalid verifier length: `request.tokens[i].verifier` is 31 or 33 bytes →
+2. Replay/conflict: exact same-generation content reasserts its snapshot and
+   returns the exact durable acknowledgment; same-generation different content
+   and lower generations return `APPLY_STATUS_STALE_GENERATION` without
+   mutation or renumbering. A post-rename failure followed by replay restores
+   the exact active authority before acknowledgment.
+3. Invalid verifier length: `request.durable.tokens[i].verifier` is 31 or 33 bytes →
    `APPLY_STATUS_INVALID`, current generation unchanged.
 4. Snapshot persist failure: inject read-only/full/unavailable storage and crash/restart;
    no false durable success and no restored acknowledged revocation (T159).
-5. Concurrency: two `ReloadTokens` calls with generations N and N+1 in
-   parallel; the data plane converges on generation N+1 and rejects
-   the older one as stale on retry.
+5. Concurrency: two valid durable calls with generations N and N+1 in
+   parallel converge on N+1; retry observes either exact idempotent authority
+   or a stale conflict, never a snapshot older than live memory.
 6. **Authority reconciliation (T159):** reconnect current persisted authority automatically,
    but reject an older restored CP credential set. Verify revoked tokens stay rejected and
-   explicit operator rollback recovery is distinguishable from ordinary reconnect.
+   explicit operator rollback recovery is distinguishable from ordinary reconnect. Exercise
+   both mixed-peer directions, snapshot failure, SIGKILL after acknowledgment, valid empty
+   restart, and existing byte-pipe completion. Pin the reference commitment vectors on both
+   language implementations and run the production Java bootstrap against the production Go
+   control server with a restored production SQLite/JTA CP authority older than the DP, asserting
+   the revoked credential remains rejected. Then restart only that server without its snapshot
+   and prove the still-running CP reseeds the acknowledged set. Shorten the production client's
+   channel lifetime, cross at least two local retirements with zero replay, then restart the peer
+   and prove one exact replay. Abruptly kill production SQLite/JTA child processes after reservation
+   and after candidate commit for both revocation and generation-zero enrollment; each recovery
+   process MUST reopen the original database files.
+
+**Supported explicit rollback (T159).** Stop both planes (terminating current
+byte pipes), preserve the newer matched DP/CP/key state as the abort path,
+restore the selected CP database/configuration with its matching pepper and
+IPC keys, and move—not edit—the active DP snapshot out of the state directory.
+Start matching new peers; admission remains denied until the normal durable
+RPC reseeds and returns the exact acknowledgment. Verify intended credential
+outcomes before reopening service. This operator-confirmed action may
+reauthorize credentials present in the selected backup. Never hand-edit
+generation/commitment fields. Host/root rollback of all trusted state is not
+claimed safe.
 
 
 ### `WatchEvents`

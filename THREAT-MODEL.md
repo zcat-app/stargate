@@ -1831,9 +1831,45 @@ byte pipes may finish. Revocation does not claim to terminate established applic
 Valid durable snapshots support CP-down restart. Missing/corrupt/incompatible snapshots deny
 new admission. Supported crash/restart must not undo an acknowledged revocation, and ordinary
 reconnect must not relabel credentials restored from a stale CP backup as fresh authority.
-T132/T159 implement and verify this target. Current non-durable success/stale-state renumbering
-is a known gap, not an accepted recovery mechanism. Explicit operator rollback recovery has its
-own warned procedure; hostile host/root rollback of all trusted state is outside the guarantee.
+T159 implements this with the versioned `auth-set-v1` verifier commitment and schema-v3 DP
+snapshot: file fsync, rename and directory fsync precede the in-memory swap and the exact durable
+acknowledgment. Same-generation exact replay rewrites that active snapshot before acknowledgment,
+repairing any newer candidate left visible by an ambiguous post-rename failure. Conflicts never
+drive CP renumbering. The CP reserves a changed generation before mutating candidate rows; a crash
+may consume a number but cannot pair new credential contents with the old number. A coalescing
+local-IPC worker redelivers the latest exact pending candidate with capped exponential backoff, so
+a DP that returns while the CP remains running reconciles without a CP restart. After exact
+acknowledgment, the running CP retains that latest non-stale authority in memory and queues it once
+when the authenticated channel becomes READY after a peer-side disconnect. The client's scheduled
+55-second credential-lifetime retirement establishes a fresh READY baseline and sends no
+`ReloadTokens`, so it causes no periodic DP snapshot rewrite. Thus a DP-only restart that has lost
+or rejected its snapshot is reseeded without periodic application RPCs, proxy probes or public-
+network traffic.
+The pre-release mixed-peer transition is stop-the-world. A new CP exposes only an empty legacy
+list to an old DP and cannot recognize its response as durable; a new DP rejects an old CP's
+missing durable envelope before mutation. Legacy schema-v2 snapshots deny until matching new
+peers reseed, because the old implementation could acknowledge state that was never persisted.
+
+Explicit rollback is offline: stop both planes (terminating byte pipes), preserve the newer
+matched state, restore the selected CP database/configuration plus matching pepper/IPC keys, move
+the active DP snapshot aside without editing it, then let matching peers reseed through the normal
+durable RPC. Admission stays denied until the exact acknowledgment is observed and credential
+outcomes are verified. This operator-confirmed procedure can deliberately reauthorize credentials
+from the selected backup. A lost response or post-rename storage error can leave application
+pending even if candidate bytes reached disk; exact replay rewrites current authority and resolves
+that ambiguity. SIGKILL and
+local-filesystem probes do not prove every power-loss/filesystem implementation. Host/root or
+storage rollback of all trusted authority state remains outside the guarantee.
+
+Verification crosses the production persistence and wire boundaries: production SQLite/JTA child
+processes are forcibly killed after generation reservation and after candidate commit for both
+revocation and first enrollment from generation zero. Fresh recovery processes reopen each
+original database in place, consume reservation gaps safely and replay committed candidates at
+their exact generation. A restored stale production CP database/configuration connects over
+mTLS/UDS to the production Go server and the real Go verifier still rejects the revoked
+credential. Both mixed-peer directions cross serialized RPC boundaries. A shortened-lifetime
+production client crosses repeated local channel retirements without a reload, then performs one
+exact replay after a real peer restart, including retirement while that outage remains pending.
 
 ### 5.16 Verification coverage and review evidence (T139)
 

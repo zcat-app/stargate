@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 40 |
-| in-progress | 0 |
+| pending | 39 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 162 |
@@ -38,13 +38,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
 | T145 | Test Maven wrapper checksum enforcement | Foundation audit remediation |  |  |
 | T146 | Correct init timeout diagnosis and isolate its fixture | Foundation audit remediation |  |  |
-| T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T159 | Preserve acknowledged auth state across rollback and restart | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

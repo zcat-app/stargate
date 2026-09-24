@@ -58,8 +58,20 @@ service Control {
 // --- ReloadTokens --------------------------------------------------
 
 message ReloadTokensRequest {
-  uint64 generation = 1;              // monotonic; CP proposal = persisted last + 1
-  repeated TokenVerifier tokens = 2;
+  uint64 generation = 1;              // legacy mirror of durable.generation
+  repeated TokenVerifier tokens = 2;  // MUST be empty in auth-set-v1
+  DurableAuthSet durable = 3;          // mandatory T159 durable-authority envelope
+}
+
+// T159's synchronized pre-release durable-authority transition. Version 1
+// commits the exact verifier multiset; order is immaterial and duplicates are
+// preserved. A peer that does not understand this envelope cannot acknowledge
+// durable application.
+message DurableAuthSet {
+  uint32 semantics_version = 1;        // exactly 1 for auth-set-v1
+  uint64 generation = 2;              // nonzero; must equal request.generation
+  repeated TokenVerifier tokens = 3;
+  bytes commitment = 4;               // 32-byte auth-set-v1 SHA-256 commitment
 }
 
 // T092: HMAC-SHA-256 tag under the install-time pepper. No per-token salt
@@ -72,7 +84,9 @@ message TokenVerifier {
 message ReloadTokensResponse {
   uint64 applied_generation = 1;
   ApplyStatus status = 2;
-  uint64 current_generation = 3;      // T092: DP's current generation; set on STALE so the CP can retry with current + 1
+  uint64 current_generation = 3;      // diagnostic only; MUST NOT drive CP renumbering
+  uint32 acknowledgment_version = 4;  // exactly 1 only after durable application
+  bytes commitment = 5;               // exact acknowledged auth-set-v1 commitment
 }
 
 enum ApplyStatus {

@@ -20,16 +20,20 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/binary"
 	"encoding/pem"
 	"errors"
+	"io"
 	"log/slog"
 	"math/big"
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -850,6 +854,34 @@ func verifiersOf(tokens ...[]byte) []*grpcpb.TokenVerifier {
 	return out
 }
 
+// durableRequest is the tests' independent auth-set-v1 encoder. Keeping the
+// commitment oracle here prevents a production helper bug from making both
+// request construction and validation agree on the wrong bytes.
+func durableRequest(generation uint64, tokens []*grpcpb.TokenVerifier) *grpcpb.ReloadTokensRequest {
+	members := make([][]byte, 0, len(tokens))
+	for _, token := range tokens {
+		members = append(members, append([]byte(nil), token.GetVerifier()...))
+	}
+	sort.Slice(members, func(i, j int) bool { return bytes.Compare(members[i], members[j]) < 0 })
+	h := sha256.New()
+	h.Write(append([]byte("stargate-auth-set-v1"), 0))
+	var count [8]byte
+	binary.BigEndian.PutUint64(count[:], uint64(len(members)))
+	h.Write(count[:])
+	for _, member := range members {
+		h.Write(member)
+	}
+	return &grpcpb.ReloadTokensRequest{
+		Generation: generation,
+		Durable: &grpcpb.DurableAuthSet{
+			SemanticsVersion: 1,
+			Generation:       generation,
+			Tokens:           tokens,
+			Commitment:       h.Sum(nil),
+		},
+	}
+}
+
 func TestReloadTokensHappyPath(t *testing.T) {
 	// Contract row 1: new generation applied; response carries
 	// APPLY_STATUS_OK + applied_generation; the snapshot seam saw the new
@@ -859,9 +891,8 @@ func TestReloadTokensHappyPath(t *testing.T) {
 	tok := make([]byte, 32)
 	rand.Read(tok)
 
-	resp, err := s.ReloadTokens(context.Background(), &grpcpb.ReloadTokensRequest{
-		Generation: 1, Tokens: verifiersOf(tok),
-	})
+	req := durableRequest(1, verifiersOf(tok))
+	resp, err := s.ReloadTokens(context.Background(), req)
 	if err != nil {
 		t.Fatalf("ReloadTokens: %v", err)
 	}
@@ -871,6 +902,9 @@ func TestReloadTokensHappyPath(t *testing.T) {
 	if resp.GetAppliedGeneration() != 1 {
 		t.Errorf("applied_generation = %d, want 1", resp.GetAppliedGeneration())
 	}
+	if resp.GetAcknowledgmentVersion() != 1 || !bytes.Equal(resp.GetCommitment(), req.GetDurable().GetCommitment()) {
+		t.Error("OK response is not an exact auth-set-v1 durable acknowledgment")
+	}
 	cur := s.tokens.Current()
 	if cur.Generation != 1 || len(cur.Verifiers) != 1 || !bytes.Equal(cur.Verifiers[0], tok) {
 		t.Error("token store did not swap to the pushed generation verbatim")
@@ -878,23 +912,21 @@ func TestReloadTokensHappyPath(t *testing.T) {
 	if rec.count() != 1 {
 		t.Fatalf("snapshot seam called %d times, want 1 (persist-before-return)", rec.count())
 	}
-	if rec.calls[0].Generation != 1 || !bytes.Equal(rec.calls[0].Verifiers[0], tok) {
+	if rec.calls[0].Generation != 1 || len(rec.calls[0].Verifiers) != 1 ||
+		!bytes.Equal(rec.calls[0].Verifiers[0], tok) {
 		t.Error("persisted generation is not the pushed one (persist-content fidelity)")
 	}
 }
 
 func TestReloadTokensStaleGeneration(t *testing.T) {
-	// Contract row 2 + T092 reconciliation: request.generation <= current →
-	// APPLY_STATUS_STALE_GENERATION, current_generation echoes the DP's
-	// current generation, applied_generation reports the unchanged current,
-	// and NO state changes.
+	// Contract row 2: equal-generation conflicting content and lower
+	// generations are stale. current_generation echoes the DP's unchanged
+	// current generation and NO state changes.
 	rec := &snapshotRecorder{}
 	s := newTestServer(t, rec)
 	tokA := make([]byte, 32)
 	rand.Read(tokA)
-	if _, err := s.ReloadTokens(context.Background(), &grpcpb.ReloadTokensRequest{
-		Generation: 2, Tokens: verifiersOf(tokA),
-	}); err != nil {
+	if _, err := s.ReloadTokens(context.Background(), durableRequest(2, verifiersOf(tokA))); err != nil {
 		t.Fatal(err)
 	}
 	snapshotCalls := rec.count()
@@ -905,9 +937,7 @@ func TestReloadTokensStaleGeneration(t *testing.T) {
 	tokStale := make([]byte, 32)
 	rand.Read(tokStale)
 	for _, stale := range []uint64{2, 1} {
-		resp, err := s.ReloadTokens(context.Background(), &grpcpb.ReloadTokensRequest{
-			Generation: stale, Tokens: verifiersOf(tokStale),
-		})
+		resp, err := s.ReloadTokens(context.Background(), durableRequest(stale, verifiersOf(tokStale)))
 		if err != nil {
 			t.Fatalf("generation %d: %v", stale, err)
 		}
@@ -918,14 +948,27 @@ func TestReloadTokensStaleGeneration(t *testing.T) {
 			t.Errorf("generation %d applied_generation = %d, want 2 (unchanged)", stale, resp.GetAppliedGeneration())
 		}
 		if resp.GetCurrentGeneration() != 2 {
-			t.Errorf("generation %d current_generation = %d, want 2 (T092 reconciliation echo)", stale, resp.GetCurrentGeneration())
+			t.Errorf("generation %d current_generation = %d, want 2 (diagnostic echo)", stale, resp.GetCurrentGeneration())
 		}
+	}
+	if rec.count() != snapshotCalls {
+		t.Error("snapshot seam fired on a stale push — persisted state must be untouched")
+	}
+	replayReq := durableRequest(2, verifiersOf(tokA))
+	replay, err := s.ReloadTokens(context.Background(), replayReq)
+	if err != nil {
+		t.Fatalf("exact same-generation replay: %v", err)
+	}
+	if replay.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK ||
+		replay.GetAcknowledgmentVersion() != 1 ||
+		!bytes.Equal(replay.GetCommitment(), replayReq.GetDurable().GetCommitment()) {
+		t.Error("exact same-generation content was not idempotently acknowledged")
 	}
 	if got := s.tokens.Current().Generation; got != 2 {
 		t.Errorf("current generation = %d, want 2 (stale pushes change nothing)", got)
 	}
-	if rec.count() != snapshotCalls {
-		t.Error("snapshot seam fired on a stale push — persisted state must be untouched")
+	if rec.count() != snapshotCalls+1 {
+		t.Error("exact replay did not reassert the active durable snapshot before acknowledgment")
 	}
 }
 
@@ -936,16 +979,12 @@ func TestReloadTokensInvalidVerifierLength(t *testing.T) {
 	s := newTestServer(t, rec)
 	tokA := make([]byte, 32)
 	rand.Read(tokA)
-	if _, err := s.ReloadTokens(context.Background(), &grpcpb.ReloadTokensRequest{
-		Generation: 1, Tokens: verifiersOf(tokA),
-	}); err != nil {
+	if _, err := s.ReloadTokens(context.Background(), durableRequest(1, verifiersOf(tokA))); err != nil {
 		t.Fatal(err)
 	}
 
 	for _, n := range []int{0, 31, 33, 64} {
-		resp, err := s.ReloadTokens(context.Background(), &grpcpb.ReloadTokensRequest{
-			Generation: 2, Tokens: verifiersOf(make([]byte, n)),
-		})
+		resp, err := s.ReloadTokens(context.Background(), durableRequest(2, verifiersOf(make([]byte, n))))
 		if err != nil {
 			t.Fatalf("len %d: %v", n, err)
 		}
@@ -960,9 +999,7 @@ func TestReloadTokensInvalidVerifierLength(t *testing.T) {
 	// follow-through in the contract test): a valid gen 2 now applies.
 	tokB := make([]byte, 32)
 	rand.Read(tokB)
-	resp, err := s.ReloadTokens(context.Background(), &grpcpb.ReloadTokensRequest{
-		Generation: 2, Tokens: verifiersOf(tokB),
-	})
+	resp, err := s.ReloadTokens(context.Background(), durableRequest(2, verifiersOf(tokB)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -981,7 +1018,7 @@ func TestReloadTokensEmptyTokenListIsValid(t *testing.T) {
 	// next push). Not an INVALID.
 	rec := &snapshotRecorder{}
 	s := newTestServer(t, rec)
-	resp, err := s.ReloadTokens(context.Background(), &grpcpb.ReloadTokensRequest{Generation: 1})
+	resp, err := s.ReloadTokens(context.Background(), durableRequest(1, nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -993,10 +1030,9 @@ func TestReloadTokensEmptyTokenListIsValid(t *testing.T) {
 	}
 }
 
-func TestReloadTokensSnapshotFailureStillOK(t *testing.T) {
-	// Contract row 4: persist failure → still APPLY_STATUS_OK (in-memory
-	// truth wins; the snapshot is a cold-start cache) and the failure is
-	// journaled (loginvariants snapshot_write class).
+func TestReloadTokensSnapshotFailureIsNotAcknowledged(t *testing.T) {
+	// Contract row 4: a persist failure cannot become visible in memory and
+	// cannot return a durable acknowledgment.
 	rec := &snapshotRecorder{err: errors.New("read-only filesystem"), errN: 1}
 	var logBuf bytes.Buffer
 	s := NewServer(auth.NewTokenStore(), rec.persist, func() *grpcpb.StatusResponse {
@@ -1005,17 +1041,15 @@ func TestReloadTokensSnapshotFailureStillOK(t *testing.T) {
 
 	tok := make([]byte, 32)
 	rand.Read(tok)
-	resp, err := s.ReloadTokens(context.Background(), &grpcpb.ReloadTokensRequest{
-		Generation: 1, Tokens: verifiersOf(tok),
-	})
-	if err != nil {
-		t.Fatal(err)
+	resp, err := s.ReloadTokens(context.Background(), durableRequest(1, verifiersOf(tok)))
+	if status.Code(err) != codes.Unavailable {
+		t.Fatalf("snapshot failure code = %v, want Unavailable", status.Code(err))
 	}
-	if resp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
-		t.Fatalf("status with failing snapshot seam = %v, want APPLY_STATUS_OK (row 4)", resp.GetStatus())
+	if resp != nil {
+		t.Fatal("snapshot failure returned a response that could be mistaken for acknowledgment")
 	}
-	if got := s.tokens.Current().Generation; got != 1 {
-		t.Errorf("in-memory generation = %d, want 1 (in-memory truth wins)", got)
+	if got := s.tokens.Current().Generation; got != 0 {
+		t.Errorf("in-memory generation = %d, want prior generation 0", got)
 	}
 	if logBuf.Len() != 0 {
 		t.Error("operational action emitted a journal record")
@@ -1024,6 +1058,161 @@ func TestReloadTokensSnapshotFailureStillOK(t *testing.T) {
 	// verifier bytes.
 	if leaks := bytes.Contains(logBuf.Bytes(), tok); leaks {
 		t.Error("journal echoes verifier bytes on persist failure (Principle III)")
+	}
+}
+
+func TestReloadTokensReplayRepairsAmbiguousPersistFailure(t *testing.T) {
+	var mu sync.Mutex
+	var durable *auth.Generation
+	failAfterWrite := false
+	persist := func(g *auth.Generation) error {
+		mu.Lock()
+		defer mu.Unlock()
+		verifiers := make([][]byte, len(g.Verifiers))
+		for i, verifier := range g.Verifiers {
+			verifiers[i] = append([]byte(nil), verifier...)
+		}
+		durable = &auth.Generation{
+			Generation: g.Generation,
+			LoadedAt:   g.LoadedAt,
+			Verifiers:  verifiers,
+		}
+		if failAfterWrite {
+			failAfterWrite = false
+			return errors.New("directory sync failed after rename")
+		}
+		return nil
+	}
+	s := NewServer(auth.NewTokenStore(), persist, func() *grpcpb.StatusResponse {
+		return &grpcpb.StatusResponse{}
+	}, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)))
+	tokA := bytes.Repeat([]byte{0x41}, 32)
+
+	if _, err := s.ReloadTokens(context.Background(), durableRequest(1, verifiersOf(tokA))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ReloadTokens(context.Background(), durableRequest(2, nil)); err != nil {
+		t.Fatal(err)
+	}
+	failAfterWrite = true
+	if resp, err := s.ReloadTokens(context.Background(), durableRequest(3, verifiersOf(tokA))); resp != nil || status.Code(err) != codes.Unavailable {
+		t.Fatalf("ambiguous candidate = %v / %v, want nil / Unavailable", resp, status.Code(err))
+	}
+
+	// Memory is still the acknowledged revoke-all generation, but the failed
+	// writer models a rename that made generation 3 visible before dir fsync.
+	if got := s.tokens.Current().Generation; got != 2 {
+		t.Fatalf("active generation = %d, want 2", got)
+	}
+	mu.Lock()
+	if durable.Generation != 3 {
+		t.Fatalf("fixture durable generation = %d, want ambiguous 3", durable.Generation)
+	}
+	mu.Unlock()
+
+	replay := durableRequest(2, nil)
+	resp, err := s.ReloadTokens(context.Background(), replay)
+	if err != nil || resp.GetAcknowledgmentVersion() != 1 {
+		t.Fatalf("exact replay = %v / %v, want durable acknowledgment", resp, err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if durable.Generation != 2 || len(durable.Verifiers) != 0 {
+		t.Fatal("durable replay did not restore the exact active revoke-all authority")
+	}
+}
+
+func TestReloadTokensRejectsMissingOrMismatchedDurableEnvelope(t *testing.T) {
+	rec := &snapshotRecorder{}
+	s := newTestServer(t, rec)
+	tok := make([]byte, 32)
+	rand.Read(tok)
+
+	if _, err := s.ReloadTokens(context.Background(), &grpcpb.ReloadTokensRequest{
+		Generation: 1, Tokens: verifiersOf(tok),
+	}); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("legacy request code = %v, want FailedPrecondition", status.Code(err))
+	}
+
+	bad := durableRequest(1, verifiersOf(tok))
+	bad.Durable.Commitment[0] ^= 0xff
+	resp, err := s.ReloadTokens(context.Background(), bad)
+	if err != nil {
+		t.Fatalf("commitment mismatch returned transport error: %v", err)
+	}
+	if resp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_INVALID {
+		t.Fatalf("commitment mismatch status = %v, want INVALID", resp.GetStatus())
+	}
+
+	mixed := durableRequest(1, verifiersOf(tok))
+	mixed.Tokens = verifiersOf(tok)
+	resp, err = s.ReloadTokens(context.Background(), mixed)
+	if err != nil || resp.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_INVALID {
+		t.Fatalf("mixed legacy/durable request = %v / %v, want INVALID", resp, err)
+	}
+	if got := s.tokens.Current().Generation; got != 0 || rec.count() != 0 {
+		t.Fatal("invalid durable envelope changed or persisted authority")
+	}
+}
+
+// TestJavaReloadInteropFixture is the real Go half of the T159 Java↔Go
+// recovery probe. Normal Go runs skip it; the Java runtime test supplies one
+// shared directory, then drives this production Server over mTLS/UDS.
+func TestJavaReloadInteropFixture(t *testing.T) {
+	shared := os.Getenv("T159_JAVA_INTEROP_DIR")
+	if shared == "" {
+		t.Skip("fixture mode requires T159_JAVA_INTEROP_DIR")
+	}
+	keysDir := filepath.Join(shared, "keys")
+	stateDir := filepath.Join(shared, "dp-state")
+	ipcDir := filepath.Join(shared, "run")
+	store := auth.NewTokenStore()
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	RestoreSnapshot(stateDir, store, log)
+	_, serverTLS, err := DeriveDPTLS(keysDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lis, err := Listen(ipcDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := NewServer(store, SnapshotWriter(stateDir, log), func() *grpcpb.StatusResponse {
+		return &grpcpb.StatusResponse{}
+	}, log)
+	grpcServer, err := NewGRPCServer(server, serverTLS)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- grpcServer.Serve(lis) }()
+	if err := os.WriteFile(filepath.Join(shared, "ready"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(shared, "stop")); err == nil {
+			// Optional Java-side probe: expose only the boolean auth outcome
+			// after driving the real restored TokenStore. The plaintext stays
+			// in the shared test directory and never enters logs or errors.
+			if candidate, readErr := os.ReadFile(filepath.Join(shared, "auth-probe")); readErr == nil {
+				pepper, loadErr := auth.LoadPepper(keysDir)
+				if loadErr != nil {
+					t.Fatal(loadErr)
+				}
+				verifier := auth.NewTokenVerifier(pepper, store)
+				result := "generation=" + strconv.FormatUint(store.Current().Generation, 10)
+				result += "\nauthorized=" + strconv.FormatBool(verifier.VerifyPassword(candidate)) + "\n"
+				if writeErr := os.WriteFile(filepath.Join(shared, "auth-result"), []byte(result), 0o600); writeErr != nil {
+					t.Fatal(writeErr)
+				}
+			}
+			grpcServer.GracefulStop()
+			if err := <-done; err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+				t.Fatal(err)
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
 
@@ -1048,9 +1237,7 @@ func TestReloadTokensConvergesUnderConcurrency(t *testing.T) {
 		wg.Add(1)
 		go func(i int, gen uint64, tok []byte) {
 			defer wg.Done()
-			resp, err := s.ReloadTokens(context.Background(), &grpcpb.ReloadTokensRequest{
-				Generation: gen, Tokens: verifiersOf(tok),
-			})
+			resp, err := s.ReloadTokens(context.Background(), durableRequest(gen, verifiersOf(tok)))
 			if err != nil {
 				t.Errorf("gen %d: %v", gen, err)
 				return
@@ -1086,9 +1273,7 @@ func TestReloadTokensLogsApply(t *testing.T) {
 	s := NewServer(auth.NewTokenStore(), rec.persist, func() *grpcpb.StatusResponse {
 		return &grpcpb.StatusResponse{}
 	}, slog.New(slog.NewTextHandler(&logBuf, nil)))
-	if _, err := s.ReloadTokens(context.Background(), &grpcpb.ReloadTokensRequest{
-		Generation: 3, Tokens: verifiersOf(tok),
-	}); err != nil {
+	if _, err := s.ReloadTokens(context.Background(), durableRequest(3, verifiersOf(tok))); err != nil {
 		t.Fatal(err)
 	}
 	if logBuf.Len() != 0 {
@@ -1387,7 +1572,7 @@ func TestGRPCServerServesMTLSOverUDS(t *testing.T) {
 	// §5.3: the version metadata the Java CP's interceptor always sends.
 	ctx = metadata.AppendToOutgoingContext(ctx, protoversion.MetaMajor, "1")
 	stub := grpcpb.NewControlClient(conn)
-	resp, err := stub.ReloadTokens(ctx, &grpcpb.ReloadTokensRequest{Generation: 1})
+	resp, err := stub.ReloadTokens(ctx, durableRequest(1, nil))
 	if err != nil {
 		t.Fatalf("ReloadTokens over mTLS dp.sock: %v — the production server shape broke the CP dial (T130)", err)
 	}
@@ -1459,8 +1644,7 @@ func TestGRPCServerReauthorizesResumedPeerAfterPinRotation(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		ctx = metadata.AppendToOutgoingContext(ctx, protoversion.MetaMajor, "1")
-		return grpcpb.NewControlClient(conn).ReloadTokens(ctx,
-			&grpcpb.ReloadTokensRequest{Generation: generation})
+		return grpcpb.NewControlClient(conn).ReloadTokens(ctx, durableRequest(generation, nil))
 	}
 
 	if _, err := callReload(oldClientTLS, 1); err != nil {

@@ -15,6 +15,7 @@
 package controlclient
 
 import (
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -40,10 +41,8 @@ import (
 // (contracts/control-grpc.md §"ReloadTokens"; HMAC-SHA-256 tag, T092).
 const verifierLen = 32
 
-// SnapshotFunc is the dp-snapshot.json persist seam (T046's snapshot.go):
-// contract row 4 — called after the in-memory swap, before the OK response;
-// a failure stays silent and the response stays OK (in-memory truth wins;
-// the snapshot is only a cold-start cache).
+// SnapshotFunc is the dp-snapshot.json persist seam (T046's snapshot.go).
+// T159 requires it to succeed before an in-memory swap or durable OK.
 type SnapshotFunc func(*auth.Generation) error
 
 // StatusFunc is the counter-snapshot seam (T049's audit/counters.go):
@@ -62,10 +61,10 @@ type Server struct {
 	persist SnapshotFunc
 	status  StatusFunc
 
-	// reloadMu serialises the stale-check→swap→persist triple per RPC.
-	// Without it, two concurrent ReloadTokens could interleave swap(A)
-	// swap(B) persist(A) persist(B) — leaving the snapshot older than the
-	// in-memory generation (contract row 5's convergence property).
+	// reloadMu serialises the stale-check→persist→swap triple per RPC.
+	// Without it, two concurrent ReloadTokens could interleave persist(A)
+	// persist(B) swap(A) swap(B) — briefly publishing an authority that does
+	// not match the durable snapshot and making exact acknowledgments ambiguous.
 	reloadMu sync.Mutex
 }
 
@@ -75,45 +74,62 @@ func NewServer(tokens *auth.TokenStore, persist SnapshotFunc, status StatusFunc,
 	return &Server{tokens: tokens, persist: persist, status: status}
 }
 
-// ReloadTokens atomically swaps the bearer-token generation
-// (contracts/control-grpc.md §"ReloadTokens"):
-//
-//   - any verifier not exactly 32 bytes → APPLY_STATUS_INVALID, no change;
-//   - request generation ≤ current → APPLY_STATUS_STALE_GENERATION with
-//     current_generation echoed (T092 reconciliation) and no change;
-//   - otherwise the store pointer swaps and the snapshot persists BEFORE
-//     the OK response; a persist failure stays silent and stays OK (row 4).
-//
-// No operational event is logged, including successful swaps (Principle III).
+// ReloadTokens validates the mandatory auth-set-v1 envelope, persists before
+// visibility, and returns an exact durable acknowledgment. Same-generation
+// exact content is idempotent; stale/conflicting content never mutates state.
 func (s *Server) ReloadTokens(_ context.Context, req *grpcpb.ReloadTokensRequest) (*grpcpb.ReloadTokensResponse, error) {
 	current := s.tokens.Current()
+	durable := req.GetDurable()
+	if durable == nil || durable.GetSemanticsVersion() != authSetVersion {
+		return nil, status.Error(codes.FailedPrecondition,
+			"stargate: compatible durable token authority envelope required")
+	}
 
-	// Validate before touching any state: a malformed push consumes no
-	// generation number and swaps nothing (contract row 3).
-	verifiers := make([][]byte, 0, len(req.GetTokens()))
-	for _, tok := range req.GetTokens() {
+	// The empty legacy list is the mixed-version fail-closed bridge: an old
+	// DP can see revoke-all only, never the candidate credential material.
+	if len(req.GetTokens()) != 0 || req.GetGeneration() == 0 ||
+		durable.GetGeneration() != req.GetGeneration() ||
+		len(durable.GetCommitment()) != sha256CommitmentLen {
+		return invalidReloadResponse(current.Generation), nil
+	}
+
+	verifiers := make([][]byte, 0, len(durable.GetTokens()))
+	for _, tok := range durable.GetTokens() {
 		if len(tok.GetVerifier()) != verifierLen {
-			return &grpcpb.ReloadTokensResponse{
-				AppliedGeneration: current.Generation,
-				Status:            grpcpb.ApplyStatus_APPLY_STATUS_INVALID,
-			}, nil
+			return invalidReloadResponse(current.Generation), nil
 		}
 		// Copy out of the request-owned buffer: the generation must not
 		// alias protobuf memory the framework may reuse, and requests are
 		// never retained beyond the handler.
 		verifiers = append(verifiers, append([]byte(nil), tok.GetVerifier()...))
 	}
+	commitment := authSetCommitment(verifiers)
+	if !bytes.Equal(commitment, durable.GetCommitment()) {
+		return invalidReloadResponse(current.Generation), nil
+	}
 
 	s.reloadMu.Lock()
 	defer s.reloadMu.Unlock()
 	current = s.tokens.Current() // re-read under the lock: a concurrent valid push may have landed
 
-	if req.GetGeneration() <= current.Generation {
+	currentCommitment := authSetCommitment(current.Verifiers)
+	if req.GetGeneration() < current.Generation ||
+		(req.GetGeneration() == current.Generation && !bytes.Equal(commitment, currentCommitment)) {
 		return &grpcpb.ReloadTokensResponse{
 			AppliedGeneration: current.Generation,
 			Status:            grpcpb.ApplyStatus_APPLY_STATUS_STALE_GENERATION,
 			CurrentGeneration: current.Generation,
 		}, nil
+	}
+	if req.GetGeneration() == current.Generation {
+		// Reassert the active authority before every exact replay ACK. A prior
+		// failed write may have renamed a newer candidate before directory
+		// fsync failed; rewriting current closes that ambiguity on restart.
+		if err := s.persist(current); err != nil {
+			return nil, status.Error(codes.Unavailable,
+				"stargate: durable token authority persistence unavailable")
+		}
+		return acknowledgedReloadResponse(current.Generation, commitment), nil
 	}
 
 	gen := &auth.Generation{
@@ -121,17 +137,29 @@ func (s *Server) ReloadTokens(_ context.Context, req *grpcpb.ReloadTokensRequest
 		Verifiers:  verifiers,
 		LoadedAt:   time.Now(),
 	}
-	s.tokens.Swap(gen)
-
-	resp := &grpcpb.ReloadTokensResponse{
-		AppliedGeneration: gen.Generation,
-		Status:            grpcpb.ApplyStatus_APPLY_STATUS_OK,
+	if err := s.persist(gen); err != nil {
+		return nil, status.Error(codes.Unavailable,
+			"stargate: durable token authority persistence unavailable")
 	}
-	// Preserve the existing row-4 in-memory acknowledgement policy; T132 owns
-	// durable recovery semantics. Failure cannot emit an operational journal.
-	_ = s.persist(gen)
+	s.tokens.Swap(gen)
+	return acknowledgedReloadResponse(gen.Generation, commitment), nil
+}
 
-	return resp, nil
+func invalidReloadResponse(current uint64) *grpcpb.ReloadTokensResponse {
+	return &grpcpb.ReloadTokensResponse{
+		AppliedGeneration: current,
+		Status:            grpcpb.ApplyStatus_APPLY_STATUS_INVALID,
+	}
+}
+
+func acknowledgedReloadResponse(generation uint64, commitment []byte) *grpcpb.ReloadTokensResponse {
+	return &grpcpb.ReloadTokensResponse{
+		AppliedGeneration:     generation,
+		CurrentGeneration:     generation,
+		Status:                grpcpb.ApplyStatus_APPLY_STATUS_OK,
+		AcknowledgmentVersion: authSetVersion,
+		Commitment:            append([]byte(nil), commitment...),
+	}
 }
 
 // GetStatus returns the audit counters' point-in-time snapshot through the
