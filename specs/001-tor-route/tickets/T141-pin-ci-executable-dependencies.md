@@ -1,9 +1,9 @@
 ---
 id: "T141"
 title: "Pin CI Actions and agent installation dependencies"
-status: "pending"
+status: in-review
 created: "2026-09-12"
-last_updated: "2026-09-12"
+last_updated: 2026-09-24
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
@@ -34,9 +34,17 @@ Existing findings 20260727-005/006: executable Actions use mutable tags and agen
 
 ## Analysis
 
-- Must hold: the ticket acceptance and cited constitutional properties.
-- Gated: existing baseline verify is green; it did not catch the audited issue.
-- Residue: the specific missing property in Context; the acceptance probes below must discriminate it. Investigation-only tickets must resolve the design before authorizing production changes.
+- Must hold: external Action code resolves to a full reviewed commit; the
+  agent CLIs resolve to exact release archives whose downloaded bytes are
+  checked before extraction. Installer processes do not receive the provider
+  key. These are Constitution IV/VI build-input properties.
+- Gated: `tests/contract/workflow/ci_inputs_test.sh` audits every workflow and
+  composite Action and runs negative fixtures for mutable `uses:`, downloaded
+  shell installers, unversioned package commands and missing archive checks.
+  `scripts/verify.sh` discovers and runs that contract test.
+- Residue: a pinned upstream publisher or CI runner can still be malicious;
+  the test cannot prove publisher trust or agent containment (T142). Manual
+  release review and the normal independent ticket gate cover that residue.
 
 ## Acceptance
 
@@ -57,3 +65,21 @@ regression before the fix; tests_first is empty because the named regression
 is authored within this ticket rather than a separate test ticket. For design
 work, no production implementation is authorized until its stated decision
 boundary is satisfied. Preserve approved historical commits.
+
+### Tests-first evidence (2026-09-24)
+
+`bash tests/contract/workflow/ci_inputs_test.sh` failed before the workflow
+edits (saved locally at `target/runs/T141-red.log`). It named all 12 mutable
+external `uses:` references, the `curl | bash` installer, the unversioned
+`npm install -g`, and the missing pre-extraction archive checks. The pins
+were obtained from the upstream GitHub tag refs, the OpenCode release asset
+digest, and the npm registry integrity for the Claude Linux x64 package.
+
+Round-2 regression evidence: the added continued-pipeline fixture failed
+against the original single-line scanner (`target/runs/T141-r2-red.log`). The
+revised contract now discovers `.yml`/`.yaml` workflow and nested Action
+files, rejects the continued pipeline and comment-disabled checksum, and
+executes each installer body with local good and tampered archives to check
+that extraction occurs only after a successful hash check. The corrected
+gitleaks pin is the tag's dereferenced commit, confirmed by the publisher's
+commit endpoint.

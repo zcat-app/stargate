@@ -1537,10 +1537,18 @@ a malicious version of Stargate or a sidecar to all users.
   `snapshot.debian.org` run with explicit `=version` pins (T099), so a
   compromised mirror cannot drift the resolved package set between builds;
   the trust + rotation procedure is in `SECURITY-DECISIONS.md`.
+- CI Action code is selected by full commit identity. The agent workflow
+  verifies exact-version CLI archives against recorded publisher digests
+  before unpacking them; the contract gate rejects mutable Action references,
+  curl pipelines to sh/bash (including line continuations), and unversioned
+  npm/pip/go/apt install lines. A reviewer promotes pin changes under
+  `CONTRIBUTING.md` §"Updating executable CI inputs".
 - Release artefacts are signed (architecture spec §12.5 — signing tool
   NEEDS CLARIFICATION).
 
-**Residual risk**: compromise of the maintainer's signing key. External
+**Residual risk**: compromise of the maintainer's signing key, an upstream
+publisher, or the CI runner remains possible. Pinning preserves the reviewed
+bytes but does not confine an agent that executes in the runner (T142). External
 human security review before tagging `v1.0.0` (Constitution Principle
 VIII) is the human-layer mitigation; downstream verification of
 reproducible builds is the technical mitigation.

@@ -156,13 +156,8 @@ jobs:
       # workflow_dispatch default above doesn't apply to issue_comment
       # triggers, so we fall back here).
       AGENT_CLI: ${{ github.event.inputs.agent_cli || 'opencode' }}
-      # Provider key. The adapter picks the right env var name based on
-      # AGENT_CLI; the dispatcher + adapter expect the raw provider key
-      # under the canonical name(s) below. Add more provider secrets here
-      # as you wire them.
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0   # need history for branch resolution + squash-merge
 
@@ -171,17 +166,37 @@ jobs:
 
       - name: Install opencode
         if: env.AGENT_CLI == 'opencode'
-        # opencode's official install (curl | sh). Pin to a version once
-        # stargate standardizes; for experimentation, latest is fine.
+        # T141 / Constitution IV: GitHub release asset digest is checked
+        # before unpacking a binary in the token-bearing run job.
         run: |
-          curl -fsSL https://opencode.ai/install | bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          test "$(uname -m)" = x86_64
+          archive="$RUNNER_TEMP/opencode-linux-x64.tar.gz"
+          curl --fail --location --silent --show-error \
+            --output "$archive" \
+            https://github.com/anomalyco/opencode/releases/download/v1.18.32/opencode-linux-x64.tar.gz
+          printf '%s  %s\n' \
+            '3046e0404fdc60fb80307e7a47824ba07477364178a4d09baa8548496dd6d43b' "$archive" \
+            | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/agent-bin"
+          tar -xzf "$archive" -C "$RUNNER_TEMP/agent-bin" opencode
+          echo "$RUNNER_TEMP/agent-bin" >> "$GITHUB_PATH"
 
       - name: Install claude code
         if: env.AGENT_CLI == 'claude'
+        # The platform package contains the CLI binary directly. The digest
+        # is the npm registry's sha512 integrity for this exact archive.
         run: |
-          npm install -g @anthropic-ai/claude-code
-          echo "$HOME/.npm-global/bin" >> "$GITHUB_PATH"
+          test "$(uname -m)" = x86_64
+          archive="$RUNNER_TEMP/claude-code-linux-x64.tgz"
+          curl --fail --location --silent --show-error \
+            --output "$archive" \
+            https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-2.1.282.tgz
+          printf '%s  %s\n' \
+            '8ae7a04cf864ff5df83098aec8d0c3ea05b648d0d1907a0f0cae972be96b873c8848bc8da4a0ae154a481ca4dfc64a7845b590807d83b67a75ad8c66253cc439' "$archive" \
+            | sha512sum -c -
+          mkdir -p "$RUNNER_TEMP/agent-bin"
+          tar -xzf "$archive" --strip-components=1 -C "$RUNNER_TEMP/agent-bin" package/claude
+          echo "$RUNNER_TEMP/agent-bin" >> "$GITHUB_PATH"
 
       # --- bootstrap state ------------------------------------------------
       - name: Resolve ticket
@@ -209,6 +224,10 @@ jobs:
       # state (done / escalated / refused) or fails (bright-line stop).
       - name: Drive run-task.sh loop
         id: drive
+        # Only agent execution needs the provider key. Installer processes
+        # never receive it (T141 / Constitution IV).
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           mkdir -p target/runs
           # Cap iterations to avoid runaway if the state machine somehow
@@ -257,7 +276,7 @@ jobs:
 
       - name: Open PR
         if: always()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');

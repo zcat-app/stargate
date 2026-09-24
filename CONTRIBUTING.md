@@ -308,6 +308,29 @@ round cap, and the escalation menu—is documented at
 `.specify/memory/review-loop.md`. The single green gate every "done" depends on
 is `scripts/verify.sh`.
 
+### Updating executable CI inputs
+
+Constitution IV/VI requires a reviewed, immutable identity for every Action
+and agent CLI that runs in CI. External `uses:` references in
+`.github/workflows/` and `.github/actions/` use full 40-character commits;
+repository-local `./.github/actions/` references resolve from the checked-out
+source. The `agent-task` job downloads exact CLI release archives and checks
+their recorded SHA-256/SHA-512 digests before unpacking them.
+
+To promote an update, open a PR that records the upstream release/version and
+commit or archive digest from the publisher's GitHub release/tag or npm registry
+metadata. For an annotated Git tag, dereference it to the commit with
+`git rev-parse <ref>^{commit}` or the publisher's `/commits/<ref>` API; the
+plain `git ls-remote refs/tags/<ref>` value can be a tag-object hash and is not
+the executable commit. Review the upstream changelog and executable diff,
+then update the commit or version URL **and** its digest together. Fetch the archive yourself
+and verify it against that metadata; a checksum copied into a comment is not
+verification. Run `bash tests/contract/workflow/ci_inputs_test.sh` and
+`bash scripts/verify.sh`, then obtain the normal ticket review. The PR must
+identify what was executed and which checks ran or skipped. No tracker or
+workflow promotes these pins automatically, and deployed updates remain an
+explicit operator action.
+
 ## PR norms
 
 - **One feature or bug per PR.** Link to the feature spec
