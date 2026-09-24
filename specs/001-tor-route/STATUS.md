@@ -15,9 +15,9 @@
 |---|---|
 | pending | 40 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 161 |
+| done | 162 |
 | deferred | 5 |
 | **total** | **207** |
 
@@ -44,9 +44,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T157 | Block protected-route failure without Direct fallback | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -64,7 +62,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_161 ticket(s) done._
+_162 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -210,6 +208,7 @@ _161 ticket(s) done._
 - T152 — Replace detailed operational journals with hourly aggregates
 - T153 — Surface incompatible peer versions at CP startup
 - T156 — Strengthen constitution and reconcile implementation prerequisites
+- T157 — Block protected-route failure without Direct fallback
 - T158 — Publish only finalized aggregate counter buckets
 - T160 — Prepare Tor security upgrade with enforced package content pins
 - T161 — Resolve Tor upgrade live validation failures before promotion
