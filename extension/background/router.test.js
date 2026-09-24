@@ -7,13 +7,13 @@
 // consumer of the FR-004(b) fail-closed gate, so this suite is its
 // executable spec: descriptor contract (FR-001/002/003 + the absent
 // failoverTimeout decision), the fail-closed matrix (gate closed / token
-// absent / FirstPartyError → direct, never a guessed username), and the
+// absent / FirstPartyError → blocked, never a guessed username), and the
 // background half of the T034c-pinned popup transport (per-tab decision
 // cache written by `webRequest.onBeforeRequest`, answered via
 // `runtime.onMessage` for `{type:'stargate:getRoute', tabId}` — `{route:
 // 'tor'}` iff a confirmed Tor decision is cached; the wrong-positive
-// guard: an onion tab routed while the gate is closed must read
-// `unrouted`, never `tor`).
+// guard: an onion tab canceled while the gate is closed must read
+// `blocked`, never `direct` or `tor`).
 //
 // Fidelity: the sandbox is the REAL shared MV2 background-page scope —
 // `lib/firstparty.js` and `lib/storage.js` are loaded into the same
@@ -109,16 +109,19 @@ function makeBrowser(state, recorded) {
     },
     proxy: {
       onRequest: {
-        addListener(fn) {
+        addListener(fn, filter, extraInfoSpec) {
           recorded.proxy.push(fn);
+          recorded.proxyFilters.push(filter);
+          recorded.proxyExtraInfo.push(extraInfoSpec);
         },
       },
     },
     webRequest: {
       onBeforeRequest: {
-        addListener(fn, filter) {
+        addListener(fn, filter, extraInfoSpec) {
           recorded.webRequest.push(fn);
           recorded.webRequestFilters.push(filter);
+          recorded.webRequestExtraInfo.push(extraInfoSpec);
         },
       },
     },
@@ -195,8 +198,11 @@ function loadRouter(options) {
   } = options || {};
   const recorded = {
     proxy: [],
+    proxyFilters: [],
+    proxyExtraInfo: [],
     webRequest: [],
     webRequestFilters: [],
+    webRequestExtraInfo: [],
     message: [],
     onChanged: [],
     localGets: [],
@@ -297,7 +303,10 @@ function loadHardenedTokened() {
     'router.js must register one committed-navigation context listener'
   );
   return {
-    onRequest: loaded.recorded.proxy[0],
+    onRequest: async (details) => primaryProxy(
+      await loaded.recorded.proxy[0](details)
+    ),
+    rawOnRequest: loaded.recorded.proxy[0],
     onBeforeRequest: loaded.recorded.webRequest[0],
     onMessage: loaded.recorded.message[0],
     onCommitted: loaded.recorded.committed[0],
@@ -324,8 +333,9 @@ async function waitForCachedRoute(onMessage, tabId, route) {
 }
 
 function mainFrame(url, extra) {
-  return {
+  const details = {
     url,
+    method: 'GET',
     type: 'main_frame',
     frameId: 0,
     parentFrameId: -1,
@@ -335,12 +345,22 @@ function mainFrame(url, extra) {
     documentId: 'top-document-7',
     ...extra,
   };
+  if (typeof details.requestId !== 'string') {
+    details.requestId = `main:${details.tabId}:${details.documentId}:${details.url}`;
+  }
+  if (typeof details.proxyInfo === 'undefined') {
+    details.proxyInfo = {
+      type: 'socks', host: '127.0.0.1', port: 8881, proxyDNS: true,
+    };
+  }
+  return details;
 }
 
 function subresource(url, documentUrl, extra) {
-  return {
+  const details = {
     url,
     documentUrl,
+    method: 'GET',
     type: 'image',
     frameId: 0,
     parentFrameId: -1,
@@ -350,20 +370,26 @@ function subresource(url, documentUrl, extra) {
     documentId: 'top-document-7',
     ...extra,
   };
+  if (typeof details.requestId !== 'string') {
+    details.requestId = `resource:${details.tabId}:${details.documentId}:${details.url}`;
+  }
+  if (typeof details.proxyInfo === 'undefined') {
+    details.proxyInfo = {
+      type: 'socks', host: '127.0.0.1', port: 8881, proxyDNS: true,
+    };
+  }
+  return details;
+}
+
+function primaryProxy(result) {
+  assert.ok(Array.isArray(result), 'protected routing returns a fail-closed proxy chain');
+  assert.strictEqual(result.length, 2, 'the chain contains one SOCKS hop and one terminator');
+  assert.strictEqual(result[1], null, 'terminal null forbids browser-defined proxy failover');
+  return result[0];
 }
 
 function assertNoRoutableIdentity(descriptor, message) {
-  assert.notStrictEqual(descriptor && descriptor.type, 'socks', message);
-  assert.strictEqual(
-    JSON.stringify(descriptor || {}).includes('username'),
-    false,
-    message + ' (no username)'
-  );
-  assert.strictEqual(
-    JSON.stringify(descriptor || {}).includes(TOKEN_A),
-    false,
-    message + ' (no bearer)'
-  );
+  assert.strictEqual(descriptor, null, message + ' (no proxy descriptor)');
 }
 
 // ---------------------------------------------------------------------------
@@ -371,28 +397,43 @@ function assertNoRoutableIdentity(descriptor, message) {
 // ---------------------------------------------------------------------------
 
 test('onionTopLevelNavigationReturnsCanonicalSocksDescriptor', async () => {
-  const { onRequest } = loadHardenedTokened();
+  const { rawOnRequest } = loadHardenedTokened();
   await drain();
-  const descriptor = await onRequest(mainFrame(`https://${ONION_A}/page`));
+  const chain = await rawOnRequest(mainFrame(`https://${ONION_A}/page`));
   assert.deepStrictEqual(
-    plain(descriptor),
-    {
-      type: 'socks',
-      host: '127.0.0.1',
-      port: 8881,
-      username: ONION_A_USERNAME,
-      password: TOKEN_A,
-      proxyDNS: true,
-    },
+    plain(chain),
+    [{
+        type: 'socks',
+        host: '127.0.0.1',
+        port: 8881,
+        username: ONION_A_USERNAME,
+        password: TOKEN_A,
+        proxyDNS: true,
+      }, null],
     'FR-001/002/003: the .onion descriptor is socks/127.0.0.1:8881 with ' +
       'the fixed-vector opaque identity as username, the bearer token as password, and ' +
-      'proxyDNS true (SOCKS5h)'
+      'proxyDNS true (SOCKS5h), terminated without browser fallback'
   );
+  const descriptor = chain[0];
   assert.strictEqual(
     'failoverTimeout' in descriptor, false,
     'tasks.md T054 decision: failoverTimeout is intentionally NOT set — ' +
       'Firefox default applies; the key must be absent, not merely default'
   );
+});
+
+test('listenersDeclareFirefoxFiltersAndBlockingCancellation', () => {
+  const loaded = loadRouter({ hardeningOk: true });
+  assert.deepStrictEqual(plain(loaded.recorded.proxyFilters), [
+    { urls: ['<all_urls>'] },
+  ]);
+  assert.strictEqual(loaded.recorded.proxyExtraInfo[0], undefined);
+  assert.deepStrictEqual(plain(loaded.recorded.webRequestFilters), [
+    { urls: ['<all_urls>'] },
+  ]);
+  assert.deepStrictEqual(plain(loaded.recorded.webRequestExtraInfo), [
+    ['blocking'],
+  ]);
 });
 
 test('distinctOnionFirstPartiesGetDistinctUsernames', async () => {
@@ -445,17 +486,9 @@ test('sameOnionDestinationSeparatesPublicAndPrivateSuffixSites', async () => {
   await drain();
 
   async function usernameFor(documentUrl, documentId) {
-    const descriptor = await onRequest({
-      url: `https://${ONION_A}/same-target.gif`,
-      documentUrl,
-      type: 'image',
-      frameId: 0,
-      parentFrameId: -1,
-      tabId: 7,
-      incognito: false,
-      cookieStoreId: 'firefox-default',
-      documentId,
-    });
+    const descriptor = await onRequest(subresource(
+      `https://${ONION_A}/same-target.gif`, documentUrl, { documentId }
+    ));
     assert.strictEqual(descriptor.type, 'socks');
     return descriptor.username;
   }
@@ -508,22 +541,24 @@ test('deviceProfilePrivateAndContainerInputsSeparatePartitions', async () => {
   });
   await drain();
 
-  const normal = await a.recorded.proxy[0](mainFrame(`https://${ONION_A}/`));
-  const device = await otherDevice.recorded.proxy[0](
-    mainFrame(`https://${ONION_A}/`)
+  const normal = primaryProxy(
+    await a.recorded.proxy[0](mainFrame(`https://${ONION_A}/`))
   );
-  const profile = await otherProfile.recorded.proxy[0](
+  const device = primaryProxy(await otherDevice.recorded.proxy[0](
     mainFrame(`https://${ONION_A}/`)
-  );
-  const privateMode = await a.recorded.proxy[0](
+  ));
+  const profile = primaryProxy(await otherProfile.recorded.proxy[0](
+    mainFrame(`https://${ONION_A}/`)
+  ));
+  const privateMode = primaryProxy(await a.recorded.proxy[0](
     mainFrame(`https://${ONION_A}/`, {
       incognito: true,
       cookieStoreId: 'firefox-private',
     })
-  );
-  const container = await a.recorded.proxy[0](
+  ));
+  const container = primaryProxy(await a.recorded.proxy[0](
     mainFrame(`https://${ONION_A}/`, { cookieStoreId: 'firefox-container-1' })
-  );
+  ));
 
   const usernames = [normal, device, profile, privateMode, container]
     .map((descriptor) => descriptor.username);
@@ -537,10 +572,12 @@ test('profileIdentityInitializesOnceAndInvalidStateIsUnavailable', async () => {
     isolationProfileId: null,
   });
   const onRequest = firstInstall.recorded.proxy[0];
-  const [one, two] = await Promise.all([
+  const [oneChain, twoChain] = await Promise.all([
     onRequest(mainFrame(`https://${ONION_A}/one`)),
     onRequest(mainFrame(`https://${ONION_A}/two`)),
   ]);
+  const one = primaryProxy(oneChain);
+  const two = primaryProxy(twoChain);
   assert.strictEqual(one.username, two.username);
   assert.deepStrictEqual(firstInstall.recorded.localSets, [
     { isolationProfileId: '33'.repeat(32) },
@@ -623,6 +660,8 @@ test('documentBoundContextGovernsFramesWorkersAndRedirects', async () => {
   ));
   const worker = await onRequest({
     url: `https://${ONION_A}/worker-fetch`,
+    method: 'GET',
+    requestId: 'worker-fetch',
     type: 'xmlhttprequest',
     frameId: 4,
     parentFrameId: 0,
@@ -631,6 +670,9 @@ test('documentBoundContextGovernsFramesWorkersAndRedirects', async () => {
     cookieStoreId: 'firefox-default',
     documentId: 'frame-alice',
     parentDocumentId: 'top-alice',
+    proxyInfo: {
+      type: 'socks', host: '127.0.0.1', port: 8881, proxyDNS: true,
+    },
   });
   assert.strictEqual(nested.username, top.username);
   assert.strictEqual(worker.username, top.username);
@@ -707,7 +749,7 @@ test('retiredTopDocumentCannotBeReboundAfterReplacement', async () => {
     'a late request must not rebind a retired top-level document'
   );
   assert.strictEqual(
-    (await onRequest(subresource(
+    primaryProxy(await onRequest(subresource(
       `https://${ONION_A}/current`,
       'https://bob.co.uk/',
       { tabId: 13, documentId: 'new-top' }
@@ -717,7 +759,7 @@ test('retiredTopDocumentCannotBeReboundAfterReplacement', async () => {
   );
   loaded.recorded.tabRemoved[0](13);
   assert.strictEqual(
-    (await onRequest(subresource(
+    primaryProxy(await onRequest(subresource(
       `https://${ONION_A}/reused-tab`,
       'https://alice.co.uk/',
       { tabId: 13, documentId: 'reused-tab-top' }
@@ -754,10 +796,14 @@ test('documentReplacementInvalidatesInFlightNestedContext', async () => {
     documentId: 'old-frame', parentDocumentId: 'old-top',
   });
   const pending = loaded.recorded.proxy[0]({
-    url: `https://${ONION_A}/nested`, type: 'image', frameId: 2,
+    url: `https://${ONION_A}/nested`, method: 'GET', requestId: 'nested-old',
+    type: 'image', frameId: 2,
     parentFrameId: 0, tabId: 12, incognito: false,
     cookieStoreId: 'firefox-default', documentId: 'old-frame',
     parentDocumentId: 'old-top',
+    proxyInfo: {
+      type: 'socks', host: '127.0.0.1', port: 8881, proxyDNS: true,
+    },
   });
   while (!releaseSign) await drain(1);
   loaded.recorded.committed[0]({
@@ -774,7 +820,6 @@ test('documentReplacementInvalidatesInFlightNestedContext', async () => {
 test('unknownDetachedOpaqueAndOriginOnlyContextsHaveNoIdentity', async () => {
   const loaded = loadHardenedTokened();
   await drain();
-  const onRequest = loaded.onRequest;
   const cases = [
     {
       url: `https://${ONION_A}/nested`, type: 'image', frameId: 3,
@@ -804,10 +849,23 @@ test('unknownDetachedOpaqueAndOriginOnlyContextsHaveNoIdentity', async () => {
     documentId: 'opaque-frame', parentDocumentId: 'opaque-top',
   });
 
-  for (const details of cases) {
+  for (const [index, original] of cases.entries()) {
+    const details = {
+      method: 'GET',
+      requestId: `untrustworthy-context-${index}`,
+      proxyInfo: {
+        type: 'socks', host: '127.0.0.1', port: 8881, proxyDNS: true,
+      },
+      ...original,
+    };
     assertNoRoutableIdentity(
-      await onRequest(details),
+      await loaded.rawOnRequest(details),
       'untrustworthy top-level context must not use the onion destination'
+    );
+    assert.deepStrictEqual(
+      plain(await loaded.onBeforeRequest(details)),
+      { cancel: true },
+      'the final browser dispatch boundary must cancel absent context'
     );
   }
 });
@@ -864,7 +922,9 @@ test('synchronousKeyImportFailureDuringRotationFailsClosed', async () => {
   const loaded = loadRouter({ hardeningOk: true, crypto: failingRotationCrypto });
   await drain();
   assert.strictEqual(
-    (await loaded.recorded.proxy[0](mainFrame(`https://${ONION_A}/`))).type,
+    primaryProxy(
+      await loaded.recorded.proxy[0](mainFrame(`https://${ONION_A}/`))
+    ).type,
     'socks'
   );
   const rotated = {
@@ -880,7 +940,7 @@ test('synchronousKeyImportFailureDuringRotationFailsClosed', async () => {
 });
 
 test('missingPrivateOrCookieStoreMetadataFailsClosed', async () => {
-  const { onRequest } = loadHardenedTokened();
+  const { rawOnRequest } = loadHardenedTokened();
   await drain();
   for (const details of [
     mainFrame(`https://${ONION_A}/`, { incognito: undefined }),
@@ -888,16 +948,16 @@ test('missingPrivateOrCookieStoreMetadataFailsClosed', async () => {
     mainFrame(`https://${ONION_A}/`, { cookieStoreId: '' }),
   ]) {
     assertNoRoutableIdentity(
-      await onRequest(details),
+      await rawOnRequest(details),
       'missing browser context metadata must not collapse partitions'
     );
   }
 });
 
 test('clearnetRequestsAreDirectAndNeverCarryTheTokenOrPort', async () => {
-  const { onRequest } = loadHardenedTokened();
+  const { rawOnRequest } = loadHardenedTokened();
   await drain();
-  const descriptor = await onRequest(
+  const descriptor = await rawOnRequest(
     mainFrame('https://example.com/page', {
       documentUrl: 'https://example.com/',
     })
@@ -960,7 +1020,7 @@ test('trailingDotFqdnOnionHostStillRoutesAsOnion', async () => {
 // Fail-closed matrix (FR-004(b) as amended by T091; Constitution III)
 // ---------------------------------------------------------------------------
 
-test('closedHardeningGateFailsClosedAndRecordsUnrouted', async () => {
+test('closedHardeningGateCancelsAndRecordsBlocked', async () => {
   // Default seed: hardeningOk = false (hardening.js initial state until
   // its startup audit completes; also the WebRTC-enabled state).
   const { onRequest, onBeforeRequest, onMessage } = await (async () => {
@@ -975,25 +1035,10 @@ test('closedHardeningGateFailsClosedAndRecordsUnrouted', async () => {
   })();
   const details = mainFrame(`https://${ONION_A}/page`);
   const descriptor = await onRequest(details);
-  assert.deepStrictEqual(
-    plain(descriptor), { type: 'direct' },
-    'FR-004(b): no SOCKS descriptor leaves the module while the gate is ' +
-      'closed — the request must not route through port 8881'
-  );
-  assert.strictEqual(
-    JSON.stringify(descriptor).includes(TOKEN_A), false,
-    'the blocked descriptor carries no credential'
-  );
-  // The T034c wrong-positive guard: the tab's cached decision must read
-  // unrouted, so the popup renders its fail-closed label — never
-  // `Route: Tor` for an onion tab routed while the gate was closed.
+  assert.strictEqual(descriptor, null, 'blocked requests expose no proxy descriptor');
   const webRequestResult = onBeforeRequest(details);
-  assert.ok(
-    webRequestResult === undefined ||
-      (webRequestResult && webRequestResult.cancel === undefined),
-    'the cache-writing listener must not cancel or redirect'
-  );
-  await drain();
+  assert.ok(isResponseChannel(webRequestResult), 'blocking decision uses Firefox async channel');
+  assert.deepStrictEqual(plain(await webRequestResult), { cancel: true });
   const blockedReply = onMessage({ type: GET_ROUTE, tabId: 7 });
   assert.ok(
     isResponseChannel(blockedReply),
@@ -1002,25 +1047,42 @@ test('closedHardeningGateFailsClosedAndRecordsUnrouted', async () => {
       '(round-1 review Major)'
   );
   assert.deepStrictEqual(
-    plain(await blockedReply), { route: 'unrouted' },
-    'an onion tab behind a closed gate reads unrouted — the popup ' +
-      'wrong-positive case (d) forbids'
+    plain(await blockedReply), { route: 'blocked' },
+    'an onion tab canceled behind a closed gate is blocked, never Direct or Tor'
+  );
+  const indicator = {};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../popup/popup.js'), 'utf8'), {
+    document: { getElementById: () => indicator },
+    browser: {
+      tabs: { query: async () => [{ id: 7 }], onUpdated: { addListener() {} } },
+      runtime: { sendMessage: onMessage },
+    },
+  });
+  await drain();
+  assert.strictEqual(
+    indicator.textContent,
+    'Main navigation decision: Blocked by Stargate' +
+      ' Other requests may use different routes. Connection success is not verified.',
+    'the popup reports an enforced cancellation as Blocked, not Direct'
   );
 });
 
 test('missingOrEmptyTokenFailsClosed', async () => {
   const noDevice = loadRouter({ hardeningOk: true, device: null });
   await drain();
-  assert.deepStrictEqual(
-    plain(await noDevice.recorded.proxy[0](mainFrame(`https://${ONION_A}/`))),
-    { type: 'direct' },
+  const missingDetails = mainFrame(`https://${ONION_A}/`);
+  assert.strictEqual(
+    await noDevice.recorded.proxy[0](missingDetails),
+    null,
     'FR-002: without a bearer token the password clause cannot be ' +
       'satisfied — routing to 8881 would violate FR-002, so fail closed'
   );
   // The cache write must agree with the descriptor: fire the
   // cache-writing listener for the tab, then ask via the pinned protocol.
-  noDevice.recorded.webRequest[0](mainFrame(`https://${ONION_A}/`));
-  await drain();
+  assert.deepStrictEqual(
+    plain(await noDevice.recorded.webRequest[0](missingDetails)),
+    { cancel: true }
+  );
   const blockedReply = noDevice.recorded.message[0]({
     type: GET_ROUTE,
     tabId: 7,
@@ -1032,8 +1094,8 @@ test('missingOrEmptyTokenFailsClosed', async () => {
   );
   assert.deepStrictEqual(
     plain(await blockedReply),
-    { route: 'unrouted' },
-    'and the tab reads unrouted, not tor'
+    { route: 'blocked' },
+    'and the tab reads blocked, not Direct or Tor'
   );
 
   const emptyToken = loadRouter({
@@ -1041,28 +1103,122 @@ test('missingOrEmptyTokenFailsClosed', async () => {
     device: { name: 'd', bearerToken: '', tokenStoredAt: 1 },
   });
   await drain();
-  assert.deepStrictEqual(
-    plain(await emptyToken.recorded.proxy[0](mainFrame(`https://${ONION_A}/`))),
-    { type: 'direct' },
+  assert.strictEqual(
+    await emptyToken.recorded.proxy[0](mainFrame(`https://${ONION_A}/`)),
+    null,
     'an empty-string token is no token — presence means a non-empty string'
+  );
+
+  const malformedToken = loadRouter({
+    hardeningOk: true,
+    device: { name: 'd', bearerToken: 'not-a-token', tokenStoredAt: 1 },
+  });
+  await drain();
+  assert.strictEqual(
+    await malformedToken.recorded.proxy[0](mainFrame(`https://${ONION_A}/`)),
+    null,
+    'corrupted storage cannot turn a malformed credential into a route'
+  );
+  const malformedDetails = mainFrame(`https://${ONION_A}/malformed`);
+  assert.strictEqual(await malformedToken.recorded.proxy[0](malformedDetails), null);
+  assert.deepStrictEqual(
+    plain(await malformedToken.recorded.webRequest[0](malformedDetails)),
+    { cancel: true },
+    'a malformed credential cancels at the final browser dispatch boundary'
   );
 });
 
 test('firstPartyErrorFailsClosedWithoutGuessedUsername', async () => {
-  const { onRequest } = loadHardenedTokened();
+  const { rawOnRequest } = loadHardenedTokened();
   await drain();
   // Present-but-unparseable governing URL (T034d sentinel contract): the
-  // router must surface the failure as a DIRECT decision — never swallow
+  // router must surface the failure as a blocked decision — never swallow
   // the sentinel into a guessed, empty, or shared username (the one-
   // routable-string collapse T034d finding 3 forbids).
-  const descriptor = await onRequest(
+  const descriptor = await rawOnRequest(
     subresource(`https://${ONION_A}/x`, 'not a url')
   );
-  assert.deepStrictEqual(plain(descriptor), { type: 'direct' });
-  assert.strictEqual(
-    JSON.stringify(descriptor).includes('username'), false,
-    'no username field of any value may accompany a FirstPartyError ' +
-      'fail-closed decision'
+  assert.strictEqual(descriptor, null, 'FirstPartyError produces no descriptor');
+});
+
+test('proxyAndBlockerShareOneDecisionAndRevalidateAppliedRoute', async () => {
+  let signs = 0;
+  const loaded = loadRouter({
+    hardeningOk: true,
+    crypto: {
+      getRandomValues: webcrypto.getRandomValues.bind(webcrypto),
+      subtle: {
+        importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
+        sign(...args) {
+          signs += 1;
+          return webcrypto.subtle.sign(...args);
+        },
+      },
+    },
+  });
+  await drain();
+  const details = mainFrame(`https://${ONION_A}/`, { requestId: 'shared-1' });
+  primaryProxy(await loaded.recorded.proxy[0](details));
+  assert.deepStrictEqual(
+    plain(await loaded.recorded.webRequest[0](details)), {},
+    'the expected applied SOCKS route is allowed'
+  );
+  assert.strictEqual(signs, 1, 'both Firefox events consume one HMAC decision');
+
+  const mismatch = mainFrame(`https://${ONION_A}/`, { requestId: 'shared-2' });
+  primaryProxy(await loaded.recorded.proxy[0](mismatch));
+  mismatch.proxyInfo = { type: 'direct' };
+  assert.deepStrictEqual(
+    plain(await loaded.recorded.webRequest[0](mismatch)), { cancel: true },
+    'an applied Direct/system/unintended route cancels the protected request'
+  );
+});
+
+test('directAndProtectedMissingRecordHaveDistinctBlockingResults', async () => {
+  const loaded = loadHardenedTokened();
+  await drain();
+
+  const direct = mainFrame('https://example.com/', { requestId: 'direct-1' });
+  assert.deepStrictEqual(plain(await loaded.rawOnRequest(direct)), { type: 'direct' });
+  assert.deepStrictEqual(plain(await loaded.onBeforeRequest(direct)), {});
+
+  const missing = mainFrame(`https://${ONION_A}/`, {
+    requestId: undefined,
+  });
+  delete missing.requestId;
+  assert.strictEqual(await loaded.rawOnRequest(missing), null);
+  assert.deepStrictEqual(
+    plain(await loaded.onBeforeRequest(missing)), { cancel: true },
+    'missing cross-event identity is a protected failure, not a recomputation'
+  );
+});
+
+test('crossEventFingerprintMismatchCancelsProtectedRequest', async () => {
+  const loaded = loadHardenedTokened();
+  await drain();
+  const proxyDetails = mainFrame(`https://${ONION_A}/original`, {
+    requestId: 'fingerprint-mismatch',
+  });
+  primaryProxy(await loaded.rawOnRequest(proxyDetails));
+  const changed = { ...proxyDetails, method: 'POST' };
+  assert.deepStrictEqual(
+    plain(await loaded.onBeforeRequest(changed)), { cancel: true },
+    'requestId reuse with changed route-relevant fields is not the same decision'
+  );
+});
+
+test('stateChangeBetweenProxyAndBlockingEventsCancels', async () => {
+  const loaded = loadRouter({ hardeningOk: true });
+  await drain();
+  const details = mainFrame(`https://${ONION_A}/`, { requestId: 'rotate-after-proxy' });
+  primaryProxy(await loaded.recorded.proxy[0](details));
+  loaded.recorded.onChanged[0]({ device: { newValue: {
+    name: 'rotated', bearerToken: TOKEN_B, tokenStoredAt: 2,
+  } } }, 'local');
+  await drain();
+  assert.deepStrictEqual(
+    plain(await loaded.recorded.webRequest[0](details)), { cancel: true },
+    'a proxy decision cannot survive credential-generation change before dispatch'
   );
 });
 
@@ -1071,20 +1227,23 @@ test('firstPartyErrorFailsClosedWithoutGuessedUsername', async () => {
 // ---------------------------------------------------------------------------
 
 test('getRouteResponderPinnedSemantics', async () => {
-  const { onBeforeRequest, onMessage } = loadHardenedTokened();
+  const { rawOnRequest, onBeforeRequest, onMessage } = loadHardenedTokened();
   await drain();
 
-  onBeforeRequest(mainFrame(`https://${ONION_A}/`, { tabId: 3 }));
-  onBeforeRequest(
-    mainFrame('https://example.com/', {
+  const tor = mainFrame(`https://${ONION_A}/`, { tabId: 3 });
+  await rawOnRequest(tor);
+  await onBeforeRequest(tor);
+  const direct = mainFrame('https://example.com/', {
       tabId: 4,
       documentUrl: 'https://example.com/',
-    })
-  );
+    });
+  await rawOnRequest(direct);
+  await onBeforeRequest(direct);
   // Non-tab request (tabId -1: devtools/service-worker/extension traffic)
   // has no indicator to feed and must not poison the cache.
-  onBeforeRequest(mainFrame(`https://${ONION_B}/`, { tabId: -1 }));
-  await drain();
+  const noTab = mainFrame(`https://${ONION_B}/`, { tabId: -1 });
+  await rawOnRequest(noTab);
+  await onBeforeRequest(noTab);
 
   const torReply = onMessage({ type: GET_ROUTE, tabId: 3 });
   assert.ok(
@@ -1104,7 +1263,7 @@ test('getRouteResponderPinnedSemantics', async () => {
   assert.deepStrictEqual(
     plain(await waitForCachedRoute(onMessage, 4, 'unrouted')),
     { route: 'unrouted' },
-    'recorded non-Tor decision → {route:"unrouted"} (T034c case (b))'
+    'recorded intentional Direct decision preserves {route:"unrouted"}'
   );
   const unknownReply = onMessage({ type: GET_ROUTE, tabId: 99 });
   assert.ok(
@@ -1157,7 +1316,8 @@ test('storageOnChangedRefreshesMirroredToken', async () => {
   onChanged[0]({ device: { newValue: loaded.state.device } }, 'local');
   await drain();
   assert.strictEqual(
-    (await onRequest(mainFrame(`https://${ONION_A}/`))).password, TOKEN_B,
+    primaryProxy(await onRequest(mainFrame(`https://${ONION_A}/`))).password,
+    TOKEN_B,
     'a storage.onChanged event for the device key must refresh the ' +
       'mirrored token — descriptors must never serve a stale credential'
   );
@@ -1166,8 +1326,8 @@ test('storageOnChangedRefreshesMirroredToken', async () => {
   loaded.state.device = null;
   onChanged[0]({ device: { oldValue: { bearerToken: TOKEN_B } } }, 'local');
   await drain();
-  assert.deepStrictEqual(
-    plain(await onRequest(mainFrame(`https://${ONION_A}/`))), { type: 'direct' },
+  assert.strictEqual(
+    await onRequest(mainFrame(`https://${ONION_A}/`)), null,
     'device removal fail-closes the router'
   );
 
@@ -1175,8 +1335,8 @@ test('storageOnChangedRefreshesMirroredToken', async () => {
   loaded.state.device = { name: 'd', bearerToken: TOKEN_B, tokenStoredAt: 3 };
   onChanged[0]({ hardening: { newValue: {} } }, 'local');
   await drain();
-  assert.deepStrictEqual(
-    plain(await onRequest(mainFrame(`https://${ONION_A}/`))), { type: 'direct' },
+  assert.strictEqual(
+    await onRequest(mainFrame(`https://${ONION_A}/`)), null,
     'a non-device change event must not resurrect the mirror from ' +
       'current storage state it was not refreshed against'
   );
@@ -1203,89 +1363,51 @@ test('routerContributesZeroNewGlobalsToTheSharedScope', () => {
 });
 
 
-// T150: main-navigation scope must survive mixed requests through either
-// callback, and the actual popup must consume that scoped decision.
-for (const writer of ['proxy', 'webRequest']) {
-  for (const mainTor of [false, true]) {
-    test(`mixedTabMainNavigationScope-${writer}-${mainTor ? 'onionMain' : 'directMain'}`, async () => {
-      const loaded = loadHardenedTokened();
-      await drain();
-      const mainURL = mainTor ? `https://${ONION_A}/` : 'https://example.com/';
-      const resourceURL = mainTor ? 'https://example.com/image' : `https://${ONION_B}/image`;
-      const write = loaded.recorded[writer][0];
-      await write(mainFrame(mainURL));
-      const expectedRoute = mainTor ? 'tor' : 'unrouted';
-      await waitForCachedRoute(loaded.onMessage, 7, expectedRoute);
-      await write(subresource(resourceURL, mainURL));
-      // Wait until the old implementation's async subresource write has completed.
-      // WebCrypto can outlast drain(); observe its opposite value or exhaust bounded turns.
-      await waitForCachedRoute(loaded.onMessage, 7, mainTor ? 'unrouted' : 'tor');
-      assert.deepStrictEqual(plain(await loaded.onMessage({ type: GET_ROUTE, tabId: 7 })),
-        { route: expectedRoute });
-      const indicator = {};
-      vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../popup/popup.js'), 'utf8'), {
-        document: { getElementById: () => indicator },
-        browser: {
-          tabs: { query: async () => [{ id: 7 }], onUpdated: { addListener() {} } },
-          runtime: { sendMessage: loaded.onMessage },
-        },
-      });
-      await drain();
-      assert.strictEqual(indicator.textContent,
-        `Main navigation decision: ${mainTor ? 'Tor' : 'Direct (unrouted)'}` +
-        ' Other requests may use different routes. Connection success is not verified.');
-    });
-  }
-
-  test(`subresourceAloneCannotClaimMainNavigation-${writer}`, async () => {
-    const loaded = loadHardenedTokened();
-    await drain();
-    await loaded.recorded[writer][0](subresource(`https://${ONION_A}/x`, 'https://example.com/'));
-    await waitForCachedRoute(loaded.onMessage, 7, 'tor');
-    assert.strictEqual(await loaded.onMessage({ type: GET_ROUTE, tabId: 7 }), undefined);
-  });
-
-  for (const replacement of ['navigation', 'close']) {
-    test(`lateMainDecisionCannotRestoreStaleTor-${writer}-${replacement}`, async () => {
-      let releaseSign;
-      const loaded = loadRouter({
-        hardeningOk: true,
-        crypto: {
-          getRandomValues: webcrypto.getRandomValues.bind(webcrypto),
-          subtle: {
-            importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
-            sign(...args) {
-              return new Promise((resolve, reject) => {
-                releaseSign = () => webcrypto.subtle.sign(...args).then(resolve, reject);
-              });
-            },
-          },
-        },
-      });
-      await drain();
-      const write = loaded.recorded[writer][0];
-      const onMessage = loaded.recorded.message[0];
-      const pending = write(mainFrame(`https://${ONION_A}/`));
-      for (let i = 0; i < 100 && !releaseSign; i += 1) await drain(1);
-      assert.ok(releaseSign, 'positive control: Tor decision waits for HMAC');
-      if (replacement === 'navigation') {
-        await write(mainFrame('https://example.com/'));
-        await waitForCachedRoute(onMessage, 7, 'unrouted');
-      } else {
-        loaded.recorded.tabRemoved[0](7);
-      }
-      await releaseSign();
-      await pending;
-      await drain();
-      assert.deepStrictEqual(plain(await onMessage({ type: GET_ROUTE, tabId: 7 })),
-        replacement === 'navigation' ? { route: 'unrouted' } : undefined);
-    });
-  }
+// T150/T157: the two ordered Firefox events form one routing decision.
+async function dispatchRequest(loaded, details) {
+  const proxyResult = await loaded.recorded.proxy[0](details);
+  const blockingResult = await loaded.recorded.webRequest[0](details);
+  return { proxyResult, blockingResult };
 }
 
-for (const writer of ['proxy', 'webRequest']) {
-  test(`pendingMainNavigationClearsExistingTor-${writer}`, async () => {
-    let holdSign = false;
+for (const mainTor of [false, true]) {
+  test(`mixedTabMainNavigationScope-${mainTor ? 'onionMain' : 'directMain'}`, async () => {
+    const loaded = loadHardenedTokened();
+    await drain();
+    const mainURL = mainTor ? `https://${ONION_A}/` : 'https://example.com/';
+    const resourceURL = mainTor ? 'https://example.com/image' : `https://${ONION_B}/image`;
+    await dispatchRequest(loaded, mainFrame(mainURL));
+    const expectedRoute = mainTor ? 'tor' : 'unrouted';
+    await waitForCachedRoute(loaded.onMessage, 7, expectedRoute);
+    await dispatchRequest(loaded, subresource(resourceURL, mainURL));
+    assert.deepStrictEqual(plain(await loaded.onMessage({ type: GET_ROUTE, tabId: 7 })),
+      { route: expectedRoute });
+    const indicator = {};
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../popup/popup.js'), 'utf8'), {
+      document: { getElementById: () => indicator },
+      browser: {
+        tabs: { query: async () => [{ id: 7 }], onUpdated: { addListener() {} } },
+        runtime: { sendMessage: loaded.onMessage },
+      },
+    });
+    await drain();
+    assert.strictEqual(indicator.textContent,
+      `Main navigation decision: ${mainTor ? 'Tor' : 'Direct (unrouted)'}` +
+      ' Other requests may use different routes. Connection success is not verified.');
+  });
+}
+
+test('subresourceAloneCannotClaimMainNavigation', async () => {
+  const loaded = loadHardenedTokened();
+  await drain();
+  await dispatchRequest(
+    loaded, subresource(`https://${ONION_A}/x`, 'https://example.com/')
+  );
+  assert.strictEqual(await loaded.onMessage({ type: GET_ROUTE, tabId: 7 }), undefined);
+});
+
+for (const replacement of ['navigation', 'close']) {
+  test(`lateMainDecisionCannotRestoreStaleTor-${replacement}`, async () => {
     let releaseSign;
     const loaded = loadRouter({
       hardeningOk: true,
@@ -1294,7 +1416,6 @@ for (const writer of ['proxy', 'webRequest']) {
         subtle: {
           importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
           sign(...args) {
-            if (!holdSign) return webcrypto.subtle.sign(...args);
             return new Promise((resolve, reject) => {
               releaseSign = () => webcrypto.subtle.sign(...args).then(resolve, reject);
             });
@@ -1303,24 +1424,68 @@ for (const writer of ['proxy', 'webRequest']) {
       },
     });
     await drain();
-    const write = loaded.recorded[writer][0];
-    const onMessage = loaded.recorded.message[0];
-    await write(mainFrame(`https://${ONION_A}/`));
-    assert.deepStrictEqual(plain(await waitForCachedRoute(onMessage, 7, 'tor')),
-      { route: 'tor' }, 'positive control: the prior main decision is Tor');
-
-    holdSign = true;
-    const pending = write(mainFrame(`https://${ONION_B}/`));
+    const details = mainFrame(`https://${ONION_A}/`);
+    const pending = loaded.recorded.proxy[0](details);
     for (let i = 0; i < 100 && !releaseSign; i += 1) await drain(1);
-    assert.ok(releaseSign, 'positive control: the replacement decision is suspended');
-    try {
-      assert.strictEqual(await onMessage({ type: GET_ROUTE, tabId: 7 }), undefined,
-        'a pending main navigation must not retain the previous Tor decision');
-    } finally {
-      await releaseSign();
-      await pending;
+    assert.ok(releaseSign, 'positive control: Tor decision waits for HMAC');
+    if (replacement === 'navigation') {
+      await dispatchRequest(loaded, mainFrame('https://example.com/'));
+      await waitForCachedRoute(loaded.recorded.message[0], 7, 'unrouted');
+    } else {
+      loaded.recorded.tabRemoved[0](7);
     }
-    assert.deepStrictEqual(plain(await waitForCachedRoute(onMessage, 7, 'tor')),
-      { route: 'tor' }, 'the replacement publishes its own decision after completion');
+    await releaseSign();
+    await pending;
+    await loaded.recorded.webRequest[0](details);
+    assert.deepStrictEqual(
+      plain(await loaded.recorded.message[0]({ type: GET_ROUTE, tabId: 7 })),
+      replacement === 'navigation' ? { route: 'unrouted' } : undefined
+    );
   });
 }
+
+test('pendingMainNavigationClearsExistingTor', async () => {
+  let holdSign = false;
+  let releaseSign;
+  const loaded = loadRouter({
+    hardeningOk: true,
+    crypto: {
+      getRandomValues: webcrypto.getRandomValues.bind(webcrypto),
+      subtle: {
+        importKey: webcrypto.subtle.importKey.bind(webcrypto.subtle),
+        sign(...args) {
+          if (!holdSign) return webcrypto.subtle.sign(...args);
+          return new Promise((resolve, reject) => {
+            releaseSign = () => webcrypto.subtle.sign(...args).then(resolve, reject);
+          });
+        },
+      },
+    },
+  });
+  await drain();
+  await dispatchRequest(loaded, mainFrame(`https://${ONION_A}/`));
+  assert.deepStrictEqual(
+    plain(await waitForCachedRoute(loaded.recorded.message[0], 7, 'tor')),
+    { route: 'tor' }, 'positive control: the prior main decision is Tor'
+  );
+
+  holdSign = true;
+  const details = mainFrame(`https://${ONION_B}/`);
+  const pending = loaded.recorded.proxy[0](details);
+  for (let i = 0; i < 100 && !releaseSign; i += 1) await drain(1);
+  assert.ok(releaseSign, 'positive control: the replacement decision is suspended');
+  try {
+    assert.strictEqual(
+      await loaded.recorded.message[0]({ type: GET_ROUTE, tabId: 7 }), undefined,
+      'a pending main navigation must not retain the previous Tor decision'
+    );
+  } finally {
+    await releaseSign();
+    await pending;
+    await loaded.recorded.webRequest[0](details);
+  }
+  assert.deepStrictEqual(
+    plain(await waitForCachedRoute(loaded.recorded.message[0], 7, 'tor')),
+    { route: 'tor' }, 'the replacement publishes its own decision after completion'
+  );
+});

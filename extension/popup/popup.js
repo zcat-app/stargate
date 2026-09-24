@@ -11,6 +11,7 @@
   const SCOPE = ' Other requests may use different routes. Connection success is not verified.';
   const LABEL_TOR = 'Main navigation decision: Tor' + SCOPE;
   const LABEL_DIRECT = 'Main navigation decision: Direct (unrouted)' + SCOPE;
+  const LABEL_BLOCKED = 'Main navigation decision: Blocked by Stargate' + SCOPE;
   const LABEL_UNKNOWN = 'Main navigation decision: Unknown' + SCOPE;
   const GET_ROUTE = 'stargate:getRoute';
   const indicator = document.getElementById('route-indicator');
@@ -34,6 +35,7 @@
         if (answer !== null && typeof answer === 'object') {
           if (answer.route === 'tor') label = LABEL_TOR;
           else if (answer.route === 'unrouted') label = LABEL_DIRECT;
+          else if (answer.route === 'blocked') label = LABEL_BLOCKED;
         }
       }
     } catch (_err) {

@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // router.js — per-request `.onion` routing plus the T136
-// authenticated-device/browser-profile/top-level-site isolation tuple.
-// Unknown identity remains an unrouted descriptor here; T157 owns browser
-// cancellation and packet-level no-fallback proof.
+// authenticated-device/browser-profile/top-level-site isolation tuple and
+// the T157 terminal fail-closed decision shared by proxy/webRequest events.
 
 'use strict';
 
@@ -15,6 +14,8 @@
   const GET_ROUTE = 'stargate:getRoute';
   const PROFILE_KEY = 'isolationProfileId';
   const PROFILE_PATTERN = /^[0-9a-f]{64}$/;
+  const TOKEN_PATTERN = /^[0-9a-f]{32}$/;
+  const MAX_REQUEST_DECISIONS = 512;
   const textEncoder = new TextEncoder();
 
   let mirroredToken = null;
@@ -22,6 +23,7 @@
   let tokenGeneration = 0;
 
   const tabDecisions = new Map();
+  const requestDecisions = new Map();
   const documentSites = new Map();
   const tabDocuments = new Map();
   const topDocuments = new Map();
@@ -83,7 +85,7 @@
       device !== null &&
       typeof device === 'object' &&
       typeof device.bearerToken === 'string' &&
-      device.bearerToken !== ''
+      TOKEN_PATTERN.test(device.bearerToken)
     ) ? device.bearerToken : null;
   }
 
@@ -228,15 +230,14 @@
   }
 
   async function route(details) {
-    if (hardeningOk !== true || !onionDestination(details)) {
-      return { routed: false };
-    }
+    if (!onionDestination(details)) return { route: 'direct' };
+    if (hardeningOk !== true) return { route: 'blocked' };
 
     await tokenReady;
     const token = mirroredToken;
     const key = mirroredKey;
     const tokenSnapshot = tokenGeneration;
-    if (token === null || key === null) return { routed: false };
+    if (token === null || key === null) return { route: 'blocked' };
 
     try {
       const initiating = requestSite(details);
@@ -254,50 +255,180 @@
             initiating.document.record
         )
       ) {
-        return { routed: false };
+        return { route: 'blocked' };
       }
-      return { routed: true, username, token };
+      return {
+        route: 'tor',
+        username,
+        token,
+        tokenGeneration: tokenSnapshot,
+        document: initiating.document,
+      };
     } catch {
-      return { routed: false };
+      return { route: 'blocked' };
     }
   }
 
-  async function routeWithIndicator(details) {
-    if (!validTabId(details.tabId) || details.type !== 'main_frame' || details.frameId !== 0) {
-      return route(details);
+  function requestId(details) {
+    return typeof details.requestId === 'string' && details.requestId !== ''
+      ? details.requestId
+      : null;
+  }
+
+  // Only fields present at both Firefox decision points and relevant to the
+  // route are compared. proxyInfo is deliberately excluded: it is the result
+  // being verified by onBeforeRequest, not an input to the decision.
+  function requestFingerprint(details) {
+    return JSON.stringify([
+      details.url ?? null,
+      details.method ?? null,
+      details.type ?? null,
+      details.tabId ?? null,
+      details.frameId ?? null,
+      details.parentFrameId ?? null,
+      details.incognito ?? null,
+      details.cookieStoreId ?? null,
+      details.documentId ?? null,
+      details.parentDocumentId ?? null,
+      details.documentUrl ?? null,
+      details.originUrl ?? null,
+    ]);
+  }
+
+  function beginIndicator(details, fingerprint) {
+    if (
+      !validTabId(details.tabId) ||
+      details.type !== 'main_frame' ||
+      details.frameId !== 0
+    ) {
+      return null;
     }
     // T150 / Principles III and V: only main-navigation decisions are displayed.
     // Object identity prevents an old async result reviving a replaced/closed tab.
-    const current = { route: undefined };
+    const current = { route: undefined, fingerprint };
     tabDecisions.set(details.tabId, current);
-    const decision = await route(details);
-    if (tabDecisions.get(details.tabId) === current) {
-      current.route = decision.routed ? 'tor' : 'unrouted';
-    }
-    return decision;
+    return current;
   }
 
-  browser.proxy.onRequest.addListener(async function proxyOnRequest(details) {
-    const decision = await routeWithIndicator(details);
-    if (!decision.routed) return DIRECT;
-    return {
-      type: 'socks',
-      host: TOR_HOST,
-      port: TOR_PORT,
-      username: decision.username,
-      password: decision.token,
-      proxyDNS: true,
+  function commitIndicator(details, indicator, routeName) {
+    if (
+      indicator !== null &&
+      tabDecisions.get(details.tabId) === indicator &&
+      indicator.fingerprint === requestFingerprint(details)
+    ) {
+      indicator.route = routeName;
+    }
+  }
+
+  function rememberRequest(details) {
+    const id = requestId(details);
+    const fingerprint = requestFingerprint(details);
+    const indicator = beginIndicator(details, fingerprint);
+    if (id === null) return { id, fingerprint, indicator, decision: null };
+
+    // The catch is part of the privacy boundary: Firefox treats a rejected
+    // proxy listener as "use the default proxy configuration". A protected
+    // internal failure must instead become an explicit blocked decision.
+    const record = {
+      id,
+      tabId: details.tabId,
+      fingerprint,
+      indicator,
+      decision: Promise.resolve()
+        .then(() => route(details))
+        .catch(() => ({ route: 'blocked' })),
     };
-  });
+    requestDecisions.set(id, record);
+    while (requestDecisions.size > MAX_REQUEST_DECISIONS) {
+      requestDecisions.delete(requestDecisions.keys().next().value);
+    }
+    return record;
+  }
+
+  function expectedTorProxy(proxyInfo) {
+    return (
+      proxyInfo !== null &&
+      typeof proxyInfo === 'object' &&
+      proxyInfo.type === 'socks' &&
+      proxyInfo.host === TOR_HOST &&
+      proxyInfo.port === TOR_PORT &&
+      proxyInfo.proxyDNS === true
+    );
+  }
+
+  function decisionStillCurrent(decision) {
+    return (
+      hardeningOk === true &&
+      decision.route === 'tor' &&
+      decision.tokenGeneration === tokenGeneration &&
+      decision.token === mirroredToken &&
+      (
+        decision.document === null ||
+        documentSites.get(decision.document.documentId) ===
+          decision.document.record
+      )
+    );
+  }
+
+  browser.proxy.onRequest.addListener(function proxyOnRequest(details) {
+    const protectedDestination = onionDestination(details);
+    const record = rememberRequest(details);
+    if (record.id === null) {
+      return Promise.resolve(protectedDestination ? null : DIRECT);
+    }
+    return record.decision.then((decision) => {
+      if (decision.route === 'direct') return DIRECT;
+      if (decision.route !== 'tor') return null;
+      return [{
+        type: 'socks',
+        host: TOR_HOST,
+        port: TOR_PORT,
+        username: decision.username,
+        password: decision.token,
+        proxyDNS: true,
+      }, null];
+    }, () => protectedDestination ? null : DIRECT);
+  }, { urls: ['<all_urls>'] });
 
   browser.webRequest.onBeforeRequest.addListener(
-    function stargateOnBeforeRequest(details) {
-      if (validTabId(details.tabId)) {
-        void routeWithIndicator(details);
+    async function stargateOnBeforeRequest(details) {
+      const protectedDestination = onionDestination(details);
+      const id = requestId(details);
+      const record = id === null ? null : requestDecisions.get(id);
+      if (
+        record === null ||
+        typeof record === 'undefined' ||
+        record.fingerprint !== requestFingerprint(details)
+      ) {
+        if (id !== null) requestDecisions.delete(id);
+        if (protectedDestination) {
+          const current = validTabId(details.tabId)
+            ? tabDecisions.get(details.tabId)
+            : null;
+          commitIndicator(details, current ?? null, 'blocked');
+          return { cancel: true };
+        }
+        return {};
       }
-      return {};
+      requestDecisions.delete(id);
+      const decision = await record.decision;
+      if (decision.route === 'direct' && !protectedDestination) {
+        commitIndicator(details, record.indicator, 'direct');
+        return {};
+      }
+      if (
+        protectedDestination &&
+        decisionStillCurrent(decision) &&
+        expectedTorProxy(details.proxyInfo)
+      ) {
+        commitIndicator(details, record.indicator, 'tor');
+        return {};
+      }
+      commitIndicator(details, record.indicator, 'blocked');
+      return { cancel: true };
     },
-    { urls: ['<all_urls>'] }
+    { urls: ['<all_urls>'] },
+    ['blocking']
   );
 
   browser.webNavigation.onCommitted.addListener(
@@ -337,6 +468,9 @@
 
   browser.tabs.onRemoved.addListener(function stargateTabRemoved(tabId) {
     tabDecisions.delete(tabId);
+    for (const [id, record] of requestDecisions) {
+      if (record.tabId === tabId) requestDecisions.delete(id);
+    }
     topDocuments.delete(tabId);
     forgetTabDocuments(tabId);
   });
@@ -348,7 +482,8 @@
     if (!validTabId(tabId)) return undefined;
     const decision = tabDecisions.get(tabId)?.route;
     if (decision === 'tor') return Promise.resolve({ route: 'tor' });
-    if (decision === 'unrouted') return Promise.resolve({ route: 'unrouted' });
+    if (decision === 'direct') return Promise.resolve({ route: 'unrouted' });
+    if (decision === 'blocked') return Promise.resolve({ route: 'blocked' });
     return Promise.resolve(undefined);
   });
 

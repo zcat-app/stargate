@@ -11,7 +11,7 @@
 //       equality, so none missing AND none extra (§14.2: no tabs, history,
 //       bookmarks, cookies, identity; `management` is the T091-amended
 //       contract, T091 acceptance #5: "T051 must request management")
-//   M3  non-persistent MV2 event page (task body)
+//   M3  persistent MV2 routing authority (T157 startup-race boundary)
 //   M4  background script list exact; hardening.js BEFORE router.js —
 //       proxy.onRequest must not be registered before the FR-004 gate flag
 //       exists (arch §14.5 Part 2)
@@ -70,8 +70,8 @@ test('M2: permission set is exactly §14.2 + T091/T136 (bidirectional)', () => {
   assert.deepStrictEqual(actual, required);
 });
 
-test('M3: background is a non-persistent MV2 event page', () => {
-  assert.strictEqual(manifest.background?.persistent, false);
+test('M3: background routing authority persists across protected requests', () => {
+  assert.strictEqual(manifest.background?.persistent, true);
 });
 
 test('M4: background scripts exact; hardening.js before router.js', () => {

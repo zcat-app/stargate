@@ -124,10 +124,13 @@ therefore remains Direct (unrouted); an onion main request with a Direct image r
 Both display: `Other requests may use different routes. Connection success is not verified.`
 
 Canonical prefixes are `Main navigation decision: Tor`,
-`Main navigation decision: Direct (unrouted)` and `Main navigation decision: Unknown`.
-Only a recorded Tor decision permits the Tor label; a recorded non-Tor decision permits the
-Direct (unrouted) label. Unknown tabs, pending decisions, missing or malformed replies and
-unreadable background state display Unknown without throwing or deriving a route from the URL.
+`Main navigation decision: Direct (unrouted)`, `Main navigation decision: Blocked by Stargate`
+and `Main navigation decision: Unknown`. Only a recorded Tor decision permits the Tor label;
+only an intentional Direct decision permits the Direct label. A protected main request canceled
+by Stargate permits the Blocked label. Unknown tabs, pending decisions, missing or malformed
+replies and unreadable background state display Unknown without throwing or deriving a route from
+the URL. The Blocked label reports the router's cancellation result; a notification is only UX
+and is never credited with canceling traffic.
 New main requests replace the old decision immediately with pending state; delayed completions
 cannot overwrite a newer decision or repopulate a closed tab. Popup refreshes similarly discard
 older replies. State stays in background memory and is removed on tab close or background restart.
@@ -310,6 +313,18 @@ tests-first suite (Principle VII) before implementation lands.
   (THREAT-MODEL §5.4/§5.5). (Aligns with Constitution Principle III bullet 3
   as amended by T091 — non-Direct routing is fail-closed at runtime against
   WebRTC; DoH/DoT/HTTP-3 are release-cadence-verified.)
+- **FR-004a**: For a protected request, failure or unknown state of hardening, credentials,
+  isolation context, profile state or asynchronous generation/binding checks MUST cancel the
+  request through an asynchronous blocking `webRequest.onBeforeRequest` response. The matching
+  `proxy.onRequest` result is never Direct and MUST NOT reject into Firefox's default proxy
+  behavior. An allowed Tor result is a SOCKS descriptor followed by a terminal `null` failover
+  sentinel, so a refused or unavailable sidecar cannot fall through to browser/system proxy
+  settings. The two listeners consume one request-bound decision and revalidate state before
+  allowing dispatch. Intentional non-`.onion` Direct behavior remains distinct. T157 verifies the
+  descriptor and real-browser network outcomes, including redirects, retries and subresources.
+  The Firefox MV2 background page MUST remain persistent so these two listeners cannot disappear
+  between protected requests; browser startup is fail-closed until their current request decision
+  completes.
 
 #### Data plane behaviour
 
@@ -693,9 +708,11 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
   path. Alpha builds are development evidence only: v1 does not release until stable Mullvad
   Browser uses Gecko 153 or newer and retains MV2. If that stable release drops MV2, redesign and
   constitutional review replace this assumption; there is no silent legacy fallback.
-- **`proxy.onRequest` failover timeout: Firefox default.** The router
-  does not set `failoverTimeout` on the returned `proxy.ProxyInfo`
-  descriptor; Firefox's 5-second default applies. Pinning the value
+- **`proxy.onRequest` failover timeout: Firefox default, with no route fallback.** The router
+  does not set `failoverTimeout` on the returned SOCKS `proxy.ProxyInfo`
+  descriptor; Firefox's default applies before the terminal `null` ends the extension-provided
+  chain. The timeout can fail the protected request but cannot select Direct or the browser's
+  configured proxy. Pinning the value
   would create a magic number with no spec-level rationale. If a
   future feature needs a tighter or looser failover (e.g. for
   high-latency bridge transports), the change ships with a

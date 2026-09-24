@@ -900,6 +900,11 @@ must account for legacy logs and backup copies under T152's explicit cleanup lim
   16.0a11 / Gecko 153.2.0 is the development reference, but v1 release is gated until the stable
   Mullvad Browser channel uses Gecko 153 or newer and still supports MV2. If that release drops
   MV2, the proxy decision path requires a new design and Constitution-level review.
+- **Background lifetime**: the MV2 background page is persistent. The proxy and blocking listeners
+  are the fail-closed authority for every protected request; Firefox must not suspend that
+  authority and temporarily resume browser-default routing. A non-persistent event page can expose
+  a fallback window while that authority is absent. T157 tests a held initialization dependency;
+  T155 retains browser-launch/session-restore coverage on the stable supported browser.
 
 ### 14.2 Permissions and justifications
 
@@ -908,7 +913,7 @@ must account for legacy logs and backup copies under T152's explicit cleanup lim
 | `proxy`                                 | Set per-request proxy via `proxy.onRequest` listener (core function)|
 | `<all_urls>` (host permission)          | The proxy listener must see all outbound URLs to apply mapping      |
 | `storage`                               | Persist per-domain route preferences, blocklist and the random browser-profile isolation id in `storage.local` |
-| `webRequest`, `webRequestBlocking`      | Block known DoH/DoT endpoints pre-proxy (defense-in-depth; the primary DoH/DoT/HTTP-3 guarantee is the externally verified profile per §14.5, not this rule) |
+| `webRequest`, `webRequestBlocking`      | Cancel a protected request when routing prerequisites or the applied proxy fail validation; also block known DoH/DoT endpoints as defense-in-depth (the primary DoH/DoT/HTTP-3 guarantee is the externally verified profile per §14.5, not this rule) |
 | `webNavigation`                         | Bind committed top-level and child `documentId` values through `parentDocumentId`; avoids destination, iframe-site and tab-reuse fallbacks |
 | `publicSuffix`                          | Firefox gates the `browser.publicSuffix` namespace behind this permission; without it the native `publicSuffix.getDomain()` registrable-domain authority for the isolation site (§14.3, Firefox 153+) is not injected and every DNS-site derivation fails closed |
 | `privacy`                               | Read WebRTC state via `privacy.network.peerConnectionEnabled` — the only hardening surface Firefox's stable WebExtensions API exposes (sol-review B4; §14.5) |
@@ -949,10 +954,23 @@ For each request:
    refused; complete onion and canonical IP identities remain whole. Scheme and port do not enter
    the site. The exact tuple and HMAC encoding are the T136
    boundary contract; the fixed 68-byte `sg1:` username reveals neither the site nor bearer.
-5. Return the SOCKS5 proxy descriptor pointing at the chosen port (`127.0.0.1:888x`) with the
-   derived isolation username and the device bearer token as password. **`proxyDNS: true`** in the
-   returned descriptor (Firefox SOCKS5h equivalent) — no local DNS, ever. Snapshot asynchronous
-   derivation against token changes; a stale completion is identity-unavailable.
+5. `proxy.onRequest` creates one bounded request record before asynchronous work and returns a
+   non-rejecting Promise. The record binds Firefox's `requestId` plus the route-relevant request
+   fields to one decision. `webRequest.onBeforeRequest`, registered with `['blocking']`, consumes
+   that exact decision after the proxy event, revalidates the token/hardening/document generations
+   and the applied proxy endpoint, and deletes the record. Missing, mismatched, stale or evicted
+   records cancel protected targets. A redirect that reuses a request id first replaces the record
+   from its new proxy event; retries and subresources get current decisions rather than inherited
+   authorization.
+6. For an allowed protected request, return an array containing the SOCKS5 proxy descriptor and a
+   terminal `null`. The descriptor points at the chosen port (`127.0.0.1:888x`) with the derived
+   isolation username, device bearer token as password and **`proxyDNS: true`** (Firefox SOCKS5h
+   equivalent). Terminal `null` ends Firefox's failover chain, so an unavailable/refusing sidecar
+   cannot fall through to browser/system proxy settings or Direct. A protected prerequisite
+   failure returns no Direct/other-route descriptor and the blocking listener returns
+   `{cancel: true}` before dispatch. Intentional non-protected Direct remains separate. No proxy
+   callback exception/rejection may escape, because Firefox otherwise preserves default proxy
+   behavior.
 
 ### 14.4 `storage.local` layout
 
@@ -1081,6 +1099,11 @@ false` at runtime (browser startup and on restart), the extension:
 3. Writes the last failure to `storage.local.hardening.lastAuditResult`
    for the admin dashboard to surface (read via a future signed-export
    flow — out of scope for this spec).
+
+The notification and stored result are explanatory UX only. Enforcement is the router's
+asynchronous blocking cancellation described in §14.3; the notification does not cancel a
+request. The popup reports a committed main-navigation cancellation as Blocked, distinguishes it
+from intentional Direct, and retains the existing mixed-request and unverified-connection scope.
 
 Non-Direct routing is **fail-closed at runtime against WebRTC**. The
 DoH/DoT/HTTP-3 surfaces are release-cadence-verified (Part 1) plus

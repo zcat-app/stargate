@@ -154,8 +154,9 @@ The browser extension derives one versioned opaque SOCKS username for the tuple
   `documentUrl` remains higher precedence than `originUrl`, but `originUrl` alone is insufficient
   because Firefox may report an intermediate CSS resource there. Subresource redirects retain the
   committed top-level site. Detached workers, absent committed context and opaque top-level parents
-  return identity-unavailable. T157 owns cancellation and packet-level no-fallback proof for that
-  result; T136 does not represent a Direct descriptor as a block. An asynchronous HMAC completion
+  return identity-unavailable. T157 owns cancellation and connection-level no-fallback proof for
+  that result; T155 owns integrated packet/circuit evidence. T136 does not represent a Direct
+  descriptor as a block. An asynchronous HMAC completion
   rechecks the exact document binding and becomes unavailable if navigation replaced it.
 - `storage.local.isolationProfileId` is 32 random bytes encoded as 64 lowercase hex characters,
   generated once per browser profile and stable across background restarts. Missing state is
@@ -239,11 +240,44 @@ work, never constitutional accepted risk or proof of forensic erasure.
 
 Selected protected requests with failed/unknown hardening, missing/invalid credentials, missing
 identity, unavailable route or an initialization race must have no Direct/system-route network
-fallback. Test both descriptor decisions and real browser packets, including subresources and
-redirect/retry paths. Existing explicit Direct requests remain separate. T157 supplies the failure
-behavior and real-browser evidence; T155 rechecks integration. A tab indicator identifies main
+fallback. Test descriptor decisions and real browser connections in T157, including subresources
+and redirect/retry paths; T155 supplies integrated packet evidence. Existing explicit Direct
+requests remain separate. T157 supplies the failure behavior and real-browser evidence; T155
+rechecks integration. A tab indicator identifies main
 navigation and mixed-route coverage without claiming a protected tab from one protected image.
 DoH/DoT/HTTP-3 checks remain external profile validation; no unsupported WebExtension API claims.
+
+For Firefox MV2, `proxy.onRequest` runs before `webRequest.onBeforeRequest`. The router registers
+both on `<all_urls>` and creates one bounded request record before asynchronous policy work. The
+record binds `requestId` to the route-relevant request fields and a non-rejecting decision promise;
+the blocking listener must consume that exact decision, reject a missing/mismatched/stale record
+for a protected target, recheck token/hardening/document generations, and delete the consumed
+record. A redirect may reuse a request id only after its new proxy event replaces the record with
+the new target binding. Retries and subresources receive their own current decisions. Eviction or
+late completion cannot authorize protected traffic.
+
+The MV2 background page is persistent. Its proxy and blocking listeners are routing authority,
+not optional event-page optimization: suspending them can let Firefox apply its ordinary proxy or
+Direct behavior before the extension is awakened. Startup remains fail-closed while current
+hardening, credential and context state is established.
+
+There are three network decisions. Intentional non-protected traffic returns the explicit Direct
+descriptor and is not canceled. A protected request whose prerequisites pass returns exactly a
+SOCKS5 descriptor followed by `null`; the descriptor carries `proxyDNS: true`, the derived
+isolation username and bearer password, while terminal `null` prevents Firefox from appending its
+browser-defined proxy fallback. A protected request whose prerequisites fail returns no Direct or
+other route descriptor, and the asynchronous blocking listener returns `{cancel: true}` before
+network dispatch. The listener also cancels if Firefox's applied proxy metadata is not the expected
+Tor endpoint. A valid descriptor followed by sidecar refusal/unavailability fails the connection;
+it never retries through Direct, a system proxy or another route.
+
+The main-navigation indicator distinguishes Tor selection, intentional Direct, a committed
+Stargate cancellation, and unknown/pending state. It retains the mixed-request and unverified-
+connection scope. Notifications report remediation only; neither contracts nor UI claim that a
+notification cancels a request. T157's real-browser evidence requires live Direct/system and SOCKS
+capture controls and observes destination, proxy and unintended-route catchers for prerequisite
+failure, sidecar failure, redirects, retries and protected subresources. Alpha-browser evidence is
+development evidence only; T155 retains the stable supported-browser and integrated release gate.
 
 ## Compatibility and completion
 

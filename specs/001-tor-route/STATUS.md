@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-23
+**Last updated:** 2026-09-24
 
 ---
 
@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 41 |
+| pending | 40 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 161 |
 | deferred | 5 |
@@ -38,14 +38,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
 | T145 | Test Maven wrapper checksum enforcement | Foundation audit remediation |  |  |
 | T146 | Correct init timeout diagnosis and isolate its fixture | Foundation audit remediation |  |  |
-| T157 | Block protected-route failure without Direct fallback | Foundation audit remediation | ✓ |  |
 | T159 | Preserve acknowledged auth state across rollback and restart | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T157 | Block protected-route failure without Direct fallback | in-review | ✓ | Foundation audit remediation |
 
 ---
 

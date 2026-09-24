@@ -28,7 +28,7 @@
       "background/hardening.js",
       "background/router.js"
     ],
-    "persistent": false
+    "persistent": true
   },
   "options_ui": {
     "page": "options/options.html"
