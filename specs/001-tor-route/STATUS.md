@@ -15,9 +15,9 @@
 |---|---|
 | pending | 38 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 163 |
+| done | 164 |
 | deferred | 5 |
 | **total** | **207** |
 
@@ -43,9 +43,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T141 | Pin CI Actions and agent installation dependencies | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -63,7 +61,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_163 ticket(s) done._
+_164 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -199,6 +197,7 @@ _163 ticket(s) done._
 - T137 — Create a fresh deadline for each token-reload RPC
 - T138 — Define an enforced Tor observation boundary
 - T139 — Prevent required verification coverage from disappearing
+- T141 — Pin CI Actions and agent installation dependencies
 - T142 — Make agent execution-boundary claims demonstrable
 - T143 — Retire obsolete Java token-verifier constants
 - T147 — Resolve HTTP CONNECT first-party isolation
