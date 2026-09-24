@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 39 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 162 |
+| done | 163 |
 | deferred | 5 |
 | **total** | **207** |
 
@@ -34,6 +34,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
+| T132 | Inter-plane follow-ups from T130 (re-push, ALPN pins, fakecp | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 | T141 | Pin CI Actions and agent installation dependencies | Foundation audit remediation | ✓ |  |
 | T144 | Preserve privacy-test ordering evidence honestly | Foundation audit remediation |  |  |
 | T145 | Test Maven wrapper checksum enforcement | Foundation audit remediation |  |  |
@@ -43,9 +44,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T159 | Preserve acknowledged auth state across rollback and restart | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -63,7 +62,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_162 ticket(s) done._
+_163 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -211,6 +210,7 @@ _162 ticket(s) done._
 - T156 — Strengthen constitution and reconcile implementation prerequisites
 - T157 — Block protected-route failure without Direct fallback
 - T158 — Publish only finalized aggregate counter buckets
+- T159 — Preserve acknowledged auth state across rollback and restart
 - T160 — Prepare Tor security upgrade with enforced package content pins
 - T161 — Resolve Tor upgrade live validation failures before promotion
 - T162 — Implement host-loopback DP with unix-socket sidecar fabric

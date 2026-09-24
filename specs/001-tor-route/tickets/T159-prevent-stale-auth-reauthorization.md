@@ -1,7 +1,7 @@
 ---
 id: "T159"
 title: "Preserve acknowledged auth state across rollback and restart"
-status: in-progress
+status: done
 created: "2026-09-12"
 last_updated: 2026-09-24
 source: "specs/001-tor-route/contracts/foundation-boundaries.md"
@@ -18,7 +18,7 @@ spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/contracts/fo
 decision_refs: []
 remediates: "T092"
 tests_first: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-24, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
