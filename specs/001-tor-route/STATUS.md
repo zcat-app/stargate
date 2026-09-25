@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 37 |
+| pending | 36 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 166 |
 | deferred | 5 |
@@ -35,14 +35,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T132 | Inter-plane follow-ups from T130 (re-push, ALPN pins, fakecp | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
-| T146 | Correct init timeout diagnosis and isolate its fixture | Foundation audit remediation |  |  |
 | T176 | Pin or refuse the Maven tar fallback | Foundation audit remediation |  |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T146 | Correct init timeout diagnosis and isolate its fixture | in-review |  | Foundation audit remediation |
 
 ---
 

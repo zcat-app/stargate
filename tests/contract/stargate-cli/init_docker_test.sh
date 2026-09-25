@@ -63,20 +63,29 @@ fi
 . "$LIB" || fail "cannot source $LIB"
 
 # Unique project names so concurrent runs / leftover state cannot collide.
-_suffix="t088-$$-$(date +%s)"
+_suffix="${T146_FIXTURE_SUFFIX:-t088-$$-$(date +%s)}"
 PROJ_A="t088isoa-$_suffix"
 PROJ_B="t088isob-$_suffix"
 
 # Temp env-file location so the test never touches the repo's compose/env.
 TMP="$(mktemp -d)"
-trap '
+cleanup() {
+  local p volume
   for p in "$PROJ_A" "$PROJ_B"; do
     [ -n "$p" ] && STARGATE_PROJECT="$p" STARGATE_COMPOSE_FILE="$FIXTURE" \
-      STARGATE_ENV_FILE="$TMP/local.env" STARGATE_ENV_DIR="$TMP" \
+      STARGATE_ENV_FILE="$TMP/$p.env" STARGATE_ENV_DIR="$TMP" \
       compose_run down -v -t 1 >/dev/null 2>&1 || true
+    # Init creates two project-labelled observer volumes that this small
+    # fixture never mounts; Compose down -v leaves those behind.
+    while IFS= read -r volume; do
+      [ -n "$volume" ] && docker volume rm "$volume" >/dev/null 2>&1 || true
+    done < <(docker volume ls --filter "label=com.docker.compose.project=$p" -q)
   done
   rm -rf "$TMP"
-' EXIT INT TERM
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # ---- HERMETIC assertions (no daemon needed) -------------------------------
 # compose_cmd must render the authoritative prefix with project + file + env.
@@ -107,6 +116,19 @@ run_init() {
     bash "$DISPATCHER" init
 }
 
+# Docker allocates the fixture host port. Read its actual publication under
+# the owning project instead of assuming production's fixed loopback port.
+fixture_port() {
+  local published
+  published="$(STARGATE_PROJECT="$1" STARGATE_COMPOSE_FILE="$FIXTURE" \
+    STARGATE_ENV_FILE="$TMP/$1.env" STARGATE_ENV_DIR="$TMP" \
+    compose_run port stargate-dp 8881)" || return 1
+  case "$published" in
+    127.0.0.1:[0-9]*) printf '%s\n' "${published##*:}" ;;
+    *) return 1 ;;
+  esac
+}
+
 # stat inside a volume: echoes "<uid> <gid> <mode-octal> <size>" for a path.
 vol_stat() {
   local phys="$1" path="$2"
@@ -133,6 +155,12 @@ phys_of() {
 echo ">>> init project A ($PROJ_A)"
 out="$(run_init "$PROJ_A" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || { echo "$out" >&2; bail "init project A exited $rc (expected 0)"; }
+port_a="$(fixture_port "$PROJ_A")" || fail 'A: fixture publication missing'
+(exec 3<>"/dev/tcp/127.0.0.1/$port_a") 2>/dev/null || bail 'A: assigned fixture port unreachable'
+[ "$port_a" != 8881 ] || bail 'A: fixture retained production host port 8881'
+if [ "${T146_FORCE_FAILURE:-0}" = 1 ]; then
+  fail 'T146 injected failure after project A provisioning'
+fi
 
 # env file supplied (acceptance #2): created by init's compose_env_file.
 [ -f "$TMP/$PROJ_A.env" ] \
@@ -281,22 +309,20 @@ for current_rc in 1 2; do
     || bail "T152 could not set current readiness fixture"
   [ "$(docker inspect -f '{{.State.Running}}:{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$observer_cid")" = true:none ] \
     || bail "T152 running/no-health precondition"
-  (exec 3<>/dev/tcp/127.0.0.1/8881) 2>/dev/null || bail "T152 DP TCP positive control"
+  (exec 3<>"/dev/tcp/127.0.0.1/$port_a") 2>/dev/null || bail "T152 DP TCP positive control"
   out="$(run_init "$PROJ_A" 1 2>&1)"; rc=$?
   [ "$rc" -eq 40 ] || bail "T152 current readiness exit $current_rc allowed init exit $rc, expected 40"
 done
 
 # --- Project isolation (B1): a second project is fully distinct -----------
-# Tear A down first (frees 127.0.0.1:8881 so B's stargate-dp can bind it; the
-# fixture publishes the same loopback port). A's key hashes + volume name are
-# already captured above for the distinctness comparison.
-echo ">>> teardown project A before isolation run"
-STARGATE_PROJECT="$PROJ_A"; STARGATE_COMPOSE_FILE="$FIXTURE"; STARGATE_ENV_FILE="$TMP/$PROJ_A.env"; STARGATE_ENV_DIR="$TMP"
-compose_run down -v -t 1 >/dev/null 2>&1 || true
-
+# Keep A running: both projects must have distinct, reachable publications.
 echo ">>> init project B ($PROJ_B) — isolation"
 out="$(run_init "$PROJ_B" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] || { echo "$out" >&2; bail "init project B exited $rc (expected 0)"; }
+port_b="$(fixture_port "$PROJ_B")" || fail 'B: fixture publication missing'
+[ "$port_a" != "$port_b" ] || bail 'isolation: A and B shared a host port'
+(exec 3<>"/dev/tcp/127.0.0.1/$port_a") 2>/dev/null || bail 'isolation: A became unreachable'
+(exec 3<>"/dev/tcp/127.0.0.1/$port_b") 2>/dev/null || bail 'isolation: B unreachable'
 keys_b="$(phys_of "$PROJ_B" stargate-keys)"
 [ -n "$keys_b" ] || bail "B: stargate-keys volume not found under project label"
 [ "$keys_b" != "$keys_a" ] \

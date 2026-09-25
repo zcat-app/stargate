@@ -581,12 +581,34 @@ wait_healthy() {
 }
 
 # ---- 6. TOR-ONLY VERIFICATION (research §8) --------------------------------
+# The disposable contract fixture lets Docker allocate a host loopback port;
+# production still probes its 8881 loopback listener (FR-005/FR-010).
+tor_probe_port() {
+  if [ "$STARGATE_COMPOSE_FILE" != "$_SG_REPO_ROOT/tests/contract/stargate-cli/fixtures/fixture-compose.yml" ]; then
+    printf '%s\n' 8881
+    return 0
+  fi
+  local published port
+  published="$(compose_run port stargate-dp 8881 2>/dev/null)" || return 1
+  case "$published" in
+    127.0.0.1:[0-9]*) port="${published##*:}" ;;
+    *) return 1 ;;
+  esac
+  case "$port" in *[!0-9]*|'') return 1 ;; esac
+  printf '%s\n' "$port"
+}
+
 # Probe ONLY the Tor route surface: the data plane's loopback proxy port
 # (8881) accepts a connection. No I2P, Nym, or Direct route probe — those
 # routes are out of scope this feature. Verify failure → 50.
 verify_tor() {
-  note "verifying Tor route (loopback proxy 127.0.0.1:8881)..."
-  # A TCP connect to 127.0.0.1:8881 succeeding proves the DP listener came up.
+  local rc port
+  port="$(tor_probe_port)" || {
+    note 'Tor route readiness could not be checked: loopback publication unavailable.'
+    return "$EXIT_VERIFY"
+  }
+  note "verifying Tor route (loopback proxy 127.0.0.1:$port)..."
+  # A TCP connect to the selected loopback publication proves it was reachable.
   # We do NOT drive a full SOCKS5 handshake here — that is the job of the
   # downstream runtime contract tests (T019b/T019c). Keep this probe cheap.
   #
@@ -597,16 +619,15 @@ verify_tor() {
   # `stargate init` then reads as hung rather than reporting a diagnosis, and
   # the T088 contract test calls init three times, paying it three times over.
   # See redteam/findings/open/20260727-011-verify-tor-unbounded-connect.md.
-  local rc
   if command -v timeout >/dev/null 2>&1; then
     timeout "$STARGATE_PROBE_TIMEOUT" \
-      bash -c 'exec 3<>/dev/tcp/127.0.0.1/8881' 2>/dev/null
+      bash -c 'exec 3<>/dev/tcp/127.0.0.1/"$1"' _ "$port" 2>/dev/null
     rc=$?
   else
     # No coreutils `timeout` (stock macOS/BSD — same gap `cleanup` handles for
     # `shred`). Bound it with a bash-native watchdog rather than reverting to
     # an unbounded connect, so the fix holds on every platform init supports.
-    ( exec 3<>/dev/tcp/127.0.0.1/8881 ) 2>/dev/null &
+    ( exec 3<>"/dev/tcp/127.0.0.1/$port" ) 2>/dev/null &
     local probe=$! waited=0
     while kill -0 "$probe" 2>/dev/null && [ "$waited" -lt "$STARGATE_PROBE_TIMEOUT" ]; do
       sleep 1
@@ -621,19 +642,18 @@ verify_tor() {
     fi
   fi
 
-  # Refused and timed-out are different diagnoses and must read differently:
-  # the first means the listener is down, the second means something is
-  # swallowing the SYN with the port published.
+  # Refused and timed-out are distinct observations, but neither establishes
+  # whether the container, Docker publishing, or host routing caused them.
   case "$rc" in
     0)
-      note "Tor route reachable on 127.0.0.1:8881."
+      note "Tor route reachable on 127.0.0.1:$port."
       return 0
       ;;
     124)
-      note "127.0.0.1:8881 timed out after ${STARGATE_PROBE_TIMEOUT}s — port published but nothing accepting (inspect the stargate-dp container)."
+      note "127.0.0.1:$port timed out after ${STARGATE_PROBE_TIMEOUT}s; Tor route readiness was not observed. Inspect the data plane and host Docker publishing path."
       ;;
     *)
-      note "127.0.0.1:8881 refused — data plane listener did not come up."
+      note "127.0.0.1:$port refused the connection; Tor route readiness was not observed."
       ;;
   esac
   return "$EXIT_VERIFY"

@@ -12,8 +12,9 @@
 #
 # Service names mirror the real compose (stargate-dp / stargate-control /
 # tor) because init's health loop and verify_tor probe reference those
-# names + port 8881. The services are trivial: stargate-dp re-arms a
-# busybox nc listener on 8881 (enough for init's TCP-connect verify_tor);
+# names + container port 8881. Docker allocates the fixture's host port so
+# concurrent project runs do not contend. The services are trivial:
+# stargate-dp re-arms a busybox nc listener on 8881 (enough for init's probe);
 # the other two just stay running. The regression test sets
 # STARGATE_COMPOSE_FILE to this file + STARGATE_PROJECT to a disposable
 # name, runs init, then asserts the post-conditions on the volumes.
@@ -26,13 +27,12 @@
 x-alpine: &alpine "alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc"
 
 services:
-  # Mirrors the real stargate-dp: publishes 127.0.0.1:8881 and listens so
-  # init's verify_tor (TCP connect to 127.0.0.1:8881) succeeds.
+  # Publishes a Docker-assigned loopback port for init's fixture-only probe.
   stargate-dp:
     image: *alpine
     command: ["sh", "-c", "while true; do nc -l -p 8881 </dev/null >/dev/null 2>&1 || sleep 0.2; done"]
     ports:
-      - "127.0.0.1:8881:8881/tcp"
+      - "127.0.0.1::8881/tcp"
     volumes:
       - stargate-ipc:/run/stargate
       - stargate-keys:/etc/stargate/keys:ro

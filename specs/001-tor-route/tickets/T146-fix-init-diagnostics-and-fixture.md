@@ -1,9 +1,9 @@
 ---
 id: "T146"
 title: "Correct init timeout diagnosis and isolate its fixture"
-status: "pending"
+status: in-review
 created: "2026-09-12"
-last_updated: "2026-09-12"
+last_updated: 2026-09-25
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
@@ -57,3 +57,17 @@ regression before the fix; tests_first is empty because the named regression
 is authored within this ticket rather than a separate test ticket. For design
 work, no production implementation is authorized until its stated decision
 boundary is satisfied. Preserve approved historical commits.
+
+Constitution VII smoke-test scope: `init_probe_test.sh` injects a timed-out
+loopback connect and checks only the operator message and exit 50. The Docker
+fixture tests exercise assigned loopback ports, simultaneous projects, and an
+injected failure after provisioning; they do not identify a host VPN or
+firewall cause, validate Tor bootstrap, or prove production bind safety.
+The forced failure reproduced a leak of two project-labelled observer volumes
+that the fixture did not mount; cleanup now removes those owned volumes after
+Compose teardown and leaves a foreign-labelled volume intact.
+The failing and passing Docker outputs, with their source states, are retained
+in `specs/001-tor-route/evidence/T146-fixture-cleanup.md`. The INT and TERM
+traps contain only `exit 130` and `exit 143`; Bash then runs the same EXIT
+trap and `cleanup()` body exercised by the forced-failure probe. The probe
+does not separately deliver signals.
