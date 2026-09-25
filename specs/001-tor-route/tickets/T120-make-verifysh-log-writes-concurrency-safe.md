@@ -1,16 +1,17 @@
 ---
 id: T120
 title: 'Make `verify.sh` log writes concurrency-safe for parallel ticket runs'
-status: pending
+status: in-review
 created: 2026-09-07
-last_updated: "2026-09-12"
+last_updated: 2026-09-25
 source: T063 run, 2026-09-07 — two sessions ran verify.sh concurrently (T062/T063 parallel by user instruction) and interleaved target/verify.log; 2 false socks5 FAILs burned a driver cycle
 phase: "6: Polish & Cross-Cutting Concerns"
 story: ''
 blocked_by: ["T139", "T156"]
 parallel: false
-files_budget: 4   # raw-diff-path counting (T116 convention): verify.sh and/or
-                  # run-task.sh + workflow.md doc line + this ticket + STATUS regen
+files_budget: 5   # raw-diff-path counting (T116 convention): verify.sh,
+                  # run-task.sh (including doc line), regression test, ticket,
+                  # and STATUS regen; fifth file approved in T120 round-2 run
 privacy_critical: false
 complexity: low
 risk: low
@@ -128,3 +129,26 @@ convention. Origin: T063's round-1 review cycle was polluted by the
 collision described in §Context (the 2 socks5 FAILs cost a re-verify and
 a re-invocation before the solo-green re-run isolated them); the T062/T063
 parallel run is also the evidence base for §Analysis's doc-line item.
+
+Implementation probe (2026-09-25): a harness assembled from `verify.sh`'s
+own setup and summary blocks ran two fixture gates against the default log.
+Before the fix, both exited 0 but the shared log contained two interleaved
+fixture starts and two `RESULT: GREEN` lines. After the lock, both exited 0,
+each stdout had one `RESULT: GREEN`, and the shared log had one fixture start
+and one `RESULT: GREEN`. The full collision probe started two simultaneous
+`bash scripts/verify.sh` invocations on the same tree: exits `a=0`, `b=0`;
+each stdout ended `RESULT: GREEN — nothing failed (2 gate(s) skipped).`;
+the final shared log contained exactly one header and one identical RESULT.
+The second invocation queued for the first full gate run. This serialization
+cost is accepted for the current two-session ceiling.
+
+Driver attribution probe (2026-09-25): after the full collision, the driver
+completed its own GREEN recheck in `target/runs/T120.verify.log`. A foreign
+`RESULT: RED` was then written to the shared `target/verify.log`; the
+in-review handoff still reported the ticket-local GREEN. The retained
+`verify_concurrency_test.sh` checks this with opposing fixture results and
+also refuses to advance on an own RED despite a foreign GREEN. Run against
+pre-fix sources, it failed for both the missing lock and the default-log
+report reader; it passes with this implementation, including when the outer
+driver exports `STARGATE_VERIFY_LOG` (the sandbox fixtures clear that inherited
+override to exercise the default-log lock).

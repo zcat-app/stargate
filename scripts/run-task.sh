@@ -42,6 +42,10 @@
 # The script NEVER pushes. The script NEVER spawns a developer-subagent
 # (there is no portable way to do that from shell; the caller does it).
 # Status transitions happen ONLY here.
+# Parallel sessions in one worktree can hit a recoverable dirty-tree refusal
+# at pending -> in-progress. Default verify runs queue on verify.log.lock;
+# driver rechecks join that queue with a ticket-local log so another ticket's
+# RESULT cannot become this ticket's review evidence (T120).
 #
 # Branch model (T096 / sol-review M6): direct commits on the feature
 # integration branch ($FEATURE_BRANCH, from .specify/feature.json). The
@@ -158,6 +162,7 @@ ROUND_CAP="$(extract_fm round_cap)"
 # --- round state file -------------------------------------------------------
 RUN_DIR="target/runs"
 mkdir -p "$RUN_DIR"
+VERIFY_LOG="$RUN_DIR/$TICKET_ID.verify.log"
 REVIEW_MATRIX="scripts/review-matrix.json"
 [ -f "$REVIEW_MATRIX" ] || { echo "run-task: missing $REVIEW_MATRIX" >&2; exit 1; }
 ROUND_FILE="$RUN_DIR/$TICKET_ID.round"
@@ -563,9 +568,8 @@ EOF
 
   in-progress)
     # Phase: IMPLEMENT → VERIFY.
-    # If verify.sh is already green (target/verify.log fresh since last
-    # edit) we transition to in-review. Otherwise we emit an implement
-    # handoff and ask the caller to write code + run verify.sh.
+    # Emit an implement handoff. The caller verifies first, then the driver
+    # runs its own gate before transitioning to in-review.
     cat <<EOF | emit_prompt IMPLEMENT
 Implement $TICKET_ID (workflow.md §"The flow" steps 2–3):
 
@@ -600,7 +604,7 @@ EOF
 
     # Also run verify.sh directly as the safety re-check (workflow.md step 3).
     echo "run-task: re-running scripts/verify.sh as the pre-review gate…"
-    if bash scripts/verify.sh >> target/verify.log 2>&1; then
+    if STARGATE_VERIFY_LOG="$VERIFY_LOG" flock -x target/verify.log.lock bash scripts/verify.sh > /dev/null 2>&1; then
       check_inventory || exit 1
       echo "run-task: GREEN. Transitioning $TICKET_ID to in-review."
       update_ticket_status "in-review"
@@ -644,8 +648,8 @@ COUNT
       if [ -n "$FILES_TOUCHED" ] && [ -n "$BUDGET" ] && [ "$FILES_TOUCHED" -gt "$BUDGET" ]; then
         BUDGET_VERDICT="OVER BUDGET (bright-line: STOP)"
       fi
-      VERIFY_FRESH="$( (stat -c '%y' target/verify.log 2>/dev/null | cut -d. -f1) || true)"
-      VERIFY_RESULT="$( (grep '^RESULT:' target/verify.log 2>/dev/null | tail -1) || true)"
+      VERIFY_FRESH="$( (stat -c '%y' "$VERIFY_LOG" 2>/dev/null | cut -d. -f1) || true)"
+      VERIFY_RESULT="$( (grep '^RESULT:' "$VERIFY_LOG" 2>/dev/null | tail -1) || true)"
       OOS_BLOCK="$( (sed -n '/^## Out-of-scope/,/^## /p' "$TICKET_PATH" | sed '1d;$d' | sed '/^$/d' | head -12) || true)"
       PRIOR_BLOCK=""
       if [ "$ROUND" -ge 2 ] && [ -f "$RUN_DIR/$TICKET_ID-r$((ROUND-1)).verdict" ]; then
@@ -655,7 +659,7 @@ printf '%s\n' "--- end of prior verdict — you MUST run the round-disposition p
       REPORT_BLOCK="diff base:     $BASE_SHA   (git diff <base> is the review scope)
 diffstat:      ${STAT_LINE:-unknown}
 files touched: ${FILES_TOUCHED:-unknown} of files_budget=${BUDGET:-?} → $BUDGET_VERDICT
-verify.log:    last written ${VERIFY_FRESH:-unknown} — ${VERIFY_RESULT:-no RESULT line yet}
+verify log:    $VERIFY_LOG last written ${VERIFY_FRESH:-unknown} — ${VERIFY_RESULT:-no RESULT line yet}
 out-of-scope (ticket §Out-of-scope, abridged):
 $(printf '%s' "$OOS_BLOCK" | sed 's/^/  /')"
       [ -n "$PRIOR_BLOCK" ] && REPORT_BLOCK="$REPORT_BLOCK
@@ -752,7 +756,7 @@ EOF
       # commit with the required Reviewed-by trailers exists. The driver
       # creates the commit itself so the invariant holds by construction.
       echo "run-task: APPROVE received. Re-running verify.sh as the freshness gate…"
-      if ! bash scripts/verify.sh >> target/verify.log 2>&1; then
+      if ! STARGATE_VERIFY_LOG="$VERIFY_LOG" flock -x target/verify.log.lock bash scripts/verify.sh > /dev/null 2>&1; then
         echo "run-task: verify.sh NOT GREEN at APPROVE. Tree changed post-review. Re-implement." >&2
         invalidate_reviews
         exit 1

@@ -18,8 +18,8 @@
 # exists is actually broken.
 #
 # Exit status: 0 if every gate is PASS or SKIP; 1 if any gate FAILs.
-# Full command output is appended to target/verify.log (a fixed path the
-# review/commit steps can read; see .specify/memory/review-loop.md);
+# Full command output is written to target/verify.log. Concurrent default-log
+# runs queue on target/verify.log.lock so the log always holds one complete run.
 # STARGATE_VERIFY_LOG redirects it (the T108 contract probe sets it so a
 # nested verify run cannot clobber the outer run's log).
 #
@@ -57,6 +57,12 @@ export PATH
 
 mkdir -p target
 LOG="${STARGATE_VERIFY_LOG:-target/verify.log}"
+if [ "$LOG" = target/verify.log ]; then
+  # Hold the lock through the RESULT line and exit; truncation before the
+  # lock would still let a queued run erase an active run's output (T120).
+  exec 9> target/verify.log.lock || exit 1
+  flock -x 9 || exit 1
+fi
 : > "$LOG"
 
 # --- result tracking ------------------------------------------------------
