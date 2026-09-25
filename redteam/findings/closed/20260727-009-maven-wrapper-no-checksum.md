@@ -1,17 +1,25 @@
 ---
 id: 20260727-009-maven-wrapper-no-checksum
-status: open
+status: closed
 severity: major
 principle: [IV, VI]
 threat-model: n/a — build-integrity surface
 location: control-plane/.mvn/wrapper/maven-wrapper.properties
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
+fix-commit: f2ac787 (distribution pin and download verification); T145 focused commit (presence gate and regression)
 decision-ref: null
+closed-date: 2026-09-25
+closed-by: T145 local archive fixture verifies matching and changed bytes, and absent checksums with cold and cached distributions
 ---
 
 # Maven wrapper downloads the Maven distribution with no checksum pin
+
+The description below records the original finding. T098 added the
+`distributionSha256Sum` pin and retained the wrapper's archive check in
+`f2ac787`. T145 adds the missing-key gate and local positive/negative fixture.
+`wrapperSha256Sum` is not used by the checked-in only-script wrapper, so the
+original suggestion to add that property was not adopted.
 
 ## What the code does
 

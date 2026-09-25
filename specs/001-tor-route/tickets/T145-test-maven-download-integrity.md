@@ -1,9 +1,9 @@
 ---
 id: "T145"
 title: "Test Maven wrapper checksum enforcement"
-status: "pending"
+status: in-review
 created: "2026-09-12"
-last_updated: "2026-09-12"
+last_updated: 2026-09-25
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
@@ -57,3 +57,14 @@ regression before the fix; tests_first is empty because the named regression
 is authored within this ticket rather than a separate test ticket. For design
 work, no production implementation is authorized until its stated decision
 boundary is satisfied. Preserve approved historical commits.
+
+## Integrity scope (Constitution IV/VI)
+
+T098 (`f2ac787`) supplied the Maven distribution SHA-256 pin and the
+download-time comparison before extraction. T145's local fixture runs the
+checked-in only-script wrapper with matching and changed archive bytes, and
+tests absent or empty checksums with cold and populated caches. The Windows
+entry point now also refuses a missing checksum before its cached-Maven path;
+the fixture checks that ordering, while the local runner executes the Unix
+script. These checks cover the Maven bootstrap input. JVM artifact byte
+reproducibility remains the separate Constitution VI build gate.
