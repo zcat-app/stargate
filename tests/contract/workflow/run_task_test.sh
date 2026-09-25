@@ -26,6 +26,7 @@ RUN_TASK_SRC="$REPO_ROOT/scripts/run-task.sh"
 LINT_SRC="$REPO_ROOT/scripts/lint-ticket.py"
 DERIVE_DEPS_SRC="$REPO_ROOT/scripts/derive-deps.sh"
 REVIEW_MATRIX_SRC="$REPO_ROOT/scripts/review-matrix.json"
+EVIDENCE_SRC="$REPO_ROOT/scripts/test-first-evidence.py"
 [ -f "$RUN_TASK_SRC" ]     || { echo "FAIL: $RUN_TASK_SRC missing" >&2; exit 1; }
 [ -f "$LINT_SRC" ]        || { echo "FAIL: $LINT_SRC missing" >&2;     exit 1; }
 [ -f "$DERIVE_DEPS_SRC" ] || { echo "FAIL: $DERIVE_DEPS_SRC missing" >&2; exit 1; }
@@ -58,6 +59,7 @@ setup_sandbox() {
   cp "$RUN_TASK_SRC" scripts/run-task.sh
   cp "$LINT_SRC"    scripts/lint-ticket.py
   cp "$REVIEW_MATRIX_SRC" scripts/review-matrix.json
+  if [ -f "$EVIDENCE_SRC" ]; then cp "$EVIDENCE_SRC" scripts/test-first-evidence.py; fi
   chmod +x scripts/run-task.sh
 
   # verify.sh stub: writes target/verify.log, exits 0 (green). Behaviour under
@@ -107,6 +109,7 @@ blocked_by: $bb
 parallel: false
 files_budget: 8
 privacy_critical: $priv
+test_for: $([ "$priv" = true ] && echo '[T999]' || echo '[]')
 complexity: low
 risk: low
 round_cap: 2
@@ -686,6 +689,99 @@ rmdir target/runs/T325.review.lock
 run_task T325
 assert '[ "$rt_rc" -eq 0 ]' "S12: approval is consumable after the launch finishes (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T325-fixture.md status)" = done ]' "S12: done after lock release"
+
+# T144: implementation work requires durable red/green evidence tied to the
+# task baseline and staged source. A declared test-only ticket stays runnable.
+setup_sandbox s144
+write_ticket T344 "privacy implementation evidence" true in-progress >/dev/null
+sed -i 's/^test_for: \[T999\]$/test_for: []/' specs/001-testfeat/tickets/T344-fixture.md
+sed -i 's/^blocked_by: \[\]$/blocked_by: [T343]/' specs/001-testfeat/tickets/T344-fixture.md
+sed -i '/^test_for: \[\]$/a tests_first: [T343]' specs/001-testfeat/tickets/T344-fixture.md
+commit_all "add T344 ticket"
+git checkout -q -b 001-testfeat main
+mkdir -p target/runs
+git rev-parse HEAD > target/runs/T344.start-sha
+printf 'failing test\n' > property_test.txt
+python3 -c 'from pathlib import Path; Path("latin1_test.txt").write_bytes(b"\xe9")'
+git add property_test.txt latin1_test.txt
+probe='from pathlib import Path; text = Path("property_impl.txt").read_text() if Path("property_impl.txt").exists() else ""; present = "fixed" in text; print("property holds" if present else "property absent"); raise SystemExit(0 if present else 1)'
+python3 scripts/test-first-evidence.py red T344 -- python3 -c "$probe" >/dev/null 2>&1
+red_rc=$?
+assert '[ "$red_rc" -eq 0 ]' "T144: red capture succeeds for a failing property probe"
+printf 'broken implementation\n' > property_impl.txt
+git add property_impl.txt
+printf 'fixed implementation\n' > property_impl.txt
+green_mismatch="$(python3 scripts/test-first-evidence.py green T344 -- python3 -c "$probe" 2>&1)"; mismatch_rc=$?
+assert '[ "$mismatch_rc" -ne 0 ]' "T144: unstaged passing fix cannot validate staged broken source"
+[[ "$green_mismatch" = *'staged source differs from working source'* ]] || bail "T144: reject must identify staged source divergence"
+git add property_impl.txt
+python3 scripts/test-first-evidence.py green T344 -- python3 -c 'print("unrelated passing probe")' >/dev/null 2>&1
+bad_green_rc=$?
+assert '[ "$bad_green_rc" -ne 0 ]' "T144: green cannot substitute a different probe"
+python3 scripts/test-first-evidence.py green T344 -- python3 -c "$probe" >/dev/null 2>&1
+green_rc=$?
+assert '[ "$green_rc" -eq 0 ]' "T144: green capture succeeds"
+git add specs/001-testfeat/evidence/T344-tests-first.json
+printf 'unstaged change\n' >> property_impl.txt
+touch target/runs/T344.verified
+run_task T344
+assert '[ "$rt_rc" -ne 0 ]' "T144: edit after green cannot advance with staged/worktree divergence"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T344-fixture.md status)" = in-progress ]' "T144: diverged source retains implementation state"
+git checkout -- property_impl.txt
+python3 scripts/test-first-evidence.py check T344 >/dev/null 2>&1
+restored_rc=$?
+assert '[ "$restored_rc" -eq 0 ]' "T144: restored staged and working source validates"
+touch target/runs/T344.verified
+run_task T344
+assert '[ "$rt_rc" -eq 0 ]' "T144: matched evidence permits in-review"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T344-fixture.md status)" = in-review ]' "T144: status advances with matched evidence"
+printf 'changed implementation\n' >> property_impl.txt
+git add property_impl.txt
+run_task T344
+assert '[ "$rt_rc" -ne 0 ]' "T144: candidate mismatch blocks review"
+[[ "$rt_out" = *'implemented source snapshot mismatch'* ]] || bail "T144: candidate mismatch must reach digest guard"
+printf 'fixed implementation\n' > property_impl.txt
+git add property_impl.txt
+python3 - <<'PY'
+import json
+from pathlib import Path
+p = Path('specs/001-testfeat/evidence/T344-tests-first.json')
+record = json.loads(p.read_text())
+record['baseline'] = '0' * 40
+p.write_text(json.dumps(record, indent=2) + '\n')
+PY
+git add specs/001-testfeat/evidence/T344-tests-first.json
+run_task T344
+assert '[ "$rt_rc" -ne 0 ]' "T144: baseline mismatch blocks review"
+[[ "$rt_out" = *'evidence identity or baseline mismatch'* ]] || bail "T144: baseline mismatch must reach identity guard"
+
+setup_sandbox s144missing
+write_ticket T345 "missing privacy evidence" true in-progress >/dev/null
+sed -i 's/^test_for: \[T999\]$/test_for: []/' specs/001-testfeat/tickets/T345-fixture.md
+commit_all "add T345 ticket"
+git checkout -q -b 001-testfeat main
+printf 'implementation\n' > impl.txt
+git add impl.txt
+mkdir -p target/runs
+git rev-parse HEAD > target/runs/T345.start-sha
+touch target/runs/T345.verified
+run_task T345
+assert '[ "$rt_rc" -ne 0 ]' "T144: missing evidence blocks transition"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T345-fixture.md status)" = in-progress ]' "T144: missing evidence retains status"
+
+setup_sandbox s144testonly
+write_ticket T346 "separate privacy test ticket" true in-progress >/dev/null
+commit_all "add T346 ticket"
+git checkout -q -b 001-testfeat main
+mkdir -p tests
+printf 'separately deliverable test\n' > tests/separate_test.txt
+git add tests/separate_test.txt
+mkdir -p target/runs
+git rev-parse HEAD > target/runs/T346.start-sha
+touch target/runs/T346.verified
+run_task T346
+assert '[ "$rt_rc" -eq 0 ]' "T144: declared test_for ticket advances without implementation evidence"
+assert '[ "$(fm_field specs/001-testfeat/tickets/T346-fixture.md status)" = in-review ]' "T144: test-only status advances"
 
 # --- report ----------------------------------------------------------------
 if [ "${#errs[@]}" -gt 0 ]; then

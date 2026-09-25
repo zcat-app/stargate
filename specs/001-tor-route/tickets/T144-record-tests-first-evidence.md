@@ -1,9 +1,9 @@
 ---
 id: "T144"
 title: "Preserve privacy-test ordering evidence honestly"
-status: "pending"
+status: in-review
 created: "2026-09-12"
-last_updated: "2026-09-12"
+last_updated: 2026-09-24
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
@@ -57,3 +57,20 @@ regression before the fix; tests_first is empty because the named regression
 is authored within this ticket rather than a separate test ticket. For design
 work, no production implementation is authorized until its stated decision
 boundary is satisfied. Preserve approved historical commits.
+
+## Historical evidence audit
+
+The original T001–T009 implementation commits, including T002a and T003a,
+have no retained in-ticket failing probe result or pre-fix snapshot in the
+current repository. Their ticket files mostly contain bootstrap acceptance
+placeholders. The audit in `reviews/redteam-20260912-677960b.md` also found
+no original `Reviewed-by` trailers or retained local verdicts for those
+commits. This is an evidence gap: commit membership and missing records do
+not prove that tests or reviews did not occur, and this ticket does not grant
+retrospective approval. Current behavior remains subject to the normal gates.
+
+T094 is a different history. The parent was decomposed at `cba3cfd` into
+T094a and T094b. Their implementation commits `aaca22d` and `68989ac` have
+review trailers. The parent's empty review field does not identify an extra
+unreviewed implementation, nor do the child reviews establish historical
+red-before-green ordering. Later boundary findings remain separately tracked.

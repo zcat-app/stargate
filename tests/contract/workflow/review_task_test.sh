@@ -70,6 +70,7 @@ mkdir -p "$ACTUAL/scripts" "$ACTUAL/.specify" "$ACTUAL/.claude/agents" \
 cp "$RUNNER" "$ACTUAL/scripts/review-task.sh"
 cp "$MATRIX" "$ACTUAL/scripts/review-matrix.json"
 cp "$REPO_ROOT/scripts/run-task.sh" "$ACTUAL/scripts/run-task.sh"
+cp "$REPO_ROOT/scripts/test-first-evidence.py" "$ACTUAL/scripts/test-first-evidence.py"
 cp "$REPO_ROOT/.claude/agents/stargate-review.md" "$ACTUAL/.claude/agents/"
 printf '#!/usr/bin/env bash\nmkdir -p target\necho "RESULT: GREEN" > target/verify.log\n' > "$ACTUAL/scripts/verify.sh"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$ACTUAL/scripts/regen-status.sh"
@@ -82,6 +83,7 @@ id: T900
 title: isolated fixture
 status: in-review
 privacy_critical: true
+test_for: [T901]
 files_budget: 8
 round_cap: 2
 reviews: {}

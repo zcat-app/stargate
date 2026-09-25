@@ -142,13 +142,14 @@ class Coverage(unittest.TestCase):
 
     def driver(self, privacy=True, budget=8):
         self.copy('scripts/run-task.sh')
+        self.copy('scripts/test-first-evidence.py')
         self.copy('scripts/review-matrix.json')
         self.write('scripts/verify.sh', '#!/bin/bash\necho "RESULT: GREEN"\n')
         self.write('scripts/regen-status.sh', '#!/bin/bash\nexit 0\n')
         self.write('.specify/feature.json', '{"feature_directory":"specs/001-fixture"}\n')
         self.ticket = 'specs/001-fixture/tickets/T999-fixture.md'
         self.write(self.ticket, f'---\nid: T999\ntitle: fixture\nstatus: in-review\n'
-                   f'privacy_critical: {str(privacy).lower()}\nfiles_budget: {budget}\n'
+                   f'privacy_critical: {str(privacy).lower()}\ntest_for: [T998]\nfiles_budget: {budget}\n'
                    'round_cap: 2\nreviews: {}\n---\n## Context\nFixture.\n')
         self.write('tracked.txt', 'before\n')
         self.commit()

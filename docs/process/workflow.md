@@ -125,7 +125,22 @@ feature branch squash-merges to `main` at milestone close.**
    IS the developer (never a developer-subagent). Surgical changes only,
    within `files_budget`. For `privacy_critical: true` tasks: **tests first**
    (Constitution Principle VII, no AI exception) — the test must exist and be
-   failing before the implementation lands.
+   failing before the implementation lands. For a new behavior or fix, stage
+   the spec-derived test and run `python3 scripts/test-first-evidence.py red
+   TNNN -- <test command>` before implementation. After the fix, stage source
+   and rerun the identical probe command through the tool with `green`. Stage its
+   `specs/<feature>/evidence/TNNN-tests-first.json` record explicitly. The
+   driver checks that the record names the task baseline and the current
+   implemented source snapshot before review and again before commit. A
+   ticket with `test_for` is separately deliverable test-only work; its later
+   implementation ticket carries the red/green record. `tests_first` remains
+   a directed dependency, not a substitute for the implementation record.
+   The reviewer checks that the recorded red output demonstrates the named
+   property rather than missing tooling, and that the pre-fix patch contains
+   the intended test. For a `test_for` ticket that skips the record, the
+   reviewer checks that the diff contains only test work; an implementation
+   change under that label is REWORK. Do not put secrets in probe output or
+   the staged record.
 4. **Verify** (run-task runs this directly before transition to in-review) —
    `scripts/verify.sh` from repo root. **The single green gate.** Fix the
    code, never the test, unless the ticket's §Out-of-scope authorized that
@@ -249,6 +264,14 @@ Findings on `done` tickets become **new remediation tickets** with
 Use the strictest applicable test category, including privacy-sensitive Docker/scripts.
 Preserve the spec-derived falsifier, failing command/result and pre-fix snapshot, then the
 passing result and implemented snapshot. Tooling failure alone is not the intended red result.
+The durable per-ticket JSON under `specs/<feature>/evidence/` records the task baseline,
+pre-fix diff and probe result, and the staged implementation digest and passing result
+from the identical probe command. Capture and review reject source differences between
+the index and working tree, because Git commits the index while the probe runs against
+working files.
+`run-task.sh` rejects a missing record or mismatched baseline/source for privacy-critical
+implementation work. The hashes bind records to source; they do not establish that a
+recorded probe tested the right property. Independent review must make that judgment.
 Required unavailable/live checks remain pending; a successful verify with SKIPs is not proof
 of their properties. Every review records actual reviewer/tool identity, scope, candidate hash,
 coverage and limitations. No unsupported model/expertise claims or fabricated historical evidence.

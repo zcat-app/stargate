@@ -466,6 +466,17 @@ INVENTORY
   fi
 }
 
+# Principle VII: only privacy-critical implementation tickets need a new
+# red/green record. A declared test_for ticket is independently deliverable
+# test work; its implementation ticket carries the later failing probe.
+check_test_first_evidence() {
+  [ "$PRIVACY" = true ] || return 0
+  local test_for
+  test_for="$(extract_fm test_for)"
+  if [ -n "$test_for" ] && [ "$test_for" != '[]' ]; then return 0; fi
+  python3 scripts/test-first-evidence.py check "$TICKET_ID"
+}
+
 # --- dispatch on status -----------------------------------------------------
 case "$STATUS" in
 
@@ -564,6 +575,10 @@ Implement $TICKET_ID (workflow.md §"The flow" steps 2–3):
    failing before the implementation lands.
 3. Surgical changes only, within files_budget=$(extract_fm files_budget).
    Stay outside out_of_scope.
+   Privacy-critical implementation: after the spec-derived test fails, run
+   \`python3 scripts/test-first-evidence.py red $TICKET_ID -- <test command>\`.
+   After the fix passes, run the same tool with \`green\` before staging its
+   evidence JSON. Inspect the recorded output for secrets before staging.
 4. When the diff is ready, run from repo root:
    bash scripts/verify.sh
 5. Verify must be GREEN. Fix the code, never the test, unless the ticket's
@@ -581,6 +596,7 @@ EOF
     fi
     rm -f "target/runs/$TICKET_ID.verified"
     check_inventory || exit 1
+    check_test_first_evidence || exit 1
 
     # Also run verify.sh directly as the safety re-check (workflow.md step 3).
     echo "run-task: re-running scripts/verify.sh as the pre-review gate…"
@@ -598,6 +614,7 @@ EOF
 
   in-review)
     check_inventory || exit 1
+    check_test_first_evidence || exit 1
     # Phase: emit the single-gate REVIEW handoff OR act on the manifest-complete
     # reviewer set. One pass covers correctness AND adversarial security review.
     if [ ! -f "$REVIEW_SET" ]; then
@@ -741,6 +758,7 @@ EOF
         exit 1
       fi
       check_inventory || exit 1
+      check_test_first_evidence || exit 1
       if [ "$(review_snapshot)" != "$(cat "$REVIEW_SNAPSHOT")" ]; then
         invalidate_reviews
         exit 1
