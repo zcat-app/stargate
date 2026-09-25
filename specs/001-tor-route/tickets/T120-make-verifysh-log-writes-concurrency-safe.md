@@ -1,7 +1,7 @@
 ---
 id: T120
 title: 'Make `verify.sh` log writes concurrency-safe for parallel ticket runs'
-status: in-review
+status: done
 created: 2026-09-07
 last_updated: 2026-09-25
 source: T063 run, 2026-09-07 — two sessions ran verify.sh concurrently (T062/T063 parallel by user instruction) and interleaved target/verify.log; 2 false socks5 FAILs burned a driver cycle
@@ -34,7 +34,7 @@ decision_refs:
     go:tests/contract/socks5 pass=53 fail=2; a solo re-run immediately
     after recorded pass=55 fail=0 — the failures were collision artifacts,
     not tree state"
-reviews: {}
+reviews: { round: 2, date: 2026-09-25, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
