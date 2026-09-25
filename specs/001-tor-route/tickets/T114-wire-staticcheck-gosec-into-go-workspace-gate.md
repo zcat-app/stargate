@@ -1,7 +1,7 @@
 ---
 id: T114
 title: 'Wire staticcheck + gosec into the Go workspace gate (data-plane TCB)'
-status: in-progress
+status: done
 created: 2026-09-03
 last_updated: 2026-09-25
 source: hand-authored   # Raised by T043's round-1 codereview
@@ -69,7 +69,7 @@ decision_refs:
      (the gate this ticket extends; its discover-don't-enumerate and
      verdict-rules contract must be preserved)"
 
-reviews: {}
+reviews: { round: 2, date: 2026-09-25, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

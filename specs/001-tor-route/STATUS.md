@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 34 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 168 |
+| done | 169 |
 | deferred | 5 |
 | **total** | **208** |
 
@@ -39,9 +39,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T114 | Wire staticcheck + gosec into the Go workspace gate (data-pl | in-progress |  | 2: Foundational (Blocking Prerequisites) |
+_(nothing in flight)_
 
 ---
 
@@ -59,7 +57,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_168 ticket(s) done._
+_169 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -178,6 +176,7 @@ _168 ticket(s) done._
 - T107 — Digest-pin alpine:3.20 in stargate-cli contract tests
 - T108 — verify.sh must record repro-test SKIP as SKIP, not PASS
 - T113 — Drop the inert PostConstruct token from ExcludedFieldAnnotations
+- T114 — Wire staticcheck + gosec into the Go workspace gate (data-plane TCB)
 - T115 — Fix the wire gate's comment-sensitive impl-detection probe
 - T116 — Fix ForbiddenDetailRejected journal-read race (poll the marker)
 - T118 — Clear the bearer-token field after a successful save
