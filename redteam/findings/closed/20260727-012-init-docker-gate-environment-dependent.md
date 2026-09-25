@@ -1,17 +1,38 @@
 ---
 id: 20260727-012-init-docker-gate-environment-dependent
-status: open
+status: closed
 severity: minor
 principle: [V]
 threat-model: n/a — operator-diagnosis / harness robustness
 location: scripts/subcommands/init (preflight) + tests/contract/stargate-cli/fixtures/fixture-compose.yml:26-28
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
+fix-commit: 7d4016a
 decision-ref: null
+closed-date: 2026-09-25
+closed-by: T146 reports only the observed timeout, gives the operator both
+  data-plane and host Docker-publishing paths to inspect, assigns fixture
+  loopback ports through Docker, and proves owned-only cleanup after an
+  injected failure. The historical missing-trap allegation was refuted;
+  the reproduced leak was two unmounted project-labelled volumes.
 ---
 
 # `init` misattributes a blocked Docker publish path to a dead data plane
+
+## Closure — 2026-09-25
+
+T146 took the suggested diagnosis-softening option. A timed-out TCP connect
+now reports only that route readiness was not observed; it does not assert
+that the container, VPN, firewall, or Docker publishing caused the failure.
+The fixture uses Docker-assigned loopback host ports, so two projects can run
+together while production still binds its specified `127.0.0.1:8881` listener.
+The existing EXIT/INT/TERM cleanup path now also removes project-labelled
+volumes that the fixture leaves unmounted. The injected-failure test checks
+that owned resources are gone and a foreign project volume remains; the
+retrospective pre-fix reproduction is recorded in
+`specs/001-tor-route/evidence/T146-fixture-cleanup.md`. The older sections
+below remain as the historical finding and suggestions, not current code
+behavior.
 
 > **Severity corrected 2026-07-28 from major to minor, and the mechanism rewritten.**
 > The original text blamed the fixture's busybox `nc` listener and "Docker 29.6.2".

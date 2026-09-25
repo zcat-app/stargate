@@ -15,9 +15,9 @@
 |---|---|
 | pending | 36 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 166 |
+| done | 167 |
 | deferred | 5 |
 | **total** | **208** |
 
@@ -41,9 +41,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T146 | Correct init timeout diagnosis and isolate its fixture | in-review |  | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -61,7 +59,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_166 ticket(s) done._
+_167 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -202,6 +200,7 @@ _166 ticket(s) done._
 - T143 — Retire obsolete Java token-verifier constants
 - T144 — Preserve privacy-test ordering evidence honestly
 - T145 — Test Maven wrapper checksum enforcement
+- T146 — Correct init timeout diagnosis and isolate its fixture
 - T147 — Resolve HTTP CONNECT first-party isolation
 - T148 — Reconcile peer certificate validity policy
 - T149 — Finalize byte accounting after both forwarding pumps
