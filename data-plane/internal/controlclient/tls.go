@@ -106,7 +106,7 @@ func deriveCertAt(key crypto.Signer, id Identity, now time.Time) (tls.Certificat
 // treats an error as a degraded-mode warning and keeps routing (§2.2 DP
 // behaviour); the error names the path, never key bytes (Principle III).
 func LoadPrivateKey(path string) (crypto.Signer, error) {
-	pemBytes, err := os.ReadFile(path)
+	pemBytes, err := os.ReadFile(path) // #nosec G304 -- configured private-key path, never client input
 	if err != nil {
 		return nil, fmt.Errorf("tls: reading private key: %w", err)
 	}
@@ -132,7 +132,7 @@ func LoadPrivateKey(path string) (crypto.Signer, error) {
 // the property that makes §6.2 key rotation live without a peer restart);
 // callers must not cache its result.
 func LoadPeerPublicKey(path string) (ed25519.PublicKey, error) {
-	pemBytes, err := os.ReadFile(path)
+	pemBytes, err := os.ReadFile(path) // #nosec G304 -- configured peer-key path, never client input
 	if err != nil {
 		return nil, fmt.Errorf("tls: reading peer pin %s: %w", path, err)
 	}
@@ -238,7 +238,7 @@ func ClientTLSConfig(cert tls.Certificate, peerPubPath string) *tls.Config {
 		// InsecureSkipVerify=true disables normal CA-chain + hostname
 		// verification but STILL invokes VerifyConnection on full and
 		// resumed handshakes. Never unset, never ship without the pin hook.
-		InsecureSkipVerify: true, //nolint:gosec // pinned peer public key IS the verifier (wire-auth.md §4)
+		InsecureSkipVerify: true, // #nosec G402 -- VerifyConnection pins the peer key on full and resumed handshakes (wire-auth.md §4)
 		VerifyConnection:   PeerPinConnectionVerifier(peerPubPath),
 		MinVersion:         tls.VersionTLS13,
 		// T130: gRPC over TLS requires ALPN h2 (wire-auth.md §4 as

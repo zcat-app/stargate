@@ -39,11 +39,6 @@ const (
 	headerCacheControl = "Cache-Control: no-store\r\n"
 )
 
-// refIDLen is the §"Response body" LOCAL_REFERENCE_ID: 16 lowercase hex
-// chars from a 64-bit crypto/rand draw — never derived from request
-// data (not the token, destination, timestamp, or source port).
-const refIDLen = 16
-
 // WriteFailure renders code's response onto w. AUTH_REQUIRED is the
 // T048 scope; a route code writes nothing and returns an error —
 // T071 owns their atomic tests-first implementation; T173 preserves this boundary.
@@ -52,6 +47,8 @@ func (r *Renderer) WriteFailure(w io.Writer, code ErrorCode) error {
 		return fmt.Errorf("errortpl: code %q has no renderer yet (T071)", code)
 	}
 
+	// The §"Response body" LOCAL_REFERENCE_ID is 16 lowercase hex chars
+	// from this 64-bit draw, never from request data (Principle III).
 	var refID [8]byte
 	if _, err := rand.Read(refID[:]); err != nil {
 		return fmt.Errorf("errortpl: generating LOCAL_REFERENCE_ID: %w", err)

@@ -49,12 +49,14 @@ a stable `pass=N fail=N skip=N` suffix makes the inventory machine-auditable.
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 # Build tags used for cadence separation. A *_test.go carrying any of these
 # in a `//go:build` line is non-hermetic and excluded from the default run.
@@ -259,6 +261,7 @@ def main() -> int:
     failed = 0
     skipped = 0
     passed = 0
+    tool_dir = None
 
     for mod in modules:
         mod_abs = os.path.join(repo_root, mod)
@@ -352,6 +355,54 @@ def main() -> int:
         else:
             say(f"  PASS  go-vet:{mod}")
 
+        # T114: build pinned tools in an isolated module so their transitive
+        # dependencies cannot upgrade data-plane runtime dependencies.
+        # Scan the production TCB; a build error or finding fails like vet.
+        if mod == "data-plane":
+            if tool_dir is None:
+                os.makedirs(os.path.join(repo_root, "target"), exist_ok=True)
+                tool_dir = tempfile.mkdtemp(prefix="go-tools-",
+                                            dir=os.path.join(repo_root, "target"))
+                atexit.register(shutil.rmtree, tool_dir, ignore_errors=True)
+            tool_env = dict(env, GOWORK="off")
+            for name, package, args in (
+                ("staticcheck", "honnef.co/go/tools/cmd/staticcheck", ["./..."]),
+                ("gosec", "github.com/securego/gosec/v2/cmd/gosec",
+                 ["-quiet", "-exclude-dir=testdata", "-nosec-require-rules",
+                  "-nosec-require-justification", "./..."]),
+            ):
+                binary = os.path.join(tool_dir, name)
+                try:
+                    build = run(["go", "build", "-mod=readonly", "-o", binary, package],
+                                # T139 probes this script against throwaway
+                                # workspaces. Tools belong beside the script.
+                                cwd=os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                 "go-tools"),
+                                env=tool_env)
+                except OSError as exc:
+                    say(f"  FAIL  {name}:{mod} — pinned tool unavailable")
+                    sys.stderr.write(f"{exc}\n")
+                    failed += 1
+                    continue
+                if build.returncode:
+                    say(f"  FAIL  {name}:{mod} — pinned tool build failed; see target/verify.log")
+                    sys.stderr.write(build.stdout + build.stderr)
+                    failed += 1
+                    continue
+                try:
+                    scan = run([binary, *args], cwd=mod_abs, env=env)
+                except OSError as exc:
+                    say(f"  FAIL  {name}:{mod} — scanner unavailable")
+                    sys.stderr.write(f"{exc}\n")
+                    failed += 1
+                    continue
+                if scan.returncode:
+                    say(f"  FAIL  {name}:{mod} — see target/verify.log")
+                    sys.stderr.write(scan.stdout + scan.stderr)
+                    failed += 1
+                else:
+                    say(f"  PASS  {name}:{mod}")
+
         # 3c. account hidden (all-tagged-out) packages as SKIP[<cadence>].
         for ip, _d in hidden:
             cad, _req, _has = meta[ip]
@@ -363,7 +414,7 @@ def main() -> int:
         # 4. run + classify the (hermetic or named-tag) packages.
         if not pkgs:
             continue
-        test_cmd = ["go", "test", "-json", "-count=1"]
+        test_cmd = ["go", "test", "-json", "-count=1", "-race"]
         if run_tags:
             test_cmd += ["-tags", ",".join(run_tags)]
         test_cmd.append("./...")

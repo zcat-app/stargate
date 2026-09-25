@@ -181,8 +181,8 @@ func Listen(ipcDir string) (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := os.Chmod(path, 0o660); err != nil {
-		lis.Close()
+	if err := os.Chmod(path, 0o660); err != nil { // #nosec G302 -- DP/CP group access is required for the authenticated IPC socket
+		_ = lis.Close() // chmod failed; preserve its error and abandon listener
 		return nil, err
 	}
 	return lis, nil

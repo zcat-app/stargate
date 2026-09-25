@@ -152,7 +152,7 @@ func isWellFormedToken(b []byte) bool {
 func LoadPepper(keysDir string) ([PepperLen]byte, error) {
 	var pepper [PepperLen]byte
 	path := filepath.Join(keysDir, PepperFile)
-	buf, err := os.ReadFile(path)
+	buf, err := os.ReadFile(path) // #nosec G304 -- keysDir is install configuration and PepperFile is fixed (data-model.md §1.7)
 	if err != nil {
 		return pepper, fmt.Errorf("reading pepper %s: %w", path, err)
 	}

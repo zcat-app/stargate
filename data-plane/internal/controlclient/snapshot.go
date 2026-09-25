@@ -103,29 +103,29 @@ func WriteSnapshot(dir string, g *auth.Generation) error {
 		return fmt.Errorf("creating temp beside %s: %w", final, err)
 	}
 	if _, err := tmp.Write(blob); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
+		_ = tmp.Close()           // cleanup after failed write; preserve the original error
+		_ = os.Remove(tmp.Name()) // cleanup is best effort
 		return fmt.Errorf("writing temp beside %s: %w", final, err)
 	}
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		os.Remove(tmp.Name())
+		_ = tmp.Close()           // cleanup after failed sync; preserve the original error
+		_ = os.Remove(tmp.Name()) // cleanup is best effort
 		return fmt.Errorf("syncing temp beside %s: %w", final, err)
 	}
 	if err := tmp.Close(); err != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name()) // cleanup after failed close is best effort
 		return fmt.Errorf("closing temp beside %s: %w", final, err)
 	}
 	if err := os.Rename(tmp.Name(), final); err != nil {
-		os.Remove(tmp.Name())
+		_ = os.Remove(tmp.Name()) // cleanup after failed rename is best effort
 		return fmt.Errorf("renaming snapshot into place %s: %w", final, err)
 	}
-	dirFile, err := os.Open(dir)
+	dirFile, err := os.Open(dir) // #nosec G304 -- snapshot directory is configured locally, never from a request
 	if err != nil {
 		return fmt.Errorf("opening snapshot directory %s: %w", dir, err)
 	}
 	if err := dirFile.Sync(); err != nil {
-		dirFile.Close()
+		_ = dirFile.Close() // preserve the sync error; close is best effort here
 		return fmt.Errorf("syncing snapshot directory %s: %w", dir, err)
 	}
 	if err := dirFile.Close(); err != nil {
@@ -171,7 +171,7 @@ func authSetCommitment(verifiers [][]byte) []byte {
 // Restore never fails the boot: a broken cache must not take routing down
 // with it (arch §5.5; Principle II).
 func RestoreSnapshot(dir string, tokens *auth.TokenStore, _ *slog.Logger) {
-	raw, err := os.ReadFile(filepath.Join(dir, snapshotFileName))
+	raw, err := os.ReadFile(filepath.Join(dir, snapshotFileName)) // #nosec G304 -- fixed filename in configured snapshot directory
 	if err != nil {
 		return
 	}

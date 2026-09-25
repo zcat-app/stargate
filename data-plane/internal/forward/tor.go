@@ -196,13 +196,13 @@ type countingConn struct {
 
 func (c *countingConn) Read(p []byte) (int, error) {
 	n, err := c.Conn.Read(p)
-	c.read.Add(uint64(n))
+	c.read.Add(uint64(n)) // #nosec G115 -- net.Conn.Read returns a nonnegative byte count
 	return n, err
 }
 
 func (c *countingConn) Write(p []byte) (int, error) {
 	n, err := c.Conn.Write(p)
-	c.written.Add(uint64(n))
+	c.written.Add(uint64(n)) // #nosec G115 -- net.Conn.Write returns a nonnegative byte count
 	return n, err
 }
 
@@ -228,7 +228,7 @@ func (t *Tor) Forward(client net.Conn, uname []byte, target string) error {
 		return err
 	}
 	if _, err := client.Write(successReply[:]); err != nil {
-		up.Close()
+		_ = up.Close() // client reply failed; close is best effort and original error is returned
 		up.finalize()
 		return err
 	}
@@ -248,7 +248,7 @@ func bridge(client net.Conn, upstream *countingConn) {
 	var stop sync.Once
 	shutdown := func() {
 		stop.Do(func() {
-			upstream.Close()
+			_ = upstream.Close() // shutdown is best effort; the connection cannot be reused
 			_ = client.SetDeadline(time.Now())
 		})
 	}

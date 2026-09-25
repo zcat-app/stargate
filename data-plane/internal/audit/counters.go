@@ -55,7 +55,7 @@ func hourBucket(now time.Time) uint64 {
 	if now.Unix() < 0 {
 		return 0
 	}
-	return uint64(now.Unix() / 3600)
+	return uint64(now.Unix() / 3600) // #nosec G115 -- negative Unix times return above; quotient is nonnegative
 }
 
 // advance closes all earlier hours and expires entire rows. Callers hold mu.

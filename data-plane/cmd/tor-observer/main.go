@@ -134,7 +134,7 @@ func serve(ctx context.Context, c config, ready chan<- struct{}) error {
 	}
 	defer l.Close()
 	defer os.Remove(c.healthSocket)
-	if err := os.Chmod(c.healthSocket, 0660); err != nil {
+	if err := os.Chmod(c.healthSocket, 0660); err != nil { // #nosec G302 -- health socket needs group access for the authorized observer peer
 		return err
 	}
 	if ready != nil {
@@ -222,7 +222,7 @@ func authenticate(conn net.Conn, peerPath string, priv ed25519.PrivateKey) error
 }
 
 func readPrivateKey(path string) (ed25519.PrivateKey, error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- caller supplies the configured private-key path, not request data
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +242,7 @@ func readPrivateKey(path string) (ed25519.PrivateKey, error) {
 }
 
 func readPublicKey(path string) (ed25519.PublicKey, error) {
-	b, err := os.ReadFile(path)
+	b, err := os.ReadFile(path) // #nosec G304 -- caller supplies the configured public-key path, not request data
 	if err != nil {
 		return nil, err
 	}
@@ -315,11 +315,11 @@ func readTorLine(r io.Reader, budget *replyBudget) (string, error) {
 		}
 		budget.bytes++
 		if budget.bytes > maxReplyBytes {
-			return "", errors.New("Tor reply too large")
+			return "", errors.New("tor reply too large")
 		}
 		line = append(line, one[0])
 		if len(line) > maxLineBytes {
-			return "", errors.New("Tor line too large")
+			return "", errors.New("tor line too large")
 		}
 		if one[0] == '\n' {
 			budget.lines++

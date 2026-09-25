@@ -119,7 +119,7 @@ func restrictProcess() error {
 	// ABI4 has exactly these first two fields. Do not accidentally request newer
 	// struct fields merely because the build machine has newer UAPI headers.
 	attr := struct{ FS, Net uint64 }{Net: unix.LANDLOCK_ACCESS_NET_BIND_TCP | unix.LANDLOCK_ACCESS_NET_CONNECT_TCP}
-	fd, _, errno := unix.Syscall(unix.SYS_LANDLOCK_CREATE_RULESET, uintptr(unsafe.Pointer(&attr)), unsafe.Sizeof(attr), 0)
+	fd, _, errno := unix.Syscall(unix.SYS_LANDLOCK_CREATE_RULESET, uintptr(unsafe.Pointer(&attr)), unsafe.Sizeof(attr), 0) // #nosec G103 -- kernel ABI4 requires the address of this exact struct
 	if errno != 0 {
 		return errBoundary
 	}
@@ -131,8 +131,8 @@ func restrictProcess() error {
 		return fmt.Errorf("%w: %w", errBoundary, err)
 	}
 	filter := socketFilter()
-	program := unix.SockFprog{Len: uint16(len(filter)), Filter: &filter[0]}
-	result, _, errno := unix.Syscall(unix.SYS_SECCOMP, unix.SECCOMP_SET_MODE_FILTER, unix.SECCOMP_FILTER_FLAG_TSYNC, uintptr(unsafe.Pointer(&program)))
+	program := unix.SockFprog{Len: uint16(len(filter)), Filter: &filter[0]}                                                                             // #nosec G115 -- socketFilter has a fixed, bounded instruction count
+	result, _, errno := unix.Syscall(unix.SYS_SECCOMP, unix.SECCOMP_SET_MODE_FILTER, unix.SECCOMP_FILTER_FLAG_TSYNC, uintptr(unsafe.Pointer(&program))) // #nosec G103 -- seccomp syscall requires the SockFprog address
 	runtime.KeepAlive(filter)
 	// TSYNC may return an unsynchronized TID rather than setting errno.
 	if errno != 0 || result != 0 {
