@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-24
+**Last updated:** 2026-09-25
 
 ---
 
@@ -15,9 +15,9 @@
 |---|---|
 | pending | 37 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 164 |
+| done | 165 |
 | deferred | 5 |
 | **total** | **207** |
 
@@ -42,9 +42,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T144 | Preserve privacy-test ordering evidence honestly | in-review |  | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -62,7 +60,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_164 ticket(s) done._
+_165 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -201,6 +199,7 @@ _164 ticket(s) done._
 - T141 — Pin CI Actions and agent installation dependencies
 - T142 — Make agent execution-boundary claims demonstrable
 - T143 — Retire obsolete Java token-verifier constants
+- T144 — Preserve privacy-test ordering evidence honestly
 - T147 — Resolve HTTP CONNECT first-party isolation
 - T148 — Reconcile peer certificate validity policy
 - T149 — Finalize byte accounting after both forwarding pumps

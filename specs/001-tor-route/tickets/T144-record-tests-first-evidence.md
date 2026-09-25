@@ -1,9 +1,9 @@
 ---
 id: "T144"
 title: "Preserve privacy-test ordering evidence honestly"
-status: in-review
+status: done
 created: "2026-09-12"
-last_updated: 2026-09-24
+last_updated: 2026-09-25
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
@@ -18,7 +18,7 @@ spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md"]
 decision_refs: []
 remediates: "T096"
 tests_first: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-25, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
