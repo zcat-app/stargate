@@ -52,8 +52,8 @@ Other subcommands (export, import, wipe) and profile selection (--profile)
 are not yet implemented; they ship with later features.
 
 Environment:
-  STARGATE_HEALTHCHECK_TIMEOUT  Per-sidecar healthcheck wait in seconds
-                                (default 60). See `stargate init`.
+  STARGATE_HEALTHCHECK_TIMEOUT  One post-Compose readiness wait in seconds
+                                (default 300). See `stargate init`.
 EOF
 }
 

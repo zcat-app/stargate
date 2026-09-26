@@ -24,11 +24,12 @@ import (
 )
 
 type fakeTor struct {
-	listener net.Listener
-	mu       sync.Mutex
-	commands []string
-	reply    string
-	stalled  bool
+	listener   net.Listener
+	mu         sync.Mutex
+	commands   []string
+	reply      string
+	stalled    bool
+	rejectAuth bool
 }
 
 func startFakeTor(t *testing.T, path, reply string) *fakeTor {
@@ -62,11 +63,15 @@ func (f *fakeTor) handle(c net.Conn) {
 		line = strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r")
 		f.mu.Lock()
 		f.commands = append(f.commands, line)
-		reply, stalled := f.reply, f.stalled
+		reply, stalled, rejectAuth := f.reply, f.stalled, f.rejectAuth
 		f.mu.Unlock()
 		switch {
 		case strings.HasPrefix(line, "AUTHENTICATE "):
-			_, _ = io.WriteString(c, "250 OK\r\n")
+			if rejectAuth {
+				_, _ = io.WriteString(c, "515 Authentication failed\r\n")
+			} else {
+				_, _ = io.WriteString(c, "250 OK\r\n")
+			}
 		case line == "GETINFO status/bootstrap-phase":
 			if stalled {
 				_, _ = io.Copy(io.Discard, c)
@@ -409,6 +414,56 @@ func TestInstallerReadinessExitCodes(t *testing.T) {
 	}
 	if len(f.fake.snapshot()) != 0 {
 		t.Fatal("unknown mode touched Tor")
+	}
+}
+
+func TestInstallerReadinessMissingCookie(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		cookie []byte
+	}{
+		{"missing", nil},
+		{"malformed", []byte("short cookie")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t, readyTor)
+			var err error
+			if tc.cookie == nil {
+				err = os.Remove(f.config.cookiePath)
+			} else {
+				err = os.WriteFile(f.config.cookiePath, tc.cookie, 0600)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := run(f.config, []string{"--check-ready"}); got != 2 {
+				t.Fatalf("cookie %s yielded readiness exit %d, want unavailable", tc.name, got)
+			}
+			if commands := f.fake.snapshot(); len(commands) != 0 {
+				t.Fatalf("cookie %s reached Tor: %q", tc.name, commands)
+			}
+		})
+	}
+}
+
+func TestInstallerReadinessRejectedCookie(t *testing.T) {
+	f := newFixture(t, readyTor)
+	f.fake.mu.Lock()
+	f.fake.rejectAuth = true
+	f.fake.mu.Unlock()
+	if got := run(f.config, []string{"--check-ready"}); got != 2 {
+		t.Fatalf("rejected 32-byte cookie yielded readiness exit %d, want unavailable", got)
+	}
+	var commands []string
+	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+		commands = f.fake.snapshot()
+		if len(commands) >= 2 {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if len(commands) != 2 || !strings.HasPrefix(commands[0], "AUTHENTICATE ") || commands[1] != "QUIT" {
+		t.Fatalf("rejected cookie sent unexpected Tor commands: %q", commands)
 	}
 }
 

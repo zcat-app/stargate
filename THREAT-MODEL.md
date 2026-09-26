@@ -1227,7 +1227,7 @@ does not exit to clearnet.
 
 - I2P performance varies with the NetDB state and reachable peer count;
   cold-start tunnel build times can be minutes (architecture spec §9.1
-  init-time healthcheck).
+  bounded init-time readiness window).
 - I2P is more vulnerable to academic anonymity attacks than Tor due to
   smaller anonymity set; this is documented honestly here rather than
   obscured.
@@ -1313,9 +1313,10 @@ Tor circuit-build failures that look like generic connectivity errors
 [Tor manual: `--Time` related options; Tor design paper §6].
 
 **Mitigation**: The Stargate host runs with NTP enabled (operator
-responsibility, documented in install instructions). The Tor sidecar's
-healthcheck (architecture spec §9.1 step 4) catches gross failures at
-init. No silent-clock-drift detection in v1.
+responsibility, documented in install instructions). The isolated observer's
+authenticated bootstrap sample (architecture spec §9.1 step 4) can detect
+failure to become READY during init. It does not diagnose clock skew or
+continuously monitor it. No silent-clock-drift detection in v1.
 
 **Residual risk**: in long-running VPS deployments without NTP, clock drift
 may degrade Tor reliability before it is visible to the user. This is
@@ -1977,7 +1978,9 @@ Executed commands/results and remaining release-cadence checks belong to reviews
 The installer invokes the observer inside its existing container/authority with
 `--check-ready`. It obtains only exit 0 (READY), 1 (NOT_READY), or 2 (UNAVAILABLE/invalid mode),
 never cookie bytes or Tor text. The query has a four-second whole-process bound, including
-cookie I/O; the installer retries within its readiness window. A sample already in progress
+cookie I/O; the installer retries within one post-Compose readiness window, default
+300 seconds with an operator override (T124). This increases cold-start tolerance but
+does not guarantee bootstrap on the public Tor network. A sample already in progress
 can finish up to four seconds after the window, plus the existing two-second retry interval.
 A running DP listener is checked separately and cannot substitute for Tor bootstrap readiness.
 The observer's authenticated CP protocol and its authority/mounts are unchanged.
@@ -2227,8 +2230,9 @@ defended position.
 
 Tor's tolerance for clock skew is bounded by descriptor and consensus
 validity windows. Containers without NTP can drift; the failure mode
-is silent connectivity loss. Stargate v1 has init-time healthchecks
-(architecture spec §9.1) but no continuous clock-drift monitor.
+is silent connectivity loss. Stargate v1 has an authenticated init-time
+bootstrap-readiness sample (architecture spec §9.1) but no continuous
+clock-drift monitor.
 
 ### 8.6 Sidecar maintainer trust
 

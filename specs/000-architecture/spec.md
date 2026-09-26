@@ -592,15 +592,24 @@ destructive change.
    - Write into `stargate-keys` volume with `0600` perms.
 4. **Compose up**
    - `docker compose -f compose/docker-compose.<profile>.yml up -d`.
-   - Wait for each container's healthcheck to pass with a bounded retry
-     budget (default 60 s per sidecar). On timeout, abort and print the
-     failing container's `docker logs` tail.
+   - In the current Local Tor slice, confirm all four service processes are
+     running, then retry the isolated observer's authenticated `--check-ready`
+     query until it returns READY. Use one bounded window after Compose up
+     (default 300 s, operator-overridable), not a separate window per sidecar.
+     Tor authentication alone or an open DP listener does not establish READY.
+     Docker healthchecks and raw container log tails are disabled by
+     Constitution III; the operator gets a fixed timeout status and the
+     containers remain available for inspection.
 5. **Verification**
-   - Run a subset of contract tests against the live stack: each route's
-     SOCKS5 endpoint accepts a connect, the admin UI responds with HTTP
-     401 on `/admin`, the data plane's gRPC handshake to control plane
-     succeeds.
+   - The current Local Tor installer checks only the DP's loopback TCP
+     listener after observer READY. Downstream contract and live tests cover
+     authenticated SOCKS forwarding and browser behavior; the installer
+     does not claim those properties from a TCP connect.
 6. **Status table**
+
+   The current Local slice reports the data plane, control plane, Tor sidecar
+   and Tor observer. The following wider multi-route table and admin URL are
+   future feature targets, not current installer output.
 
    ```
    ┌──────────────┬──────────┬────────────┬──────────────────────┐
@@ -618,15 +627,17 @@ destructive change.
    ```
 7. **Exit**
    - `0` on success, non-zero with a clear error code on failure
-     (preflight=10, key-gen=20, compose=30, healthcheck=40, verify=50).
+     (preflight=10, key-gen=20, compose=30, readiness=40, verify=50).
 
 ### 9.2 Failure modes
 
 - **Docker missing** → exit 10 with a link to install docs.
 - **Existing stack detected without `--force`** → exit 0 after printing the
   status table for the existing stack.
-- **Healthcheck timeout** → exit 40, leave containers up so the user can
-  inspect `docker logs`. `init` never deletes user data on failure.
+- **Readiness timeout** → exit 40, leave containers up and preserve user
+  data. In-progress observer samples and the two-second retry interval can
+  make the return occur just after the configured window. A 300-second
+  budget improves cold-start tolerance but does not guarantee Tor bootstrap.
 
 ### 9.3 Idempotence guarantees
 

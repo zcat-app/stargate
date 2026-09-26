@@ -1,21 +1,22 @@
 ---
 id: T124
 title: 'Allow bounded cold-bootstrap time during init'
-status: pending
+status: in-review
 created: 2026-09-07
-last_updated: "2026-09-26"
+last_updated: 2026-09-26
 source: hand-filed (T120 convention)
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
 blocked_by: ["T139", "T134", "T138", "T156", "T162", "T164", "T165", "T152", "T174", "T177"]
 parallel: false
-files_budget: 14
+files_budget: 15
 files_scope:
   - specs/001-tor-route/tickets/T124-tor-healthcheck-bootstrap-window-shor.md
   - specs/001-tor-route/STATUS.md
   - specs/000-architecture/spec.md
   - specs/001-tor-route/spec.md
   - specs/001-tor-route/plan.md
+  - specs/001-tor-route/quickstart.md
   - specs/001-tor-route/contracts/torrc.md
   - THREAT-MODEL.md
   - scripts/subcommands/init
@@ -79,7 +80,8 @@ default is 300 seconds with the existing operator override. Architecture §9.1's
 Docker-health/log-tail wording and affected active readiness references must be reconciled
 with T152/T174 in the reviewed implementation; no constitutional amendment is authorized.
 The ticket remains pending. Its prior clarity PASS described the superseded proposal and
-has been cleared for a new grounding pass. The 14-file scope includes documentation, tests,
+has been cleared for a new grounding pass. The 15-file scope includes operator quickstart
+instructions that still recommend now-disabled raw logs, plus documentation, tests,
 durable evidence, this ticket and the generated status board.
 
 ## Analysis
@@ -126,7 +128,8 @@ durable evidence, this ticket and the generated status board.
    A discovered observer implementation defect requires a scoped follow-up; this ticket
    authorizes no observer production change.
 4. Reconcile architecture §9.1 steps 4–7/§9.2, affected feature-spec health references,
-   torrc-contract healthcheck prose, CLI/test descriptions and THREAT-MODEL §5.18 with current
+   torrc-contract healthcheck prose, CLI/test and quickstart descriptions and
+   THREAT-MODEL §5.18 with current
    observer readiness and the new default. Describe one readiness window after Compose
    startup, not 300 seconds separately per sidecar. Remove affected active instructions to
    wait for Docker health or retrieve raw log tails. Preserve exact torrc bytes, the finite

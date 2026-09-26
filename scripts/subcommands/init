@@ -16,8 +16,9 @@
 #                          with arch-§4.3 / data-model-§1.7 ownership/perms.
 #   4. Compose up        — one authoritative compose command (project name +
 #                          compose file + env file) via scripts/lib/compose.sh.
-#   5. Healthcheck wait  — `docker compose ps -q <service>`, never guessed
-#                          container names (B1 fix). Bounded (default 60 s).
+#   5. Readiness wait   — `docker compose ps -q <service>`, never guessed
+#                          container names (B1 fix); authenticated observer
+#                          READY within one bounded window (default 300 s).
 #   6. Verification      — Tor route only (no I2P/Nym/Direct).
 #   7. Status table      — DP + CP + Tor sidecar + observer.
 #   8. Exit codes        — 0/10/20/30/40/50/60 (stable contract surface).
@@ -42,7 +43,7 @@
 #   10  preflight failure (docker / compose / socket / openssl missing or dead)
 #   20  key-generation failure
 #   30  compose failure (build / up)
-#   40  healthcheck timeout
+#   40  readiness timeout
 #   50  verification failure
 #   60  mandatory host-network boundary unavailable or ineffective
 #
@@ -91,7 +92,7 @@ esac
 . "$_SG_INIT_DIR/../lib/compose.sh"
 
 # ---- tunables -------------------------------------------------------------
-: "${STARGATE_HEALTHCHECK_TIMEOUT:=60}"        # arch §9.1 step 4 (seconds)
+: "${STARGATE_HEALTHCHECK_TIMEOUT:=300}"       # arch §9.1 step 4 (seconds)
 : "${STARGATE_PROBE_TIMEOUT:=5}"               # verify_tor TCP connect bound (seconds)
 
 # Services init waits on (mirrors compose/docker-compose.local.yml). The
@@ -534,10 +535,10 @@ build_observer_image() {
 
 # ---- 4. COMPOSE UP (arch §9.1 step 4) --------------------------------------
 # One authoritative compose command (project name + compose file + env file)
-# via compose_run (T088/B1). Bounded healthcheck wait; on timeout exit 40 and
+# via compose_run (T088/B1). Bounded readiness wait; on timeout exit 40 and
 # LEAVE CONTAINERS UP (arch §9.2) for inspection of current state.
 # init never tears the stack down on failure (no destructive teardown on the
-# healthcheck-timeout path).
+# readiness-timeout path).
 compose_up() {
   note "building + starting stack (project $STARGATE_PROJECT, $STARGATE_COMPOSE_FILE)..."
   if ! compose_run up -d --build >/dev/null 2>&1; then
@@ -547,13 +548,13 @@ compose_up() {
   return 0
 }
 
-# ---- 5. HEALTHCHECK WAIT (arch §9.1 step 4; arch §9.2 on timeout) ----------
+# ---- 5. READINESS WAIT (arch §9.1 step 4; arch §9.2 on timeout) ------------
 # Process discovery uses Compose service IDs. Running proves only process
 # presence; init also requires the observer's current authenticated Tor query.
 # No Docker health-probe history is enabled (Constitution III / T152).
 wait_healthy() {
   local deadline=$(( $(date +%s) + STARGATE_HEALTHCHECK_TIMEOUT ))
-  note "waiting up to ${STARGATE_HEALTHCHECK_TIMEOUT}s for services to be healthy..."
+  note "waiting up to ${STARGATE_HEALTHCHECK_TIMEOUT}s for Tor readiness..."
   local all_ok s cid running health
   while [ "$(date +%s)" -lt "$deadline" ]; do
     all_ok=true
@@ -574,7 +575,7 @@ wait_healthy() {
     fi
     sleep 2
   done
-  note "healthcheck timeout — services did not all report healthy within ${STARGATE_HEALTHCHECK_TIMEOUT}s."
+  note "Tor readiness timeout — running services and observer READY were not both confirmed within ${STARGATE_HEALTHCHECK_TIMEOUT}s."
   note "Containers have been LEFT UP (arch §9.2) — inspect with:"
   note "  $(compose_cmd) ps"
   return "$EXIT_HEALTHCHECK"

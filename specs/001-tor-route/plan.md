@@ -15,13 +15,13 @@
 ## Summary
 
 Stand up the first end-to-end Stargate route: Mullvad Browser → WebExtension →
-data plane (port 8881, loopback) → Tor sidecar (SOCKS5 9050, compose-internal) →
+data plane (port 8881, loopback) → Tor sidecar (private SOCKS Unix socket) →
 Tor network → `.onion` destination. Per-first-party-domain stream isolation is
 enforced via Tor's `IsolateSOCKSAuth` driven by the extension's SOCKS5 username.
 The control plane runs headlessly in this slice — it loads bearer tokens from a
 YAML file at startup, pushes hashed tokens to the data plane via gRPC
 `ReloadTokens`, and emits `SidecarEvent`s — but exposes no admin UI beyond a
-healthcheck endpoint. Tor-port failures use fixed SOCKS5 replies. HTTP CONNECT is refused at first byte
+health endpoint that is not used for Docker health history. Tor-port failures use fixed SOCKS5 replies. HTTP CONNECT is refused at first byte
 under the T172 contract implemented by T173. The architecture §10 HTML
 error template remains a future-format renderer, not a Tor-port response.
 
@@ -43,7 +43,7 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 **Primary Dependencies**:
 
 - **Data plane**: Go stdlib (`net`, `crypto/subtle`, `context`, `log/slog`); `golang.org/x/net/proxy` for SOCKS5 client outbound to the Tor sidecar; `google.golang.org/grpc` for the inter-plane client; protobuf v3 generated stubs from `proto/stargate/v1/`. No third-party HTTP server frameworks — the data plane uses the stdlib for SOCKS5 framing and CONNECT.
-- **Control plane**: Quarkus core, Quarkus gRPC, Hibernate ORM with Panache, Quarkus JDBC SQLite, Flyway, Quarkus Qute (used only for a stub healthcheck page in this feature), SnakeYAML for `tokens.yaml` parsing.
+- **Control plane**: Quarkus core, Quarkus gRPC, Hibernate ORM with Panache, Quarkus JDBC SQLite, Flyway, `quarkus-vertx-http` (body-less GET `/healthz`; Compose does not probe it), SnakeYAML for `tokens.yaml` parsing.
 - **Extension**: WebExtensions APIs — `proxy`, `storage`, `webRequest`, `webRequestBlocking`, `privacy`, `notifications`. No third-party JS deps.
 - **Test-only (Go, not shipped)**: `github.com/google/gopacket` for live-packet capture in `tests/integration/dns_leak_test.go` (T034) and `tests/integration/egress_consensus_test.go` (T034f) — requires `CAP_NET_RAW` or root on the test runner (CI configures this for the integration job). `github.com/docker/docker/client` (Docker SDK for Go) for every `tests/contract/` Docker bring-up harness (research.md §5). Both are CI-only and never linked into the data-plane binary. Pinned via `go.mod` at scaffold time (T002 / T002a) and updated only through the regular dependency-update workflow (Principle IV — pinned, tested, manually promoted).
 
@@ -144,6 +144,16 @@ The constitution amended on 2026-09-12 and `contracts/foundation-boundaries.md` 
 | VII — tests-first | Required-coverage/evidence repairs T139/T144; implementations preserve real failing-before-fix evidence. |
 | VIII — independent reviews | Amendment review in T156; foundation T155 and final T078/T079 remain required. |
 | Deployment | T162 enforces loopback and Unix fabrics; T168 adds irreversible all-thread IP confinement before serving. Owner rules remain installer-required defense in depth. T170 preserves enforcing-profile signal/lifecycle behavior. T163 records cumulative evidence from actual deployment namespaces on an independently booted Linux host, under the foundation contract's capture, family, failure/recovery and restart requirements. The maintainer approved VM evidence on 2026-09-21; the measured guest result makes no physical-NIC, hypervisor or untested-environment claim. |
+
+**T124 scoped Constitution Check (Local Tor init).** Principle II keeps CP health
+advisory for DP routing. Principle III keeps Docker health history and raw diagnostics
+disabled; the installer observes only the isolated observer's finite READY result.
+Principle V requires a bounded cold-start claim and actual fresh-volume evidence;
+300 seconds is an operator wait, not a Tor availability guarantee. Principle VII
+requires the delayed-READY red/green regression before changing the installer,
+plus retrospective negative credential guards. Principle VIII requires the exact
+candidate and live-evidence limits in the independent ticket review. This check
+does not convert the plan's other pending foundation obligations into PASS.
 
 **Verdict: IMPLEMENTATION BLOCKED ON REMEDIATION**, not PASS (deferred). This plan specifies
 work to reach compliance; it does not waive current defects. Use `remaining-implementation-plan.md`
@@ -270,30 +280,22 @@ the tree.
 
 ### Compose topology (this feature)
 
-`compose/docker-compose.local.yml` declares **three services** on a single
-compose-internal bridge network. The only externally bound port is the
-data plane's `127.0.0.1:8881` (loopback-only); every other inter-service
-edge is on the compose-internal network or on a UDS in the shared
-`stargate-ipc` volume.
+The supported Local stack has four services. The DP shares the host namespace
+but binds its listener to loopback and reaches Tor only through a private Unix
+socket. CP and the observer have no IP network; Tor alone has bridge egress.
 
-| Service                | Image (digest-pinned)                            | Role in this feature                                                                                                                                                                                                                                       |
-|------------------------|--------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `stargate-dp`          | Stargate-built (Go data plane; Dockerfile T002a, digest pinned by T015)  | Listens on `127.0.0.1:8881` (FR-005); dials `tor:9050` for SOCKS5h forward (FR-007); hosts `/run/stargate/dp.sock` exposing `ReloadTokens` + the minimum-subset `GetStatus` per T007 / T045. Runtime UID `stargate-dp` (5102), supplementary group `stargate-ipc` (GID 5100).                              |
-| `stargate-control`     | Stargate-built (Quarkus CP; Dockerfile T003a, digest pinned by T015)     | Hosts `/run/stargate/control.sock` exposing `WatchEvents` (T038); reads `tokens.yaml` (T035); observes Tor lifecycle via the cookie-authenticated ControlPort `tor:9051` (T039; T094a removed the `docker-socket-proxy` that previously brokered this). Does NOT render `torrc` in this slice — the safe `torrc` is baked into the Tor image (T089/T087, FR-011). No host ports — only the UDS surface and Compose healthcheck. Runtime UID `stargate-cp` (5101), supplementary group `stargate-ipc` (GID 5100). |
-| `tor`                  | Stargate-built (Tor from `deb.torproject.org`, T014) | `SocksPort 9050` + `ControlPort 9051`, **both compose-internal only** (FR-012, gated by T019b). Loads the byte-pinned safe `torrc` baked into the image at `/etc/tor/torrc` (T087, per T089's amendment to FR-011) — no `stargate-tor-config` mount for v1 (deferred to dynamic config). Runtime user is the upstream-declared `tor` user.                                          |
+| Service | Current Local role |
+|---|---|
+| `stargate-dp` | Listens on `127.0.0.1:8881`, uses its DP-only Tor SOCKS fabric, and retains authenticated admission during CP outage. |
+| `stargate-control` | Loads current auth state and receives only authenticated finite observer health over its CP-only Unix fabric. It holds no Tor cookie or raw control path. |
+| `tor` | Loads the image-baked `torrc`, serves private SOCKS/control Unix sockets, and performs Tor-native bootstrap. |
+| `tor-observer` | Alone mounts Tor's narrow control subpath, authenticates to Tor, and reduces one fixed bootstrap query to READY/NOT_READY/UNAVAILABLE. |
 
-The control plane observes Tor lifecycle through Tor's **cookie-
-authenticated ControlPort** (`tor:9051`) — not through a Docker Engine
-observer. The `docker-socket-proxy` auxiliary container that previously
-brokered this observation (and was in the privacy TCB as host-root-
-equivalent) was removed by T094a; the CP holds no `docker.sock` handle
-and the stack has no auxiliary host-root-pivot surface (Constitution
-Principle III). The removal rationale + supersession of the T017a trust
-entry is recorded in `SECURITY-DECISIONS.md` (T094a). Any future LAN/VPS
-profile is release-blocked on re-evaluating the CP's sidecar-observation
-surface, because exposing the CP (and DP) to non-localhost callers
-changes the compromise-probability calculus; the network-split +
-container hardening deferred from T094 is T094b's mandate.
+Docker healthchecks and raw container diagnostics are disabled under
+Constitution III (T152). The installer waits for the observer's current
+authenticated READY sample within one post-Compose window, default 300 seconds
+(T124); CP health remains advisory to DP routing (T164/T165). The former
+`docker-socket-proxy` was removed by T094a; T162 supplies the distinct fabrics.
 
 **Structure Decision**: This feature follows the multi-language repo layout
 fixed by architecture spec §3. No new top-level directories are introduced.
@@ -372,7 +374,7 @@ the resolutions deliberately rather than accepting them implicitly.
    emit `SidecarEvent`s. The plan defines a *headless* control plane
    in this feature: `api/` (gRPC server only), `core/` (token loader,
    sidecar monitor), `persistence/` (`audit_log` writes), and `ui/`
-   shipping only a Compose healthcheck endpoint. The full UI lands in
+   shipping a health endpoint that Compose does not probe. The full UI lands in
    a separate feature. research.md §3.
 
 3. **`SC-005` (≥200 concurrent CONNECTs) is measured against a synthetic
@@ -409,7 +411,7 @@ the resolutions deliberately rather than accepting them implicitly.
 
 8. **`scripts/stargate init` ships a minimum subset only**. Full `init`
    (arch §9) is a later feature; this slice delivers only key generation
-   + compose-up + healthcheck wait (no admin enrollment URL, no
+   + compose-up + authenticated observer readiness wait (no admin enrollment URL, no
    admin-credential generation — there is no admin UI to enroll
    against). research.md §8.
 

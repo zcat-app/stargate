@@ -94,7 +94,7 @@ renders the page. A simultaneous `tcpdump` / Wireshark capture on the
 **Acceptance Scenarios**:
 
 1. **Given** a freshly installed Stargate local-profile stack
-   (`docker-compose.local.yml` up, Tor sidecar HEALTHY, bearer token
+   (`docker-compose.local.yml` up, authenticated Tor observer READY, bearer token
    present in the extension), **When** the user opens a known `.onion`
    URL in Mullvad Browser, **Then** the page renders, the extension's
    per-tab indicator shows the main-navigation decision = Tor (scope below), and the SOCKS tunnel carries page bytes without a
@@ -424,13 +424,15 @@ tests-first suite (Principle VII) before implementation lands.
   publication. Its native SOCKS Unix socket is in a Tor-private directory;
   the image-owned hook hardlinks that inode at mode 0660 into a DP-only
   volume. The DP may dial only that fixed path. The raw cookie-authenticated
-  ControlSocket is in Tor's private state and is reachable only inside Tor
-  for its native healthcheck and by the test harness via `docker compose exec`.
+  ControlSocket is in Tor's private state and is reachable inside Tor,
+  through the observer's narrow Tor-facing mount, and by the test harness
+  via `docker compose exec`. Tor's Docker healthcheck is disabled.
   CP holds no Tor cookie, Tor-cookie group, raw control mount or Docker network
-  path. A separate CP-only fabric is reserved for T164's authenticated finite
-  health observer. T164 implements and tests that endpoint and T165 validates
-  its deployed caller matrix; until then CP health observation is unavailable
-  and advisory, with no raw-control fallback (architecture spec §4.2).
+  path. T164 implements the isolated observer's authenticated finite-health
+  endpoint on a CP-only fabric; T165 validates its deployed caller matrix.
+  CP health remains advisory, with no raw-control fallback (architecture
+  spec §4.2). The installer requires a current authenticated READY sample
+  within one bounded post-Compose window, default 300 seconds (T124).
 
 #### Inter-plane integration
 
@@ -668,8 +670,9 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
   the smallest viable choice.
 - **No Quarkus dashboard UI yet.** The control plane runs (it has to —
   it owns the token loader and the gRPC server to the data plane) but
-  exposes no HTTP admin UI for this feature beyond a health endpoint
-  used by `docker compose` healthchecks. The admin UI lands in a later
+  exposes no HTTP admin UI for this feature. The existing `/healthz` endpoint
+  is not used for Docker health history; Compose healthchecks are disabled
+  under Constitution III. The admin UI lands in a later
   feature; this slice deliberately defers it to keep the cone small.
 - **Reference target onion service for the success-criterion tests.**
   The integration suite uses DuckDuckGo's v3 onion address

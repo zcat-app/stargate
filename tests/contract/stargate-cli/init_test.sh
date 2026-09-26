@@ -9,7 +9,7 @@
 # Why this is mostly a static test (mirrors T015's local_compose_test.sh
 # philosophy): the runtime properties of `stargate init` — that real ed25519
 # keys land in the stargate-keys volume with the right ownership, that
-# compose-up actually waits for healthchecks, that the Tor verify probe
+# compose-up actually waits for authenticated Tor readiness, that the Tor verify probe
 # exercises the live SOCKS5 surface — are gated DOWNSTREAM by T022
 # (control-grpc transport_test requires a correct mutual-ed25519 handshake,
 # which can only succeed if key-gen produced correctly-permissioned,
@@ -27,7 +27,7 @@
 #         against data-plane/Dockerfile, control-plane/Dockerfile, and
 #         compose/docker-compose.local.yml (extends T015's M6 technique).
 #   - M6  hard-coded compose/docker-compose.local.yml; no --profile flag.
-#   - M7  bounded healthcheck (60 s default + env override); no `compose down`.
+#   - M7  bounded observer readiness (300 s default + env override); no `compose down`.
 #   - M8  Tor-only verify (no 8882/8884/8885 port literals).
 #   - M9  status table references DP + CP + Tor sidecar + observer.
 #   - M10 exit-code constants 10/20/30/40/50 present.
@@ -257,11 +257,11 @@ has_literal "$LIB" "compose_health_ids"    "T088: lib must define compose_health
 has_literal "$INIT" "stargate-keys" \
   "M5: stargate-keys volume not referenced by $INIT"
 
-# --- M7: bounded healthcheck + no teardown on failure ----------------------
+# --- M7: bounded readiness + no teardown on failure ------------------------
 has_literal "$INIT" "STARGATE_HEALTHCHECK_TIMEOUT" \
   "M7: STARGATE_HEALTHCHECK_TIMEOUT override not referenced by $INIT"
-has_literal "$INIT" "(^|[^0-9])60([^0-9]|\$)" \
-  "M7: default healthcheck bound (60) missing from $INIT"
+has_literal "$INIT" 'STARGATE_HEALTHCHECK_TIMEOUT:=300' \
+  "M7: default readiness bound (300) missing from $INIT"
 lacks_literal "$INIT" "compose[[:space:]]+down" \
   "M7: 'compose down' must NOT appear in $INIT (arch §9.2: leave containers up on failure)"
 

@@ -51,11 +51,13 @@ COMPOSE="docker compose -p stargate -f compose/docker-compose.local.yml --env-fi
 3. Generates ed25519 inter-plane keys, writes them to the
    `stargate-keys` volume with mode 0600.
 4. Brings up the stack via `compose/docker-compose.local.yml`
-   (data plane, control plane, Tor sidecar).
-5. Waits for each container's healthcheck (≤60 s per sidecar).
+   (data plane, control plane, Tor sidecar, Tor observer).
+5. Confirms the services are running and waits for the observer's authenticated
+   current READY result. The default is one 300-second window after Compose
+   startup; `STARGATE_HEALTHCHECK_TIMEOUT` overrides it.
 6. Runs a bounded TCP-connect check on `127.0.0.1:8881`.
-7. Prints a status table. Tor health observation from CP remains unavailable
-   until T164 adds the sanitized observer; it cannot gate DP admission.
+7. Prints a status table. CP receives only the observer's finite health
+   result, which remains advisory for DP admission.
 
 The data plane installs its own kernel network restriction before serving.
 `network confinement unavailable` means that the required kernel feature or
@@ -69,13 +71,10 @@ rerunning `init` also restores the additional owner rules.
 Expected output (truncated):
 
 ```
-┌──────────────┬──────────┬────────────┬──────────────────────┐
-│ Component    │ Status   │ Bind       │ Notes                │
-├──────────────┼──────────┼────────────┼──────────────────────┤
-│ Data plane   │ HEALTHY  │ 127.0.0.1  │ port 8881            │
-│ Control plane│ HEALTHY  │ 127.0.0.1  │ healthcheck only     │
-│ Tor sidecar  │ HEALTHY  │ internal   │ SOCKS5 over UDS      │
-└──────────────┴──────────┴────────────┴──────────────────────┘
+data plane         HEALTHY
+control plane      HEALTHY
+Tor sidecar        HEALTHY
+Tor observer       READY
 ```
 
 If `init` exits non-zero, see arch §9.1 step 7 for the error-code
@@ -209,10 +208,14 @@ should render.
 
 If the page does not render:
 
-- Check `$COMPOSE logs tor` for bootstrap failures.
+- If `init` exited 40, leave the containers running and retry after checking
+  the host clock and Tor network connectivity. The observer's finite current
+  result can be queried with
+  `$COMPOSE exec -T tor-observer /opt/stargate/tor-observer --check-ready`:
+  exit 0 is READY, 1 is NOT_READY, and 2 is UNAVAILABLE.
 - Check that the token in the extension matches the token in `tokens.yaml` (case-sensitive 32-char hex).
-- Verify the data plane's journal for `AUTH_REQUIRED` or `ROUTE_DOWN`
-  entries.
+- Check whether `init` reached the loopback TCP verification step. A TCP
+  connection alone does not prove authenticated SOCKS forwarding.
 
 ---
 
