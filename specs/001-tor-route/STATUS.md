@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 33 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 169 |
+| done | 170 |
 | deferred | 5 |
 | **total** | **208** |
 
@@ -38,9 +38,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T123 | Validate fresh-host CP mount provisioning | in-progress |  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
+_(nothing in flight)_
 
 ---
 
@@ -58,7 +56,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_169 ticket(s) done._
+_170 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -183,6 +181,7 @@ _169 ticket(s) done._
 - T118 — Clear the bearer-token field after a successful save
 - T120 — Make `verify.sh` log writes concurrency-safe for parallel ticket runs
 - T122 — Fix DP/CP image builds: proto/ outside build contexts
+- T123 — Validate fresh-host CP mount provisioning
 - T125 — Local profile cannot expose 8881: FR-010 bind vs compose publish
 - T127 — Correct T058 comment: DP dials upstream with UNAME only, no token
 - T128 — Stabilize TestMutualTLSHandshakeEndToEnd benign closeNotify close

@@ -1,7 +1,7 @@
 ---
 id: T123
 title: 'Validate fresh-host CP mount provisioning'
-status: in-progress
+status: done
 created: 2026-09-07
 last_updated: 2026-09-26
 source: hand-filed (T120 convention)
@@ -21,7 +21,7 @@ spec_refs:
    - specs/001-tor-route/tickets/T167-repair-control-plane-overlapping-read-only-mounts.md
 decision_refs:
    - .specify/memory/constitution.md#Principle-IV   # retain pinned, networkless provisioning
-reviews: {}
+reviews: { round: 1, date: 2026-09-26, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
