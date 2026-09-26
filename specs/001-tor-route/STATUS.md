@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-25
+**Last updated:** 2026-09-26
 
 ---
 
@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 34 |
-| in-progress | 0 |
+| pending | 33 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 169 |
@@ -30,7 +30,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
 | T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
-| T123 | Fresh-host CP start fails: rw child mount under :ro volume p | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T124 | Tor healthcheck bootstrap window shorter than real cold-boot | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 | T132 | Inter-plane follow-ups from T130 (re-push, ALPN pins, fakecp | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 | T176 | Pin or refuse the Maven tar fallback | Foundation audit remediation |  |  |
@@ -39,7 +38,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T123 | Validate fresh-host CP mount provisioning | in-progress |  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 
