@@ -1,7 +1,7 @@
 ---
 id: T177
 title: 'Promote Tor 0.4.9.13 security package'
-status: in-review
+status: done
 created: 2026-09-26
 last_updated: 2026-09-26
 source: https://forum.torproject.org/t/security-release-0-4-9-13/22178
@@ -38,7 +38,7 @@ spec_refs:
   - specs/001-tor-route/contracts/torrc.md
 decision_refs:
   - SECURITY-DECISIONS.md T160 Tor package promotion
-reviews: {}
+reviews: { round: 2, date: 2026-09-26, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
