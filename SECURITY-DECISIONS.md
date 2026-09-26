@@ -41,6 +41,41 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-09-26 — Promote Tor 0.4.9.13 verified security package (T177)
+
+**Decision and authorization.** The maintainer authorized a separate update after T124's
+fresh-volume build failed because the Tor Project's Bookworm index no longer selected the
+reviewed 0.4.9.12 package. Tor's [2026-09-23 security announcement](https://forum.torproject.org/t/security-release-0-4-9-13/22178)
+describes high-severity issues affecting clients, onion services and relays and recommends
+prompt updating. Select `0.4.9.13-1~d12.bookworm+1` from the same official repository.
+The former 0.4.9.12 selection remains a historical decision; this entry supersedes only its
+selected package identity. This source/image preparation does not deploy or publish an image.
+T124 still requires a separate fresh-volume integrated READY run and review.
+
+**Authenticated inputs (resolved 2026-09-26).** The fetched Tor repository key had exactly
+one primary key, matching the existing fingerprint
+`A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89`. `gpgv` validated the Bookworm
+[InRelease](https://deb.torproject.org/torproject.org/dists/bookworm/InRelease) signature
+from subkey `2265EB4CB2BF88D900AE8D1B74A941BA219EC810`. Signed metadata is dated
+2026-09-25 11:28:01 UTC and valid until 2026-11-04 11:28:01 UTC. The actual
+[amd64](https://deb.torproject.org/torproject.org/dists/bookworm/main/binary-amd64/Packages)
+and [arm64](https://deb.torproject.org/torproject.org/dists/bookworm/main/binary-arm64/Packages)
+Packages files matched their SHA-256 and size in that signed Release. Downloaded package
+bytes matched the corresponding authenticated Packages rows and the new independent lock:
+
+| Architecture | Package filename | SHA-256 |
+|---|---|---|
+| amd64 | `tor_0.4.9.13-1~d12.bookworm+1_amd64.deb` | `6dd261277646e309cb9571861722862fe646c76bb5f0b7b72ee1e6ab2fd1c01a` |
+| arm64 | `tor_0.4.9.13-1~d12.bookworm+1_arm64.deb` | `db443c92ed416a1f06f8a7c8f538642a641d6c96c6a98402134f9467369d0ff9` |
+
+The T160 checked local-file installer, package-substitution controls, dependency-source
+isolation, Debian snapshot and signing-key policy remain in force. Native amd64 build
+verification and exact candidate review belong to `reviews/T177/README.md`; downloaded
+arm64 bytes do not establish arm64 runtime behavior. Tor-network availability and
+integrated route readiness remain T124's unfulfilled live acceptance until measured.
+
+---
+
 ## 2026-09-22 — Enforce certificate validity and bounded IPC authority (T148)
 
 **Supersedes:** the 2026-07-12 T095 certificate-validity rationale, for expiry enforcement,
@@ -208,6 +243,8 @@ execution does not establish arm64 runtime behavior; authenticated arm64 bytes e
 selection/integrity. Final release artifact identities remain T081's responsibility. This entry
 does not assert that the remaining topology, observer, browser or isolation repairs are closed
 (THREAT-MODEL §2.6/§5.8; T155).
+
+Superseded by: [T177 Tor security promotion](#2026-09-26--promote-tor-04913-verified-security-package-t177), for the selected Tor package version/hash only.
 
 ---
 

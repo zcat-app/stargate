@@ -190,6 +190,18 @@ constitutional validation, and T134/T138 still own topology/observer authority. 
 [T161 evidence](reviews/T161/README.md), the dated T160 entry in SECURITY-DECISIONS.md and the
 [official release announcement](https://forum.torproject.org/t/security-release-0-4-9-12/22096).
 
+**T177 security update (2026-09-26).** The selected Tor package is now
+`0.4.9.13-1~d12.bookworm+1`, following Tor's 2026-09-23 high-severity security
+release. This supersedes T160's package selection while retaining its independent
+amd64/arm64 content locks, checked local-file installation and Debian-only dependency
+closure. The upstream announcement does not yet provide a complete public issue-level
+account, and a verified package identity does not prove absence of defects. Native image
+checks and their limits are recorded in `reviews/T177/README.md`; T124's fresh-volume
+integrated READY result is still required. No current Tor-network availability,
+arm64 runtime behavior or unchanged circuit-isolation behavior follows solely from
+this package promotion. See the dated T177 decision in `SECURITY-DECISIONS.md` and the
+[Tor release announcement](https://forum.torproject.org/t/security-release-0-4-9-13/22178).
+
 ### 2.7 Malicious browser extension
 
 An extension running alongside the Stargate WebExtension in the same

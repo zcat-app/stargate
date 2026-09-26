@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Copyright 2026 The Stargate Authors
 # SPDX-License-Identifier: Apache-2.0
-# T160 / Constitution IV: a signed mutable index must not replace the reviewed
+# T160/T177 / Constitution IV: a signed mutable index must not replace the reviewed
 # Tor package with different bytes under the same package name and version.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -16,7 +16,7 @@ import shutil
 import tempfile
 import sys
 
-version = "0.4.9.12-1~d12.bookworm+1"
+version = "0.4.9.13-1~d12.bookworm+1"
 root = Path.cwd()
 dockerfile = (root / "sidecars/tor/Dockerfile").read_text()
 commands = re.sub(r"\\\n\s*", " ", dockerfile)
@@ -24,7 +24,7 @@ installer = root / "sidecars/tor/install-tor.sh"
 pins = root / "sidecars/tor/tor-packages.sha256"
 errors = []
 if version not in commands:
-    errors.append("Tor security release 0.4.9.12 is not selected")
+    errors.append("Tor security release 0.4.9.13 is not selected")
 if re.search(r"apt-get install [^&\n]*\btor=", commands):
     errors.append("Tor is installed directly from mutable metadata without a checked local artifact")
 if f"/tmp/install-tor.sh {version} /tmp/tor-packages.sha256" not in commands:
@@ -174,5 +174,5 @@ else:
         assert record.exists(), "snapshot dependency selection did not reach checked installation"
         print(f"OK: {name} dependency control selected the Debian snapshot")
 
-print("OK: T160 repository isolation, security version, checked local installation, amd64/arm64 and four rejection controls")
+print("OK: T160/T177 repository isolation, security version, checked local installation, amd64/arm64 and four rejection controls")
 PY

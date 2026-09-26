@@ -48,9 +48,9 @@ reproducibility guarantee (Constitution Principle IV). It holds because the
 Debian archive is pinned to an immutable `snapshot.debian.org` run with
 explicit `=version` pins (T099).
 
-**Tor package content — independently checked (T160).** A package-name/version
+**Tor package content — independently checked (T160/T177).** A package-name/version
 manifest alone cannot detect same-version replacement. The upgraded Tor
-`0.4.9.12-1~d12.bookworm+1` also has reviewed amd64/arm64 `.deb` hashes in
+`0.4.9.13-1~d12.bookworm+1` also has reviewed amd64/arm64 `.deb` hashes in
 `sidecars/tor/tor-packages.sha256`. The build downloads into a private apt cache,
 checks the Tor artifact, resolves dependencies with only the Debian snapshot
 source enabled, and disables downloads during installation. Repository priorities
@@ -58,7 +58,7 @@ alone do not isolate the source of same-version packages. Audit both
 the package-manifest comparison and that pre-install content check; the negative
 controls in `tests/contract/security-decisions/tor_package_integrity_test.sh`
 must reject substituted bytes. Ground future locks against signed metadata and
-actual packages as recorded in the dated T160 SECURITY-DECISIONS entry.
+actual packages as recorded in the dated T177 SECURITY-DECISIONS entry.
 
 **Expected variance — final image DIGEST is NOT byte-stable.** Two cold
 rebuilds of the same source commit produce different image IDs (config
@@ -89,7 +89,7 @@ digest across two builds as a defect on its own. Verify instead that:
 3. Tor's documented behavioural invariants hold (run the live sidecar gate,
    `tests/contract/torrc/live_sidecar_test.go`).
 4. The independently pinned Tor package passed its build-time content check
-   before offline installation, with the T160 substitution/re-fetch and higher-/same-version
+   before offline installation, with the T160/T177 substitution/re-fetch and higher-/same-version
    dependency-source controls passing. The mutable Tor index must not supply dependencies.
 
 These checks establish the stated package-selection tier; unexplained content

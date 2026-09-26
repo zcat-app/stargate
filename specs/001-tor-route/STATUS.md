@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 34 |
+| pending | 33 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 170 |
 | deferred | 5 |
@@ -32,13 +32,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
 | T132 | Inter-plane follow-ups from T130 (re-push, ALPN pins, fakecp | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 | T176 | Pin or refuse the Maven tar fallback | Foundation audit remediation |  |  |
-| T177 | Promote Tor 0.4.9.13 security package | Urgent security update | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T177 | Promote Tor 0.4.9.13 security package | in-review | ✓ | Urgent security update |
 
 ---
 

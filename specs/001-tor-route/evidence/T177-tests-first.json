@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "ticket": "T177",
+  "baseline": "40f9021b5734710f1cc27e7947ae423e1f95968e",
+  "red": {
+    "patch": "diff --git a/tests/contract/security-decisions/tor_package_integrity_test.sh b/tests/contract/security-decisions/tor_package_integrity_test.sh\nindex edd6913..e05d67b 100644\n--- a/tests/contract/security-decisions/tor_package_integrity_test.sh\n+++ b/tests/contract/security-decisions/tor_package_integrity_test.sh\n@@ -1,7 +1,7 @@\n #!/usr/bin/env bash\n # Copyright 2026 The Stargate Authors\n # SPDX-License-Identifier: Apache-2.0\n-# T160 / Constitution IV: a signed mutable index must not replace the reviewed\n+# T160/T177 / Constitution IV: a signed mutable index must not replace the reviewed\n # Tor package with different bytes under the same package name and version.\n set -euo pipefail\n cd \"$(git rev-parse --show-toplevel)\"\n@@ -16,7 +16,7 @@ import shutil\n import tempfile\n import sys\n \n-version = \"0.4.9.12-1~d12.bookworm+1\"\n+version = \"0.4.9.13-1~d12.bookworm+1\"\n root = Path.cwd()\n dockerfile = (root / \"sidecars/tor/Dockerfile\").read_text()\n commands = re.sub(r\"\\\\\\n\\s*\", \" \", dockerfile)\n@@ -24,7 +24,7 @@ installer = root / \"sidecars/tor/install-tor.sh\"\n pins = root / \"sidecars/tor/tor-packages.sha256\"\n errors = []\n if version not in commands:\n-    errors.append(\"Tor security release 0.4.9.12 is not selected\")\n+    errors.append(\"Tor security release 0.4.9.13 is not selected\")\n if re.search(r\"apt-get install [^&\\n]*\\btor=\", commands):\n     errors.append(\"Tor is installed directly from mutable metadata without a checked local artifact\")\n if f\"/tmp/install-tor.sh {version} /tmp/tor-packages.sha256\" not in commands:\n",
+    "snapshot_sha256": "84936456cf1920e3863fb3040b30bf82bd11ed1735c1cbeab3f4ff51194efd1b",
+    "command": [
+      "bash",
+      "tests/contract/security-decisions/tor_package_integrity_test.sh"
+    ],
+    "exit_code": 1,
+    "output": "FAIL: Tor security release 0.4.9.13 is not selected\nFAIL: Dockerfile does not invoke the content-checked Tor installer\n"
+  },
+  "green": {
+    "snapshot_sha256": "6e63b824fb7fc3f8c37655811529a306b93efa20142e725e8b0ce9bb5af2c3b5",
+    "command": [
+      "bash",
+      "tests/contract/security-decisions/tor_package_integrity_test.sh"
+    ],
+    "exit_code": 0,
+    "output": "OK: higher-version dependency control selected the Debian snapshot\nOK: same-version dependency control selected the Debian snapshot\nOK: T160/T177 repository isolation, security version, checked local installation, amd64/arm64 and four rejection controls\n"
+  }
+}

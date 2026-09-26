@@ -48,7 +48,7 @@
 # Pins resolved empirically at /start from authoritative live sources:
 #   - debian:12-slim digest: docker buildx imagetools inspect (registry)
 #   - Tor apt key fingerprint: deb.torproject.org/torproject.org/ index
-#   - Current Tor (bookworm): 0.4.9.12-1~d12.bookworm+1 (T160, 2026-09-12)
+#   - Current Tor (bookworm): 0.4.9.13-1~d12.bookworm+1 (T177, 2026-09-26)
 #
 # T099 — immutable build inputs (Constitution Principle IV). The Debian
 # archive is pinned to a snapshot.debian.org run so a clean rebuild selects
@@ -157,7 +157,7 @@ RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources \
  && echo "deb [signed-by=/usr/share/keyrings/torproject-archive-keyring.gpg] https://deb.torproject.org/torproject.org bookworm main" \
         > /etc/apt/sources.list.d/tor.list \
  && apt-get update \
- && sh /tmp/install-tor.sh 0.4.9.12-1~d12.bookworm+1 /tmp/tor-packages.sha256 \
+ && sh /tmp/install-tor.sh 0.4.9.13-1~d12.bookworm+1 /tmp/tor-packages.sha256 \
  && rm -f /tmp/install-tor.sh /tmp/tor-packages.sha256 \
  && rm -rf /var/lib/apt/lists/*
 

@@ -1,7 +1,7 @@
 ---
 id: T177
 title: 'Promote Tor 0.4.9.13 security package'
-status: pending
+status: in-review
 created: 2026-09-26
 last_updated: 2026-09-26
 source: https://forum.torproject.org/t/security-release-0-4-9-13/22178
@@ -18,6 +18,7 @@ files_scope:
   - sidecars/tor/tor-packages.sha256
   - tests/contract/security-decisions/tor_package_integrity_test.sh
   - THREAT-MODEL.md
+  - BUILD-DIFFS.md
   - SECURITY-DECISIONS.md
   - specs/001-tor-route/evidence/T177-tests-first.json
   - reviews/T177/README.md
@@ -96,9 +97,11 @@ obtain its required live evidence. It does not reopen T160's approved commit.
    behavior unchanged. Build the native Tor image and verify its installed
    package version and reported Tor version. Run relevant Tor contracts.
 4. Append the promotion rationale to `SECURITY-DECISIONS.md` without rewriting
-   prior entries; add a dated threat-model update that distinguishes the new
-   artifact from T160's historical evidence. Mark T124 dependent on T177 and
-   regenerate STATUS. No deployed image is silently promoted.
+   prior entries; add the scoped supersession back-link on the historical T160
+   entry. Reconcile `BUILD-DIFFS.md` auditor guidance with the current lock,
+   and add a dated threat-model update that distinguishes the new artifact
+   from T160's historical evidence. Mark T124 dependent on T177 and regenerate
+   STATUS. No deployed image is silently promoted.
 5. Run `bash scripts/verify.sh` on the exact staged candidate, obtain both
    native independent reviewer approvals through the normal T177 driver,
    and commit one focused ticket change. T124's subsequent fresh-volume run
@@ -113,6 +116,6 @@ force an image build.
 
 ## Notes
 
-The failed T124 run and diagnostic build are recorded in
-`reviews/T124/README.md` in the stashed in-progress candidate. The upstream
-announcement is https://forum.torproject.org/t/security-release-0-4-9-13/22178.
+The failed T124 run and diagnostic build are preserved in T124's stashed
+in-progress candidate; its evidence report will land with that ticket. The
+upstream announcement is https://forum.torproject.org/t/security-release-0-4-9-13/22178.
