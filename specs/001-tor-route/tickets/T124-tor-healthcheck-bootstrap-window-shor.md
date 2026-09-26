@@ -1,7 +1,7 @@
 ---
 id: T124
 title: 'Allow bounded cold-bootstrap time during init'
-status: in-review
+status: done
 created: 2026-09-07
 last_updated: 2026-09-26
 source: hand-filed (T120 convention)
@@ -47,7 +47,7 @@ decision_refs:
   - specs/001-tor-route/tickets/T152-resolve-operational-audit-contract.md
   - specs/001-tor-route/tickets/T174-migrate-live-observer-operational-checks.md
   - reviews/T161/README.md
-reviews: {}
+reviews: { round: 1, date: 2026-09-26, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
