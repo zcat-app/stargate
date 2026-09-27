@@ -29,6 +29,7 @@ import java.util.Base64;
 import javax.net.ssl.X509ExtendedTrustManager;
 
 import io.grpc.netty.GrpcSslContexts;
+import io.netty.handler.ssl.ApplicationProtocolConfig;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
@@ -55,6 +56,14 @@ public final class CpTls {
 
     /** §1: Ed25519 is the only signature algorithm on this channel (RFC 8410). */
     static final String ED25519_OID = "1.3.101.112";
+
+    // wire-auth.md §4: both CP TLS roles must offer exactly h2. Pin this
+    // independently of GrpcSslContexts' library defaults (T130/T132).
+    private static final ApplicationProtocolConfig H2_ALPN = new ApplicationProtocolConfig(
+            ApplicationProtocolConfig.Protocol.ALPN,
+            ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+            ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+            "h2");
 
     private static final DateTimeFormatter UTC_TIME =
             DateTimeFormatter.ofPattern("yyMMddHHmmss'Z'").withZone(ZoneOffset.UTC);
@@ -279,6 +288,7 @@ public final class CpTls {
             builder.sslProvider(io.netty.handler.ssl.SslProvider.JDK)
                     .trustManager(peerPinTrustManager(peerPubPath))
                     .clientAuth(ClientAuth.REQUIRE) // §4: client auth REQUIRED
+                    .applicationProtocolConfig(H2_ALPN)
                     .protocols("TLSv1.3");
             return builder.build();
         } catch (javax.net.ssl.SSLException e) {
@@ -304,6 +314,7 @@ public final class CpTls {
             builder.sslProvider(io.netty.handler.ssl.SslProvider.JDK)
                     .keyManager(id.privateKey(), id.certificate())
                     .trustManager(peerPinTrustManager(peerPubPath))
+                    .applicationProtocolConfig(H2_ALPN)
                     .protocols("TLSv1.3");
             return builder.build();
         } catch (javax.net.ssl.SSLException e) {

@@ -49,11 +49,15 @@
 // compile-checks via the go-workspace vet pass and accounts this suite
 // SKIP[docker]. Live invocation:
 //
-//	cd tests/integration && go test -tags docker -run TestStackSmoke -v -timeout 35m
+//	cd tests/integration && go test -tags docker -run TestStackSmoke -v -timeout 50m
 package integration
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -75,10 +79,10 @@ import (
 // shared-runner hoist is T121). Deadlines mirror T059's: per-phase up
 // windows, bootstrap under the suite's own 5-minute deadline (T124's
 // healthcheck window is bypassed by the two-phase bring-up). Stacked
-// worst case: up 10m + boot 5m + up 10m + connect 3m ≈ 28m against a
-// 30-minute suite context and a 35-minute go-test outer bound (T059's
-// arithmetic) — no phase starves a later one, and the outer bound leaves
-// cleanup room past a terminal Fatalf.
+// worst case with T132: up 10m + boot 5m + up 10m + two CONNECT/read
+// windows of 13m (cold CP) and 6m (recovery) + stop 0.5m + restart 2m
+// = 46.5m. The 48-minute suite context and 50-minute go-test outer bound
+// leave cleanup room.
 const (
 	t131Project = "stargate-t131-test"
 	t131DPAddr  = "127.0.0.1:8881" // FR-005; host-published DP loopback
@@ -89,15 +93,30 @@ const (
 	t131UpDead      = 10 * time.Minute
 	t131BootDead    = 5 * time.Minute
 	t131ConnectWait = 3 * time.Minute
+	// As in T173's live fixture, a TCG-emulated JVM gets a separate cold
+	// startup budget. Recovery and individual wire/read deadlines stay 3m.
+	t131InitialWait = 10 * time.Minute
 	t131PollEvery   = 5 * time.Second
 	t131StreamPoll  = 2 * time.Second
 	t131ExecDead    = 15 * time.Second
-	t131OverallDead = 30 * time.Minute // suite ctx; test -timeout 35m is outer
+	t132StopDead    = 30 * time.Second
+	t132RestartDead = 2 * time.Minute
+	t131OverallDead = 48 * time.Minute // suite ctx; test -timeout 50m is outer
 )
 
-// TestStackSmoke is T131's single full-path assertion: bring up the
-// stack, seed the token, issue ONE authenticated CONNECT through 8881,
-// and read at least one application byte back through the tunnel.
+// The independently pinned foundation-boundaries.md reference vector
+// calibrates the test client's complete SOCKS partition username.
+func TestT131PartitionUsernameReferenceVector(t *testing.T) {
+	token := strings.Repeat("0f1e2d3c", 4)
+	onion := strings.Repeat("abcd2345", 7) + ".onion"
+	const want = "sg1:1940cde7068246610f120ee0926ad88113942aa2e83d71ba649deab843077a06"
+	if got := t131PartitionUsername(token, onion); got != want {
+		t.Fatalf("foundation-boundaries.md reference username = %q, want %q", got, want)
+	}
+}
+
+// TestStackSmoke brings up the stack, seeds a token, carries application
+// bytes through authenticated SOCKS, then proves T132 DP-only recovery.
 func TestStackSmoke(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker CLI not on PATH: %v", err)
@@ -183,7 +202,7 @@ func TestStackSmoke(t *testing.T) {
 	// ReloadTokens push latency — and, until T130 lands, demonstrates the
 	// auth-rejected failure this test exists to catch).
 	t.Logf("smoke: authenticated CONNECT through %s to the reference onion…", t131DPAddr)
-	conn := t131ConnectWithRetry(t, ctx, composeFile, envFile, token)
+	conn := t131ConnectWithRetry(t, ctx, composeFile, envFile, token, t131InitialWait)
 
 	// Application bytes through the tunnel: a minimal HTTP request over
 	// the established CONNECT (TLS is the onion's problem, not the
@@ -199,28 +218,75 @@ func TestStackSmoke(t *testing.T) {
 		t.Fatalf("no application byte through the tunnel within %s: %v — CONNECT established but the path carries no data (upstream/rendezvous broken)", t131ConnectWait, err)
 	}
 	t.Logf("OK: full path live — authenticated CONNECT through %s established and carrying application bytes", t131DPAddr)
+	_ = conn.Close()
+
+	// T132's live sibling: remove the DP's authority snapshot during a
+	// DP-only restart. With CP still running, admission must recover through
+	// exact-generation ReloadTokens re-delivery (Constitution Principle II).
+	t.Run("T132_DPOnlyRestartRecovery", func(t *testing.T) {
+		stopCtx, stopCancel := context.WithTimeout(ctx, t132StopDead)
+		defer stopCancel()
+		if out, err := t131Compose(stopCtx, composeFile, envFile, "stop", "stargate-dp"); err != nil {
+			t.Fatalf("stop only DP: %v\n%s", err, out)
+		}
+		cp, err := t131Compose(ctx, composeFile, envFile, "ps", "--status", "running", "--quiet", "stargate-control")
+		if err != nil || len(strings.TrimSpace(string(cp))) == 0 {
+			t.Fatalf("CP must remain running during DP restart: %v\n%s", err, cp)
+		}
+		// A retained snapshot could make this probe pass without a CP push.
+		// Remove exactly the test project's DP snapshot while its process is
+		// stopped; keep the CP database and process intact.
+		clear := exec.CommandContext(ctx, "docker", "run", "--rm", "--user", "0:0",
+			"--entrypoint", "sh", "-v", t131Project+"_stargate-dp-state:/state",
+			"stargate/tor:local", "-c",
+			"test -f /state/dp-snapshot.json && rm /state/dp-snapshot.json")
+		if out, err := clear.CombinedOutput(); err != nil {
+			t.Fatalf("remove stopped DP snapshot: %v\n%s", err, out)
+		}
+		startCtx, startCancel := context.WithTimeout(ctx, t132RestartDead)
+		defer startCancel()
+		if out, err := t131Compose(startCtx, composeFile, envFile, "up", "-d", "--no-deps", "stargate-dp"); err != nil {
+			t.Fatalf("restart only DP: %v\n%s", err, out)
+		}
+		cp, err = t131Compose(ctx, composeFile, envFile, "ps", "--status", "running", "--quiet", "stargate-control")
+		if err != nil || len(strings.TrimSpace(string(cp))) == 0 {
+			t.Fatalf("CP stopped during DP-only restart: %v\n%s", err, cp)
+		}
+		forwarded := t131ConnectWithRetry(t, ctx, composeFile, envFile, token, t131ConnectWait)
+		defer forwarded.Close()
+		n, err := fmt.Fprintf(forwarded, "HEAD / HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n", t131Onion)
+		if err != nil || n == 0 {
+			t.Fatalf("write through recovered tunnel failed (wrote %d): %v", n, err)
+		}
+		one := make([]byte, 1)
+		_ = forwarded.SetReadDeadline(time.Now().Add(t131ConnectWait))
+		if _, err := io.ReadFull(forwarded, one); err != nil {
+			t.Fatalf("no application byte through recovered tunnel within %s: %v", t131ConnectWait, err)
+		}
+	})
 }
 
 // t131ConnectWithRetry issues the authenticated CONNECT until it
 // establishes or the window closes, failing with the T059-style
 // classification (AUTH vs ROUTE) and the planes' log tails — the
 // diagnostics that name which layer of the pyramid is broken.
-func t131ConnectWithRetry(t *testing.T, ctx context.Context, composeFile, envFile, token string) net.Conn {
+func t131ConnectWithRetry(t *testing.T, ctx context.Context, composeFile, envFile, token string, wait time.Duration) net.Conn {
 	t.Helper()
-	deadline := time.Now().Add(t131ConnectWait)
+	waitCtx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
 	var lastErr error
 	for {
-		if ctx.Err() != nil {
-			t.Fatalf("suite context expired: %v (last error: %v)", ctx.Err(), lastErr)
+		if waitCtx.Err() != nil {
+			t.Fatalf("authentication wait expired: %v (last error: %v)", waitCtx.Err(), lastErr)
 		}
-		conn, err := t131Connect(ctx, token)
+		conn, err := t131Connect(waitCtx, token)
 		if err == nil {
 			return conn
 		}
 		lastErr = err
-		if time.Now().After(deadline) {
+		if waitCtx.Err() != nil {
 			t.Fatalf("authenticated CONNECT through %s not established within %s: %s\n%s\n%s",
-				t131DPAddr, t131ConnectWait, t131Classify(err),
+				t131DPAddr, wait, t131Classify(err),
 				t131LogTail(t, ctx, composeFile, envFile, "stargate-dp"),
 				t131LogTail(t, ctx, composeFile, envFile, "stargate-control"))
 		}
@@ -228,12 +294,12 @@ func t131ConnectWithRetry(t *testing.T, ctx context.Context, composeFile, envFil
 	}
 }
 
-// t131Connect issues one SOCKS5 CONNECT through the DP: UNAME = the
-// first-party domain, PASSWD = the bearer token (contracts/socks5-auth.md;
-// ATYP=domain — SOCKS5h, no local resolution, FR-007).
+// t131Connect issues one SOCKS5 CONNECT through the DP: UNAME is the full
+// token-keyed first-party partition (foundation-boundaries.md), PASSWD is
+// the bearer token, and ATYP=domain keeps destination DNS out of the DP.
 func t131Connect(ctx context.Context, token string) (net.Conn, error) {
 	dialer, err := proxy.SOCKS5("tcp", t131DPAddr, &proxy.Auth{
-		User:     t131Onion,
+		User:     t131PartitionUsername(token, t131Onion),
 		Password: token,
 	}, proxy.Direct)
 	if err != nil {
@@ -242,6 +308,17 @@ func t131Connect(ctx context.Context, token string) (net.Conn, error) {
 	dCtx, cancel := context.WithTimeout(ctx, t131ConnectWait)
 	defer cancel()
 	return dialer.(proxy.ContextDialer).DialContext(dCtx, "tcp", fmt.Sprintf("%s:%d", t131Onion, t131OnionPrt))
+}
+
+// t131PartitionUsername mirrors the browser's bounded JSON tuple for this
+// fixed normal-profile/onion fixture; the reference-vector test pins bytes.
+func t131PartitionUsername(token, onion string) string {
+	message, _ := json.Marshal([]string{
+		"stargate-isolation-v1", strings.Repeat("11", 32), "normal", "firefox-default", "onion:" + onion,
+	}) // []string has no unsupported values or cycle that can fail Marshal.
+	mac := hmac.New(sha256.New, []byte(token))
+	_, _ = mac.Write(message)
+	return "sg1:" + hex.EncodeToString(mac.Sum(nil))
 }
 
 // t131Classify names the broken layer — the T059 classifier's AUTH and
@@ -302,8 +379,8 @@ func t131SeedToken(ctx context.Context, token string) error {
 	return nil
 }
 
-// t131WaitBootstrapped polls the control port for PROGRESS=100 (T033's
-// in-container probe shape; this suite's project + deadlines).
+// t131WaitBootstrapped polls Tor's private control socket for PROGRESS=100
+// (T162's current torrc contract; this suite's project + deadlines).
 func t131WaitBootstrapped(t *testing.T, ctx context.Context, composeFile, envFile string) {
 	t.Helper()
 	deadline := time.Now().Add(t131BootDead)
@@ -313,7 +390,7 @@ func t131WaitBootstrapped(t *testing.T, ctx context.Context, composeFile, envFil
 		` && { printf 'AUTHENTICATE %s\r\n' "$HEX"` +
 		`      ; printf 'GETINFO status/bootstrap-phase\r\n'` +
 		`      ; printf 'QUIT\r\n'` +
-		`      ; } | nc 127.0.0.1 9051`
+		`      ; } | nc -q 1 -U /var/lib/tor/control/tor-control.sock`
 	for {
 		eCtx, cancel := context.WithTimeout(ctx, t131ExecDead)
 		out, err := t131Compose(eCtx, composeFile, envFile, "exec", "-T", "tor", "sh", "-c", shell)

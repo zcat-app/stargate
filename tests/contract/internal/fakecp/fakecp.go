@@ -198,6 +198,7 @@ func StartTLS(t *testing.T, ipcDir, keysDir string) *Server {
 		VerifyPeerCertificate: PinVerifier(filepath.Join(keysDir, "dp.pub")),
 		ClientAuth:            tls.RequireAnyClientCert,
 		MinVersion:            tls.VersionTLS13,
+		NextProtos:            []string{"h2"}, // wire-auth.md §4: pin explicitly; Go peers can mask omission
 	}
 	return start(t, ipcDir, cfg)
 }

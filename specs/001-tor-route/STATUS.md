@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 32 |
-| in-progress | 0 |
-| in-review | 1 |
+| pending | 31 |
+| in-progress | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 173 |
+| done | 174 |
 | deferred | 5 |
 | **total** | **211** |
 
@@ -30,7 +30,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
 | T121 | Hoist per-suite compose project runner into one shared helpe | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |  | ✓ |
-| T132 | Inter-plane follow-ups from T130 (re-push, ALPN pins, fakecp | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 | T176 | Pin or refuse the Maven tar fallback | Foundation audit remediation |  |  |
 
 ---
@@ -39,7 +38,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
-| T178 | Diagnose and repair live initial token-load failure | in-review | ✓ | Foundational |
+| T132 | Inter-plane follow-ups from T130 (re-push, ALPN pins, fakecp | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 
@@ -57,7 +56,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_173 ticket(s) done._
+_174 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -231,4 +230,5 @@ _173 ticket(s) done._
 - T174 — Migrate live observer checks to silent operational boundaries
 - T175 — Align live quickstart wording with scoped route indicators
 - T177 — Promote Tor 0.4.9.13 security package
+- T178 — Diagnose and repair live initial token-load failure
 - T179 — Harden SQLite contention regression scheduling
