@@ -1,7 +1,7 @@
 ---
 id: T132
 title: 'Inter-plane follow-ups from T130 (re-push, ALPN pins, fakecp ALPN)'
-status: in-review
+status: done
 created: 2026-09-07
 last_updated: 2026-09-27
 source: hand-filed (T120 convention; T130 rounds 1–2 review follow-ups + audit plan)
@@ -19,7 +19,7 @@ spec_refs:
    - specs/001-tor-route/contracts/control-grpc.md §"Plane-down survival"
    - specs/001-tor-route/contracts/wire-auth.md §4   # the ALPN invariant (as amended by T130)
 decision_refs: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-27, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
