@@ -15,9 +15,9 @@
 |---|---|
 | pending | 32 |
 | in-progress | 0 |
-| in-review | 2 |
+| in-review | 1 |
 | escalated | 0 |
-| done | 172 |
+| done | 173 |
 | deferred | 5 |
 | **total** | **211** |
 
@@ -40,7 +40,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
 | T178 | Diagnose and repair live initial token-load failure | in-review | ✓ | Foundational |
-| T179 | Harden SQLite contention regression scheduling | in-review | ✓ | Foundational |
 
 ---
 
@@ -58,7 +57,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_172 ticket(s) done._
+_173 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -232,3 +231,4 @@ _172 ticket(s) done._
 - T174 — Migrate live observer checks to silent operational boundaries
 - T175 — Align live quickstart wording with scoped route indicators
 - T177 — Promote Tor 0.4.9.13 security package
+- T179 — Harden SQLite contention regression scheduling

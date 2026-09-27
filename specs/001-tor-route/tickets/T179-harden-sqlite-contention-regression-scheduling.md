@@ -1,7 +1,7 @@
 ---
 id: T179
 title: 'Harden SQLite contention regression scheduling'
-status: in-review
+status: done
 created: 2026-09-27
 last_updated: 2026-09-27
 source: T178 round-1 GLM Minor finding
@@ -19,7 +19,7 @@ spec_refs:
   - specs/001-tor-route/data-model.md §4
   - specs/001-tor-route/contracts/control-grpc.md ReloadTokens
 decision_refs: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-27, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
