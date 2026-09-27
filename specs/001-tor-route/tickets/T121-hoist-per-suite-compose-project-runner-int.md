@@ -3,13 +3,16 @@ id: T121
 title: 'Hoist per-suite compose project runner into one shared helper'
 status: pending
 created: 2026-09-07
-last_updated: "2026-09-12"
+last_updated: "2026-09-27"
 source: hand-filed (T120 convention)
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
 blocked_by: ["T058", "T139", "T134", "T138", "T156"]
 parallel: true
-files_budget: 4
+files_budget: 7   # amended 4 → 7 (user-authorized, 2026-09-27 run): acceptance #1
+                  # itself requires the five suite files (named in §Context) + the
+                  # new shared helper + this ticket = 7 raw diff paths; 4 was infeasible
+                  # as filed (T094a/T120 budget-amendment precedent, not scope creep)
 privacy_critical: false   # plumbing only; body's "auth" hit is IsolateSOCKSAuth (a tor directive name), not an auth surface
 complexity: low
 risk: low
@@ -73,7 +76,11 @@ its private runner copy.
 
 Derived by hand 2026-09-07 from T058a round-1 review follow-up; see T058a
 §Notes #1 for the live failure that justifies keeping per-suite project
-consts through the hoist.
+consts through the hoist. Grounding note (2026-09-27): port_exposure's
+project const is now `stargate-t162-socket-test` (T162's amendment);
+acceptance #2 pins whatever name is on disk, so the hoist carries it
+verbatim. `files_budget` amended 4 → 7 at run start (user-authorized):
+acceptance #1 mandates five suite edits + one new helper + the ticket.
 
 Constitution check: plumbing refactor only — no privacy surface changes (no
 assertion, deadline, or transport-behaviour edits), so Principle VII's
