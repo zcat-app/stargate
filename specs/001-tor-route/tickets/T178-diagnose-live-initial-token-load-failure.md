@@ -1,7 +1,7 @@
 ---
 id: T178
 title: 'Diagnose and repair live initial token-load failure'
-status: in-review
+status: done
 created: 2026-09-27
 last_updated: 2026-09-27
 source: T132 live VM execution on 2026-09-27
@@ -19,7 +19,7 @@ spec_refs:
   - specs/001-tor-route/data-model.md §1.7–1.9
   - specs/001-tor-route/contracts/socks5-auth.md
 decision_refs: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-27, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
