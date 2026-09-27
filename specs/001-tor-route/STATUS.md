@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-26
+**Last updated:** 2026-09-27
 
 ---
 
@@ -15,11 +15,11 @@
 |---|---|
 | pending | 32 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 172 |
 | deferred | 5 |
-| **total** | **209** |
+| **total** | **210** |
 
 ---
 
@@ -37,7 +37,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T178 | Diagnose and repair live initial token-load failure | in-review | ✓ | Foundational |
 
 ---
 

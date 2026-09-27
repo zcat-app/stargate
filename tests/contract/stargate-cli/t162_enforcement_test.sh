@@ -424,6 +424,20 @@ docker run --rm --network none --user 5102:5100 --cap-drop ALL \
     echo 'FAIL: profiled authenticated gRPC WatchEvents/ReloadTokens regression' >&2; exit 1;
   }
 
+# T178: a successful rename alone is insufficient. The production writer must
+# open and fsync the deployment directory before auth becomes durable (II).
+docker run --rm --network none --user 5102:5100 --cap-drop ALL \
+  --security-opt "apparmor=$profile_name" --security-opt no-new-privileges:true \
+  --tmpfs /tmp:rw,mode=1777 --tmpfs /var/lib/stargate:rw,uid=5102,gid=5100,mode=0750 \
+  -e STARGATE_TEST_DEPLOYMENT_STATE=1 \
+  -v "$tmpdir/controlclient.test:/opt/stargate/stargate-proxy:ro" \
+  --entrypoint /opt/stargate/stargate-proxy stargate/tor:local \
+  -test.run '^TestDeploymentSnapshotCommitAndRestore$' -test.timeout 30s \
+  >"$tmpdir/snapshot.out" 2>&1 || {
+    tail -20 "$tmpdir/snapshot.out" >&2
+    echo 'FAIL: profiled deployment snapshot commit/restore regression' >&2; exit 1;
+  }
+
 docker run --rm --privileged --network none "${policy_mounts[@]}" \
   --entrypoint /bin/bash "$image" -c \
   'apparmor_parser -T -R /policy && ! grep -Fq "$1 (enforce)" /sys/kernel/security/apparmor/profiles' \

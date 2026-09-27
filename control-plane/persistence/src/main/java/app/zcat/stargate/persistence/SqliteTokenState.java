@@ -44,10 +44,24 @@ public class SqliteTokenState
 
     @Override
     public void begin() {
+        openTransaction();
+        try {
+            // SQLite's deferred read-to-write upgrade can fail with SQLITE_BUSY
+            // while the §4 aggregate worker commits. Reserve the single writer
+            // before Hibernate reads a credential, preserving §1.7's atomic set.
+            em.createNativeQuery("UPDATE token_generation SET generation = generation")
+                    .executeUpdate();
+        } catch (Exception e) {
+            rollback();
+            throw new IllegalStateException("token store: cannot reserve the load transaction", e);
+        }
+    }
+
+    private void openTransaction() {
         try {
             utx.begin();
         } catch (Exception e) {
-            throw new IllegalStateException("token store: cannot open the load transaction", e);
+            throw new IllegalStateException("token store: cannot open the transaction", e);
         }
     }
 
@@ -129,10 +143,10 @@ public class SqliteTokenState
      * outside the loader's window — on the boot thread BEFORE {@code begin()},
      * and on the sidecar monitor's poll thread via the generation supplier —
      * so there is nothing to join: begin, read, commit. (A future in-window
-     * read would fail loud in {@link #begin()}, which is the honest shape.)
+     * read would fail loud in {@link #openTransaction()}, which is the honest shape.)
      */
     private <T> T inTransaction(java.util.function.Supplier<T> work) {
-        begin();
+        openTransaction();
         try {
             T result = work.get();
             utx.commit();

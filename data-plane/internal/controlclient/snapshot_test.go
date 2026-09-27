@@ -35,6 +35,33 @@ import (
 
 // --- fixtures -----------------------------------------------------------------
 
+// The Docker policy gate supplies the actual deployment path under AppArmor;
+// ordinary Go runs exercise the same durable-write/restore contract in TempDir.
+func TestDeploymentSnapshotCommitAndRestore(t *testing.T) {
+	dir := t.TempDir()
+	if os.Getenv("STARGATE_TEST_DEPLOYMENT_STATE") == "1" {
+		dir = "/var/lib/stargate"
+	}
+	plaintext := strings.Repeat("a", 32)
+	generation := &auth.Generation{
+		Generation: 1,
+		Verifiers:  [][]byte{mintVerifier(plaintext)},
+		LoadedAt:   fixedTime,
+	}
+	if err := WriteSnapshot(dir, generation); err != nil {
+		t.Fatalf("durable snapshot commit: %v", err)
+	}
+	store := auth.NewTokenStore()
+	log, journal := journalLogger()
+	RestoreSnapshot(dir, store, log)
+	if store.Current().Generation != 1 || !auth.NewTokenVerifier(testPepper, store).VerifyPassword([]byte(plaintext)) {
+		t.Fatal("durably committed deployment snapshot did not restore authentication")
+	}
+	if journal.Len() != 0 {
+		t.Fatal("snapshot persistence emitted operational diagnostics")
+	}
+}
+
 // testPepper is the fixture pepper both the minted verifiers and the
 // round-trip auth.TokenVerifier use (data-model.md §1.5: same pepper on
 // both sides; length pinned by auth.PepperLen).

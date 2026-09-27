@@ -11,6 +11,8 @@ profile stargate-dp flags=(attach_disconnected,mediate_deleted) {
   /etc/hostname r,
   /etc/hosts r,
   /etc/stargate/keys/** r,
+  # T178 / Principle II: open the state directory for fsync after snapshot rename.
+  /var/lib/stargate/ r,
   /var/lib/stargate/** rwk,
   /run/stargate/ rw,
   /run/stargate/control.sock rw,

@@ -320,6 +320,15 @@ host had not exposed: Go's `urg`/`rtmin+1` and host shutdown signals were denied
 An operator's ability to stop the route remains part of Principle II and the
 existing trusted-host boundary. T163 still owns the cumulative packet result.
 
+**T178 snapshot-directory compatibility:** the profile grants read access to the exact
+`/var/lib/stargate/` directory so the DP can open and fsync it after an atomic snapshot
+rename. Access to its contents was already permitted. Without this directory permission,
+the visible snapshot was not durably acknowledged and new credentials correctly remained
+inadmissible. The production writer/restore regression fails at that open under the old
+enforcing profile and passes under the repaired one. This preserves the durable-auth
+boundary in Principle II; directory sync remains mandatory. Network, Unix-socket and
+signal restrictions are unchanged. It adds no trust boundary or cryptographic mechanism.
+
 **T171 evidence timing:** probe processes have a separate bounded startup/run
 allowance; ordinary socket-operation deadlines remain 0.8 seconds. Loopback
 fixtures start after recorder readiness and drain queued attempts before
@@ -1958,6 +1967,15 @@ clock boundary can abort CP initialization; the loader's later failure containme
 promise CP boot availability. The DP continues independently. No production operational export endpoint exists yet; any future reader must enforce
 expiry before export. A stopped/unwritable database cannot run cleanup; normal retention is
 not a claim of erasure during an outage.
+
+**T178 first-token contention repair.** The loader's credential transaction takes SQLite's
+writer reservation before reading or changing `configured_tokens`. The aggregate worker uses
+its separate transaction and waits for that reservation; it cannot force a deferred
+read-to-write upgrade failure during initial enrollment. Generation reservation still commits
+before the credential set, and `ReloadTokens` still follows its commit. An unavailable SQLite
+store can still prevent CP enrollment; the DP denies admission without valid authority and
+continues using its last valid state during CP failure (Principle II). The aggregate sink
+still retains only completed-hour categories under the policy above (Principle III).
 
 | Writer / capture | Enforcement and preserved behavior |
 |---|---|

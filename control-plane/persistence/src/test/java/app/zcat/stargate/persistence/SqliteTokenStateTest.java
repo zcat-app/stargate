@@ -18,6 +18,8 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Collection;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -224,6 +226,47 @@ class SqliteTokenStateTest {
         assertNull(row, "revocation must not retain per-device operational history");
         assertTrue(state.storedTokens().stream().noneMatch(t -> t.label().equals(label)),
                 "a deleted label leaves the diff view (§1.4/§1.9)");
+    }
+
+    @Test
+    void aggregateWriterCannotAbortInitialCredentialCommit() throws Exception {
+        // §1.7–1.9 requires the candidate to commit before ReloadTokens. A concurrent
+        // §4 aggregate writer must not turn the first credential into SQLITE_BUSY.
+        String label = "concurrent-enrollment-" + System.nanoTime();
+        CountDownLatch writerStarted = new CountDownLatch(1);
+        CountDownLatch writerAcquired = new CountDownLatch(1);
+        CountDownLatch releaseWriter = new CountDownLatch(1);
+        try (var executor = Executors.newSingleThreadExecutor()) {
+            state.begin();
+            // A miss forces the same deferred read-to-write window as initial upsert.
+            state.delete(label);
+            var aggregateWriter = executor.submit(() -> {
+                try (Connection connection = dataSource.getConnection();
+                        Statement statement = connection.createStatement()) {
+                    writerStarted.countDown();
+                    statement.execute("BEGIN IMMEDIATE");
+                    writerAcquired.countDown();
+                    statement.executeUpdate("INSERT OR IGNORE INTO operational_aggregates "
+                            + "(hour_bucket, category, count) VALUES (1800000000, 'enrolled', 0)");
+                    releaseWriter.await(5, TimeUnit.SECONDS);
+                    statement.execute("COMMIT");
+                }
+                return null;
+            });
+            try {
+                assertTrue(writerStarted.await(5, TimeUnit.SECONDS));
+                // On a deferred token transaction the second writer acquires the
+                // reservation and the token upgrade fails, even with busy_timeout.
+                writerAcquired.await(2, TimeUnit.SECONDS);
+                state.upsert(label, VERIFIER_A);
+                state.commit();
+            } finally {
+                releaseWriter.countDown();
+                state.rollback();
+            }
+            aggregateWriter.get(10, TimeUnit.SECONDS);
+        }
+        assertNotNull(readTokenRow(label), "the first configured credential must commit");
     }
 
     @Test
