@@ -15,11 +15,11 @@
 |---|---|
 | pending | 32 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 2 |
 | escalated | 0 |
 | done | 172 |
 | deferred | 5 |
-| **total** | **210** |
+| **total** | **211** |
 
 ---
 
@@ -40,6 +40,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
 | T178 | Diagnose and repair live initial token-load failure | in-review | ✓ | Foundational |
+| T179 | Harden SQLite contention regression scheduling | in-review | ✓ | Foundational |
 
 ---
 

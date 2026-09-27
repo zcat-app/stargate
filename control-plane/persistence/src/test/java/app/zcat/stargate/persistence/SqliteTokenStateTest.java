@@ -22,6 +22,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.LockSupport;
 import java.util.stream.Collectors;
 
 import app.zcat.stargate.auth.HmacVerifierMinter;
@@ -36,6 +37,8 @@ import org.jspecify.annotations.Nullable;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.sqlite.BusyHandler;
+import org.sqlite.SQLiteConnection;
 
 /**
  * Behavioural contract for {@link SqliteTokenState} (T041; Principle VII
@@ -232,8 +235,11 @@ class SqliteTokenStateTest {
     void aggregateWriterCannotAbortInitialCredentialCommit() throws Exception {
         // §1.7–1.9 requires the candidate to commit before ReloadTokens. A concurrent
         // §4 aggregate writer must not turn the first credential into SQLITE_BUSY.
+        // Hold the token writer for 3.5s after the competing BEGIN reaches SQLite;
+        // the fixture's 12s busy budget allows that delay plus a stalled runner.
         String label = "concurrent-enrollment-" + System.nanoTime();
-        CountDownLatch writerStarted = new CountDownLatch(1);
+        CountDownLatch writerInterleaved = new CountDownLatch(1);
+        CountDownLatch writerContending = new CountDownLatch(1);
         CountDownLatch writerAcquired = new CountDownLatch(1);
         CountDownLatch releaseWriter = new CountDownLatch(1);
         try (var executor = Executors.newSingleThreadExecutor()) {
@@ -243,23 +249,54 @@ class SqliteTokenStateTest {
             var aggregateWriter = executor.submit(() -> {
                 try (Connection connection = dataSource.getConnection();
                         Statement statement = connection.createStatement()) {
-                    writerStarted.countDown();
-                    statement.execute("BEGIN IMMEDIATE");
-                    writerAcquired.countDown();
-                    statement.executeUpdate("INSERT OR IGNORE INTO operational_aggregates "
-                            + "(hour_bucket, category, count) VALUES (1800000000, 'enrolled', 0)");
-                    releaseWriter.await(5, TimeUnit.SECONDS);
-                    statement.execute("COMMIT");
+                    // The first busy callback proves BEGIN actually reached the
+                    // reserved writer lock. On an unfixed store, BEGIN succeeds
+                    // instead and the acquired latch establishes that ordering.
+                    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(12);
+                    SQLiteConnection sqlite = connection.unwrap(SQLiteConnection.class);
+                    int inheritedBusyTimeout = sqlite.getBusyTimeout();
+                    BusyHandler.setHandler(sqlite, new BusyHandler() {
+                        @Override
+                        protected int callback(int count) {
+                            writerContending.countDown();
+                            writerInterleaved.countDown();
+                            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(10));
+                            return System.nanoTime() < deadline ? 1 : 0;
+                        }
+                    });
+                    try {
+                        statement.execute("BEGIN IMMEDIATE");
+                        writerAcquired.countDown();
+                        writerInterleaved.countDown();
+                        statement.executeUpdate("INSERT OR IGNORE INTO operational_aggregates "
+                                + "(hour_bucket, category, count) VALUES (1800000000, 'enrolled', 0)");
+                        if (!releaseWriter.await(12, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("fixture did not release the aggregate writer");
+                        }
+                        statement.execute("COMMIT");
+                    } finally {
+                        // Agroal may reuse the physical connection in another test.
+                        sqlite.setBusyTimeout(inheritedBusyTimeout);
+                        try (ResultSet timeout = statement.executeQuery("PRAGMA busy_timeout")) {
+                            assertTrue(timeout.next());
+                            assertEquals(inheritedBusyTimeout, timeout.getInt(1),
+                                    "the pooled connection must retain its inherited busy wait");
+                        }
+                    }
                 }
                 return null;
             });
             try {
-                assertTrue(writerStarted.await(5, TimeUnit.SECONDS));
-                // On a deferred token transaction the second writer acquires the
-                // reservation and the token upgrade fails, even with busy_timeout.
-                writerAcquired.await(2, TimeUnit.SECONDS);
+                assertTrue(writerInterleaved.await(5, TimeUnit.SECONDS),
+                        "fixture never reached BEGIN IMMEDIATE; cannot test contention");
+                boolean writerAcquiredBeforeCommit = writerAcquired.getCount() == 0;
+                Thread.sleep(3500); // Exceeds the inherited 3s SQLite wait budget.
                 state.upsert(label, VERIFIER_A);
                 state.commit();
+                assertFalse(writerAcquiredBeforeCommit,
+                        "aggregate writer acquired before token commit");
+                assertEquals(0, writerContending.getCount(),
+                        "aggregate writer never encountered the token reservation");
             } finally {
                 releaseWriter.countDown();
                 state.rollback();
