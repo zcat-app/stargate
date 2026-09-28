@@ -1,7 +1,7 @@
 ---
 id: T121
 title: 'Hoist per-suite compose project runner into one shared helper'
-status: in-progress
+status: done
 created: 2026-09-07
 last_updated: 2026-09-28
 source: hand-filed (T120 convention)
@@ -22,7 +22,7 @@ round_cap: 2
 spec_refs:
    - specs/001-tor-route/spec.md#FR-012   # compose-internal transport contract the runners share
 decision_refs: []
-reviews: {}
+reviews: { round: 2, date: 2026-09-28, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
