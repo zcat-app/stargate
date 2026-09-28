@@ -11,9 +11,12 @@
 // GETINFO circuit-status.
 //
 // Wire shape (contracts/socks5-auth.md, replicated exactly by x/net's
-// proxy.SOCKS5): UNAME = the request's first-party domain — for a
-// top-level .onion navigation that is the onion address itself
-// (spec.md FR-002) — PASSWD = the device bearer token. The DP validates
+// proxy.SOCKS5): UNAME = the complete `sg1:` partition username the
+// browser derives for a normal-mode, default-container top-level .onion
+// navigation (contracts/foundation-boundaries.md; spec.md FR-002; T172/
+// T173), via T126's reference-vector-pinned t126PartitionUsername — the
+// two targets' tuples differ in `onion:<addr>`, so their partitions are
+// distinct — PASSWD = the device bearer token. The DP validates
 // the token, then forwards the UNAME verbatim as the upstream SOCKS5
 // username (data-plane/internal/forward/tor.go dialUpstream, FR-007: "the
 // US2 IsolateSOCKSAuth key"), never re-sending the PASSWD upstream.
@@ -63,9 +66,11 @@
 // argon2id load + ReloadTokens push to the DP. The token lives only in
 // run-time memory/pipe and is torn down with the project's volumes.
 //
-// Control-port transport (FR-012: 9050/9051 are compose-internal only):
-// the cookie-authenticated probe rides `docker compose exec tor … nc` —
-// T033's pattern, extended with GETINFO stream-status. Wire formats
+// Control transport (FR-012; torrc contract invariant #3): tor exposes
+// control only on the private ControlSocket
+// /var/lib/tor/control/tor-control.sock (T162 removed TCP 9051). The
+// cookie-authenticated probe rides `docker compose exec tor … nc -U` —
+// T131's live-green shape, extended with GETINFO stream-status. Wire formats
 // captured live 2026-09-07 (single-stream form `250-stream-status=<fields>`
 // vs multi-stream block form `250+stream-status=` … `.`); the parser
 // handles both, matching T058a's exact-count discipline: streams are
@@ -81,6 +86,16 @@
 //
 // Skip guards mirror T033 (env opt-in / docker CLI / daemon / content
 // gates for the not-yet-landed implementation).
+//
+// OPERATOR PREREQUISITES (current Local topology; T126/T131 runbook): run
+// only on a disposable Linux Docker host or VM
+// (tests/live-e2e/local-topology/README.md) with the `stargate-dp`
+// AppArmor profile loaded in enforce mode and the DP owner rules
+// installed, and with the init-equivalent key/pepper and volume-root
+// provisioning (scripts/stargate init steps 2–3) done for THIS project's
+// volumes — detailed at the token-seed step below. The harness automates
+// only the tokens.yaml seed, the keys/ mountpoint and the two-phase
+// bring-up.
 package integration
 
 import (
@@ -138,7 +153,15 @@ const (
 	t059StreamPoll  = 2 * time.Second  // stream-status poll cadence (T058a)
 	t059ExecDead    = 15 * time.Second // docker compose exec deadline (T033)
 	t059OverallDead = 30 * time.Minute // whole-suite ctx; test -timeout 35m is outer
+
+	// t059ControlSocket is tor's only control endpoint (torrc contract
+	// invariant #3; T162).
+	t059ControlSocket = "/var/lib/tor/control/tor-control.sock"
 )
+
+// t059ProfileID is the fixed browser-profile id of both partitions (the
+// foundation-boundaries reference vector's); only the target varies.
+var t059ProfileID = strings.Repeat("11", 32)
 
 // t059OnionShape is the v3 onion-address shape (T063's corpus invariant):
 // 56 base32 chars (a-z2-7) + ".onion". Both destination constants are
@@ -154,7 +177,7 @@ var t059TerminalStreamStates = map[string]bool{
 
 // TestStreamIsolationPerFirstPartyDomain is T059 (spec US2 acceptance
 // scenario 1): two parallel CONNECTs through port 8881 to two distinct
-// .onion destinations, each with its own first-party-domain username,
+// .onion destinations, each with its own `sg1:` partition username,
 // MUST attach to distinct circuits at the Tor control port.
 func TestStreamIsolationPerFirstPartyDomain(t *testing.T) {
 	// --- Self-skip guards (T033 pattern) ---------------------------------
@@ -230,14 +253,12 @@ func TestStreamIsolationPerFirstPartyDomain(t *testing.T) {
 	// exercises on-disk state, not a stale cached tag.
 	//
 	// Why tor in a separate phase (live-run finding 2026-09-07): the tor
-	// HEALTHCHECK demands full bootstrap (PROGRESS=100) within ~150s
-	// (start-period 60s + 3×30s retries), but a cold bootstrap on the live
-	// Tor network legitimately takes minutes — T032/T058a budget 5m — and
-	// stargate-control depends_on tor service_healthy, so a slow Tor day
-	// aborts the whole `up` (product gap filed as T124). The harness
-	// therefore pre-bootstraps tor under its OWN 5-minute deadline, then
-	// brings up the remaining services — at which point tor is already
-	// healthy and the dependency gate passes deterministically.
+	// HEALTHCHECK then demanded full bootstrap within ~150s and
+	// stargate-control depended on it, so a slow cold bootstrap (minutes —
+	// T032/T058a budget 5m) aborted the whole `up`. T162/T152 removed that
+	// gate (the tor healthcheck is disabled and nothing depends on it);
+	// the split remains so the CONNECT windows below start only after tor
+	// has bootstrapped under this suite's OWN 5-minute deadline.
 	t.Log("bringing up tor and waiting for bootstrap…")
 	upCtx, upCancel := context.WithTimeout(ctx, t059UpDead)
 	if out, err := t059Compose(upCtx, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
@@ -412,11 +433,11 @@ func t059WaitBootstrapped(t *testing.T, ctx context.Context, composeFile, envFil
 	}
 }
 
-// t059ControlProbe runs one cookie-authenticated control-port command
-// inside the tor container and returns the raw reply text. The probe
-// mirrors the image HEALTHCHECK / T033: locate the cookie with `find`
-// (T087's DataDirectory note), hex-encode it, AUTHENTICATE, send the
-// command, QUIT.
+// t059ControlProbe runs one cookie-authenticated control command over
+// tor's private ControlSocket inside the tor container and returns the
+// raw reply text. The probe mirrors T131's t131WaitBootstrapped: locate
+// the cookie with `find` (T087's DataDirectory note), hex-encode it,
+// AUTHENTICATE, send the command, QUIT; `nc -q 1` closes after the reply.
 func t059ControlProbe(ctx context.Context, composeFile, envFile string, command string) (string, error) {
 	shell := `COOKIE=$(find /var/lib/tor -name control_auth_cookie 2>/dev/null | head -1)` +
 		` && [ -n "$COOKIE" ]` +
@@ -424,7 +445,7 @@ func t059ControlProbe(ctx context.Context, composeFile, envFile string, command 
 		` && { printf 'AUTHENTICATE %s\r\n' "$HEX"` +
 		`      ; printf '` + command + `\r\n'` +
 		`      ; printf 'QUIT\r\n'` +
-		`      ; } | nc 127.0.0.1 9051`
+		`      ; } | nc -q 1 -U ` + t059ControlSocket
 	eCtx, cancel := context.WithTimeout(ctx, t059ExecDead)
 	defer cancel()
 	out, err := t059Compose(eCtx, composeFile, envFile, "exec", "-T", "tor", "sh", "-c", shell)
@@ -563,15 +584,16 @@ func t059DialWorker(ctx context.Context, start <-chan struct{}, idx int, onion s
 }
 
 // t059ConnectThroughDP issues one SOCKS5 CONNECT through the DP's loopback
-// port 8881: UNAME = the first-party domain (the onion address itself —
-// FR-002's top-level-navigation rule), PASSWD = the bearer token
+// port 8881: UNAME = the target's complete `sg1:` partition
+// (foundation-boundaries.md; FR-002), PASSWD = the bearer token
 // (contracts/socks5-auth.md). x/net's dialer sends ATYP=0x03 DOMAIN for a
 // non-IP host — SOCKS5h, no local resolution (FR-007) — and the returned
 // conn is the established tunnel: no HTTP/TLS is spoken (page load is
 // T033's assertion; this test only needs the stream attached and held).
 func t059ConnectThroughDP(ctx context.Context, onion string, port int, token string) (net.Conn, error) {
 	dialer, err := proxy.SOCKS5("tcp", t059DPAddr, &proxy.Auth{
-		User:     onion, // first-party domain — the isolation credential the DP forwards upstream
+		// Partition — the isolation credential the DP forwards upstream.
+		User:     t126PartitionUsername(token, t059ProfileID, onion),
 		Password: token, // bearer token — what the DP validates; never re-sent upstream
 	}, proxy.Direct)
 	if err != nil {

@@ -1,7 +1,7 @@
 ---
 id: T182
 title: 'Repair stale T059/T033 live harnesses: control socket, sg1 names'
-status: pending
+status: in-progress
 created: 2026-09-28
 last_updated: 2026-09-28
 source: hand-filed (T120 convention) — discovered while grounding T126 (2026-09-28 session); user direction to file
@@ -9,7 +9,7 @@ phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P
 story: 'US2'
 blocked_by: []
 parallel: true
-files_budget: 5   # two suite files + this ticket + STATUS.md regen + evidence/T182-tests-first.json
+files_budget: 6   # two suite files + T126 suite comment + this ticket + STATUS.md regen + evidence/T182-tests-first.json (5 -> 6 user-authorized 2026-09-28: fix the T126 header prose T182 makes stale, no deferral)
 privacy_critical: true   # edits the observation channel and SOCKS credential shape of isolation/route suites
 complexity: low
 risk: low
@@ -60,14 +60,46 @@ reads circuits through the T062 helper `tests/contract/tor`.
 
 ## Analysis
 
-*(Filed for grounding at start; the property map is completed then.)*
+Grounded 2026-09-28 against HEAD `a59ee18`: `stream_isolation_test.go:427`
+and `onion_load_test.go:297,305` pipe to `nc 127.0.0.1 9051`;
+`sidecars/tor/torrc` exposes only `ControlSocket
+/var/lib/tor/control/tor-control.sock`; `stack_smoke_test.go`
+`t131WaitBootstrapped` (`nc -q 1 -U <socket>`) is live-green (T178).
+`t126PartitionUsername` (untagged, same package) is pinned to the
+foundation-boundaries vector by `TestT126PartitionUsernameReferenceVector`
+and already shared cross-suite in the T131/T126 manner (`t059NewToken`,
+`t059ClassifyDialErr`).
 
-- Must hold: every control exchange uses the authenticated Unix
-  ControlSocket (the T062 helper or T131's `nc -U` shape); every SOCKS
-  CONNECT through 8881 carries a complete `sg1:` partition and the bearer
-  only as the DP-facing password; each suite's assertion and cadence are
-  otherwise unchanged; failures stay loud.
-- Residue: live-only behaviour. Acceptance requires a live run.
+- **Must hold:**
+  1. Every Tor control exchange in T059/T033 rides the cookie-authenticated
+     private Unix ControlSocket; nothing dials TCP 9051 (FR-012, torrc
+     invariant #3).
+  2. Every SOCKS CONNECT through 8881 carries a complete 68-char `sg1:`
+     partition derived by the vector-pinned helper; the bearer is only the
+     DP-facing PASSWD, never the UNAME. T059's two targets yield distinct
+     partitions (the tuple's `onion:<addr>` element differs).
+  3. Assertions, project names and the env-gated release cadence are
+     unchanged; every probe failure stays a loud `Fatal`. Windows are
+     unchanged unless the green live run shows a window too short for the
+     current stack (e.g. T033's 90 s load window vs the cold CP): then it
+     is widened here, T131/T126-style (user-authorized 2026-09-28, no
+     separate ask or follow-up).
+  4. Headers name the current Local-topology live prerequisites.
+  5. T033's bring-up names its services (`tor stargate-dp
+     stargate-control`, T059/T126/T131's set). Red live run 1 found its
+     list-less `up` pulling `tor-observer` from the example env's
+     placeholder `STARGATE_OBSERVER_IMAGE` (an init-written local image
+     ID) and failing before any probe — a third stale assumption, fixed
+     here rather than deferred.
+- **Gated:** the partition derivation (hermetic reference-vector test in the
+  PR gate); compile + vet of both files (go-workspace gate); `grep -n 9051`
+  over `tests/integration` (acceptance 1, mechanical).
+- **Residue:** live-only behaviour — socket reachability as the exec user,
+  reply shape over `nc -U`, and DP admission of the `sg1:` names. Closed by
+  acceptance 4's red (control probe fails on the unmodified transport) and
+  green live runs on the enforcing VM. T033 has no token seed step; its
+  live run relies on the operator seeding `tokens.yaml` for its project
+  (stated in its header, performed by the live wrapper).
 
 ## Acceptance
 
@@ -87,6 +119,30 @@ reads circuits through the T062 helper `tests/contract/tor`.
 
 - T059's or T033's assertions (isolation, page load) — transport and
   credential shape only.
-- `stack_smoke_test.go` and T126's suite (already current).
+- `stack_smoke_test.go` and T126's suite (already current), except the one
+  `stream_isolation_dp_uname_test.go` header sentence claiming T059's probe
+  still dials TCP 9051 — prose this ticket falsifies; corrected here
+  (user-directed 2026-09-28, no follow-up ticket).
 - Hoisting a shared integration-module helper (T121/T180 deferred it).
 - Production code or the torrc contract.
+
+## Notes
+
+### Tests-first evidence (disposable VM)
+
+Executed 2026-09-28 on a copy of the saved enforcing Ubuntu VM
+(`guest-t126.qcow2` → `guest-t182.qcow2`, QEMU TCG, 4 vCPU, 6 GiB; kernel
+`6.8.0-142-generic`; `stargate-dp (enforce)`, IPv4/IPv6 owner rules, synthetic
+keys/pepper and volume roots provisioned for `stargate-t033-test` and
+`stargate-t059-test`, plus T033's operator token seeded on stdin). Probe
+(identical for red and green): `bash target/runs/T182-vm/live.sh`
+(gitignored T126-derived wrapper) running
+`^(TestOnionLoad|TestT126PartitionUsernameReferenceVector|TestStreamIsolationPerFirstPartyDomain)$`.
+
+- Red 1 (superseded): T059 failed at its 9051 bootstrap probe; T033 failed
+  earlier, at the list-less `up` pulling `tor-observer` (Analysis item 5).
+- **Red 2** (recorded): every change staged except the probe transport —
+  both suites fail at the control probe (`no PROGRESS=100 within 5m0s`).
+- **Green**: `nc -q 1 -U` ControlSocket probes — T033 loads 212506 bytes
+  after one AUTH retry within the unchanged 90 s window, circuit BUILT;
+  T059 streams on distinct BUILT circuits 13 / 21. No window widened.

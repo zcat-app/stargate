@@ -44,9 +44,17 @@ const (
 	t033ReqWait   = 90 * time.Second  // retry window for the onion load (route-enable + circuit-build slack)
 	t033ReqDead   = 120 * time.Second // per-attempt HTTP client timeout
 	t033BootWait  = 5 * time.Minute   // Tor bootstrap (cold guard selection)
-	t033ExecDead  = 15 * time.Second  // docker compose exec deadline (nc control-port probe)
+	t033ExecDead  = 15 * time.Second  // docker compose exec deadline (nc control-socket probe)
 	t033PollEvery = 5 * time.Second
+
+	// t033ControlSocket is tor's only control endpoint (torrc contract
+	// invariant #3; T162 removed TCP 9051).
+	t033ControlSocket = "/var/lib/tor/control/tor-control.sock"
 )
+
+// t033ProfileID is the partition's fixed browser-profile id (the
+// foundation-boundaries reference vector's).
+var t033ProfileID = strings.Repeat("11", 32)
 
 // TestOnionLoad is the US1 MVP gate (T033): bring up the full
 // local-profile stack, load the spec's reference onion through port 8881
@@ -61,6 +69,18 @@ const (
 // STARGATE_TEST_TOKEN=<bearer>. Not run by verify.sh (which gates only
 // the data-plane Go module). DNS-leak and egress-consensus properties
 // are gated separately by T034/T034f.
+//
+// OPERATOR PREREQUISITES (current Local topology; T126/T131 runbook): run
+// only on a disposable Linux Docker host or VM
+// (tests/live-e2e/local-topology/README.md) with the `stargate-dp`
+// AppArmor profile loaded in enforce mode and the DP owner rules
+// installed, and with the init-equivalent key/pepper and volume-root
+// provisioning (scripts/stargate init steps 2–3) done for THIS project's
+// (stargate-t033-test) volumes. The harness does not seed the token: the
+// operator also writes tokens.yaml (spec FR-017 shape, carrying
+// STARGATE_TEST_TOKEN) and the keys/ mountpoint into
+// stargate-t033-test_stargate-control-config before the run — the step
+// T059's t059SeedToken automates for its own project.
 func TestOnionLoad(t *testing.T) {
 	// --- Self-skip guards ------------------------------------------------
 	// The test is authored BEFORE the implementation it verifies. Each
@@ -143,16 +163,19 @@ func TestOnionLoad(t *testing.T) {
 
 	// --- Bring up the full stack ----------------------------------------
 	// --build forces a rebuild against current Dockerfiles so the test
-	// exercises on-disk state, not a stale cached tag.
-	t.Log("bringing up full local-profile stack…")
+	// exercises on-disk state, not a stale cached tag. Scoped to the three
+	// services the route needs (T059/T126/T131's set): tor-observer's image
+	// is an init-written local image ID, and the example env's placeholder
+	// makes a list-less up fail pulling it (T182 live finding).
+	t.Log("bringing up tor + data plane + control plane…")
 	upCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
-	if out, err := t033Compose(upCtx, composeFile, envFile, "up", "-d", "--build"); err != nil {
+	if out, err := t033Compose(upCtx, composeFile, envFile, "up", "-d", "--build", "tor", "stargate-dp", "stargate-control"); err != nil {
 		t.Fatalf("docker compose up: %v\n%s", err, out)
 	}
 
 	// --- Wait for Tor bootstrap -----------------------------------------
-	// The control-port exchange mirrors the Dockerfile HEALTHCHECK + T032:
+	// The control-socket exchange mirrors T032/T131:
 	// AUTHENTICATE <cookie-hex> then GETINFO status/bootstrap-phase,
 	// grepping for PROGRESS=100. The cookie is located via find — robust
 	// to the T087 DataDirectory discrepancy (/var/lib/tor/.tor vs
@@ -207,9 +230,12 @@ func t033TryLoadOnion(ctx context.Context, t *testing.T, token string, window ti
 }
 
 // t033LoadOnion issues GET https://<reference-onion>/ via SOCKS5h through
-// the data plane's loopback port 8881. The SOCKS5 UNAME is the first-
-// party domain (the onion itself) and PASSWD is the bearer token, per
-// contracts/socks5-auth.md §"Username/password sub-negotiation".
+// the data plane's loopback port 8881. The SOCKS5 UNAME is the complete
+// `sg1:` partition the browser derives for this normal-mode, default-
+// container onion navigation (contracts/foundation-boundaries.md; T172/
+// T173), via T126's reference-vector-pinned t126PartitionUsername, and
+// PASSWD is the bearer token, per contracts/socks5-auth.md
+// §"Username/password sub-negotiation".
 //
 // proxy.SOCKS5 with a domain target uses ATYP=0x03 DOMAIN — SOCKS5h, no
 // local DNS resolution of the .onion name (FR-007, Principle III). TLS
@@ -218,8 +244,9 @@ func t033TryLoadOnion(ctx context.Context, t *testing.T, token string, window ti
 // serves a valid certificate.
 func t033LoadOnion(ctx context.Context, token string) ([]byte, error) {
 	dialer, err := proxy.SOCKS5("tcp", t033DPAddr, &proxy.Auth{
-		User:     t033Onion, // first-party domain — stream-isolation key (not a credential)
-		Password: token,     // bearer token — the credential the DP validates
+		// Partition — stream-isolation key (not a credential).
+		User:     t126PartitionUsername(token, t033ProfileID, t033Onion),
+		Password: token, // bearer token — the credential the DP validates
 	}, proxy.Direct)
 	if err != nil {
 		return nil, fmt.Errorf("SOCKS5 dialer: %w", err)
@@ -282,11 +309,11 @@ func t033CircuitStatus(ctx context.Context, composeFile, envFile string) (string
 }
 
 // t033BootstrapProbe and t033CircuitStatusProbe are the shell snippets
-// run inside the tor container. They mirror the Dockerfile HEALTHCHECK
-// exactly: locate the auth cookie (find — T087), hex-encode it, then
-// drive the control-port exchange via nc. The `find | head -1` is robust
-// to any DataDirectory location; the HEALTHCHECK's hardcoded path would
-// miss the cookie at /var/lib/tor/.tor/control_auth_cookie.
+// run inside the tor container. They mirror T131's t131WaitBootstrapped:
+// locate the auth cookie (find — T087), hex-encode it, then drive the
+// exchange over tor's private ControlSocket via `nc -q 1 -U`. The
+// `find | head -1` is robust to any DataDirectory location (a hardcoded
+// path would miss the cookie at /var/lib/tor/.tor/control_auth_cookie).
 const (
 	t033BootstrapProbe = `COOKIE=$(find /var/lib/tor -name control_auth_cookie 2>/dev/null | head -1)` +
 		` && [ -n "$COOKIE" ]` +
@@ -294,7 +321,7 @@ const (
 		` && { printf 'AUTHENTICATE %s\r\n' "$HEX"` +
 		`      ; printf 'GETINFO status/bootstrap-phase\r\n'` +
 		`      ; printf 'QUIT\r\n'` +
-		`      ; } | nc 127.0.0.1 9051`
+		`      ; } | nc -q 1 -U ` + t033ControlSocket
 
 	t033CircuitStatusProbe = `COOKIE=$(find /var/lib/tor -name control_auth_cookie 2>/dev/null | head -1)` +
 		` && [ -n "$COOKIE" ]` +
@@ -302,7 +329,7 @@ const (
 		` && { printf 'AUTHENTICATE %s\r\n' "$HEX"` +
 		`      ; printf 'GETINFO circuit-status\r\n'` +
 		`      ; printf 'QUIT\r\n'` +
-		`      ; } | nc 127.0.0.1 9051`
+		`      ; } | nc -q 1 -U ` + t033ControlSocket
 )
 
 // t033ExecTor runs a shell command inside the tor service container via

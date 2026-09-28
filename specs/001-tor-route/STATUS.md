@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 30 |
-| in-progress | 0 |
+| pending | 29 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 179 |
@@ -30,13 +30,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
 | T176 | Pin or refuse the Maven tar fallback | Foundation audit remediation |  |  |
-| T182 | Repair stale T059/T033 live harnesses: control socket, sg1 n | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T182 | Repair stale T059/T033 live harnesses: control socket, sg1 n | in-progress | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 

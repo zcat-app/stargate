@@ -33,8 +33,8 @@
 // hermetic test below, so a drift in the tuple shape fails in the PR gate.
 //
 // Circuits are read through the landed T062 control helper
-// (tests/contract/tor, Unix ControlSocket since T162) — T059's
-// t059ControlProbe still dials TCP 9051 and is not reused. Two streams to
+// (tests/contract/tor, Unix ControlSocket since T162) rather than T059's
+// shell-level t059ControlProbe (`nc -U`, T182). Two streams to
 // one target cannot be attributed by target string, so the assertion
 // counts exactly two live streams at the target and compares their
 // circuit IDs (T060's machinery); no attribution is needed.
