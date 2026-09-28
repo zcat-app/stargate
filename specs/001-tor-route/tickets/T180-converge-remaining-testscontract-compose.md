@@ -1,7 +1,7 @@
 ---
 id: T180
 title: 'Converge remaining tests/contract compose runners onto T121 helper'
-status: in-progress
+status: done
 created: 2026-09-28
 last_updated: 2026-09-28
 source: hand-filed (T121 convention) — T121 run round-2 reviewer RECOMMENDED-FOLLOW-UP + T121 §Notes follow-up promise
@@ -21,7 +21,7 @@ spec_refs:
 decision_refs:
   - "T121 (done, 4a75e15): hoisted the five §Context-enumerated suite runners into tests/contract/internal/compose; its §Notes routes this residue here and defers the tests/integration family"
   - "T121 round-2 review (both reviewers APPROVE) RECOMMENDED-FOLLOW-UP: migrate network_hardening_test.go (import needs an alias — the suite's own package is `compose`); converge control_port.go's private composeArgs onto internal/compose.Args"
-reviews: {}
+reviews: { round: 1, date: 2026-09-28, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
