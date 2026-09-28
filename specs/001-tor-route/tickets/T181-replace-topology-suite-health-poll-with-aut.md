@@ -1,7 +1,7 @@
 ---
 id: T181
 title: 'Replace topology suite Docker-health poll with authenticated probe'
-status: in-progress
+status: done
 created: 2026-09-28
 last_updated: 2026-09-28
 source: hand-filed (T180 convention) — discovery recorded in T180 §Notes (run 2026-09-28, commit 262b7be); user direction 2026-09-28 session (one ticket, no companions)
@@ -34,7 +34,7 @@ decision_refs:
   - "T152 (046f2dd): removed Docker health metadata (Constitution III, no health-probe journal) — made the suite's {{.State.Health.Status}} poll unsatisfiable by construction"
   - "T174 (done): sanctioned the replacement observation shape — bounded authenticated current readiness over the compose-internal cookie channel (live-e2e observer migration)"
   - "T180 (done, 262b7be) §Notes: falsification record — pristine-tree identical failure, with/without-healthcheck mechanism probe, T160→T177 dead-pin build blocker, no recorded historical PASS anywhere in specs/"
-reviews: {}
+reviews: { round: 1, date: 2026-09-28, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
