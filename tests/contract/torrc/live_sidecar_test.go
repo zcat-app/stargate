@@ -63,6 +63,8 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
+
+	"github.com/zcat-app/stargate/tests/contract/internal/compose"
 )
 
 // liveComposeProject namespaces every compose invocation this test issues so
@@ -182,7 +184,7 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 	t.Cleanup(func() {
 		downCtx, dcancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer dcancel()
-		if out, err := liveDockerCompose(downCtx, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
+		if out, err := compose.Run(downCtx, liveComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
 			t.Logf("docker compose down (best-effort cleanup): %v\n%s", err, out)
 		}
 	})
@@ -197,7 +199,7 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 	// sol-review B2).
 	upCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	if out, err := liveDockerCompose(upCtx, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
+	if out, err := compose.Run(upCtx, liveComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
 		t.Fatalf("docker compose up -d --build tor (cold volume, image-baked torrc): %v\n%s", err, out)
 	}
 
@@ -252,12 +254,12 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 	// T087's §Analysis §Residue promised and render_byte_match_test.go
 	// documents (redteam M1).
 	t.Run("ImageBakedTorrcMatchesGolden", func(t *testing.T) {
-		out, err := liveDockerCompose(ctx, composeFile, envFile,
+		out, err := compose.Run(ctx, liveComposeProject, composeFile, envFile,
 			"exec", "-T", "tor", "cat", "/etc/tor/torrc")
 		if err != nil {
 			t.Fatalf("docker compose exec tor cat /etc/tor/torrc: %v\n%s", err, out)
 		}
-		if out != wantTorrc {
+		if string(out) != wantTorrc {
 			t.Errorf("image-baked /etc/tor/torrc does NOT equal the wantTorrc "+
 				"golden byte-for-byte (FR-011 / invariant #13) — a build-time "+
 				"swap added or removed content the GETCONF checks do not cover.\n"+
@@ -277,7 +279,7 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 	// exactly this regression — the deterministic path assertion below is
 	// what catches a DataDirectory regression going forward.
 	t.Run("CookieAtAuthoritativePath", func(t *testing.T) {
-		if out, err := liveDockerCompose(ctx, composeFile, envFile,
+		if out, err := compose.Run(ctx, liveComposeProject, composeFile, envFile,
 			"exec", "-T", "tor", "test", "-f", "/var/lib/tor/control_auth_cookie"); err != nil {
 			t.Errorf("control cookie NOT at /var/lib/tor/control_auth_cookie "+
 				"(invariant #11 — DataDirectory /var/lib/tor):\n"+
@@ -289,7 +291,7 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 		}
 		// The wrong path must NOT exist — its presence would mean Tor fell
 		// back to $HOME/.tor despite the explicit DataDirectory.
-		if _, err := liveDockerCompose(ctx, composeFile, envFile,
+		if _, err := compose.Run(ctx, liveComposeProject, composeFile, envFile,
 			"exec", "-T", "tor", "test", "-f", "/var/lib/tor/.tor/control_auth_cookie"); err == nil {
 			// test -f exited 0 → the wrong-path cookie EXISTS → regression.
 			t.Errorf("control cookie ALSO at /var/lib/tor/.tor/control_auth_cookie — " +
@@ -500,25 +502,6 @@ func liveTorControl(ctx context.Context, composeFile, envFile, command string) (
 		"sh", "-c", script, "torctrl", command,
 	}
 	cmd := exec.CommandContext(ctx, "docker", args...)
-	out, err := cmd.CombinedOutput()
-	return string(out), err
-}
-
-// liveDockerCompose runs `docker compose -p <liveComposeProject> -f <file>
-// --env-file <env> <args...>` and returns the combined stdout+stderr. Same
-// shape as T019b's dockerCompose helper (tests/contract/tor/); not importable
-// across packages, so re-implemented here per the same convention T029 uses
-// for findRepoRoot. A future ticket may hoist the shared compose-runline +
-// label-lookup helpers into tests/contract/internal/ when T058/T058a (Phase 4)
-// land and also need live-sidecar bring-up.
-func liveDockerCompose(ctx context.Context, composeFile, envFile string, args ...string) (string, error) {
-	full := append([]string{
-		"compose",
-		"-p", liveComposeProject,
-		"-f", composeFile,
-		"--env-file", envFile,
-	}, args...)
-	cmd := exec.CommandContext(ctx, "docker", full...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

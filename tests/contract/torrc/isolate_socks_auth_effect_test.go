@@ -91,6 +91,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zcat-app/stargate/tests/contract/internal/compose"
 	"github.com/zcat-app/stargate/tests/contract/tor"
 )
 
@@ -174,14 +175,14 @@ func TestIsolateSOCKSAuthDistinctCircuits(t *testing.T) {
 	t.Cleanup(func() {
 		downCtx, downCancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer downCancel()
-		if out, err := isoCompose(downCtx, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
+		if out, err := compose.Run(downCtx, isoComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
 			t.Logf("docker compose down (best-effort cleanup): %v\n%s", err, out)
 		}
 	})
 
 	upCtx, upCancel := context.WithTimeout(ctx, isoUpDeadline)
 	defer upCancel()
-	if out, err := isoCompose(upCtx, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
+	if out, err := compose.Run(upCtx, isoComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
 		t.Fatalf("docker compose up -d --build tor (cold volume, image-baked torrc): %v\n%s", err, out)
 	}
 
@@ -670,18 +671,6 @@ func isoCircuitStatusFor(lines []string, circuitID, uname string) (string, bool)
 		}
 	}
 	return "", false
-}
-
-// isoCompose runs `docker compose -p <isoComposeProject> …` — same shape as
-// the sibling suites' runners, which each bake their own project const in
-// (T019b/T032/T062 precedent); not importable across packages.
-func isoCompose(ctx context.Context, composeFile, envFile string, args ...string) ([]byte, error) {
-	full := append([]string{
-		"compose", "-p", isoComposeProject,
-		"-f", composeFile,
-		"--env-file", envFile,
-	}, args...)
-	return exec.CommandContext(ctx, "docker", full...).CombinedOutput()
 }
 
 // isoDigits reports whether s is a non-empty decimal digit string (tor

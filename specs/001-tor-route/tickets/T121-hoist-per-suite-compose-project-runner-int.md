@@ -1,17 +1,19 @@
 ---
 id: T121
 title: 'Hoist per-suite compose project runner into one shared helper'
-status: pending
+status: in-progress
 created: 2026-09-07
-last_updated: "2026-09-27"
+last_updated: 2026-09-28
 source: hand-filed (T120 convention)
 phase: "4: User Story 2 — Stream isolation per first-party domain (Priority: P2)"
 story: 'US2'
 blocked_by: ["T058", "T139", "T134", "T138", "T156"]
 parallel: true
-files_budget: 7   # amended 4 → 7 (user-authorized, 2026-09-27 run): acceptance #1
-                  # itself requires the five suite files (named in §Context) + the
-                  # new shared helper + this ticket = 7 raw diff paths; 4 was infeasible
+files_budget: 9   # amended 4 → 9 (user-authorized amendment, 2026-09-27 run):
+                  # acceptance #1 itself requires the five suite files (named in
+                  # §Context) + the new shared helper AND its tests-first
+                  # compose_test.go + this ticket + the driver's STATUS.md regen
+                  # (T120 counting convention) = 9 raw diff paths. 4 was infeasible
                   # as filed (T094a/T120 budget-amendment precedent, not scope creep)
 privacy_critical: false   # plumbing only; body's "auth" hit is IsolateSOCKSAuth (a tor directive name), not an auth surface
 complexity: low
@@ -79,8 +81,37 @@ Derived by hand 2026-09-07 from T058a round-1 review follow-up; see T058a
 consts through the hoist. Grounding note (2026-09-27): port_exposure's
 project const is now `stargate-t162-socket-test` (T162's amendment);
 acceptance #2 pins whatever name is on disk, so the hoist carries it
-verbatim. `files_budget` amended 4 → 7 at run start (user-authorized):
-acceptance #1 mandates five suite edits + one new helper + the ticket.
+verbatim. `files_budget` amended 4 → 9 at run start (user-authorized):
+acceptance #1 mandates five suite edits + helper + helper test + ticket,
+plus the driver's STATUS regen.
+
+Live exercise (acceptance #3, round-1 REWORK remediation — the original
+run passed but its transcript lived only outside the review scope).
+Round-2 re-run, candidate-bound, `go test -count=1 -tags=docker -v`:
+
+    cd tests/contract && go test -count=1 -tags=docker -v ./tor \
+      -run '^TestTorSocketCallerMatrix$'
+    === RUN   TestTorSocketCallerMatrix
+    --- PASS: TestTorSocketCallerMatrix (15.72s)
+    PASS
+    ok  github.com/zcat-app/stargate/tests/contract/tor 15.724s
+
+The suite EXECUTED (not SKIP: it brings up tor under
+`stargate-t162-socket-test` via the hoisted runner, resolves the
+compose-labeled volumes, probes all six caller-matrix cells, restarts
+tor and re-probes, then tears down — `docker compose -p
+stargate-t162-socket-test ps -a` is empty after, proving every
+subcommand named this suite's own project through compose.Run).
+
+Follow-up observation (2026-09-27 grounding): `tests/contract/compose/
+network_hardening_test.go` carries the same private-runner pattern
+(`dockerCompose`, const `stargate-t162-topology-test`) and PREDATES this
+filing (added 2026-07-17, 68989ac / T094b) — the §Context enumeration
+simply missed it. Acceptance #1 is satisfied against §Context's
+enumerated scope (the five suites; the authorized files_budget=9 admits
+exactly those five + helper + helper test + ticket + STATUS — a sixth
+suite edit would itself have breached the budget); the residue is routed
+to the planned one-liner follow-up ticket.
 
 Constitution check: plumbing refactor only — no privacy surface changes (no
 assertion, deadline, or transport-behaviour edits), so Principle VII's

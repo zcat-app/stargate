@@ -35,6 +35,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/zcat-app/stargate/tests/contract/internal/compose"
 )
 
 // cpComposeProject namespaces every compose invocation this suite issues so
@@ -78,14 +80,14 @@ func TestControlPortLive(t *testing.T) {
 	t.Cleanup(func() {
 		downCtx, downCancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer downCancel()
-		if out, err := cpCompose(downCtx, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
+		if out, err := compose.Run(downCtx, cpComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
 			t.Logf("docker compose down (best-effort cleanup): %v\n%s", err, out)
 		}
 	})
 
 	upCtx, upCancel := context.WithTimeout(ctx, cpUpDeadline)
 	defer upCancel()
-	if out, err := cpCompose(upCtx, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
+	if out, err := compose.Run(upCtx, cpComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
 		t.Fatalf("docker compose up -d --build tor: %v\n%s", err, out)
 	}
 
@@ -253,17 +255,4 @@ func TestControlPortLive(t *testing.T) {
 		}
 		t.Logf("OK: rejected cookie auth: %s", truncate(authErr.Error()))
 	})
-}
-
-// cpCompose runs `docker compose -p <cpComposeProject> …` — same shape as
-// T019b's dockerCompose, which bakes ITS project const in; re-implemented
-// for this suite's own project name (the T032 re-implementation precedent).
-// A future hoist can parameterize the project across all three.
-func cpCompose(ctx context.Context, composeFile, envFile string, args ...string) ([]byte, error) {
-	full := append([]string{
-		"compose", "-p", cpComposeProject,
-		"-f", composeFile,
-		"--env-file", envFile,
-	}, args...)
-	return exec.CommandContext(ctx, "docker", full...).CombinedOutput()
 }

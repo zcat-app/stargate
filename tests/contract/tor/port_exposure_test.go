@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/zcat-app/stargate/tests/contract/internal/compose"
 )
 
 const composeProject = "stargate-t162-socket-test"
@@ -39,16 +41,16 @@ func TestTorSocketCallerMatrix(t *testing.T) {
 	t.Cleanup(func() {
 		cleanupCtx, stop := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer stop()
-		if out, err := dockerCompose(cleanupCtx, composeFile, envFile, "down", "-v", "--remove-orphans"); err != nil {
+		if out, err := compose.Run(cleanupCtx, composeProject, composeFile, envFile, "down", "-v", "--remove-orphans"); err != nil {
 			t.Errorf("cleanup disposable Tor stack: %v: %s", err, out)
 		}
 	})
-	if out, err := dockerCompose(ctx, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
+	if out, err := compose.Run(ctx, composeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
 		t.Fatalf("start Tor: %v: %s", err, out)
 	}
 	volume := composeVolume(t, "stargate-tor-dp-fabric")
 	stateVolume := composeVolume(t, "stargate-tor-state")
-	torID, err := dockerCompose(ctx, composeFile, envFile, "ps", "-q", "tor")
+	torID, err := compose.Run(ctx, composeProject, composeFile, envFile, "ps", "-q", "tor")
 	if err != nil || len(bytes.TrimSpace(torID)) == 0 {
 		t.Fatalf("Tor container missing: %v: %s", err, torID)
 	}
@@ -63,7 +65,7 @@ func TestTorSocketCallerMatrix(t *testing.T) {
 		if err != nil || strings.TrimSpace(string(out)) != "05 02" {
 			t.Fatalf("%s DP→SOCKS failed: %v: %s", label, err, out)
 		}
-		out, err = dockerCompose(ctx, composeFile, envFile, "exec", "-T", "tor", "sh", "-c",
+		out, err = compose.Run(ctx, composeProject, composeFile, envFile, "exec", "-T", "tor", "sh", "-c",
 			`printf 'PROTOCOLINFO 1\r\nQUIT\r\n' | nc -q 1 -U /var/lib/tor/control/tor-control.sock`)
 		if err != nil || !bytes.Contains(out, []byte("250-PROTOCOLINFO 1")) {
 			t.Fatalf("%s Tor-local raw control positive control failed: %v: %s", label, err, out)
@@ -113,7 +115,7 @@ func TestTorSocketCallerMatrix(t *testing.T) {
 		}
 	}
 	checkMatrix("initial")
-	if out, err := dockerCompose(ctx, composeFile, envFile, "restart", "tor"); err != nil {
+	if out, err := compose.Run(ctx, composeProject, composeFile, envFile, "restart", "tor"); err != nil {
 		t.Fatalf("restart Tor: %v: %s", err, out)
 	}
 	deadline := time.Now().Add(15 * time.Second)
@@ -167,11 +169,6 @@ func composeVolume(t *testing.T, logical string) string {
 		t.Fatalf("resolve %s volume: %v: %s", logical, err, out)
 	}
 	return strings.TrimSpace(string(out))
-}
-
-func dockerCompose(ctx context.Context, composeFile, envFile string, args ...string) ([]byte, error) {
-	base := []string{"compose", "-p", composeProject, "-f", composeFile, "--env-file", envFile}
-	return exec.CommandContext(ctx, "docker", append(base, args...)...).CombinedOutput()
 }
 
 func findRepoRoot(t *testing.T) string {

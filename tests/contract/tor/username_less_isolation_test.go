@@ -63,6 +63,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/zcat-app/stargate/tests/contract/internal/compose"
 )
 
 // ulComposeProject namespaces every compose invocation this suite issues so
@@ -142,14 +144,14 @@ func TestUsernameLessIsolation(t *testing.T) {
 	t.Cleanup(func() {
 		downCtx, downCancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer downCancel()
-		if out, err := ulCompose(downCtx, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
+		if out, err := compose.Run(downCtx, ulComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
 			t.Logf("docker compose down (best-effort cleanup): %v\n%s", err, out)
 		}
 	})
 
 	upCtx, upCancel := context.WithTimeout(ctx, ulUpDeadline)
 	defer upCancel()
-	if out, err := ulCompose(upCtx, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
+	if out, err := compose.Run(upCtx, ulComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
 		t.Fatalf("docker compose up -d --build tor: %v\n%s", err, out)
 	}
 
@@ -250,23 +252,6 @@ func TestUsernameLessIsolation(t *testing.T) {
 	})
 }
 
-// ulCompose runs `docker compose -p <ulComposeProject> …`. Each suite bakes
-// its own project const into its own runner (the T032/T062 re-implementation
-// precedent) — reusing a sibling's runner would point this suite's up/down
-// at the SIBLING's project while its exec transports use ours, splitting the
-// suite across two projects (found live: the first run brought up tor under
-// stargate-t062-test and then polled a nonexistent tor in
-// stargate-t058a-test until the boot deadline). A future hoist can
-// parameterize the project across all suites.
-func ulCompose(ctx context.Context, composeFile, envFile string, args ...string) ([]byte, error) {
-	full := append([]string{
-		"compose", "-p", ulComposeProject,
-		"-f", composeFile,
-		"--env-file", envFile,
-	}, args...)
-	return exec.CommandContext(ctx, "docker", full...).CombinedOutput()
-}
-
 // ulPairConnect dials and greets two fresh SOCKS sessions, CONNECTs both to
 // target, and returns the live sessions. Each attempt is a full fresh
 // dial+greet+connect pair; on any per-attempt failure both sessions are
@@ -317,7 +302,7 @@ func ulPairConnect(t *testing.T, ctx context.Context, cfg ControlPortConfig, tar
 // healthcheck and operators read), so addresses are scrubbed at the source.
 func ulTorLogTail(t *testing.T, ctx context.Context, cfg ControlPortConfig) string {
 	t.Helper()
-	out, err := ulCompose(ctx, cfg.ComposeFile, cfg.EnvFile, "logs", "--tail", "15", "tor")
+	out, err := compose.Run(ctx, cfg.Project, cfg.ComposeFile, cfg.EnvFile, "logs", "--tail", "15", "tor")
 	if err != nil {
 		return fmt.Sprintf("(logs unavailable: %v)", err)
 	}
