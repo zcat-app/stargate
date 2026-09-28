@@ -43,6 +43,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/zcat-app/stargate/tests/contract/internal/compose"
 )
 
 // CookieAuthPath is the authoritative control-cookie path inside the tor
@@ -88,13 +90,11 @@ func (c ControlPortConfig) validate() error {
 }
 
 // composeArgs builds the shared `docker compose -p … -f … --env-file …`
-// prefix, mirroring dockerCompose/liveDockerCompose in the sibling suites.
+// prefix by delegating to the T121 helper (internal/compose.Args, pinned
+// by its compose_test.go) — the one argv builder every tests/contract
+// suite now shares.
 func composeArgs(cfg ControlPortConfig, args ...string) []string {
-	return append([]string{
-		"compose", "-p", cfg.Project,
-		"-f", cfg.ComposeFile,
-		"--env-file", cfg.EnvFile,
-	}, args...)
+	return compose.Args(cfg.Project, cfg.ComposeFile, cfg.EnvFile, args...)
 }
 
 // ReadCookie reads the raw control-auth cookie bytes out of the tor

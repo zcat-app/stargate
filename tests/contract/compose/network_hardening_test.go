@@ -18,6 +18,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	// Aliased because this suite's own package is compose (T180).
+	composecli "github.com/zcat-app/stargate/tests/contract/internal/compose"
 )
 
 const composeProject = "stargate-t162-topology-test"
@@ -37,14 +40,14 @@ func TestLocalTorRuntimeTopology(t *testing.T) {
 	t.Cleanup(func() {
 		stopCtx, stop := context.WithTimeout(context.Background(), 90*time.Second)
 		defer stop()
-		if out, err := dockerCompose(stopCtx, composeFile, envFile, "down", "-v", "--remove-orphans"); err != nil {
+		if out, err := composecli.Run(stopCtx, composeProject, composeFile, envFile, "down", "-v", "--remove-orphans"); err != nil {
 			t.Errorf("cleanup disposable Tor topology: %v: %s", err, out)
 		}
 	})
-	if out, err := dockerCompose(ctx, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
+	if out, err := composecli.Run(ctx, composeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
 		t.Fatalf("start Tor: %v: %s", err, out)
 	}
-	idBytes, err := dockerCompose(ctx, composeFile, envFile, "ps", "-q", "tor")
+	idBytes, err := composecli.Run(ctx, composeProject, composeFile, envFile, "ps", "-q", "tor")
 	if err != nil || strings.TrimSpace(string(idBytes)) == "" {
 		t.Fatalf("Tor container missing: %v: %s", err, idBytes)
 	}
@@ -122,11 +125,6 @@ func contains(values []string, expected string) bool {
 		}
 	}
 	return false
-}
-
-func dockerCompose(ctx context.Context, composeFile, envFile string, args ...string) ([]byte, error) {
-	base := []string{"compose", "-p", composeProject, "-f", composeFile, "--env-file", envFile}
-	return exec.CommandContext(ctx, "docker", append(base, args...)...).CombinedOutput()
 }
 
 func findRepoRoot(t *testing.T) string {

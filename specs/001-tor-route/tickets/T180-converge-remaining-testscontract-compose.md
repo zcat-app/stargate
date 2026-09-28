@@ -1,9 +1,9 @@
 ---
 id: T180
 title: 'Converge remaining tests/contract compose runners onto T121 helper'
-status: pending
+status: in-progress
 created: 2026-09-28
-last_updated: "2026-09-28"
+last_updated: 2026-09-28
 source: hand-filed (T121 convention) — T121 run round-2 reviewer RECOMMENDED-FOLLOW-UP + T121 §Notes follow-up promise
 phase: "6: Polish & Cross-Cutting Concerns"
 story: ''
@@ -93,6 +93,41 @@ the two in-module items, integration-module convergence deferred. This
 ticket backs T121 §Notes' "planned one-liner follow-up ticket" promise
 (widened by item 2 per the reviewer recommendation; still one coherent
 cleanup of same-shaped residue).
+
+Live exercise (acceptance #3). The acceptance's "e.g." suite
+(`TestLocalTorRuntimeTopology`) FAILS on the current tree for a reason that
+predates this ticket: its health poll (`docker inspect -f
+"{{.State.Health.Status}}"`) cannot succeed since T152 (046f2dd) disabled
+Tor's Docker healthcheck — `sidecars/tor/Dockerfile:206` declares
+`HEALTHCHECK NONE`, compose sets `healthcheck: disable: true`, and FR-012
+now reads "Tor's Docker healthcheck is disabled" (T174 migrated the
+live-e2e consumers of that metadata; this docker-tagged, opt-in suite was
+outside its scope and so lingered red). Falsified as pre-existing: with
+this ticket's two code diffs stashed, the pristine tree fails identically
+(`network_hardening_test.go:106: Tor health inspect: ... map has no entry
+for key "Health"`). Within that failing run the migrated runner itself is
+proven correct for every invocation it owns: `up -d --build tor` created
+the container in `stargate-t162-topology-test`, `ps -q tor` returned its
+id, and pre-registered teardown left `docker compose -p
+stargate-t162-topology-test ps -a` EMPTY (verified after both the migrated
+and the pristine run). Repairing the poll is an assertion change
+(§Out-of-scope #3) and a fifth diff path would breach files_budget=4, so
+the fix is routed to a follow-up decision, not bundled here.
+
+The live RUN/PASS evidence is migration (2)'s direct consumer suite,
+`cd tests/contract && go test -count=1 -tags=docker -v ./tor/ -run
+'^TestControlPortLive$' -timeout 20m` — every ReadCookie/Connect call in
+it rides the migrated `composeArgs` → `compose.Args`:
+
+    === RUN   TestControlPortLive
+        OK: cookie (32 bytes) read from /var/lib/tor/control_auth_cookie and AUTHENTICATE accepted
+        OK: bootstrapped: status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=done
+    --- PASS: TestControlPortLive (9.25s)
+    PASS
+    ok  github.com/zcat-app/stargate/tests/contract/tor 9.257s
+
+with `docker compose -p stargate-t062-test ps -a` empty after teardown.
+`bash scripts/verify.sh`: PASS=33, SKIP=2 (opt-in), FAIL=0 — GREEN.
 
 Constitution check: plumbing refactor only — no privacy surface changes
 (no assertion, deadline, or transport-behaviour edits), so Principle VII's
