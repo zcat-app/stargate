@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 29 |
+| pending | 28 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 180 |
+| done | 181 |
 | deferred | 5 |
 | **total** | **214** |
 
@@ -29,7 +29,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T176 | Pin or refuse the Maven tar fallback | Foundation audit remediation |  |  |
+| T155 | Validate repaired foundation before feature work | Foundation audit remediation | ✓ |  |
 
 ---
 
@@ -53,7 +53,7 @@ _(nothing in flight)_
 
 ## Done
 
-_180 ticket(s) done._
+_181 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -229,6 +229,7 @@ _180 ticket(s) done._
 - T173 — Refuse unpartitioned HTTP CONNECT on the Tor listener
 - T174 — Migrate live observer checks to silent operational boundaries
 - T175 — Align live quickstart wording with scoped route indicators
+- T176 — Pin or refuse the Maven tar fallback
 - T177 — Promote Tor 0.4.9.13 security package
 - T178 — Diagnose and repair live initial token-load failure
 - T179 — Harden SQLite contention regression scheduling

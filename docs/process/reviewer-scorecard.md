@@ -48,6 +48,8 @@ recorded under the widened allowlist.
 | 2026-09-28 | T126 | 1 | REWORK (1 Major, 2 Minor) | APPROVE-WITH-FIXES (2 Minor) |
 | 2026-09-28 | T126 | 2 | ESCALATE (1 Major) · 3 min | APPROVE (0) · 8 min |
 | 2026-09-28 | T126 | 3 (refine) | APPROVE (0) · 2 min | APPROVE (0) · 11 min |
+| 2026-09-28 | T176 | 1 | APPROVE-WITH-FIXES (1 Minor) | APPROVE-WITH-FIXES (1 Minor) |
+| 2026-09-28 | T176 | 1 (post-fix re-review) | APPROVE (0) | APPROVE (0) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -61,10 +63,16 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-09-28 | T126 | 1 | Minor | Ticket Notes claim T182 "filed" while no T182 file is in the tree | missed | found | fixed | reworded; T182 lands in the `docs:` follow-up |
 | 2026-09-28 | T126 | 1 | Minor | Ticket helper-reuse list omits `t059TerminalStreamStates`, which the test uses | missed | found | fixed | doc-only |
 | 2026-09-28 | T126 | 2 | Major | Round-2 signal regression self-SIGTERMs the shared `go test` process; under `-tags docker` sibling suites' retained handlers `os.Exit(1)` mid-run | found | dismissed | fixed (round 3) | glm: "the only hermetic signal handler in this module is T126's own" — true only without `-tags docker`; confirmed locally: a leaked sibling-style handler kills the round-2 binary, the round-3 subprocess test survives |
+| 2026-09-28 | T176 | 1 | Minor | Ticket integrity record claims the no-unzip refusal precedes creation of the download directory; `mktemp -d` runs first and the EXIT trap removes it | found | found | fixed | doc-only reword; both reviewers' evaluation probes pass |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
 not adopted — call sites verified correct and the helper is vector-pinned.
+
+T176: first ticket under the widened GLM allowlist. GLM's verdicts record
+effort `xhigh` (the period header says `max`); Astra `high`. Both still report
+shell execution beyond the allowlist as denied, so their test/verify evidence
+came from the mechanical report. Per-reviewer durations were not measured.
 
 ## Baseline (before Period 1 — not counted in the evaluation)
 

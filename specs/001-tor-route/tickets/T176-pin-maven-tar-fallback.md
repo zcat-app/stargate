@@ -1,7 +1,7 @@
 ---
 id: "T176"
 title: "Pin or refuse the Maven tar fallback"
-status: in-review
+status: done
 created: 2026-09-25
 last_updated: 2026-09-28
 source: "T145 implementation observation: cold-cache wrapper without unzip"
@@ -17,7 +17,7 @@ round_cap: 2
 spec_refs: [".specify/memory/constitution.md Principles IV/VI"]
 decision_refs: []
 tests_first: []
-reviews: {}
+reviews: { round: 1, date: 2026-09-28, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
