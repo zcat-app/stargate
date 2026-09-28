@@ -806,11 +806,47 @@ run_task T346
 assert '[ "$rt_rc" -eq 0 ]' "T144: declared test_for ticket advances without implementation evidence"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T346-fixture.md status)" = in-review ]' "T144: test-only status advances"
 
+# Scenario 15: verify.sh runs once per executable-content state. The stub
+# appends one line per run to target/verify.log.
+verify_runs() { grep -c "stub-verify GREEN" target/verify.log 2>/dev/null || echo 0; }
+gate_fixture() {
+  setup_sandbox "$1"
+  write_ticket "$2" "verify once" false in-progress >/dev/null
+  commit_all "add $2 ticket"
+  git checkout -q -b 001-testfeat main
+  printf '// why\npackage x\n\nconst n = 1\n' > x.go
+  git add x.go
+  mkdir -p target/runs
+  git rev-parse HEAD > "target/runs/$2.start-sha"
+  touch "target/runs/$2.verified"
+  run_task "$2"
+}
+gate_fixture s15 T347
+assert '[ "$(fm_field specs/001-testfeat/tickets/T347-fixture.md status)" = in-review ] && [ "$(verify_runs)" = 1 ]' "S15: pre-review gate runs verify once"
+gate_verdict T347 APPROVE
+run_task T347
+assert '[ "$rt_rc" -eq 0 ] && [ "$(fm_field specs/001-testfeat/tickets/T347-fixture.md status)" = done ]' "S15: approved ticket commits"
+assert '[ "$(verify_runs)" = 1 ]' "S15: status flips alone do not re-run verify at APPROVE (runs: $(verify_runs))"
+
+gate_fixture s15comment T348
+printf '// why, reworded\npackage x\n\nconst n = 1\n' > x.go; git add x.go
+run_task T348                 # candidate changed -> fresh review
+gate_verdict T348 APPROVE
+run_task T348
+assert '[ "$(fm_field specs/001-testfeat/tickets/T348-fixture.md status)" = done ] && [ "$(verify_runs)" = 1 ]' "S15: a Go comment edit does not re-run verify (runs: $(verify_runs))"
+
+gate_fixture s15code T349
+printf '// why\npackage x\n\nconst n = 2\n' > x.go; git add x.go
+run_task T349
+gate_verdict T349 APPROVE
+run_task T349
+assert '[ "$(fm_field specs/001-testfeat/tickets/T349-fixture.md status)" = done ] && [ "$(verify_runs)" = 2 ]' "S15: a code edit re-runs verify at APPROVE (runs: $(verify_runs))"
+
 # --- report ----------------------------------------------------------------
 if [ "${#errs[@]}" -gt 0 ]; then
   echo "FAIL: T096 run-task harness (${#errs[@]} finding(s)):" >&2
   for e in "${errs[@]}"; do echo "  - $e" >&2; done
   exit 1
 fi
-echo "OK: T096 workflow-driver regression harness (14 scenarios) — start, approve, single-gate review, commit, merge, dirty refusal, rework, lint, replacement race, gate lock"
+echo "OK: T096 workflow-driver regression harness (15 scenarios) — start, approve, single-gate review, commit, merge, dirty refusal, rework, lint, replacement race, gate lock, verify once"
 exit 0

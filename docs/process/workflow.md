@@ -144,9 +144,11 @@ feature branch squash-merges to `main` at milestone close.**
 4. **Verify** (run-task runs this directly before transition to in-review) —
    `scripts/verify.sh` from repo root. **The single green gate.** Fix the
    code, never the test, unless the ticket's §Out-of-scope authorized that
-   test change. A green run stays valid only while the tree is unchanged;
-   `run-task.sh` re-runs verify as the safety re-check before transitioning
-   to in-review.
+   test change. The implementer does not run it by hand: `run-task.sh`
+   runs it as the pre-review gate and again at APPROVE only when the
+   executable content changed since the last GREEN run (ticket lifecycle
+   fields, `STATUS.md`, evidence, the scorecard and plain Go/Java `//`
+   comments do not count; see `code_digest`).
 5. **Review** (the run-task `in-review` phase) — emit a handoff for
    `scripts/review-task.sh <id>` — the single gate. ONE invocation, ONE pass:
    the launcher runs one OpenCode GLM reviewer and one Codex Astra reviewer

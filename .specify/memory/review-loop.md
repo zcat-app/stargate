@@ -20,9 +20,11 @@ For one task `[ID]` from `specs/NNN-*/tasks.md`:
 2. **Implement** the task. For privacy-critical categories (DNS, routing,
    headers, auth, sidecar/contract surfaces) the test is written **first** and
    failing before the implementation — Principle VII, no exception.
-3. **Gate green.** Run `scripts/verify.sh`. It must be GREEN (exit 0) before
-   review. A green run is valid only while the tree is unchanged — do not edit
-   after gating and before committing without re-running.
+3. **Gate green.** `scripts/verify.sh` must be GREEN (exit 0) before review;
+   `scripts/run-task.sh` runs it at the pre-review gate. A green run stays
+   valid while the executable content is unchanged, so the driver re-runs it
+   at APPROVE only after a code change (not for status, evidence or plain
+   comment edits).
 4. **Review.** Run `scripts/review-task.sh <id>` for every ticket — the
    single gate. ONE invocation, ONE pass: the fail-closed launcher concurrently
    runs two fresh contexts — one GLM and one Codex Astra — in native CLI

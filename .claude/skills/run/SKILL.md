@@ -20,8 +20,10 @@ status after each invocation; do not replay a stale prompt after a transition.
 
 - START: ground on the ticket and cited contracts, fill required analysis,
   lint the ticket, and signal readiness as the prompt directs.
-- IMPLEMENT: implement acceptance, tests first where required, verify, stage
-  explicit ticket paths, and signal readiness.
+- IMPLEMENT: implement acceptance, tests first where required, run the
+  ticket's own tests, stage explicit ticket paths, and signal readiness. Do
+  not run `scripts/verify.sh` by hand; the driver runs it once and re-runs it
+  only after an executable-code change.
 - REVIEW: run `scripts/review-task.sh <id>` exactly as the driver directs —
   the single gate. It launches one GLM and one Codex Astra reviewer in
   separate native sessions with candidate copies and imports their private
@@ -29,7 +31,7 @@ status after each invocation; do not replay a stale prompt after a transition.
   may not spawn subagents. Never invoke a review CLI directly or transcribe a
   verdict, and never include the implementer's rationale.
 - APPLY-FIXES: apply only authorized comment/doc corrections, stage those
-  paths, verify and signal completion. The driver still owns commit.
+  paths and signal completion. The driver still owns verify and commit.
 - COMMIT: stage the requested explicit paths and re-invoke the driver.
 - MERGE/done: report the local commit and required review results. Do not
   create a second ticket commit. In the `docs: mark <id> done` follow-up,

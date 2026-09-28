@@ -178,6 +178,8 @@ if [ "${#REVIEW_VERDICT_FILES[@]}" -ne 2 ]; then
 fi
 REVIEW_SET="$RUN_DIR/$TICKET_ID.review-set"
 REVIEW_SNAPSHOT="$RUN_DIR/$TICKET_ID.review-snapshot"
+# Digest of the executable content the last GREEN verify.sh ran against.
+GREEN_CODE="$RUN_DIR/$TICKET_ID.green-code"
 AWF_FILE="$RUN_DIR/$TICKET_ID.awf-applied"      # sentinel: APPROVE-WITH-FIXES items applied (reviewer-prompt.md)
 PROMPT_FILE="$RUN_DIR/$TICKET_ID.prompt"
 
@@ -344,6 +346,74 @@ for part in parts:
     digest.update(part)
 print(digest.hexdigest())
 SNAPSHOT
+}
+
+# code_digest: hash of the working tree's executable content — every tracked
+# or untracked non-ignored file, as verify.sh reads it — minus what cannot
+# change a gate outcome: ticket lifecycle frontmatter (status, last_updated,
+# reviews), generated STATUS.md, tests-first evidence, the reviewer scorecard,
+# and full-line // comments in Go/Java. Machine-read comments stay code:
+# license headers, build/lint directives and `stargate:` markers. Other
+# comments and all prose (.md, .sh, .yml, …) stay code too, because contract
+# tests assert literals in them.
+code_digest() {
+  python3 - <<'DIGEST'
+import hashlib, os, pathlib, re, subprocess
+
+names = subprocess.check_output(
+    ['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'])
+skip = re.compile(r'^specs/[^/]+/(STATUS\.md|evidence/.*)$|^docs/process/reviewer-scorecard\.md$')
+ticket = re.compile(r'^specs/[^/]+/tickets/[^/]+\.md$')
+lifecycle = re.compile(rb'^(status|last_updated|reviews):.*\n', re.M)
+comment = re.compile(rb'^[ \t]*//(?!go:|\+build|nolint|lint:|line |export ).*\n', re.M)
+machine = (b'stargate:', b'SPDX-License-Identifier', b'Copyright')
+
+def normalize(name, data):
+    if ticket.match(name) and data.startswith(b'---\n'):
+        end = data.find(b'\n---\n', 4)
+        if end != -1:
+            data = lifecycle.sub(b'', data[:end + 1]) + data[end + 1:]
+    elif name.endswith(('.go', '.java')):
+        data = comment.sub(lambda m: m.group(0) if any(k in m.group(0) for k in machine) else b'', data)
+    return data
+
+digest = hashlib.sha256()
+for raw in sorted(set(filter(None, names.split(b'\0')))):
+    name = os.fsdecode(raw)
+    if skip.match(name):
+        continue
+    path = pathlib.Path(name)
+    if path.is_symlink():
+        data = b'link:' + os.fsencode(os.readlink(path))
+    elif path.is_file():
+        data = normalize(name, path.read_bytes())
+    else:
+        data = b'<absent>'
+    for part in (raw, data):
+        digest.update(len(part).to_bytes(8, 'big'))
+        digest.update(part)
+print(digest.hexdigest())
+DIGEST
+}
+
+# verify_gate <label>: run verify.sh unless the executable content is
+# identical to what the last GREEN run for this ticket verified (a status
+# flip or a Go/Java comment edit cannot change a gate outcome). A GREEN run
+# is recorded only when the content did not move while it ran.
+verify_gate() {
+  local before after
+  before="$(code_digest)"
+  if [ -f "$GREEN_CODE" ] && [ "$(cat "$GREEN_CODE")" = "$before" ]; then
+    echo "run-task: $1: executable content unchanged since the last GREEN verify.sh; not re-running."
+    return 0
+  fi
+  echo "run-task: $1: running scripts/verify.sh…"
+  if ! STARGATE_VERIFY_LOG="$VERIFY_LOG" flock -x target/verify.log.lock bash scripts/verify.sh > /dev/null 2>&1; then
+    return 1
+  fi
+  after="$(code_digest)"
+  [ "$after" != "$before" ] || echo "$before" > "$GREEN_CODE"
+  return 0
 }
 
 invalidate_reviews() {
@@ -583,14 +653,14 @@ Implement $TICKET_ID (workflow.md §"The flow" steps 2–3):
    \`python3 scripts/test-first-evidence.py red $TICKET_ID -- <test command>\`.
    After the fix passes, run the same tool with \`green\` before staging its
    evidence JSON. Inspect the recorded output for secrets before staging.
-4. When the diff is ready, run from repo root:
-   bash scripts/verify.sh
-5. Verify must be GREEN. Fix the code, never the test, unless the ticket's
-   §Out-of-scope authorized that test change.
-6. **Stage the ticket's changed paths** (explicit paths only — never \`git add -A\`;
+4. Run the ticket's own tests. Do not run scripts/verify.sh yourself: the
+   driver runs it once as the pre-review gate and skips re-runs while the
+   executable content is unchanged. If it is NOT GREEN, fix the code, never
+   the test, unless the ticket's §Out-of-scope authorized that test change.
+5. **Stage the ticket's changed paths** (explicit paths only — never \`git add -A\`;
    the driver commits ONLY what you stage, at APPROVE):
    git add <path1> <path2> ... $TICKET_PATH
-7. When verify is green and the paths are staged, signal ready:
+6. When the paths are staged, signal ready:
    touch target/runs/$TICKET_ID.verified
 
 EOF
@@ -602,15 +672,15 @@ EOF
     check_inventory || exit 1
     check_test_first_evidence || exit 1
 
-    # Also run verify.sh directly as the safety re-check (workflow.md step 3).
-    echo "run-task: re-running scripts/verify.sh as the pre-review gate…"
-    if STARGATE_VERIFY_LOG="$VERIFY_LOG" flock -x target/verify.log.lock bash scripts/verify.sh > /dev/null 2>&1; then
+    # The pre-review gate (workflow.md step 4): the one verify.sh run a
+    # ticket normally pays.
+    if verify_gate "pre-review gate"; then
       check_inventory || exit 1
       echo "run-task: GREEN. Transitioning $TICKET_ID to in-review."
       update_ticket_status "in-review"
     else
-      echo "run-task: verify.sh NOT GREEN after the caller signalled verified." >&2
-      echo "  The tree changed between the caller's verify and this one. Re-implement." >&2
+      echo "run-task: verify.sh NOT GREEN at the pre-review gate (log: $VERIFY_LOG)." >&2
+      echo "  Fix the code, then touch target/runs/$TICKET_ID.verified and re-invoke." >&2
       exit 1
     fi
     exit 0
@@ -755,8 +825,7 @@ EOF
       # verdict set approves (the files we're holding), and (c) a focused
       # commit with the required Reviewed-by trailers exists. The driver
       # creates the commit itself so the invariant holds by construction.
-      echo "run-task: APPROVE received. Re-running verify.sh as the freshness gate…"
-      if ! STARGATE_VERIFY_LOG="$VERIFY_LOG" flock -x target/verify.log.lock bash scripts/verify.sh > /dev/null 2>&1; then
+      if ! verify_gate "APPROVE freshness gate"; then
         echo "run-task: verify.sh NOT GREEN at APPROVE. Tree changed post-review. Re-implement." >&2
         invalidate_reviews
         exit 1
@@ -830,7 +899,7 @@ txt = re.sub(r'^reviews:\s*\{[^}]*\}\s*$', new, txt, count=1, flags=re.MULTILINE
 open(path, 'w').write(txt)
 PY
       update_ticket_status "done"
-      rm -f "$REVIEW_SET" "$REVIEW_SNAPSHOT" "$AWF_FILE" "${REVIEW_VERDICT_FILES[@]}"
+      rm -f "$REVIEW_SET" "$REVIEW_SNAPSHOT" "$AWF_FILE" "$GREEN_CODE" "${REVIEW_VERDICT_FILES[@]}"
       echo "run-task: $TICKET_ID done (committed on '$FEATURE_BRANCH')."
       echo "  Push is your call: git push origin $FEATURE_BRANCH"
       echo "  Milestone squash-merge to main: scripts/run-task.sh $TICKET_ID --merge"
