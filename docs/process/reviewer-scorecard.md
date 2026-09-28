@@ -34,6 +34,13 @@ review scope.
 
 ## Period 1 (from 2026-09-28): astra high · glm-5.3-flash max
 
+Tool-control change inside Period 1, after T126: GLM's `stargate-review` bash
+allowlist was widened from git read commands only to read-only inspection
+(`ls`, `cat`, `head`, `tail`, `wc`, `grep`, `sha256sum`, `diff`,
+`git ls-files`, `git cat-file`, `git blame`). The matrix model and effort are
+unchanged, so the period continues. GLM rows from the next ticket on are
+recorded under the widened allowlist.
+
 ### Rounds
 
 | Date | Ticket | Round | astra | glm |

@@ -9,11 +9,24 @@ permission:
   glob: allow
   grep: allow
   bash:
+    "*": deny
     git diff*: allow
     git log*: allow
     git show*: allow
     git status*: allow
     git rev-parse*: allow
+    "ls": allow
+    "ls *": allow
+    "cat *": allow
+    "head *": allow
+    "tail *": allow
+    "wc *": allow
+    "grep *": allow
+    "sha256sum *": allow
+    "diff *": allow
+    "git ls-files*": allow
+    "git cat-file*": allow
+    "git blame*": allow
 ---
 
 
