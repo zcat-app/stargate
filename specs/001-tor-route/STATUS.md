@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 30 |
-| in-progress | 1 |
+| pending | 31 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 176 |
+| done | 177 |
 | deferred | 5 |
-| **total** | **212** |
+| **total** | **213** |
 
 ---
 
@@ -31,14 +31,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T126 | Pin DP UNAME forwarding: same target, distinct usernames, vi | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 | T176 | Pin or refuse the Maven tar fallback | Foundation audit remediation |  |  |
+| T181 | Replace topology suite Docker-health poll with authenticated | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T180 | Converge remaining tests/contract compose runners onto T121  | in-progress |  | 6: Polish & Cross-Cutting Concerns |
+_(nothing in flight)_
 
 ---
 
@@ -56,7 +55,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_176 ticket(s) done._
+_177 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -234,3 +233,4 @@ _176 ticket(s) done._
 - T177 — Promote Tor 0.4.9.13 security package
 - T178 — Diagnose and repair live initial token-load failure
 - T179 — Harden SQLite contention regression scheduling
+- T180 — Converge remaining tests/contract compose runners onto T121 helper
