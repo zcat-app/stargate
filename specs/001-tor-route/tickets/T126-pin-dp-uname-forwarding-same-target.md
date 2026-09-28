@@ -1,7 +1,7 @@
 ---
 id: T126
 title: 'Pin DP UNAME forwarding: same target, distinct usernames, via 8881'
-status: in-progress
+status: done
 created: 2026-09-07
 last_updated: 2026-09-28
 source: hand-filed (T120 convention; T059 round-1 review Finding 4 + RECOMMENDED-FOLLOW-UP)
@@ -23,7 +23,7 @@ spec_refs:
    - specs/001-tor-route/tasks.md#T059   # harness this extends
 decision_refs:
    - .specify/memory/constitution.md#Principle-VII   # tests-first: the DP's forwarding contract currently has no runtime gate through the DP
-reviews: {}
+reviews: { round: 3, date: 2026-09-28, verdict: APPROVE }   # r1 astra REWORK / glm APPROVE-WITH-FIXES; r2 astra ESCALATE / glm APPROVE; user-authorized refine (driver counter reset, labelled round 1); r3 both APPROVE — 9e26827
 overrides: []
 aborted_attempts: []
 reopens: []

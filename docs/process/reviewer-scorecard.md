@@ -38,11 +38,22 @@ review scope.
 
 | Date | Ticket | Round | astra | glm |
 |---|---|---|---|---|
+| 2026-09-28 | T126 | 1 | REWORK (1 Major, 2 Minor) | APPROVE-WITH-FIXES (2 Minor) |
+| 2026-09-28 | T126 | 2 | ESCALATE (1 Major) · 3 min | APPROVE (0) · 8 min |
+| 2026-09-28 | T126 | 3 (refine) | APPROVE (0) · 2 min | APPROVE (0) · 11 min |
+
+T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
 ### Findings
 
 | Date | Ticket | Round | Sev | Finding | astra | glm | Disposition | Note |
 |---|---|---|---|---|---|---|---|---|
+| 2026-09-28 | T126 | 1 | Major | Live test's SIGINT/SIGTERM handler outlives the test; a later signal can tear down/exit under the next suite | found | missed | fixed | stoppable `t126TrapSignals`, stop registered to run after compose-down |
+| 2026-09-28 | T126 | 1 | Minor | Blocking control-port reads bypass the advertised phase deadlines (bounded only by the 45-min suite ctx) | found | missed | fixed | per-operation sessions bounded by min(phase, 15 s); hermetic hung-transport test |
+| 2026-09-28 | T126 | 1 | Minor | Principal isolation failure omits the DP/tor diagnostics acceptance #1 requires | found | missed | fixed | forensics on every live fatal path; red re-capture shows both sections |
+| 2026-09-28 | T126 | 1 | Minor | Ticket Notes claim T182 "filed" while no T182 file is in the tree | missed | found | fixed | reworded; T182 lands in the `docs:` follow-up |
+| 2026-09-28 | T126 | 1 | Minor | Ticket helper-reuse list omits `t059TerminalStreamStates`, which the test uses | missed | found | fixed | doc-only |
+| 2026-09-28 | T126 | 2 | Major | Round-2 signal regression self-SIGTERMs the shared `go test` process; under `-tags docker` sibling suites' retained handlers `os.Exit(1)` mid-run | found | dismissed | fixed (round 3) | glm: "the only hermetic signal handler in this module is T126's own" — true only without `-tags docker`; confirmed locally: a leaked sibling-style handler kills the round-2 binary, the round-3 subprocess test survives |
 
 ## Baseline (before Period 1 — not counted in the evaluation)
 

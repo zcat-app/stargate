@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 29 |
+| pending | 30 |
 | in-progress | 0 |
 | in-review | 0 |
-| escalated | 1 |
-| done | 178 |
+| escalated | 0 |
+| done | 179 |
 | deferred | 5 |
-| **total** | **213** |
+| **total** | **214** |
 
 ---
 
@@ -30,14 +30,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
 | T176 | Pin or refuse the Maven tar fallback | Foundation audit remediation |  |  |
+| T182 | Repair stale T059/T033 live harnesses: control socket, sg1 n | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ | ✓ |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T126 | Pin DP UNAME forwarding: same target, distinct usernames, vi | escalated | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
+_(nothing in flight)_
 
 ---
 
@@ -55,7 +54,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_178 ticket(s) done._
+_179 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -184,6 +183,7 @@ _178 ticket(s) done._
 - T123 — Validate fresh-host CP mount provisioning
 - T124 — Allow bounded cold-bootstrap time during init
 - T125 — Local profile cannot expose 8881: FR-010 bind vs compose publish
+- T126 — Pin DP UNAME forwarding: same target, distinct usernames, via 8881
 - T127 — Correct T058 comment: DP dials upstream with UNAME only, no token
 - T128 — Stabilize TestMutualTLSHandshakeEndToEnd benign closeNotify close
 - T129 — CP crash-loop: noexec tmpfs /tmp blocks sqlite-jdbc native lib
