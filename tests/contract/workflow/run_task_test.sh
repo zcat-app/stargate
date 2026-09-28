@@ -472,6 +472,29 @@ assert '[ "$rt_rc" -eq 0 ]' "S8: milestone merge exits 0 (got $rt_rc)"
 # which §Acceptance #2 and the process doctrine forbid.
 assert 'git show -s --format=%s main | grep -q "milestone squash"' "S8: main tip is the milestone squash commit"
 assert 'git show-ref --verify --quiet refs/heads/001-testfeat' "S8: feature branch retained"
+assert '[ "$(git rev-parse main^{tree})" = "$(git rev-parse 001-testfeat^{tree})" ]' "S8: main carries the feature tip"
+# Second milestone: main holds only a squash of the feature branch, so a
+# plain `merge --squash` sees the old merge base and conflicts on every file
+# both sides added. The driver must fold in only the commits since the
+# feature commit main's tree equals (live failure at T182's milestone).
+git checkout -q 001-testfeat
+printf 'more\n' >> w.txt; git add w.txt; git commit -q -m "Implement 001-testfeat: T307 more work"
+run_task T307 --merge
+assert '[ "$rt_rc" -eq 0 ]' "S8b: second milestone merge exits 0 (got $rt_rc)"
+assert '[ "$(git rev-parse main^{tree})" = "$(git rev-parse 001-testfeat^{tree})" ]' "S8b: main carries the new feature tip"
+assert 'git show -s --format=%s main | grep -q "milestone squash (1 ticket commits)"' "S8b: counts only commits since the last milestone"
+assert '[ "$(git branch --show-current)" = 001-testfeat ] && [ -z "$(git status --porcelain)" ]' "S8b: back on a clean feature branch"
+# Diverged main (content not on the feature branch) that conflicts: the
+# squash must be undone, leaving main unchanged and the tree clean.
+git checkout -q main
+printf 'main-only\n' > w.txt; git add w.txt; git commit -q -m "diverging main edit"
+main_before="$(git rev-parse main)"
+git checkout -q 001-testfeat
+printf 'feature\n' >> w.txt; git add w.txt; git commit -q -m "Implement 001-testfeat: T307 conflicting work"
+run_task T307 --merge
+assert '[ "$rt_rc" -ne 0 ]' "S8c: conflicting merge exits non-zero (got $rt_rc)"
+assert '[ "$(git rev-parse main)" = "$main_before" ]' "S8c: main unchanged on conflict"
+assert '[ "$(git branch --show-current)" = 001-testfeat ] && [ -z "$(git status --porcelain)" ]' "S8c: conflict leaves a clean feature branch"
 
 # ===========================================================================
 # Scenario 9: MERGE — dirty-tree refusal

@@ -907,15 +907,30 @@ EOF
         echo "run-task: 'main' does not exist. Create it before the milestone merge." >&2
         exit 1
       fi
+      # main receives only squashes, so git's merge base with the feature
+      # branch stays at the first milestone and a later `merge --squash`
+      # conflicts on every file both sides added. When main's tree equals a
+      # feature commit (main holds nothing the branch lacks), the milestone
+      # is exactly the feature tip's tree and folds in only the commits
+      # since that point (T182 milestone live failure).
+      MAIN_TREE="$(git rev-parse 'main^{tree}')"
+      SYNCED="$(git log --format='%H %T' "$FEATURE_BRANCH" | awk -v t="$MAIN_TREE" '$2 == t { print $1; exit }')"
       # Count commits being folded in (for the milestone message).
-      NCOMMITS="$(git rev-list --count main.."${FEATURE_BRANCH}" 2>/dev/null || echo 0)"
+      NCOMMITS="$(git rev-list --count "${SYNCED:-main}".."${FEATURE_BRANCH}" 2>/dev/null || echo 0)"
       if [ "${NCOMMITS:-0}" -eq 0 ]; then
         echo "run-task: '$FEATURE_BRANCH' has no commits ahead of main. Nothing to merge." >&2
         exit 0
       fi
       echo "run-task: milestone squash-merge of '$FEATURE_BRANCH' (${NCOMMITS} commits) into main…"
       git checkout main
-      if git merge --squash "$FEATURE_BRANCH"; then
+      if [ -n "$SYNCED" ]; then
+        _squashed=0
+        git read-tree -u --reset "$FEATURE_BRANCH" && _squashed=1
+      else
+        _squashed=0
+        git merge --squash "$FEATURE_BRANCH" && _squashed=1
+      fi
+      if [ "$_squashed" = 1 ]; then
         # T105: capture the milestone commit's rc and confirm main actually
         # advanced. The `&& _crc=0 || _crc=$?` form tests the exit so the
         # script's `set -e` does not abort before we can fail-closed. Without
@@ -941,7 +956,9 @@ EOF
         echo "  Push is your call (never auto-push): git push origin main"
       else
         echo "run-task: squash-merge conflicted. Resolve, or rebase $FEATURE_BRANCH onto main and retry." >&2
-        git merge --abort 2>/dev/null || true
+        # A squash records no MERGE_HEAD, so `merge --abort` cannot undo it;
+        # the tree was clean before the merge, so reset main to its tip.
+        git reset -q --hard HEAD
         git checkout "$FEATURE_BRANCH" 2>/dev/null || true
         exit 1
       fi
