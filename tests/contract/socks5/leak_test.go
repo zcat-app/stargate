@@ -68,11 +68,13 @@ import (
 )
 
 // timingMeasureRounds is the per-distribution sample count for the
-// constant-time sub-tests; 32 interleaved rounds give the median a
-// standard error the ±25% band can live with on shared CI hardware
-// (the DP's HMAC work is ~1µs; the measured ~80µs is loopback RTT and
-// scheduling, so only sample count and interleaving fight the noise).
-const timingMeasureRounds = 32
+// constant-time sub-tests (the DP's HMAC work is ~1µs; the measured
+// ~80µs is loopback RTT and scheduling, so only sample count and
+// interleaving fight the noise). 32 rounds — sized for the retired
+// argon2id cost — left per-distribution medians swinging ±40% even
+// within one DP and failed verify.sh on a loaded host (T182
+// milestone); 256 rounds hold them within ~±10% at ~1 s per measure.
+const timingMeasureRounds = 256
 
 // measureUntilInBand runs measure up to 3 times, returning the first
 // set of distributions whose medians sit within the band (or the last
@@ -272,14 +274,11 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 			distros, 0.25)
 	})
 
-	// (c) SlotInvariance_N4_ConstantTimeAcrossList: pre-mint 5 distinct
-	// verifiers (hashA..hashE of plainA..plainE). For each slot index
-	// s ∈ {0,1,2,3}, push a generation with hashA at index s (the other
-	// three slots filled with hashB/hashC/hashD), then time K=8 auth-
-	// SUCCESS attempts for plainA. For the all-fail case, push a
-	// generation of [hashB, hashC, hashD, hashE] and time K=8 auth-
-	// FAILURE attempts for plainA. Assert all 5 latency distributions'
-	// medians are within 25% of the overall median.
+	// (c) SlotInvariance_N4_ConstantTimeAcrossList: load ONE generation
+	// [hashA, hashB, hashC, hashD] into ONE DP, then time auth-SUCCESS
+	// for plainA..plainD (the matching verifier at slot 0..3) and auth-
+	// FAILURE for plainE (matches no slot). Assert all 5 latency
+	// distributions' medians are within 25% of the overall median.
 	//
 	// Under the prior argon2id cost model a short-circuit-on-first-match
 	// implementation produced a slot-0 vs slot-3 ratio of ~4× (1 vs 4
@@ -301,11 +300,9 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 	t.Run("SlotInvariance_N4_ConstantTimeAcrossList", func(t *testing.T) {
 		requireAuth(t)
 
-		// Five distinct plaintexts (32-char hex); hashA is the one we
-		// measure auth-success latency for at each slot. hashE is the
-		// 5th verifier used only in the all-fail generation (so the
-		// list is always N=4 but plainA matches nothing in the all-fail
-		// case).
+		// Five distinct plaintexts (32-char hex); plainA..plainD match
+		// the N=4 list's slots 0..3 and plainE matches nothing (the
+		// all-fail case), so it needs no verifier.
 		const (
 			plainA = "aabbccddeeff00112233445566778899"
 			plainB = "bbccddeeff00112233445566778899aa"
@@ -317,90 +314,74 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 		hashB := dpharness.MintToken(t, plainB)
 		hashC := dpharness.MintToken(t, plainC)
 		hashD := dpharness.MintToken(t, plainD)
-		hashE := dpharness.MintToken(t, plainE)
 
-		// Five distributions: auth-success with hashA at slot 0/1/2/3,
-		// then auth-failure with plainA against [hashB, hashC, hashD,
-		// hashE]. Each case boots its own fresh DP (see comment below
-		// the cases), so the generation numbers here index the cases
-		// rather than exercising §1.6's within-one-DP monotonicity
-		// invariant (that invariant is T020's scope). Each case's gen
-		// is simply a valid (>0) generation the fresh DP will accept.
+		// Five distributions over ONE token list: auth-success for the
+		// plaintext whose verifier sits at slot 0/1/2/3, then auth-failure
+		// for plainE, which matches no slot. A short-circuit-on-first-match
+		// implementation answers plainA (slot 0) faster than plainD (slot
+		// 3); the all-fail case scans the whole list.
+		//
+		// One DP process for every distribution (T182 milestone flake):
+		// the previous design booted a fresh DP per slot (varying the list
+		// under a fixed candidate), so each distribution was ALSO one
+		// process's scheduling luck — observed on a loaded verify.sh host
+		// as medians [170, 95, 107, 167, 186]µs that split by process, not
+		// by slot, surviving interleaving and all three re-measures.
+		// Varying the candidate within one fixed list tests the same
+		// slot-position property with the process held constant.
 		//
 		// Slot-order assumption: the test assumes ReloadTokens preserves
 		// the caller's token-list order — i.e. the DP's internal
 		// tokenStore[i] corresponds to tokens[i] on the wire. If a
 		// future implementation re-orders or dedups the list (e.g. sorts
-		// by hash for binary search), the four slot cases collapse into
-		// one internal state and this test cannot distinguish them. T044
-		// (auth/token.go) is expected to preserve insertion order; a
-		// regression here would need a side-channel check T025 does not
-		// own.
+		// by hash for binary search), the slot cases no longer map to
+		// the labelled positions. T044 (auth/token.go) is expected to
+		// preserve insertion order; a regression here would need a
+		// side-channel check T025 does not own.
 		type tc struct {
 			label   string
-			gen     uint64
-			tokens  []*grpcpb.TokenVerifier
 			passwd  string
 			wantRep []byte // expected sub-negotiation reply
 		}
 		cases := []tc{
-			{"slot0", 1, []*grpcpb.TokenVerifier{hashA, hashB, hashC, hashD}, plainA, []byte{0x01, 0x00}},
-			{"slot1", 2, []*grpcpb.TokenVerifier{hashB, hashA, hashC, hashD}, plainA, []byte{0x01, 0x00}},
-			{"slot2", 3, []*grpcpb.TokenVerifier{hashB, hashC, hashA, hashD}, plainA, []byte{0x01, 0x00}},
-			{"slot3", 4, []*grpcpb.TokenVerifier{hashB, hashC, hashD, hashA}, plainA, []byte{0x01, 0x00}},
-			{"allfail", 5, []*grpcpb.TokenVerifier{hashB, hashC, hashD, hashE}, plainA, []byte{0x01, 0xFF}},
+			{"slot0", plainA, []byte{0x01, 0x00}},
+			{"slot1", plainB, []byte{0x01, 0x00}},
+			{"slot2", plainC, []byte{0x01, 0x00}},
+			{"slot3", plainD, []byte{0x01, 0x00}},
+			{"allfail", plainE, []byte{0x01, 0xFF}},
 		}
 
-		// Each case gets its own DP process: a short-circuit
-		// implementation's slot-0 latency would otherwise be
-		// unmeasurable after slot-3's generation was loaded (the DP
-		// keeps only the latest generation). A fresh DP per case
-		// isolates the measurement.
-		//
-		// Interleaved sampling (T050 fixture mechanics): all five DPs
-		// boot first, then samples rotate round-robin across them, so
-		// each distribution's 16 samples span the whole measurement
-		// window. Case-by-case sampling gives every distribution one
-		// contiguous ~5 ms slice of a noisy shared host — a single load
-		// spike lands wholly inside one distribution and masquerades as
-		// a slot-position timing leak (observed r1: medians [87, 65,
-		// 132, 91, 69]µs case-by-case vs within-band interleaved on the
-		// same host). The slot factor is what must differ, not the wall
-		// clock; interleaving is the standard comparative-benchmark
-		// defence.
-		type liveCase struct {
-			spec tc
-			h    *dpharness.Harness
-		}
+		// Interleaved sampling (T050 fixture mechanics): samples rotate
+		// round-robin across the cases in shuffled order, so each
+		// distribution's samples span the whole measurement window and a
+		// load spike cannot land wholly inside one distribution.
 		rng := rand.New(rand.NewSource(2))
 		measure := func() [][]time.Duration {
-			live := make([]liveCase, 0, len(cases))
+			h := dpharness.Start(t)
+			requireReloadOK(t, dpharness.Reload(t, h, 1,
+				[]*grpcpb.TokenVerifier{hashA, hashB, hashC, hashD}), 1)
+			// Warm every path once so the first-sampled case does not
+			// absorb the DP's cold-start cost (see warmupAuth).
 			for _, c := range cases {
-				h := dpharness.Start(t)
-				requireReloadOK(t, dpharness.Reload(t, h, c.gen, c.tokens), c.gen)
-				// Every case runs a FRESH DP, so every distribution
-				// needs its own warmup or the first-sampled case
-				// absorbs all cold-start cost (see warmupAuth).
 				warmupAuth(t, h, "t025c-uname", c.passwd)
-				live = append(live, liveCase{spec: c, h: h})
 			}
-			distros := make([][]time.Duration, len(live))
+			distros := make([][]time.Duration, len(cases))
 			for i := range distros {
 				distros[i] = make([]time.Duration, 0, timingMeasureRounds)
 			}
 			for round := 0; round < timingMeasureRounds; round++ {
-				for _, idx := range shuffledOrder(len(live), rng) {
-					lc := live[idx]
-					conn := dialProxy(t, lc.h)
+				for _, idx := range shuffledOrder(len(cases), rng) {
+					c := cases[idx]
+					conn := dialProxy(t, h)
 					_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 					doMethodNegotiation(t, conn)
-					elapsed, reply := timeSubnegotiation(t, conn, "t025c-uname", lc.spec.passwd)
-					if !bytes.Equal(reply, lc.spec.wantRep) {
+					elapsed, reply := timeSubnegotiation(t, conn, "t025c-uname", c.passwd)
+					if !bytes.Equal(reply, c.wantRep) {
 						_ = conn.Close()
 						t.Fatalf("%s: sub-negotiation reply = %x, want %x — "+
 							"the slot-positioning precondition failed (the "+
 							"token was not at the expected slot, or auth "+
-							"behaved incorrectly)", lc.spec.label, reply, lc.spec.wantRep)
+							"behaved incorrectly)", c.label, reply, c.wantRep)
 					}
 					_ = conn.Close()
 					distros[idx] = append(distros[idx], elapsed)
