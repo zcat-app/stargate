@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-27
+**Last updated:** 2026-09-28
 
 ---
 
@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 30 |
-| in-progress | 1 |
+| pending | 31 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 175 |
+| done | 176 |
 | deferred | 5 |
-| **total** | **211** |
+| **total** | **212** |
 
 ---
 
@@ -31,14 +31,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T126 | Pin DP UNAME forwarding: same target, distinct usernames, vi | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 | T176 | Pin or refuse the Maven tar fallback | Foundation audit remediation |  |  |
+| T180 | Converge remaining tests/contract compose runners onto T121  | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T121 | Hoist per-suite compose project runner into one shared helpe | in-progress |  | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
+_(nothing in flight)_
 
 ---
 
@@ -56,7 +55,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_175 ticket(s) done._
+_176 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -180,6 +179,7 @@ _175 ticket(s) done._
 - T116 — Fix ForbiddenDetailRejected journal-read race (poll the marker)
 - T118 — Clear the bearer-token field after a successful save
 - T120 — Make `verify.sh` log writes concurrency-safe for parallel ticket runs
+- T121 — Hoist per-suite compose project runner into one shared helper
 - T122 — Fix DP/CP image builds: proto/ outside build contexts
 - T123 — Validate fresh-host CP mount provisioning
 - T124 — Allow bounded cold-bootstrap time during init
