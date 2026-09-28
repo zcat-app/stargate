@@ -13,10 +13,10 @@
 
 | Status | Count |
 |---|---|
-| pending | 30 |
+| pending | 29 |
 | in-progress | 0 |
 | in-review | 0 |
-| escalated | 0 |
+| escalated | 1 |
 | done | 178 |
 | deferred | 5 |
 | **total** | **213** |
@@ -29,14 +29,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T126 | Pin DP UNAME forwarding: same target, distinct usernames, vi | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) | ✓ |  |
 | T176 | Pin or refuse the Maven tar fallback | Foundation audit remediation |  |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T126 | Pin DP UNAME forwarding: same target, distinct usernames, vi | escalated | ✓ | 4: User Story 2 — Stream isolation per first-party domain (Priority: P2) |
 
 ---
 
