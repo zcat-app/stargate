@@ -32,9 +32,9 @@ import json, sys
 
 matrix = json.load(open(sys.argv[1]))
 expected = [
-    ("glm", "opencode", "stargate-review", "zai-coding-plan/glm-5.3", "xhigh",
+    ("glm", "opencode", "stargate-review", "zai-coding-plan/glm-5.3-flash", "xhigh",
      lambda t: f"{t}.review-glm.verdict"),
-    ("astra", "codex", "stargate-review", "gpt-6-astra", "low",
+    ("astra", "codex", "stargate-review", "gpt-6-astra", "high",
      lambda t: f"{t}.review-astra.verdict"),
 ]
 rows = matrix.get("reviewers")
@@ -118,7 +118,7 @@ while [ "$#" -gt 0 ]; do
     *) shift ;;
   esac
 done
-[ "$model" = zai-coding-plan/glm-5.3 ] || exit 64
+[ "$model" = zai-coding-plan/glm-5.3-flash ] || exit 64
 [ "$role" = stargate-review ] || exit 64
 output="$(sed -n 's/^Your verdict output path is \(.*\) in your private candidate\.$/\1/p' "$prompt" | head -1)"
 [ "$output" = target/runs/T900.review-glm.verdict ] || exit 64
@@ -136,7 +136,7 @@ if [ -f .fixture-mutate ]; then
   python3 -c 'open("candidate.txt", "w").write("changed by reviewer")'
 fi
 [ "${OPENCODE_CONFIG_CONTENT:-}" != "" ] || exit 64
-python3 -c 'import json,os; c=json.loads(os.environ["OPENCODE_CONFIG_CONTENT"]); assert c["provider"]["zai-coding-plan"]["models"]["glm-5.3"]["variants"]["xhigh"]["reasoningEffort"] == "max"; assert c["permission"]["task"] == "deny"'
+python3 -c 'import json,os; c=json.loads(os.environ["OPENCODE_CONFIG_CONTENT"]); assert c["provider"]["zai-coding-plan"]["models"]["glm-5.3-flash"]["variants"]["xhigh"]["reasoningEffort"] == "max"; assert c["permission"]["task"] == "deny"'
 python3 -c 'import json,os; c=json.loads(os.environ["OPENCODE_CONFIG_CONTENT"]); assert c["agent"]["stargate-review"]["mode"] == "all"'
 if [ -f .fixture-extra-output ]; then
   mkdir -p target/runs/not-a-verdict
@@ -163,7 +163,7 @@ output=""
 model=""
 args="$*"
 [[ " $* " = *" -s danger-full-access "* && " $* " = *" --ephemeral "* ]] || exit 64
-[[ " $* " = *'model_reasoning_effort="low"'* ]] || exit 64
+[[ " $* " = *'model_reasoning_effort="high"'* ]] || exit 64
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -o) output="$2"; shift 2 ;;
@@ -434,9 +434,9 @@ MUT
     grep -q '^status: done' "$case_dir/specs/001-fixture/tickets/T900-fixture.md" ||
       bail "$tag: driver did not complete after release"
     git -C "$case_dir" log -1 --format=%B > "$SANDBOX/$tag-msg"
-    grep -q 'Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3; effort xhigh; VERDICT: APPROVE' "$SANDBOX/$tag-msg" ||
+    grep -q 'Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3-flash; effort xhigh; VERDICT: APPROVE' "$SANDBOX/$tag-msg" ||
       bail "$tag: commit trailers do not match the authorizing APPROVE set (glm)"
-    grep -q 'Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort low; VERDICT: APPROVE' "$SANDBOX/$tag-msg" ||
+    grep -q 'Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort high; VERDICT: APPROVE' "$SANDBOX/$tag-msg" ||
       bail "$tag: commit trailers do not match the authorizing APPROVE set (astra)"
   fi
 }

@@ -128,15 +128,16 @@ editing any `.claude/agents/*.md`.
 
 - **Long-context / planning / threat-modelling / adversarial review**:
   Opus-class (the `stargate-redteam` and `stargate-perf` subagents default here).
-- **Routine implementation / refactoring / test-writing** (once the spec is
-  stable): Sonnet-class.
-- **Per-ticket single review gate** (`stargate-review`): Opus-class, fresh
+- **Ticket implementation** (the `/run` root developer): Claude Code,
+  Opus-class. The implementer never reviews its own ticket.
+- **Per-ticket single review gate** (`stargate-review`): the models in
+  `scripts/review-matrix.json` (below), not the implementer's model; fresh
   context, blind to the implementer's rationale, covering correctness AND
   adversarial security in one pass.
 
 Ticket review uses `scripts/review-matrix.json`: exactly one OpenCode full
-`zai-coding-plan/glm-5.3` context at `xhigh` (native GLM `max`) and one
-Codex `gpt-6-astra` context at `low`, both running the same merged gate in
+`zai-coding-plan/glm-5.3-flash` context at `xhigh` (native GLM `max`) and one
+Codex `gpt-6-astra` context at `high`, both running the same merged gate in
 one pass — there is no separate redteam dispatch. `scripts/review-task.sh`
 launches fresh native CLI child sessions concurrently with separate candidate
 copies and verdict paths. No containers are required. This is context

@@ -168,9 +168,9 @@ gate_verdict() {
   fi
   snapshot="$(cat "target/runs/$id.review-snapshot")"
   round="$(cat "target/runs/$id.round")"
-  printf 'VERDICT: %s\nREVIEWER: glm\nTOOL: opencode\nMODEL: zai-coding-plan/glm-5.3\nEFFORT: xhigh\nSNAPSHOT: %s\nROUND: %s\nSUMMARY: fixture gate\nFINDINGS: fixture\n%s\n' \
+  printf 'VERDICT: %s\nREVIEWER: glm\nTOOL: opencode\nMODEL: zai-coding-plan/glm-5.3-flash\nEFFORT: xhigh\nSNAPSHOT: %s\nROUND: %s\nSUMMARY: fixture gate\nFINDINGS: fixture\n%s\n' \
     "$kind" "$snapshot" "$round" "$details" > "target/runs/$id.review-glm.verdict"
-  printf 'VERDICT: %s\nREVIEWER: astra\nTOOL: codex\nMODEL: gpt-6-astra\nEFFORT: low\nSNAPSHOT: %s\nROUND: %s\nSUMMARY: fixture gate\nFINDINGS: fixture\n%s\n' \
+  printf 'VERDICT: %s\nREVIEWER: astra\nTOOL: codex\nMODEL: gpt-6-astra\nEFFORT: high\nSNAPSHOT: %s\nROUND: %s\nSUMMARY: fixture gate\nFINDINGS: fixture\n%s\n' \
     "$kind" "$snapshot" "$round" "$details" > "target/runs/$id.review-astra.verdict"
   review_manifest "$id" "$snapshot" "$round" \
     "$id.review-glm.verdict" "$id.review-astra.verdict"
@@ -278,9 +278,9 @@ run_task T303
 assert '[ "$rt_rc" -eq 0 ]' "S4: APPROVE exits 0 (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T303-fixture.md status)" = done ]' "S4: status -> done"
 assert '[ "$(git rev-parse HEAD)" != "$PRE_COMMIT" ]' "S4: a new commit was created"
-assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3; effort xhigh; VERDICT: APPROVE"' \
+assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3-flash; effort xhigh; VERDICT: APPROVE"' \
   "S4: tip commit carries the GLM Reviewed-by trailer"
-assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort low; VERDICT: APPROVE"' \
+assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort high; VERDICT: APPROVE"' \
   "S4: tip commit carries the Astra Reviewed-by trailer"
 assert 'git log -1 --format=%s HEAD | grep -qE "^Implement 001-testfeat: T303 "' \
   "S4: subject is 'Implement <feature>: T303 ...'"
@@ -304,9 +304,9 @@ assert '[ "$rt_rc" -eq 0 ]' "S4b: mixed set emits APPLY-FIXES"
 touch target/runs/T323.awf-applied
 run_task T323
 assert '[ "$rt_rc" -eq 0 ]' "S4b: mixed set commits after sentinel"
-assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3; effort xhigh; VERDICT: APPROVE;"' \
+assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3-flash; effort xhigh; VERDICT: APPROVE;"' \
   "S4b: GLM trailer preserves its APPROVE"
-assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort low; VERDICT: APPROVE-WITH-FIXES;"' \
+assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort high; VERDICT: APPROVE-WITH-FIXES;"' \
   "S4b: Astra trailer preserves its APPROVE-WITH-FIXES"
 
 # ===========================================================================
@@ -360,8 +360,8 @@ gate_verdict T305 APPROVE
 run_task T305
 assert '[ "$rt_rc" -eq 0 ]' "S6: gate approval commits a privacy-critical ticket"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T305-fixture.md status)" = done ]' "S6: done after one gate pass"
-assert 'git log -1 --format=%B | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3; effort xhigh; VERDICT: APPROVE"' "S6: GLM trailer"
-assert 'git log -1 --format=%B | grep -q "Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort low; VERDICT: APPROVE"' "S6: Astra trailer"
+assert 'git log -1 --format=%B | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3-flash; effort xhigh; VERDICT: APPROVE"' "S6: GLM trailer"
+assert 'git log -1 --format=%B | grep -q "Reviewed-by: stargate-review (astra; codex; model gpt-6-astra; effort high; VERDICT: APPROVE"' "S6: Astra trailer"
 
 privacy_fixture s7
 printf 'VERDICT: CLEAN\n' > target/runs/T305.review-glm.verdict
@@ -565,7 +565,7 @@ run_task T320   # step 2: sentinel present -> commit path
 assert '[ "$rt_rc" -eq 0 ]' "S10c-2: post-sentinel exits 0 (got $rt_rc)"
 assert '[ "$(fm_field specs/001-testfeat/tickets/T320-fixture.md status)" = done ]' \
   "S10c-2: status -> done"
-assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3; effort xhigh; VERDICT: APPROVE-WITH-FIXES; round"' \
+assert 'git log -1 --format=%B HEAD | grep -q "Reviewed-by: stargate-review (glm; opencode; model zai-coding-plan/glm-5.3-flash; effort xhigh; VERDICT: APPROVE-WITH-FIXES; round"' \
   "S10c-2: trailer carries the AWF verdict kind"
 assert '[ ! -e target/runs/T320.awf-applied ]' "S10c-2: awf sentinel cleaned up at done"
 

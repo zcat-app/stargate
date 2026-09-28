@@ -672,7 +672,7 @@ Run the single-gate reviewer set against $TICKET_ID (workflow.md §"The flow" st
   scripts/review-task.sh $TICKET_ID
 
 ONE invocation, ONE pass: the launcher creates two separate fresh-context
-native CLI sessions (one OpenCode GLM 5.3 and one Codex Astra), each blind to
+native CLI sessions (one OpenCode GLM-5.3-Flash and one Codex Astra), each blind to
 your rationale and peer verdicts, each covering correctness AND adversarial
 security/privacy in the same pass. It gives each:
   - The diff:    \`git diff $BASE_SHA\`

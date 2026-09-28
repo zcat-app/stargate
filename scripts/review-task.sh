@@ -245,7 +245,9 @@ run_actual() {
     if [ "$tool" = opencode ]; then
       # OpenCode run rejects subagent-only roles and silently selects build.
       # Make the gate role CLI-selectable for this invocation; keep its denies.
-      OPENCODE_CONFIG_CONTENT='{"agent":{"stargate-review":{"mode":"all"}},"provider":{"zai-coding-plan":{"models":{"glm-5.3":{"variants":{"xhigh":{"reasoningEffort":"max"}}}}}},"permission":{"external_directory":"deny","task":"deny"}}' \
+      # The xhigh→max variant is keyed by the matrix model (provider/name), so
+      # a model swap in review-matrix.json cannot silently drop the mapping.
+      OPENCODE_CONFIG_CONTENT="$(python3 -c 'import json,sys; p,m=sys.argv[1].split("/",1); print(json.dumps({"agent":{"stargate-review":{"mode":"all"}},"provider":{p:{"models":{m:{"variants":{"xhigh":{"reasoningEffort":"max"}}}}}},"permission":{"external_directory":"deny","task":"deny"}}))' "$model")" \
         TMPDIR="$dir" setsid "$binary" run "Perform the attached isolated ticket review directly." \
           --auto --pure --dir "$candidate" --agent "$role" --model "$model" --variant "$effort" \
           --file "$input/prompt.md" > "$dir/reviewer.log" 2>&1 &

@@ -100,7 +100,7 @@
     "stargate-review": {
       "description": "The single merged review gate of the ticket workflow — one fresh-context pass covering correctness, scope, test discipline, contract conformance AND the adversarial security/privacy checklist. Spawned only by scripts/review-task.sh. Writes ONLY its own verdict file.",
       "mode": "subagent",
-      "model": "zai-coding-plan/glm-5.3",
+      "model": "zai-coding-plan/glm-5.3-flash",
       "permission": {
         "edit": { "*": "deny", "target/runs/*.verdict": "allow" },
         "task": "deny",

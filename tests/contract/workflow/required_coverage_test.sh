@@ -183,9 +183,9 @@ class Coverage(unittest.TestCase):
         snapshot = (self.root / 'target/runs/T999.review-snapshot').read_text().strip()
         files = ('T999.review-glm.verdict', 'T999.review-astra.verdict')
         self.reviewer_verdict(files[0], verdict, 'glm', 'opencode',
-                              'zai-coding-plan/glm-5.3', 'xhigh', snapshot)
+                              'zai-coding-plan/glm-5.3-flash', 'xhigh', snapshot)
         self.reviewer_verdict(files[1], verdict, 'astra', 'codex',
-                              'gpt-6-astra', 'low', snapshot)
+                              'gpt-6-astra', 'high', snapshot)
         self.review_manifest(snapshot, files)
         return files
 
@@ -252,9 +252,9 @@ class Coverage(unittest.TestCase):
         # complete set bound to the stale snapshot cannot authorize B.
         files = ('T999.review-glm.verdict', 'T999.review-astra.verdict')
         self.reviewer_verdict(files[0], 'APPROVE', 'glm', 'opencode',
-                              'zai-coding-plan/glm-5.3', 'xhigh', snapshot_a)
+                              'zai-coding-plan/glm-5.3-flash', 'xhigh', snapshot_a)
         self.reviewer_verdict(files[1], 'APPROVE', 'astra', 'codex',
-                              'gpt-6-astra', 'low', snapshot_a)
+                              'gpt-6-astra', 'high', snapshot_a)
         self.review_manifest(snapshot_a, files)
         self.assert_refused(self.drive())
         self.gate_approve()

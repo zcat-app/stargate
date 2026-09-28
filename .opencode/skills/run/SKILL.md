@@ -32,7 +32,10 @@ status after each invocation; do not replay a stale prompt after a transition.
   paths, verify and signal completion. The driver still owns commit.
 - COMMIT: stage the requested explicit paths and re-invoke the driver.
 - MERGE/done: report the local commit and required review results. Do not
-  create a second ticket commit. Push or milestone merge requires user
+  create a second ticket commit. In the `docs: mark <id> done` follow-up,
+  append every round's verdicts and dispositioned findings to
+  `docs/process/reviewer-scorecard.md` (found / missed / dismissed per
+  reviewer) — never in the ticket's own candidate. Push or milestone merge requires user
   authorization already present in the session or a separate user decision.
 
 Continue through authorized local work and bounded rework. Stop on clarity
