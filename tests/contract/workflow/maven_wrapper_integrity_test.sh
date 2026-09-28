@@ -2,6 +2,8 @@
 # Copyright 2026 The Stargate Authors
 # SPDX-License-Identifier: Apache-2.0
 # T145: exercise the checked-in only-script wrapper against local archive bytes.
+# T176: a cold install without unzip must refuse before any download, because
+# distributionSha256Sum pins only the -bin.zip bytes.
 set -euo pipefail
 
 python3 - "$(git rev-parse --show-toplevel)" <<'PY'
@@ -10,10 +12,8 @@ import hashlib
 import http.server
 import io
 import os
-import shutil
 import subprocess
 import sys
-import tarfile
 import tempfile
 import threading
 import zipfile
@@ -45,26 +45,39 @@ with tempfile.TemporaryDirectory(prefix='stargate-t145-') as tmp:
     bindir.mkdir()
     fake_wget = bindir / 'wget'
     fake_wget.write_text('#!/bin/sh\nset -eu\nwhile [ "$#" -gt 0 ]; do\n'
-                         '  if [ "$1" = -O ]; then shift; dest=$1; fi\n'
+                         '  case "$1" in -O) shift; dest=$1 ;; -*) ;; *) url=$1 ;; esac\n'
                          '  shift\ndone\ncp "$FIXTURE_ARCHIVE" "$dest"\n'
-                         'printf downloaded >> "$DOWNLOAD_MARKER"\n')
+                         'printf %s "$url" > "$DOWNLOAD_MARKER"\n')
     fake_wget.chmod(0o755)
+    # T176: PATH is rebuilt from the host minus unzip so the no-unzip branch is
+    # deterministic; the ZIP path gets a local unzip, since hosts may lack one.
+    toolbox = work / 'toolbox'
+    toolbox.mkdir()
+    for entry in os.environ['PATH'].split(os.pathsep):
+        if not os.path.isdir(entry):
+            continue
+        for tool in os.listdir(entry):
+            source, target = Path(entry, tool), toolbox / tool
+            if tool != 'unzip' and not target.exists() and source.is_file() and os.access(source, os.X_OK):
+                target.symlink_to(source)
+    unzipdir = work / 'unzip'
+    unzipdir.mkdir()
+    fake_unzip = unzipdir / 'unzip'
+    fake_unzip.write_text('#!/usr/bin/env python3\nimport os, sys, zipfile\n'
+                          'args = [a for a in sys.argv[1:] if a != "-q"]\n'
+                          'archive, dest = args[0], args[args.index("-d") + 1]\n'
+                          'with zipfile.ZipFile(archive) as zf:\n'
+                          '    for item in zf.infolist():\n'
+                          '        os.chmod(zf.extract(item, dest), item.external_attr >> 16)\n')
+    fake_unzip.chmod(0o755)
 
-    use_zip = shutil.which('unzip') is not None
-    archive = work / ('apache-maven-fixture-bin.zip' if use_zip else 'apache-maven-fixture-bin.tar.gz')
+    archive = work / 'apache-maven-fixture-bin.zip'
     content = b'#!/bin/sh\nprintf executed >> "$EXEC_MARKER"\n'
     buf = io.BytesIO()
-    if use_zip:
-        with zipfile.ZipFile(buf, 'w') as zf:
-            item = zipfile.ZipInfo('apache-maven-fixture/bin/mvn')
-            item.external_attr = 0o100755 << 16
-            zf.writestr(item, content)
-    else:
-        with tarfile.open(fileobj=buf, mode='w:gz') as tf:
-            item = tarfile.TarInfo('apache-maven-fixture/bin/mvn')
-            item.mode = 0o755
-            item.size = len(content)
-            tf.addfile(item, io.BytesIO(content))
+    with zipfile.ZipFile(buf, 'w') as zf:
+        item = zipfile.ZipInfo('apache-maven-fixture/bin/mvn')
+        item.external_attr = 0o100755 << 16
+        zf.writestr(item, content)
     good = buf.getvalue()
     digest = hashlib.sha256(good).hexdigest()
     wrapper_dir = work / 'control-plane'
@@ -76,7 +89,7 @@ with tempfile.TemporaryDirectory(prefix='stargate-t145-') as tmp:
     parent_env = dict(os.environ, MVNW_USERNAME='fixture-user',
                       MVNW_PASSWORD='fixture-password',
                       MVNW_REPOURL=f'http://127.0.0.1:{recorder.server_port}')
-    env = dict(parent_env, PATH=f'{bindir}{os.pathsep}{parent_env["PATH"]}',
+    env = dict(parent_env, PATH=os.pathsep.join(map(str, (bindir, unzipdir, toolbox))),
                MAVEN_USER_HOME=str(work / 'm2'), FIXTURE_ARCHIVE=str(archive),
                DOWNLOAD_MARKER=str(work / 'downloaded'), EXEC_MARKER=str(work / 'executed'))
     # Paired credentials select the wrapper's Java downloader; an inherited
@@ -84,19 +97,23 @@ with tempfile.TemporaryDirectory(prefix='stargate-t145-') as tmp:
     for name in ('MVNW_USERNAME', 'MVNW_PASSWORD', 'MVNW_REPOURL'):
         env.pop(name, None)
 
-    def run(checksum, payload=good, cached=False):
-        prop.write_text(base + (f'distributionSha256Sum={checksum}\n' if checksum is not None else ''))
+    def run(checksum, payload=good, cached=False, unzip=True, props=None):
+        if props is None:
+            props = base + (f'distributionSha256Sum={checksum}\n' if checksum is not None else '')
+        prop.write_text(props)
         archive.write_bytes(payload)
         for marker in ('downloaded', 'executed'):
             (work / marker).unlink(missing_ok=True)
         if not cached:
             subprocess.run(['rm', '-rf', str(work / 'm2')], check=True)
-        result = subprocess.run(['sh', str(wrapper_dir / 'mvnw')], env=env,
+        run_env = env if unzip else dict(env, PATH=os.pathsep.join(map(str, (bindir, toolbox))))
+        result = subprocess.run(['sh', str(wrapper_dir / 'mvnw')], env=run_env,
                                 cwd=wrapper_dir, capture_output=True, text=True)
         return result, (work / 'downloaded').exists(), (work / 'executed').exists()
 
     result, downloaded, executed = run(digest)
     assert (result.returncode, downloaded, executed) == (0, True, True), (result.stdout, result.stderr)
+    assert (work / 'downloaded').read_text().endswith('/apache-maven-fixture-bin.zip')
     result, downloaded, executed = run(digest, cached=True)
     assert (result.returncode, downloaded, executed) == (0, False, True), result.stderr
     for checksum in (None, ''):
@@ -108,10 +125,21 @@ with tempfile.TemporaryDirectory(prefix='stargate-t145-') as tmp:
         assert result.returncode != 0 and not downloaded and not executed, result.stderr
     result, downloaded, executed = run(digest, good + b'changed')
     assert result.returncode != 0 and downloaded and not executed, result.stderr
+    # T176: without unzip a cold install refuses before fetching any archive,
+    # whether the pin matches the fixture, the bytes changed, or the checked-in
+    # properties are used verbatim; an existing verified install still runs.
+    for payload, props in ((good, None), (good + b'changed', None), (good, properties.read_text())):
+        result, downloaded, executed = run(digest, payload, unzip=False, props=props)
+        assert result.returncode != 0 and not downloaded and not executed, (result.stderr, downloaded)
+        assert 'unzip is required' in result.stderr, result.stderr
+    result, downloaded, executed = run(digest)
+    assert (result.returncode, downloaded, executed) == (0, True, True), result.stderr
+    result, downloaded, executed = run(digest, cached=True, unzip=False)
+    assert (result.returncode, downloaded, executed) == (0, False, True), result.stderr
     recorder.shutdown()
     recorder.server_close()
     thread.join()
     assert RequestRecorder.requests == 0, 'fixture contacted the inherited repository'
 
-print('PASS: Maven wrapper checks local archive bytes and refuses absent checksum')
+print('PASS: Maven wrapper checks local archive bytes, refuses absent checksum and cold installs without unzip')
 PY

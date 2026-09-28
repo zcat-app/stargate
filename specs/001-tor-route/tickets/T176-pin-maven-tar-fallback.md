@@ -1,9 +1,9 @@
 ---
 id: "T176"
 title: "Pin or refuse the Maven tar fallback"
-status: pending
+status: in-review
 created: 2026-09-25
-last_updated: 2026-09-25
+last_updated: 2026-09-28
 source: "T145 implementation observation: cold-cache wrapper without unzip"
 phase: "Foundation audit remediation"
 story: "-"
@@ -50,3 +50,39 @@ Maven version upgrades, JVM artifact reproducibility, and runtime proxy paths.
 
 Filed from a T145 implementation observation. This ticket does not reopen the
 reviewed T145 commit or weaken its checksum presence gate.
+
+## Integrity scope (Constitution IV/VI)
+
+Reproduction (pre-fix): the checked-in `control-plane/mvnw` and properties,
+run with a cold `MAVEN_USER_HOME`, no `unzip` on PATH and a fake `wget`
+serving local bytes, requested
+`.../apache-maven-3.9.14-bin.tar.gz` and failed "Failed to validate Maven
+distribution SHA-256": the tarball was checked against the ZIP pin, so no
+valid tarball could ever install.
+
+Contract: **`unzip` is required before download.** A cold install without
+`unzip` now dies before fetching any
+archive or creating the Maven install directory; the temporary download
+directory it creates first is trap-cleaned on exit. The `.tar.gz` fallback
+and its `tar` extraction branch are removed.
+Pinning the tarball was rejected because it adds a second content identity
+that would need its own independently grounded digest from a production
+download, while the ZIP pin from T098 is already grounded. An existing
+verified `MAVEN_HOME` still runs without `unzip`, since it needs no extraction.
+
+Checksum identity per archive format:
+
+| Format | Unix `mvnw` | Windows `mvnw.cmd` | Identity |
+|---|---|---|---|
+| `apache-maven-3.9.14-bin.zip` | only format fetched | only format fetched (`Expand-Archive`) | `distributionSha256Sum` (T098, verified before extraction) |
+| `apache-maven-3.9.14-bin.tar.gz` | never fetched; refused without `unzip` | never fetched | none: not a supported input |
+
+Regression: `tests/contract/workflow/maven_wrapper_integrity_test.sh` now
+builds its PATH from the host minus `unzip`, and supplies a local `unzip`
+for the ZIP cases so they no longer depend on host tooling (previously a
+host without `unzip` silently exercised a fixture-pinned tarball instead).
+Without `unzip`, matching bytes, changed bytes and the checked-in properties
+verbatim all exit non-zero with no download and no execution. A cached
+install still executes. T145's ZIP positive, cached, absent/empty-checksum
+and changed-bytes controls are unchanged, and the ZIP download URL is now
+asserted.
