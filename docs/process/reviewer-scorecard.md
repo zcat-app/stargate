@@ -62,6 +62,10 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-09-28 | T126 | 1 | Minor | Ticket helper-reuse list omits `t059TerminalStreamStates`, which the test uses | missed | found | fixed | doc-only |
 | 2026-09-28 | T126 | 2 | Major | Round-2 signal regression self-SIGTERMs the shared `go test` process; under `-tags docker` sibling suites' retained handlers `os.Exit(1)` mid-run | found | dismissed | fixed (round 3) | glm: "the only hermetic signal handler in this module is T126's own" — true only without `-tags docker`; confirmed locally: a leaked sibling-style handler kills the round-2 binary, the round-3 subprocess test survives |
 
+T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
+guards for the shared partition helper (a swapped argument would still pass);
+not adopted — call sites verified correct and the helper is vector-pinned.
+
 ## Baseline (before Period 1 — not counted in the evaluation)
 
 Matrix at the time: `astra` at `low`; `glm` = full `zai-coding-plan/glm-5.3`

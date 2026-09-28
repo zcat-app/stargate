@@ -1,7 +1,7 @@
 ---
 id: T182
 title: 'Repair stale T059/T033 live harnesses: control socket, sg1 names'
-status: in-progress
+status: done
 created: 2026-09-28
 last_updated: 2026-09-28
 source: hand-filed (T120 convention) — discovered while grounding T126 (2026-09-28 session); user direction to file
@@ -23,7 +23,7 @@ decision_refs:
   - "T162: replaced the TCP ControlPort 9051 with ControlSocket — the suites' `nc 127.0.0.1 9051` probes can no longer connect"
   - "T172/T173: Tor ingress consumers send complete sg1: partition usernames, not raw first-party domains"
   - "T131 (stack_smoke_test.go): already migrated (Unix-socket bootstrap probe + sg1: username) and live-green on the enforcing VM (T178 evidence) — the reference shape"
-reviews: {}
+reviews: { round: 1, date: 2026-09-28, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
