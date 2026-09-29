@@ -54,6 +54,8 @@ recorded under the widened allowlist.
 | 2026-09-29 | T183 | 1 | REWORK (2 Major) | APPROVE (0) |
 | 2026-09-29 | T183 | 2 | ESCALATE (1 Major) | APPROVE (0) |
 | 2026-09-29 | T183 | 3 (refine) | APPROVE (0) | APPROVE (1 Minor) |
+| 2026-09-29 | T186 | 1 | REWORK (1 Major) | APPROVE-WITH-FIXES (2 Minor) |
+| 2026-09-29 | T186 | 2 | APPROVE (0) | APPROVE (0) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -76,6 +78,9 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-09-29 | T183 | 1 | Minor | `t034BuildDP`'s `os.MkdirTemp("", "t034-dp")` is never removed; a DP binary accumulates in /tmp per privileged run | missed | missed | open | code unchanged since round 1; raised in round 3 |
 | 2026-09-29 | T183 | 2 | Minor | (same `t034BuildDP` temp-dir leak) | missed | missed | open | |
 | 2026-09-29 | T183 | 3 | Minor | (same `t034BuildDP` temp-dir leak) | missed | found | open | test-hygiene Minor under an APPROVE set; not fixed post-approval |
+| 2026-09-29 | T186 | 1 | Major | Live probe replaced each negative navigation in the same tab after ≤4 s and never required a terminal result, so a delayed fallback could be cancelled by the test itself | found | missed | fixed | glm called acceptance 3 met on the same evidence; fix: one preserved tab per request, label-bound terminal error required, `delayed-null` (RED, destination capture) and `hung-proxy` (RED, incomplete) falsifiers, red/green re-recorded |
+| 2026-09-29 | T186 | 1 | Minor | THREAT-MODEL residue named only the "sink treated as hostname" branch, omitting descriptor rejection → default (system) proxy with the destination name | missed | found | fixed | doc-only; glm's evaluation probe passes |
+| 2026-09-29 | T186 | 1 | Minor | router.js comment and THREAT-MODEL claimed no process "root included" can listen at the sink; root can replace `/dev/null` | missed | found | fixed | reworded to the unprivileged boundary; both evaluation probes pass |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -85,6 +90,13 @@ T192 recommended follow-ups (not rows): glm flagged `AGENTS.md:131` and astra
 `docs/process/analysis.md:111` as developer-role wording T192 made stale; both
 fixed in the `docs: mark T192 done` commit (no-deferral). Astra's note that
 analysis.md's separate-redteam wording predates the single gate is pre-existing.
+
+T186: round 1 astra REWORK / glm APPROVE-WITH-FIXES, round 2 both APPROVE.
+Durations were not measured; the round-1 set is archived in gitignored
+`target/runs/T186-r1.verdict`. glm's recommended follow-up (record monotonic
+run timestamps in evidence JSON so feasibility-before-implementation order is
+mechanically provable) is not a row. The maintainer-directed D5/D4
+feasibility matrix ran before the fix and again on the round-2 probe.
 
 T183: rounds 1–2 then the refine re-review (round counter reset to 1 by
 `run-task.sh --reset`; recorded here as round 3). Per-reviewer durations were

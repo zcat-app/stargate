@@ -1,7 +1,7 @@
 ---
 id: T186
 title: 'Fail closed in proxy.onRequest for blocked protected requests'
-status: in-progress
+status: done
 created: 2026-09-29
 last_updated: 2026-09-29
 source: "reviews/redteam-20260929-694dbd8.md (area 2 M1, survived falsification, sharpened)"
@@ -24,7 +24,7 @@ spec_refs:
 decision_refs:
   - "T157 (done): blocking listener plus null proxy result; its combined mutant disabled the blocker only on the Tor-descriptor path"
 remediates: "T157"
-reviews: {}
+reviews: { round: 2, date: 2026-09-29, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
