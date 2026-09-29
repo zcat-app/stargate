@@ -1,7 +1,7 @@
 ---
 id: T183
 title: 'Rebuild the T034 DNS-leak gate on the current DP interface'
-status: in-progress
+status: done
 created: 2026-09-29
 last_updated: 2026-09-29
 source: "reviews/redteam-20260929-694dbd8.md (area 1 M2, survived falsification)"
@@ -24,7 +24,7 @@ spec_refs:
   - specs/001-tor-route/spec.md#FR-007
 decision_refs: []
 remediates: "T034"
-reviews: {}
+reviews: { round: 1, date: 2026-09-29, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

@@ -51,6 +51,9 @@ recorded under the widened allowlist.
 | 2026-09-28 | T176 | 1 | APPROVE-WITH-FIXES (1 Minor) | APPROVE-WITH-FIXES (1 Minor) |
 | 2026-09-28 | T176 | 1 (post-fix re-review) | APPROVE (0) | APPROVE (0) |
 | 2026-09-29 | T192 | 1 | APPROVE (0) | APPROVE (2 Minor, record-only) |
+| 2026-09-29 | T183 | 1 | REWORK (2 Major) | APPROVE (0) |
+| 2026-09-29 | T183 | 2 | ESCALATE (1 Major) | APPROVE (0) |
+| 2026-09-29 | T183 | 3 (refine) | APPROVE (0) | APPROVE (1 Minor) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -67,6 +70,12 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-09-28 | T176 | 1 | Minor | Ticket integrity record claims the no-unzip refusal precedes creation of the download directory; `mktemp -d` runs first and the EXIT trap removes it | found | found | fixed | doc-only reword; both reviewers' evaluation probes pass |
 | 2026-09-29 | T192 | 1 | Minor | Acceptance 1 cites workflow.md "step 2"; the developer rule lives in step 3 | found | found | not fixed (acceptance immutable post-landing) | astra noted it under ACCEPTANCE, not FINDINGS; change landed in the correct passage |
 | 2026-09-29 | T192 | 1 | Minor | Skill residue sentence "if it cannot load the skill, it follows this file" reads self-contradictory | missed | found | open (clarity only) | no false capability claim; wording left as reviewed |
+| 2026-09-29 | T183 | 1 | Major | Named skip absent from verify output: the capability-gated DNS-leak test in the mixed `tests/integration` package was only an anonymous `skip=N` (acceptance 4) | found | dismissed | fixed | glm: "capability-honest cadence… per-test skips counted in the package tail" = MET; fix: `go-workspace-gate.py` names every `test PASS:`/`test SKIP: … — reason`, regression in verify_discovery (budget 5→7 maintainer-authorised) |
+| 2026-09-29 | T183 | 1 | Major | Tests-first red/green command ran a gitignored script (`target/runs/T183/probe.sh`), so the experiment was not reviewable/reproducible | found | dismissed | fixed | glm saw it and filed it as a "recommended follow-up", not a finding; fix: self-contained inline `bash -c` probe in the evidence |
+| 2026-09-29 | T183 | 2 | Major | Inline probe still ran the unidentified local image `t165-qemu11:local` (no recipe, no digest) | found | missed | fixed | ESCALATE → maintainer refine: acceptance 5 requires a public image by digest; re-recorded in `debian@sha256:a99cfc51…` (trixie-slim) |
+| 2026-09-29 | T183 | 1 | Minor | `t034BuildDP`'s `os.MkdirTemp("", "t034-dp")` is never removed; a DP binary accumulates in /tmp per privileged run | missed | missed | open | code unchanged since round 1; raised in round 3 |
+| 2026-09-29 | T183 | 2 | Minor | (same `t034BuildDP` temp-dir leak) | missed | missed | open | |
+| 2026-09-29 | T183 | 3 | Minor | (same `t034BuildDP` temp-dir leak) | missed | found | open | test-hygiene Minor under an APPROVE set; not fixed post-approval |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -76,6 +85,13 @@ T192 recommended follow-ups (not rows): glm flagged `AGENTS.md:131` and astra
 `docs/process/analysis.md:111` as developer-role wording T192 made stale; both
 fixed in the `docs: mark T192 done` commit (no-deferral). Astra's note that
 analysis.md's separate-redteam wording predates the single gate is pre-existing.
+
+T183: rounds 1–2 then the refine re-review (round counter reset to 1 by
+`run-task.sh --reset`; recorded here as round 3). Per-reviewer durations were
+not measured. Round-1/2 verdicts are archived in gitignored
+`target/runs/T183-r1.verdict` and `T183-r2.verdict`. The recorded
+red/green experiment now runs in a public digest-pinned image; the earlier
+local-image runs remain only under gitignored `target/runs/T183/`.
 
 T176: first ticket under the widened GLM allowlist. GLM's verdicts record
 effort `xhigh` (the period header says `max`); Astra `high`. Both still report

@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 36 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 182 |
+| done | 183 |
 | deferred | 5 |
 | **total** | **224** |
 
@@ -42,9 +42,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T183 | Rebuild the T034 DNS-leak gate on the current DP interface | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -62,7 +60,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_182 ticket(s) done._
+_183 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -245,4 +243,5 @@ _182 ticket(s) done._
 - T180 — Converge remaining tests/contract compose runners onto T121 helper
 - T181 — Replace topology suite Docker-health poll with authenticated probe
 - T182 — Repair stale T059/T033 live harnesses: control socket, sg1 names
+- T183 — Rebuild the T034 DNS-leak gate on the current DP interface
 - T192 — Allow a per-ticket developer subagent under an orchestrator
