@@ -108,8 +108,8 @@ reviewer focus on.
   Every `privacy_critical: true` ticket requires redteam before commit,
   including when the author believes the residue list is empty. The reviewer
   challenges that completeness claim. It is not a gate-skipping signal.
-- **Autonomy.** The root follows the driver through codereview and, when
-  privacy-critical, independent redteam. Both approvals are required; rework
+- **Autonomy.** The ticket's developer (workflow.md step 3) follows the
+  driver through codereview and, when privacy-critical, independent redteam. Both approvals are required; rework
   and escalation follow the shared review-loop policy.
 
 ## Where it lives, who does it

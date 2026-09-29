@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 37 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 181 |
+| done | 182 |
 | deferred | 5 |
 | **total** | **224** |
 
@@ -27,15 +27,23 @@
 
 Tickets where `status: pending` AND every `blocked_by` is `done`.
 
-_(none — every pending ticket has unsatisfied `blocked_by`, or no pending tickets.)_
+| ID | Title | Phase | Priv? | Parallel? |
+|---|---|---|---|---|
+| T183 | Rebuild the T034 DNS-leak gate on the current DP interface | Foundation audit remediation | ✓ | ✓ |
+| T184 | Pin the Tor sidecar package closure against index rollback | Foundation audit remediation | ✓ | ✓ |
+| T185 | Lock control-plane Maven dependency identities | Foundation audit remediation | ✓ | ✓ |
+| T186 | Fail closed in proxy.onRequest for blocked protected request | Foundation audit remediation | ✓ | ✓ |
+| T187 | Report pending or stale revocation; count only after DP ack | Foundation audit remediation | ✓ | ✓ |
+| T188 | Detect and require private-window access for the extension | Foundation audit remediation | ✓ | ✓ |
+| T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
+| T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
+| T191 | Resolve surviving deployment-area redteam minors and audit g | Foundation audit remediation | ✓ | ✓ |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T192 | Allow a per-ticket developer subagent under an orchestrator | in-progress |  | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -53,7 +61,7 @@ _(none — every pending ticket has unsatisfied `blocked_by`, or no pending tick
 
 ## Done
 
-_181 ticket(s) done._
+_182 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -236,3 +244,4 @@ _181 ticket(s) done._
 - T180 — Converge remaining tests/contract compose runners onto T121 helper
 - T181 — Replace topology suite Docker-health poll with authenticated probe
 - T182 — Repair stale T059/T033 live harnesses: control socket, sg1 names
+- T192 — Allow a per-ticket developer subagent under an orchestrator

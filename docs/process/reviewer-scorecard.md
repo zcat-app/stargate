@@ -50,6 +50,7 @@ recorded under the widened allowlist.
 | 2026-09-28 | T126 | 3 (refine) | APPROVE (0) · 2 min | APPROVE (0) · 11 min |
 | 2026-09-28 | T176 | 1 | APPROVE-WITH-FIXES (1 Minor) | APPROVE-WITH-FIXES (1 Minor) |
 | 2026-09-28 | T176 | 1 (post-fix re-review) | APPROVE (0) | APPROVE (0) |
+| 2026-09-29 | T192 | 1 | APPROVE (0) | APPROVE (2 Minor, record-only) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -64,10 +65,17 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-09-28 | T126 | 1 | Minor | Ticket helper-reuse list omits `t059TerminalStreamStates`, which the test uses | missed | found | fixed | doc-only |
 | 2026-09-28 | T126 | 2 | Major | Round-2 signal regression self-SIGTERMs the shared `go test` process; under `-tags docker` sibling suites' retained handlers `os.Exit(1)` mid-run | found | dismissed | fixed (round 3) | glm: "the only hermetic signal handler in this module is T126's own" — true only without `-tags docker`; confirmed locally: a leaked sibling-style handler kills the round-2 binary, the round-3 subprocess test survives |
 | 2026-09-28 | T176 | 1 | Minor | Ticket integrity record claims the no-unzip refusal precedes creation of the download directory; `mktemp -d` runs first and the EXIT trap removes it | found | found | fixed | doc-only reword; both reviewers' evaluation probes pass |
+| 2026-09-29 | T192 | 1 | Minor | Acceptance 1 cites workflow.md "step 2"; the developer rule lives in step 3 | found | found | not fixed (acceptance immutable post-landing) | astra noted it under ACCEPTANCE, not FINDINGS; change landed in the correct passage |
+| 2026-09-29 | T192 | 1 | Minor | Skill residue sentence "if it cannot load the skill, it follows this file" reads self-contradictory | missed | found | open (clarity only) | no false capability claim; wording left as reviewed |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
 not adopted — call sites verified correct and the helper is vector-pinned.
+
+T192 recommended follow-ups (not rows): glm flagged `AGENTS.md:131` and astra
+`docs/process/analysis.md:111` as developer-role wording T192 made stale; both
+fixed in the `docs: mark T192 done` commit (no-deferral). Astra's note that
+analysis.md's separate-redteam wording predates the single gate is pre-existing.
 
 T176: first ticket under the widened GLM allowlist. GLM's verdicts record
 effort `xhigh` (the period header says `max`); Astra `high`. Both still report

@@ -1,7 +1,7 @@
 ---
 id: T192
 title: 'Allow a per-ticket developer subagent under an orchestrator'
-status: in-progress
+status: done
 created: 2026-09-29
 last_updated: 2026-09-29
 source: "maintainer decision 2026-09-29 session: orchestrated run of plan steps 9–10 with one developer subagent per ticket"
@@ -26,7 +26,7 @@ spec_refs:
   - .claude/skills/run/SKILL.md
 decision_refs:
   - "Maintainer decision 2026-09-29: an orchestrating root may delegate one ticket's whole /run lifecycle to one fresh subagent"
-reviews: {}
+reviews: { round: 1, date: 2026-09-29, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
