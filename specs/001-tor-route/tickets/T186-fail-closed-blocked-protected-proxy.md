@@ -7,7 +7,7 @@ last_updated: 2026-09-29
 source: "reviews/redteam-20260929-694dbd8.md (area 2 M1, survived falsification, sharpened)"
 phase: "Foundation audit remediation"
 story: ''
-blocked_by: []
+blocked_by: ["T192"]
 parallel: true
 files_budget: 5
 privacy_critical: true

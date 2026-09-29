@@ -7,7 +7,7 @@ last_updated: 2026-09-29
 source: "reviews/redteam-20260929-694dbd8.md (area 3 minors and T155 reconciliation gaps that survived falsification)"
 phase: "Foundation audit remediation"
 story: ''
-blocked_by: []
+blocked_by: ["T192"]
 parallel: true
 files_budget: 14
 privacy_critical: true
