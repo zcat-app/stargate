@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 37 |
+| pending | 38 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 181 |
 | deferred | 5 |
-| **total** | **223** |
+| **total** | **224** |
 
 ---
 
@@ -38,6 +38,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T191 | Resolve surviving deployment-area redteam minors and audit g | Foundation audit remediation | ✓ | ✓ |
+| T192 | Allow a per-ticket developer subagent under an orchestrator | Foundation audit remediation |  |  |
 
 ---
 
