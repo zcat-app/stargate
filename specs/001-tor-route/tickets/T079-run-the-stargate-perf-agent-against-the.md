@@ -3,7 +3,7 @@ id: T079
 title: 'Run the `stargate-perf` agent against the data plane (Principle VIII);'
 status: pending
 created: 2026-07-04
-last_updated: "2026-09-21"
+last_updated: "2026-09-29"
 source: tasks.md#T079
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
@@ -52,6 +52,14 @@ for the preferred shapes: named test, behavioral assertion, runnable command.)*
 Run on the completed candidate after implementation and live/reproducibility prerequisites.
 Record the snapshot and environment, SC-005 concurrency and retained-allocation evidence.
 File and resolve blocking findings, then remeasure affected paths; T155 does not satisfy this review.
+
+Reviewer fleet (maintainer decision 2026-09-29): run the Opus `stargate-perf` agent and, on the
+same bound snapshot, separate Astra (Codex `gpt-6-astra`, high) and GLM-5.3-Flash (OpenCode,
+xhigh/native `max`) cumulative passes, each in a fresh native session without implementation
+rationale, dispatched by a driver script rather than a hand-invoked CLI. Record each reviewer's
+actual model identity as reported by its CLI; a reviewer that fails, falls back to another model
+or cannot be identified fails closed. Union and dedupe findings; one reviewer's silence never
+dismisses another's finding. Reuse or add the cumulative dispatch path T078 requires.
 
 ## Out-of-scope
 

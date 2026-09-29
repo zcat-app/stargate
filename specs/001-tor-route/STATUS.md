@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-28
+**Last updated:** 2026-09-29
 
 ---
 
@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 28 |
+| pending | 37 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 181 |
 | deferred | 5 |
-| **total** | **214** |
+| **total** | **223** |
 
 ---
 
@@ -29,7 +29,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T155 | Validate repaired foundation before feature work | Foundation audit remediation | ✓ |  |
+| T183 | Rebuild the T034 DNS-leak gate on the current DP interface | Foundation audit remediation | ✓ | ✓ |
+| T184 | Pin the Tor sidecar package closure against index rollback | Foundation audit remediation | ✓ | ✓ |
+| T185 | Lock control-plane Maven dependency identities | Foundation audit remediation | ✓ | ✓ |
+| T186 | Fail closed in proxy.onRequest for blocked protected request | Foundation audit remediation | ✓ | ✓ |
+| T187 | Report pending or stale revocation; count only after DP ack | Foundation audit remediation | ✓ | ✓ |
+| T188 | Detect and require private-window access for the extension | Foundation audit remediation | ✓ | ✓ |
+| T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
+| T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
+| T191 | Resolve surviving deployment-area redteam minors and audit g | Foundation audit remediation | ✓ | ✓ |
 
 ---
 
