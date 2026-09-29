@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // router.js — per-request `.onion` routing plus the T136
-// authenticated-device/browser-profile/top-level-site isolation tuple and
-// the T157 terminal fail-closed decision shared by proxy/webRequest events.
+// authenticated-device/browser-profile/top-level-site isolation tuple, the
+// T157 terminal fail-closed decision shared by proxy/webRequest events and
+// the T186 unreachable proxy sink for blocked protected requests.
 
 'use strict';
 
@@ -11,6 +12,20 @@
   const TOR_HOST = '127.0.0.1';
   const TOR_PORT = 8881;
   const DIRECT = { type: 'direct' };
+  // T186 / FR-004a / Principle III: a blocked protected request must never
+  // return `null`. Gecko's ProxyChannelFilter turns `null` into "no proxy": an
+  // explicit direct connection that also bypasses the browser/system proxy,
+  // and `x.onion.` escapes network.dns.blockDotOnion. A rejected or throwing
+  // listener instead selects the default (system) proxy. The blocked result is
+  // one SOCKS5h hop over a Unix socket whose path cannot exist — `/dev/null`
+  // is not a directory, so no unprivileged process can create or listen on it
+  // (a host-root attacker already owns the loopback ports and this extension
+  // and is outside this protection's threat class) — then the terminal `null`,
+  // so no failover remains. proxyDNS keeps the name from being resolved
+  // locally; the hop carries no credential or identity. Unlike a loopback TCP
+  // port, no local user can bind the sink while Stargate is down. Live
+  // evidence (Mullvad Browser 140/153 ESR): THREAT-MODEL T186.
+  const BLOCKED_SINK_HOST = 'file:///dev/null/stargate-blocked';
   const GET_ROUTE = 'stargate:getRoute';
   const PROFILE_KEY = 'isolationProfileId';
   const PROFILE_PATTERN = /^[0-9a-f]{64}$/;
@@ -188,10 +203,25 @@
     return firstPartyDomain(details);
   }
 
+  function blockedProxy() {
+    // A fresh object per call: Firefox validates and rewrites the fields.
+    // The port is required by ProxyInfoData validation and unused for Unix
+    // sockets.
+    const sink = {
+      type: 'socks',
+      host: BLOCKED_SINK_HOST,
+      port: 1,
+      proxyDNS: true,
+    };
+    return [sink, null];
+  }
+
   function onionDestination(details) {
     try {
       const parsed = new URL(details.url);
-      return parsed.hostname.replace(/\.$/, '').toLowerCase().endsWith('.onion');
+      // Every trailing-dot and case variant is the same protected
+      // destination (T186); classify toward protection.
+      return parsed.hostname.replace(/\.+$/, '').toLowerCase().endsWith('.onion');
     } catch {
       return false;
     }
@@ -371,23 +401,28 @@
   }
 
   browser.proxy.onRequest.addListener(function proxyOnRequest(details) {
+    // onionDestination never throws; everything after it is guarded so a
+    // listener failure cannot reach Firefox's default-proxy path.
     const protectedDestination = onionDestination(details);
-    const record = rememberRequest(details);
-    if (record.id === null) {
-      return Promise.resolve(protectedDestination ? null : DIRECT);
+    const failed = () => (protectedDestination ? blockedProxy() : DIRECT);
+    try {
+      const record = rememberRequest(details);
+      if (record.id === null) return Promise.resolve(failed());
+      return record.decision.then((decision) => {
+        if (decision.route === 'direct') return DIRECT;
+        if (decision.route !== 'tor') return blockedProxy();
+        return [{
+          type: 'socks',
+          host: TOR_HOST,
+          port: TOR_PORT,
+          username: decision.username,
+          password: decision.token,
+          proxyDNS: true,
+        }, null];
+      }).catch(failed);
+    } catch {
+      return Promise.resolve(failed());
     }
-    return record.decision.then((decision) => {
-      if (decision.route === 'direct') return DIRECT;
-      if (decision.route !== 'tor') return null;
-      return [{
-        type: 'socks',
-        host: TOR_HOST,
-        port: TOR_PORT,
-        username: decision.username,
-        password: decision.token,
-        proxyDNS: true,
-      }, null];
-    }, () => protectedDestination ? null : DIRECT);
   }, { urls: ['<all_urls>'] });
 
   browser.webRequest.onBeforeRequest.addListener(

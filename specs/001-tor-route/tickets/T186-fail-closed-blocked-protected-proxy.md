@@ -1,7 +1,7 @@
 ---
 id: T186
 title: 'Fail closed in proxy.onRequest for blocked protected requests'
-status: pending
+status: in-progress
 created: 2026-09-29
 last_updated: 2026-09-29
 source: "reviews/redteam-20260929-694dbd8.md (area 2 M1, survived falsification, sharpened)"
@@ -9,7 +9,7 @@ phase: "Foundation audit remediation"
 story: ''
 blocked_by: ["T192"]
 parallel: true
-files_budget: 5
+files_budget: 8   # router.js + router.test.js + THREAT-MODEL.md + live-e2e probe.py + live-e2e README.md + this ticket + STATUS.md regen + evidence/T186-tests-first.json (5 -> 8 maintainer-authorised 2026-09-29)
 privacy_critical: true
 tests_first: []
 test_for: []
@@ -82,3 +82,23 @@ disabled".
 ## Out-of-scope
 
 Private-window access (T188); WebRTC re-audit (T190).
+
+## Notes
+
+Maintainer decisions (2026-09-29, maintainer-authorised, relayed by the orchestrator):
+
+1. `files_budget` raised 5 -> 8 to cover the eight paths in the frontmatter comment,
+   including the live-e2e harness README whose "no SOCKS descriptor" wording this ticket
+   makes stale.
+2. Fail-closed descriptor: the developer's proposal (Stargate DP port plus invalid
+   credential) is rejected: while the DP is down, whatever binds that port can receive
+   the onion name. Chosen order: (a) D5, a SOCKS descriptor over a Unix domain socket at a
+   path nobody can listen on (e.g. `/dev/null/x`), if Mullvad Browser's `proxy.onRequest`
+   supports it; otherwise (b) D4, an `https`-type descriptor to `127.0.0.1` on an unused
+   privileged port (CONNECT only after TLS validation an impostor cannot pass; an
+   IP-literal proxy host puts no hostname in the TLS hello). Before implementing, a
+   real-browser feasibility run (host Mullvad Browser, disposable profile, cancel listener
+   disabled) must establish D5 support/fail-closed, zero destination bytes at plain-TCP and
+   self-signed-TLS impostors on the D4 target, no DIRECT/failover after proxy failure, no
+   destination names in the DNS capture, and record whether a fake SOCKS listener on the
+   D1-style port receives the name. If neither D5 nor D4 passes, stop and return.

@@ -18,7 +18,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import pathlib
+import re
 import socket
 import socketserver
 import subprocess
@@ -48,6 +50,8 @@ class Captures:
         self.http: list[dict[str, object]] = []
         self.socks: list[dict[str, object]] = []
         self.destination: list[dict[str, object]] = []
+        # T186: impostor listeners standing at a fail-closed descriptor's target.
+        self.impostor: list[dict[str, object]] = []
 
     def append(self, kind: str, item: dict[str, object]) -> None:
         with self.lock:
@@ -170,8 +174,12 @@ class DestinationHandler(socketserver.BaseRequestHandler):
             return
         first = raw.split(b"\r\n", 1)[0].decode("latin-1", "replace")
         parts = first.split(" ")
+        host = next((line[5:].strip() for line in
+                     raw.decode("latin-1", "replace").split("\r\n")
+                     if line.lower().startswith("host:")), "")
         CAPTURES.append("destination", {
             "firstLine": first,
+            "host": host.lower(),
             "path": parts[1] if len(parts) >= 2 else "",
         })
         body = b"destination-catcher"
@@ -280,7 +288,10 @@ class Server:
 class WebDriver:
     def __init__(self, browser: pathlib.Path, driver: pathlib.Path,
                  extension: pathlib.Path, proxy_port: int, hardened: bool,
-                 log_path: pathlib.Path, install_wait: float = 1.0) -> None:
+                 log_path: pathlib.Path, install_wait: float = 1.0,
+                 extra_prefs: dict[str, object] | None = None,
+                 accept_insecure_certs: bool = True,
+                 trace: "NameTrace | None" = None) -> None:
         reservation = socket.socket()
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
@@ -289,9 +300,12 @@ class WebDriver:
         self.session: str | None = None
         log_path.parent.mkdir(parents=True, exist_ok=True)
         self.log_file = log_path.open("ab")
+        command = [str(driver), "--allow-system-access", "--port", str(port)]
+        env = None
+        if trace is not None:
+            command, env = trace.wrap(command)
         self.process = subprocess.Popen(
-            [str(driver), "--allow-system-access", "--port", str(port)],
-            stdout=self.log_file, stderr=subprocess.STDOUT,
+            command, stdout=self.log_file, stderr=subprocess.STDOUT, env=env,
         )
         try:
             self.wait_ready()
@@ -315,8 +329,9 @@ class WebDriver:
                 "network.proxy.type": 1,
                 "xpinstall.signatures.required": False,
             }
+            prefs.update(extra_prefs or {})
             value = self.request("POST", "/session", {"capabilities": {"alwaysMatch": {
-                "browserName": "firefox", "acceptInsecureCerts": True,
+                "browserName": "firefox", "acceptInsecureCerts": accept_insecure_certs,
                 "pageLoadStrategy": "none",
                 "moz:firefoxOptions": {
                     "binary": str(browser), "args": ["-headless"], "prefs": prefs,
@@ -514,6 +529,23 @@ class WebDriver:
             "elapsedSeconds": round(time.monotonic() - started, 3),
         })
         return last
+
+    def open_tab(self, url: str) -> str:
+        """Start a navigation in a new tab that no later request replaces."""
+        self.set_context("content")
+        created = self.request("POST", f"/session/{self.session}/window/new", {"type": "tab"})
+        handle = str(created["handle"])
+        self.request("POST", f"/session/{self.session}/window", {"handle": handle})
+        self.request("POST", f"/session/{self.session}/url", {"url": url})
+        return handle
+
+    def tab_state(self, handle: str) -> dict[str, object] | None:
+        self.set_context("content")
+        self.request("POST", f"/session/{self.session}/window", {"handle": handle})
+        state = self.execute(
+            "return {documentURI:document.documentURI,readyState:document.readyState};"
+        )
+        return state if isinstance(state, dict) else None
 
     def blocked_navigation(self, url: str, expected_url: str | None = None) -> dict[str, object]:
         # Browser-owned channel state is independent of the extension's route/UI decision.
@@ -722,6 +754,25 @@ def variant_extension(source: pathlib.Path, destination: pathlib.Path,
             if router.count(guard) != 1:
                 raise RuntimeError("mutation guard anchor differs from candidate")
             router = router.replace(guard, "decision.route === 'direct'")
+        elif variant.startswith("no-blocker"):
+            # T186: remove the cancel layer so the proxy result stands alone.
+            blocker = "async function stargateOnBeforeRequest(details) {"
+            if variant == "no-blocker":
+                old, new = blocker, blocker + "\n      return {};\n"
+            else:
+                # Falsifiers for the probe itself: one blocked request's proxy
+                # result arrives late as null (Direct) or never arrives.
+                if router.count(blocker) != 1:
+                    raise RuntimeError("blocking listener mutation anchor differs")
+                router = router.replace(blocker, blocker + "\n      return {};\n")
+                late = {
+                    "no-blocker-delayed-null":
+                        "new Promise((resolve) => setTimeout(() => resolve(null), 6000))",
+                    "no-blocker-hung-proxy": "new Promise(() => {})",
+                }[variant]
+                old = "browser.proxy.onRequest.addListener(function proxyOnRequest(details) {"
+                new = old + ("\n    if (details.url.includes('/blocked/trailing-dot')) "
+                             f"return {late};\n")
         elif variant == "delayed-main-navigation":
             old = "commitIndicator(details, record.indicator, 'blocked');\n      return { cancel: true };"
             new = "commitIndicator(details, record.indicator, 'blocked');\n" + \
@@ -779,6 +830,289 @@ def wait_for_markers(expected: set[str], timeout: float = 10.0) -> bool:
     return False
 
 
+# --- T186: fail-closed proxy results for blocked protected requests -------
+#
+# Gecko's ProxyChannelFilter turns a `null` proxy.onRequest result into "no
+# proxy at all": an explicit direct connection. `x.onion.` escapes
+# network.dns.blockDotOnion, so a null result for a blocked protected request
+# can resolve and connect directly once the cancel listener is absent. These
+# modes run with no cancel listener and observe four surfaces per request:
+# the destination, the configured ordinary (system) proxy, listeners standing
+# at the proxy descriptor's own target, and name resolution (strace of every
+# browser socket to port 53 plus the MOZ_LOG nsHostResolver record).
+
+T186_BLOCKED_TLS_PORT = 1023  # unused privileged port: the D4 target
+T186_UNIX_SINK = "file:///dev/null/stargate-blocked"  # D5: never bindable
+T186_BASE32 = "abcdefghijklmnopqrstuvwxyz234567"
+
+
+def t186_label() -> str:
+    raw = os.urandom(35)
+    bits = int.from_bytes(raw, "big")  # 280 random bits = 56 base32 characters
+    return "".join(T186_BASE32[(bits >> (5 * i)) & 31] for i in range(56))
+
+
+class NameTrace:
+    """Out-of-band name-resolution capture for one browser session."""
+
+    def __init__(self, directory: pathlib.Path, name: str) -> None:
+        directory.mkdir(parents=True, exist_ok=True)
+        self.strace = directory / f"{name}.strace"
+        self.moz_log = directory / f"{name}.moz_log"
+        for stale in directory.glob(f"{name}.*"):
+            stale.unlink()
+
+    def wrap(self, command: list[str]) -> tuple[list[str], dict[str, str]]:
+        env = dict(os.environ)
+        env["MOZ_LOG"] = "timestamp,sync,nsHostResolver:5"
+        env["MOZ_LOG_FILE"] = str(self.moz_log)
+        return ([
+            "strace", "-f", "-qq", "-yy", "-s", "4096", "-o", str(self.strace),
+            "-e", "trace=connect,sendto,sendmsg,sendmmsg,writev",
+        ] + command, env)
+
+    def lines(self) -> list[str]:
+        if not self.strace.is_file():
+            return []
+        return self.strace.read_text(errors="replace").splitlines()
+
+    def resolver_lines(self) -> list[str]:
+        # glibc (`hosts: files dns`) talks to the stub resolver on port 53.
+        return [line for line in self.lines()
+                if ":53]" in line or "htons(53)" in line]
+
+    def dns_hits(self, label: str) -> list[str]:
+        return [line[:300] for line in self.resolver_lines() if label in line.lower()]
+
+    def moz_log_hits(self, label: str) -> list[str]:
+        # Resolver lines carry the request's origin attributes, whose
+        # firstPartyDomain names the destination even while the resolved host
+        # is only the proxy address. Match the looked-up host, not that key.
+        hits: list[str] = []
+        for path in sorted(self.moz_log.parent.glob(self.moz_log.name + "*")):
+            for line in path.read_text(errors="replace").splitlines():
+                if label in re.sub(r"<\^[^>]*>", "", line).lower():
+                    hits.append(line[:300])
+        return hits
+
+    def connects(self, needle: str) -> list[str]:
+        return [line[:300] for line in self.lines()
+                if " connect(" in line and needle in line]
+
+
+def t186_labels_in(data: bytes, labels: list[str]) -> list[str]:
+    lowered = data.lower()
+    return [label for label in labels if label.encode() in lowered]
+
+
+T186_LABELS: list[str] = []
+
+
+class RawImpostorHandler(socketserver.BaseRequestHandler):
+    """A plain TCP listener squatting on a fail-closed descriptor target."""
+
+    def handle(self) -> None:
+        self.request.settimeout(3)
+        data = bytearray()
+        try:
+            while len(data) < 65536:
+                chunk = self.request.recv(4096)
+                if not chunk:
+                    break
+                data.extend(chunk)
+        except (OSError, TimeoutError):
+            pass
+        CAPTURES.append("impostor", {
+            "listener": "plain-tcp", "bytes": len(data),
+            "firstBytesHex": bytes(data[:8]).hex(),
+            "tlsClientHello": bool(data[:1] == b"\x16"),
+            "onionBytes": b"onion" in bytes(data).lower(),
+            "labels": t186_labels_in(bytes(data), T186_LABELS),
+        })
+
+
+class TLSImpostorHandler(socketserver.BaseRequestHandler):
+    """A TLS listener with a self-signed certificate for 127.0.0.1."""
+
+    context = None
+
+    def handle(self) -> None:
+        import ssl
+        record: dict[str, object] = {"listener": "self-signed-tls"}
+        self.request.settimeout(5)
+        try:
+            tls = self.context.wrap_socket(self.request, server_side=True)
+        except (ssl.SSLError, OSError) as error:
+            record.update({"handshake": "failed", "error": str(error)[:200]})
+            CAPTURES.append("impostor", record)
+            return
+        record["handshake"] = "completed"
+        try:
+            raw = read_headers(tls)
+        except (OSError, TimeoutError):
+            raw = b""
+        record.update({
+            "decryptedFirstLine": raw.split(b"\r\n", 1)[0].decode("latin-1", "replace"),
+            "labels": t186_labels_in(raw, T186_LABELS),
+        })
+        CAPTURES.append("impostor", record)
+
+
+class UnixServer:
+    def __init__(self, handler: type[socketserver.BaseRequestHandler],
+                 path: pathlib.Path) -> None:
+        if path.exists():
+            path.unlink()
+        self.server = socketserver.ThreadingUnixStreamServer(str(path), handler)
+        self.server.daemon_threads = True
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def stop(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
+
+
+def t186_tls_context(directory: pathlib.Path):
+    import ssl
+    directory.mkdir(parents=True, exist_ok=True)
+    key, cert = directory / "impostor.key", directory / "impostor.crt"
+    subprocess.run([
+        "openssl", "req", "-x509", "-newkey", "ec", "-pkeyopt",
+        "ec_paramgen_curve:P-256", "-nodes", "-keyout", str(key), "-out",
+        str(cert), "-days", "1", "-subj", "/CN=127.0.0.1",
+        "-addext", "subjectAltName=IP:127.0.0.1",
+    ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(cert, key)
+    return context
+
+
+def t186_matrix_extension(destination: pathlib.Path, modes: dict[str, object],
+                          hosts: dict[str, str]) -> pathlib.Path:
+    """A minimal proxy-only extension: a fixed descriptor per request host.
+
+    Every request to one host (including browser-initiated favicon loads)
+    gets that host's descriptor. It has no webRequest listener at all, so
+    nothing can cancel a request: the browser's handling of the returned
+    proxy result is observed alone.
+    """
+    manifest = {
+        "manifest_version": 2, "name": "t186-descriptor-matrix", "version": "1",
+        "browser_specific_settings": {"gecko": {"id": "t186-matrix@stargate.local"}},
+        "permissions": ["proxy", "<all_urls>"],
+        "background": {"scripts": ["background.js"]},
+    }
+    script = (
+        "'use strict';\nconst MODES = " + json.dumps(modes, sort_keys=True) + ";\n"
+        "const HOSTS = " + json.dumps(hosts, sort_keys=True) + ";\n"
+        "browser.proxy.onRequest.addListener((details) => {\n"
+        "  const host = new URL(details.url).hostname.replace(/\\.+$/, '').toLowerCase();\n"
+        "  const mode = HOSTS[host];\n"
+        "  if (Object.prototype.hasOwnProperty.call(MODES, mode)) return MODES[mode];\n"
+        "  return { type: 'direct' };\n"
+        "}, { urls: ['<all_urls>'] });\n"
+    )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, body in (("manifest.json", json.dumps(manifest, sort_keys=True)),
+                           ("background.js", script)):
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            archive.writestr(info, body)
+    return destination
+
+
+def t186_request_url(host: str, port: int, mode: str, variant: str) -> str:
+    return f"http://{host}:{port}/{mode}/{variant}"
+
+
+def t186_hits(label: str, trace: NameTrace) -> dict[str, list[object]]:
+    return {
+        "destination": [x for x in CAPTURES.snapshot("destination")
+                        if label in str(x.get("host")) or label in str(x.get("path"))],
+        "systemProxy": [x for x in CAPTURES.snapshot("http")
+                        if label in str(x.get("host")) or label in str(x.get("path"))],
+        "socks": [x for x in CAPTURES.snapshot("socks") if label in str(x.get("host"))],
+        "impostorLabel": [x for x in CAPTURES.snapshot("impostor")
+                          if label in (x.get("labels") or [])],
+        "dnsStrace": trace.dns_hits(label),
+        "dnsMozLog": trace.moz_log_hits(label),
+    }
+
+
+def t186_clean(hits: dict[str, list[object]]) -> bool:
+    return not any(hits.values())
+
+
+def t186_summary(report: dict[str, object]) -> dict[str, object]:
+    def surfaces(hits: dict[str, list[object]]) -> list[str]:
+        return sorted(name for name, found in hits.items() if found)
+
+    scenarios: dict[str, object] = {}
+    for name, scenario in dict(report["scenarios"]).items():
+        entry: dict[str, object] = {"passed": scenario["passed"]}
+        for key in ("results", "liveUnixCalibration", "controls"):
+            value = scenario.get(key)
+            if not isinstance(value, dict):
+                continue
+            flat: dict[str, object] = {}
+            for variant, result in value.items():
+                if isinstance(result, dict) and "hits" in result:
+                    flat[variant] = {"host": result["host"], "surfaces": surfaces(result["hits"]),
+                                     "terminal": (result.get("terminal") or {}).get("kind")}
+                elif isinstance(result, dict) and all(isinstance(x, dict) for x in result.values()):
+                    flat[variant] = {v: {"host": r["host"], "surfaces": surfaces(r["hits"])}
+                                     for v, r in result.items() if "hits" in r}
+                elif isinstance(result, dict):
+                    flat[variant] = {"surfaces": surfaces(result)}
+            entry[key] = flat
+        for key in ("controlsPassed", "unixSocksSupported", "nameReceived", "socksReached"):
+            if key in scenario:
+                value = scenario[key]
+                entry[key] = ({k: len(v) for k, v in value.items()}
+                              if isinstance(value, dict) else value)
+        scenarios[name] = entry
+    return {"browserVersion": report["browserVersion"], "result": report["result"],
+            "failures": report["failures"], "designs": report.get("t186Designs"),
+            "executedExtensionSha256": report["executedExtensionSha256"],
+            "scenarios": scenarios}
+
+
+class ImpostorSocksHandler(socketserver.BaseRequestHandler):
+    """A SOCKS5 listener that accepts any client and records the CONNECT name."""
+
+    def handle(self) -> None:
+        record: dict[str, object] = {"listener": "socks-impostor", "stage": "accepted"}
+        CAPTURES.append("socks", record)
+        self.request.settimeout(5)
+        try:
+            version, count = read_exact(self.request, 2)
+            methods = read_exact(self.request, count)
+            if version != 5:
+                return
+            if 0 in methods:
+                self.request.sendall(b"\x05\x00")
+            elif 2 in methods:
+                self.request.sendall(b"\x05\x02")
+                read_exact(self.request, 1)
+                read_exact(self.request, read_exact(self.request, 1)[0])
+                read_exact(self.request, read_exact(self.request, 1)[0])
+                self.request.sendall(b"\x01\x00")
+            else:
+                return
+            _version, command, _reserved, address_type = read_exact(self.request, 4)
+            if command != 1 or address_type != 3:
+                record["stage"] = f"connect-atyp-{address_type}"
+                return
+            host = read_exact(self.request, read_exact(self.request, 1)[0]).decode("latin-1")
+            record.update({"stage": "connect", "host": host.lower()})
+        except (EOFError, OSError, TimeoutError):
+            return
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--browser", type=pathlib.Path, required=True)
@@ -789,12 +1123,16 @@ def main() -> int:
                         default=pathlib.Path("target/runs/T157.geckodriver.log"))
     parser.add_argument("--report-out", type=pathlib.Path,
                         default=pathlib.Path("target/runs/T157.browser.json"))
-    parser.add_argument("--only", choices=("full", "startup", "sidecar", "context", "fixture", "navigation"),
+    parser.add_argument("--only", choices=("full", "startup", "sidecar", "context", "fixture", "navigation",
+                                           "descriptor-matrix", "blocked-proxy"),
                         default="full")
     parser.add_argument("--mutation", choices=("none", "observe", "terminal-null", "opaque-context",
                         "terminal-null-and-blocker", "suppress-subrequest",
-                        "delayed-fallback", "startup-release", "delayed-main-navigation"), default="none")
+                        "delayed-fallback", "startup-release", "delayed-main-navigation",
+                        "delayed-null", "hung-proxy"), default="none")
     args = parser.parse_args()
+    if args.mutation in ("delayed-null", "hung-proxy") and args.only != "blocked-proxy":
+        parser.error(f"--mutation {args.mutation} applies only to --only blocked-proxy")
     for path in (args.browser, args.driver, args.extension):
         if not path.is_file():
             parser.error(f"missing file: {path}")
@@ -982,14 +1320,327 @@ def main() -> int:
             "/marker/context-start", "/marker/context-done",
         })
 
+    def t186_session_prefs(mapped: list[str]) -> dict[str, object]:
+        forms = sorted({h.lower().rstrip(".") for h in mapped} |
+                       {h.lower().rstrip(".") + "." for h in mapped})
+        return {
+            "network.dns.localDomains": ",".join(forms),
+            # Native resolution keeps every lookup observable at the socket
+            # layer; MOZ_LOG additionally records resolver requests whatever
+            # the backend (Mullvad Browser defaults to DoH-only mode 3).
+            "network.trr.mode": 5,
+            "network.dns.disablePrefetch": True,
+            "network.http.speculative-parallel-limit": 0,
+        }
+
+    def t186_variants(port: int, mode: str) -> dict[str, dict[str, object]]:
+        variants: dict[str, dict[str, object]] = {}
+        for variant, suffix, mapped in (("onion", ".onion", True),
+                                        ("trailing-dot", ".onion.", True),
+                                        ("mixed-case", ".OnIoN.", True),
+                                        ("unmapped-dns", ".onion.", False)):
+            label = t186_label()
+            T186_LABELS.append(label)
+            shown = label.upper() if variant == "mixed-case" else label
+            host = shown + suffix
+            variants[variant] = {"label": label, "host": host, "mapped": mapped,
+                                 "url": t186_request_url(host, port, mode, variant)}
+        return variants
+
+    def t186_controls(port: int, sysproxy_mode: str, null_mode: str) -> dict[str, dict[str, object]]:
+        controls: dict[str, dict[str, object]] = {}
+        for name, suffix, mapped, mode in (
+            ("destination", ".test", True, null_mode),
+            ("system-proxy", ".test", True, sysproxy_mode),
+            ("dns", ".invalid", False, null_mode),
+        ):
+            label = t186_label()
+            T186_LABELS.append(label)
+            host = label + suffix
+            controls[name] = {"label": label, "host": host, "mapped": mapped,
+                              "url": t186_request_url(host, port, mode, "control-" + name)}
+        return controls
+
+    def t186_mapped(groups: list[dict[str, dict[str, object]]]) -> list[str]:
+        return [str(v["host"]) for group in groups for v in group.values() if v["mapped"]]
+
+    def t186_run_requests(browser: WebDriver, requests: list[dict[str, object]],
+                          settle: float) -> None:
+        # Each request keeps its own tab for the whole observation, so no
+        # later navigation can cancel it. A request counts as observed only
+        # once its tab reaches a terminal document bound to that request's
+        # unique label (the loaded page or an error page naming the URL);
+        # every tab then stays open for `settle` seconds more.
+        started = time.monotonic()
+        for request in requests:
+            request["handle"] = browser.open_tab(str(request["url"]))
+        pending = list(requests)
+        last: dict[int, dict[str, object]] = {}
+        deadline = time.monotonic() + 30
+        while pending and time.monotonic() < deadline:
+            for request in list(pending):
+                try:
+                    state = browser.tab_state(str(request["handle"]))
+                except RuntimeError:
+                    continue
+                if state is None:
+                    continue
+                last[id(request)] = state
+                uri = str(state.get("documentURI") or "").lower()
+                # A browser error page naming this request is its terminal
+                # channel failure; background tabs may leave it "interactive".
+                error = uri.startswith(("about:neterror", "about:certerror"))
+                ready = state.get("readyState") == "complete" or (
+                    error and state.get("readyState") == "interactive")
+                if ready and str(request["label"]) in uri:
+                    request["terminal"] = {
+                        **state, "completed": True,
+                        "kind": "error" if error else "loaded",
+                        "elapsedSeconds": round(time.monotonic() - started, 3),
+                    }
+                    pending.remove(request)
+            time.sleep(0.2)
+        for request in pending:
+            request["terminal"] = {**last.get(id(request), {}), "completed": False,
+                                   "kind": "incomplete"}
+        time.sleep(settle)
+
+    def t186_terminal_error(request: dict[str, object]) -> bool:
+        terminal = request.get("terminal") or {}
+        return terminal.get("completed") is True and terminal.get("kind") == "error"
+
+    def run_descriptor_matrix() -> None:
+        # Maintainer-directed feasibility study (T186 Notes): which fail-closed
+        # proxy result keeps a blocked protected request off every surface when
+        # no cancel listener exists?
+        workdir = args.report_out.with_suffix(".t186")
+        trace = NameTrace(workdir, "matrix")
+        raw = Server(RawImpostorHandler)
+        TLSImpostorHandler.context = t186_tls_context(workdir)
+        tls = Server(TLSImpostorHandler)
+        socks_impostor = Server(ImpostorSocksHandler)
+        unix_path = workdir / "live-socks.sock"
+        unix_socks = UnixServer(ImpostorSocksHandler, unix_path)
+        for server in (raw, tls, socks_impostor, unix_socks):
+            server.start()
+        modes: dict[str, object] = {
+            "ctl-null": None,
+            "ctl-direct": {"type": "direct"},
+            "d1-null": None,
+            "d1-socks": [{"type": "socks", "host": "127.0.0.1", "port": socks_impostor.port,
+                          "username": "blocked", "password": "invalid", "proxyDNS": True}, None],
+            "d5-live": [{"type": "socks", "host": "file://" + str(unix_path.resolve()),
+                         "port": 1, "proxyDNS": True}, None],
+            "d5": [{"type": "socks", "host": T186_UNIX_SINK, "port": 1, "proxyDNS": True}, None],
+            "d4": [{"type": "https", "host": "127.0.0.1", "port": T186_BLOCKED_TLS_PORT}, None],
+            "d4-plain": [{"type": "https", "host": "127.0.0.1", "port": raw.port}, None],
+            "d4-tls": [{"type": "https", "host": "127.0.0.1", "port": tls.port}, None],
+        }
+        report["t186Modes"] = modes
+        port = destination.port
+        groups = {mode: t186_variants(port, mode)
+                  for mode in ("d1-null", "d1-socks", "d5-live", "d5", "d4", "d4-plain", "d4-tls")}
+        controls = t186_controls(port, "ctl-direct", "ctl-null")
+        calibration = t186_variants(port, "d4-tls")
+        everything = list(groups.values()) + [controls, calibration]
+        mapped = t186_mapped(everything)
+        hosts = {str(r["host"]).rstrip(".").lower(): urllib.parse.urlsplit(str(r["url"])).path.split("/")[1]
+                 for group in everything for r in group.values()}
+        extension = t186_matrix_extension(workdir / "matrix-extension.zip", modes, hosts)
+        report["t186MatrixExtensionSha256"] = sha256(extension)
+        try:
+            browser = WebDriver(args.browser, args.driver, extension, http_proxy.port, True,
+                                args.driver_log, extra_prefs=t186_session_prefs(mapped),
+                                accept_insecure_certs=False, trace=trace)
+            try:
+                CAPTURES.reset("http", "destination", "socks", "impostor")
+                ordered = [v for group in groups.values() for v in group.values()]
+                # Past Gecko's ten-second proxy failover bound, all tabs open.
+                t186_run_requests(browser, ordered + list(controls.values()), settle=12)
+            finally:
+                browser.close()
+            impostor_after_main = CAPTURES.snapshot("impostor")
+            # Calibration: the same TLS impostor, but with certificate errors
+            # accepted by the automation session, must see the request name.
+            cal_trace = NameTrace(workdir, "calibration")
+            browser = WebDriver(args.browser, args.driver, extension, http_proxy.port, True,
+                                args.driver_log, extra_prefs=t186_session_prefs(mapped),
+                                accept_insecure_certs=True, trace=cal_trace)
+            try:
+                t186_run_requests(browser, [calibration["trailing-dot"]], settle=3)
+            finally:
+                browser.close()
+        finally:
+            for server in (raw, tls, socks_impostor, unix_socks):
+                server.stop()
+
+        def evaluate(group: dict[str, dict[str, object]]) -> dict[str, object]:
+            out: dict[str, object] = {}
+            for variant, request in group.items():
+                hits = t186_hits(str(request["label"]), trace)
+                out[variant] = {"host": request["host"], "terminal": request.get("terminal"),
+                                "terminalError": t186_terminal_error(request),
+                                "hits": hits, "clean": t186_clean(hits)}
+            return out
+
+        results = {mode: evaluate(group) for mode, group in groups.items()}
+        control_results = evaluate(controls)
+        controls_ok = (
+            all((c.get("terminal") or {}).get("completed") is True for c in controls.values()) and
+            bool(control_results["destination"]["hits"]["destination"]) and
+            bool(control_results["system-proxy"]["hits"]["systemProxy"]) and
+            bool(control_results["dns"]["hits"]["dnsStrace"]) and
+            bool(control_results["dns"]["hits"]["dnsMozLog"])
+        )
+        record("t186-positive-controls", controls_ok, extra={"controls": control_results})
+
+        def all_clean(mode: str) -> bool:
+            # A negative result needs a request-bound terminal failure too.
+            return all(v["clean"] and v["terminalError"] for v in results[mode].values())
+
+        d1_leaks = {v: sorted(k for k, hits in r["hits"].items() if hits)
+                    for v, r in results["d1-null"].items()}
+        record("t186-d1-null-comparison", True, extra={
+            "results": results["d1-null"], "leakSurfaces": d1_leaks})
+        socks_names = [x for x in CAPTURES.snapshot("socks")
+                       if any(str(r["label"]) in str(x.get("host"))
+                              for r in groups["d1-socks"].values())]
+        record("t186-d1-socks-impostor-comparison", True, extra={
+            "results": results["d1-socks"], "impostorReceivedNames": socks_names,
+            "nameReceived": bool(socks_names)})
+
+        d5_supported = any(results["d5-live"][v]["hits"]["socks"] for v in results["d5-live"])
+        d5_attempts = trace.connects("/dev/null/stargate-blocked")
+        d5_pass = d5_supported and all_clean("d5") and bool(d5_attempts)
+        record("t186-d5-unix-sink", d5_pass, extra={
+            "unixSocksSupported": d5_supported, "liveUnixCalibration": results["d5-live"],
+            "results": results["d5"], "sinkConnectAttempts": d5_attempts[:8]})
+
+        impostor = impostor_after_main
+        plain = [x for x in impostor if x.get("listener") == "plain-tcp"]
+        tls_seen = [x for x in impostor if x.get("listener") == "self-signed-tls"]
+        cal_label = str(calibration["trailing-dot"]["label"])
+        cal_seen = [x for x in CAPTURES.snapshot("impostor")
+                    if x.get("listener") == "self-signed-tls" and cal_label in (x.get("labels") or [])]
+        d4_attempts = trace.connects(f"htons({T186_BLOCKED_TLS_PORT})")
+        d4_pass = (
+            all_clean("d4") and all_clean("d4-plain") and all_clean("d4-tls") and
+            bool(d4_attempts) and bool(plain) and
+            all(not x["labels"] and not x["onionBytes"] for x in plain) and
+            bool(tls_seen) and all(x.get("handshake") == "failed" for x in tls_seen) and
+            bool(cal_seen)
+        )
+        record("t186-d4-https-privileged", d4_pass, extra={
+            "results": {m: results[m] for m in ("d4", "d4-plain", "d4-tls")},
+            "privilegedPortConnectAttempts": d4_attempts[:8],
+            "plainImpostor": plain, "tlsImpostor": tls_seen,
+            "acceptedCertificateCalibration": {
+                "host": calibration["trailing-dot"]["host"], "impostorDecrypted": cal_seen},
+        })
+        report["t186Designs"] = {"D5": d5_pass, "D4": d4_pass}
+        report["t186ResolverLinesTotal"] = len(trace.resolver_lines())
+
+    def run_blocked_proxy() -> None:
+        # Acceptance 3: the real extension with its cancel listener disabled.
+        # Every blocked protected request must stay off all four surfaces.
+        workdir = args.report_out.with_suffix(".t186")
+        variant = "no-blocker" if args.mutation == "none" else f"no-blocker-{args.mutation}"
+        mutant, identity = variant_extension(
+            args.extension, workdir / f"{variant}.zip", variant)
+        report["t186NoBlocker"] = identity
+        socks = Server(SocksHandler, 8881)  # Stargate's Tor port: must stay silent
+        socks.start()
+        port = destination.port
+        try:
+            for session, hardened, seed in (("missing-token", True, False),
+                                             ("hardening-closed", False, True)):
+                trace = NameTrace(workdir, session)
+                blocked = t186_variants(port, "blocked")
+                controls = t186_controls(port, "sysproxy", "direct")
+                browser = WebDriver(args.browser, args.driver, mutant, http_proxy.port,
+                                    hardened, args.driver_log,
+                                    extra_prefs=t186_session_prefs(t186_mapped([blocked, controls])),
+                                    accept_insecure_certs=False, trace=trace)
+                try:
+                    if seed:
+                        browser.seed_valid_device()
+                    CAPTURES.reset("http", "destination", "socks", "impostor")
+                    t186_run_requests(browser, list(blocked.values()), settle=12)
+                    t186_run_requests(browser, [controls["system-proxy"]], settle=0)
+                    browser.set_proxy_type(0)
+                    t186_run_requests(browser, [controls["destination"], controls["dns"]],
+                                      settle=2)
+                    browser.set_proxy_type(1)
+                finally:
+                    browser.close()
+                results = {}
+                for form, request in blocked.items():
+                    hits = t186_hits(str(request["label"]), trace)
+                    results[form] = {"host": request["host"], "terminal": request.get("terminal"),
+                                     "terminalError": t186_terminal_error(request),
+                                     "hits": hits, "clean": t186_clean(hits)}
+                control_hits = {name: t186_hits(str(c["label"]), trace)
+                                for name, c in controls.items()}
+                controls_ok = (all((c.get("terminal") or {}).get("completed") is True
+                                   for c in controls.values()) and
+                               bool(control_hits["system-proxy"]["systemProxy"]) and
+                               bool(control_hits["destination"]["destination"]) and
+                               bool(control_hits["dns"]["dnsStrace"]) and
+                               bool(control_hits["dns"]["dnsMozLog"]))
+                record(f"t186-blocked-{session}-no-direct-proxy-or-dns",
+                       controls_ok and all(r["clean"] and r["terminalError"]
+                                           for r in results.values()),
+                       extra={"results": results, "controls": control_hits,
+                              "controlsPassed": controls_ok,
+                              "fixtureStorageSeeded": seed, "hardened": hardened})
+            # Positive control for the protected route itself: with valid state
+            # the same trailing-dot form reaches Stargate's SOCKS port by name.
+            trace = NameTrace(workdir, "tor-positive")
+            tor = t186_variants(port, "tor")
+            browser = WebDriver(args.browser, args.driver, mutant, http_proxy.port, True,
+                                args.driver_log, extra_prefs=t186_session_prefs(t186_mapped([tor])),
+                                accept_insecure_certs=False, trace=trace)
+            try:
+                browser.seed_valid_device()
+                CAPTURES.reset("http", "destination", "socks", "impostor")
+                t186_run_requests(browser, [tor["trailing-dot"], tor["mixed-case"]], settle=2)
+            finally:
+                browser.close()
+            reached = {v: [x for x in CAPTURES.snapshot("socks")
+                           if str(tor[v]["label"]) in str(x.get("host")) and
+                           x.get("passwordMatches") is True]
+                       for v in ("trailing-dot", "mixed-case")}
+            record("t186-tor-route-positive-control", all(reached.values()), extra={
+                "socksReached": reached,
+                "otherSurfaces": {v: t186_hits(str(tor[v]["label"]), trace)
+                                  for v in ("trailing-dot", "mixed-case")}})
+        finally:
+            socks.stop()
+
     def finish() -> int:
         report["result"] = "GREEN" if not failures else "RED"
         report["failures"] = failures
         rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
         args.report_out.parent.mkdir(parents=True, exist_ok=True)
         args.report_out.write_text(rendered)
-        print(rendered, end="")
+        if args.only in ("descriptor-matrix", "blocked-proxy"):
+            # The complete record (captures, strace and MOZ_LOG lines) is in
+            # --report-out; stdout carries the per-request surface verdicts.
+            print(json.dumps(t186_summary(report), indent=1, sort_keys=True))
+        else:
+            print(rendered, end="")
         return 0 if not failures else 1
+
+    if args.only in ("descriptor-matrix", "blocked-proxy"):
+        try:
+            if args.only == "descriptor-matrix":
+                run_descriptor_matrix()
+            else:
+                run_blocked_proxy()
+        finally:
+            http_proxy.stop()
+            destination.stop()
+        return finish()
 
     if args.only != "full":
         try:

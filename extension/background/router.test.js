@@ -388,8 +388,30 @@ function primaryProxy(result) {
   return result[0];
 }
 
-function assertNoRoutableIdentity(descriptor, message) {
-  assert.strictEqual(descriptor, null, message + ' (no proxy descriptor)');
+// T186 / FR-004a: a blocked protected request never gets `null`. Gecko's
+// ProxyChannelFilter maps `null` to "no proxy" — an explicit direct
+// connection that also bypasses the browser/system proxy — and `x.onion.`
+// escapes network.dns.blockDotOnion. The fail-closed result is a SOCKS5h hop
+// to a Unix socket path that cannot exist, then the terminal null: nothing
+// resolves locally, the connect fails, no failover remains, and the hop
+// carries no credential or isolation identity.
+const BLOCKED_CHAIN = [{
+  type: 'socks',
+  host: 'file:///dev/null/stargate-blocked',
+  port: 1,
+  proxyDNS: true,
+}, null];
+
+function assertFailClosed(result, message) {
+  assert.notStrictEqual(result, null, message + ' (null would mean Direct)');
+  assert.notStrictEqual(result, undefined, message + ' (undefined would mean the default proxy)');
+  assert.deepStrictEqual(plain(result), BLOCKED_CHAIN, message + ' (unreachable fail-closed sink)');
+  assert.ok(!('username' in result[0]) && !('password' in result[0]),
+    message + ' (the sink carries no identity or credential)');
+}
+
+function assertNoRoutableIdentity(result, message) {
+  assertFailClosed(result, message);
 }
 
 // ---------------------------------------------------------------------------
@@ -1034,8 +1056,7 @@ test('closedHardeningGateCancelsAndRecordsBlocked', async () => {
     };
   })();
   const details = mainFrame(`https://${ONION_A}/page`);
-  const descriptor = await onRequest(details);
-  assert.strictEqual(descriptor, null, 'blocked requests expose no proxy descriptor');
+  assertFailClosed(await onRequest(details), 'a closed hardening gate fails closed');
   const webRequestResult = onBeforeRequest(details);
   assert.ok(isResponseChannel(webRequestResult), 'blocking decision uses Firefox async channel');
   assert.deepStrictEqual(plain(await webRequestResult), { cancel: true });
@@ -1071,9 +1092,8 @@ test('missingOrEmptyTokenFailsClosed', async () => {
   const noDevice = loadRouter({ hardeningOk: true, device: null });
   await drain();
   const missingDetails = mainFrame(`https://${ONION_A}/`);
-  assert.strictEqual(
+  assertFailClosed(
     await noDevice.recorded.proxy[0](missingDetails),
-    null,
     'FR-002: without a bearer token the password clause cannot be ' +
       'satisfied — routing to 8881 would violate FR-002, so fail closed'
   );
@@ -1103,9 +1123,8 @@ test('missingOrEmptyTokenFailsClosed', async () => {
     device: { name: 'd', bearerToken: '', tokenStoredAt: 1 },
   });
   await drain();
-  assert.strictEqual(
+  assertFailClosed(
     await emptyToken.recorded.proxy[0](mainFrame(`https://${ONION_A}/`)),
-    null,
     'an empty-string token is no token — presence means a non-empty string'
   );
 
@@ -1114,13 +1133,15 @@ test('missingOrEmptyTokenFailsClosed', async () => {
     device: { name: 'd', bearerToken: 'not-a-token', tokenStoredAt: 1 },
   });
   await drain();
-  assert.strictEqual(
+  assertFailClosed(
     await malformedToken.recorded.proxy[0](mainFrame(`https://${ONION_A}/`)),
-    null,
     'corrupted storage cannot turn a malformed credential into a route'
   );
   const malformedDetails = mainFrame(`https://${ONION_A}/malformed`);
-  assert.strictEqual(await malformedToken.recorded.proxy[0](malformedDetails), null);
+  assertFailClosed(
+    await malformedToken.recorded.proxy[0](malformedDetails),
+    'a malformed credential fails closed at the proxy decision'
+  );
   assert.deepStrictEqual(
     plain(await malformedToken.recorded.webRequest[0](malformedDetails)),
     { cancel: true },
@@ -1138,7 +1159,7 @@ test('firstPartyErrorFailsClosedWithoutGuessedUsername', async () => {
   const descriptor = await rawOnRequest(
     subresource(`https://${ONION_A}/x`, 'not a url')
   );
-  assert.strictEqual(descriptor, null, 'FirstPartyError produces no descriptor');
+  assertFailClosed(descriptor, 'FirstPartyError fails closed without a descriptor identity');
 });
 
 test('proxyAndBlockerShareOneDecisionAndRevalidateAppliedRoute', async () => {
@@ -1186,11 +1207,59 @@ test('directAndProtectedMissingRecordHaveDistinctBlockingResults', async () => {
     requestId: undefined,
   });
   delete missing.requestId;
-  assert.strictEqual(await loaded.rawOnRequest(missing), null);
+  assertFailClosed(
+    await loaded.rawOnRequest(missing), 'a protected request without an id fails closed'
+  );
   assert.deepStrictEqual(
     plain(await loaded.onBeforeRequest(missing)), { cancel: true },
     'missing cross-event identity is a protected failure, not a recomputation'
   );
+});
+
+test('everyBlockedProtectedPathFailsClosedNeverNullOrDefault', async () => {
+  // Non-tor decision: the hardening gate is closed.
+  const closed = loadRouter({ hardeningOk: false });
+  await drain();
+  for (const host of [ONION_A, `${ONION_A}.`, `${ONION_A.toUpperCase()}.`, `${ONION_A}..`]) {
+    const details = mainFrame(`http://${host}/blocked`, { requestId: `closed:${host}` });
+    assertFailClosed(
+      await closed.recorded.proxy[0](details),
+      `a blocked ${JSON.stringify(host)} request fails closed`
+    );
+    assert.deepStrictEqual(
+      plain(await closed.recorded.webRequest[0](details)), { cancel: true },
+      'the cancel listener remains the second layer for ' + JSON.stringify(host)
+    );
+  }
+
+  // Missing request id, including the trailing-dot form that escapes
+  // Gecko's .onion DNS block.
+  const loaded = loadHardenedTokened();
+  await drain();
+  const missing = mainFrame(`http://${ONION_A}./no-id`);
+  delete missing.requestId;
+  assertFailClosed(await loaded.rawOnRequest(missing), 'a trailing-dot request without an id');
+
+  // Listener failure: a throw inside the proxy listener would make Firefox
+  // use its default (system) proxy, so it must also resolve to the sink.
+  const hostile = mainFrame(`http://${ONION_A}./listener-failure`, { requestId: 'hostile-1' });
+  Object.defineProperty(hostile, 'method', {
+    get() { throw new Error('synthetic listener failure'); },
+  });
+  let result;
+  assert.doesNotThrow(() => { result = loaded.rawOnRequest(hostile); },
+    'a listener failure must not escape to Firefox\'s default proxy path');
+  assertFailClosed(await result, 'a protected listener failure fails closed');
+
+  // Intentional Direct behavior is unchanged, including without an id.
+  const clearnet = mainFrame('http://example.com/no-id');
+  delete clearnet.requestId;
+  assert.deepStrictEqual(plain(await loaded.rawOnRequest(clearnet)), { type: 'direct' });
+  const clearnetHostile = mainFrame('http://example.com/listener-failure', { requestId: 'hostile-2' });
+  Object.defineProperty(clearnetHostile, 'method', {
+    get() { throw new Error('synthetic listener failure'); },
+  });
+  assert.deepStrictEqual(plain(await loaded.rawOnRequest(clearnetHostile)), { type: 'direct' });
 });
 
 test('crossEventFingerprintMismatchCancelsProtectedRequest', async () => {
@@ -1326,8 +1395,8 @@ test('storageOnChangedRefreshesMirroredToken', async () => {
   loaded.state.device = null;
   onChanged[0]({ device: { oldValue: { bearerToken: TOKEN_B } } }, 'local');
   await drain();
-  assert.strictEqual(
-    await onRequest(mainFrame(`https://${ONION_A}/`)), null,
+  assertFailClosed(
+    await onRequest(mainFrame(`https://${ONION_A}/`)),
     'device removal fail-closes the router'
   );
 
@@ -1335,8 +1404,8 @@ test('storageOnChangedRefreshesMirroredToken', async () => {
   loaded.state.device = { name: 'd', bearerToken: TOKEN_B, tokenStoredAt: 3 };
   onChanged[0]({ hardening: { newValue: {} } }, 'local');
   await drain();
-  assert.strictEqual(
-    await onRequest(mainFrame(`https://${ONION_A}/`)), null,
+  assertFailClosed(
+    await onRequest(mainFrame(`https://${ONION_A}/`)),
     'a non-device change event must not resurrect the mirror from ' +
       'current storage state it was not refreshed against'
   );

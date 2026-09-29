@@ -759,10 +759,33 @@ six relays (three on each side) selected by Tor's path-selection algorithm
   consume one bounded, request-id/fingerprint-bound decision. A valid Tor decision returns the
   ordered `[SOCKS5h descriptor, null]` chain, whose terminal `null` forbids browser-defined
   failover. Missing/malformed credentials, closed hardening, missing or changed request identity,
-  unavailable first-party context, state-generation change, and applied-proxy mismatch return no
-  proxy descriptor and are canceled asynchronously at `onBeforeRequest`. Listener exceptions are
-  converted to the same blocked result because Firefox otherwise resumes its default proxy path.
-  Intentional Direct decisions remain allowed and carry no Tor credential.
+  unavailable first-party context, state-generation change, and applied-proxy mismatch are
+  canceled asynchronously at `onBeforeRequest`. Intentional Direct decisions remain allowed and
+  carry no Tor credential. As shipped by T157 the blocked proxy result was `null`, which is not
+  "no descriptor": Gecko's `ProxyChannelFilter` maps `null` to no proxy at all — an explicit
+  direct connection that also bypasses a configured browser/system proxy — while a rejected or
+  throwing listener selects the default (system) proxy. Only the cancel listener stood between a
+  blocked `.onion` request and Direct (redteam finding 20260929-004; T186 below).
+- **Blocked protected proxy result (T186, maintainer-selected design D5):** every blocked
+  protected path — missing request id, non-Tor decision, rejected decision or a throwing
+  listener — now returns `[{type:'socks', host:'file:///dev/null/stargate-blocked', port:1,
+  proxyDNS:true}, null]`. Gecko supports SOCKS over a Unix socket for a `file://` host; the path
+  cannot exist (`/dev/null` is not a directory; no unprivileged process can create the path — a
+  host-root attacker already owns the loopback ports and the extension and is outside this
+  protection's threat class), so the connect fails with ENOTDIR,
+  `proxyDNS` keeps the name from any local resolver, and the terminal `null` leaves no failover.
+  The hop carries no credential or isolation identity. The cancel listener stays as the second
+  layer. `.onion` classification strips every trailing dot and lowercases, so `x.onion.`,
+  `x.onion..` and mixed-case forms are protected. Rejected alternatives: a loopback TCP port
+  (Stargate's own, with an invalid credential) hands the name to whatever binds that port while
+  the data plane is down — the matrix below shows a fake SOCKS listener there receives the name;
+  D4 (`https` to `127.0.0.1:1023`) was also clean but depends on certificate validation that a
+  user can click through on the resulting certificate-error page. Residue: a future Gecko that
+  drops `file://` SOCKS support could fail in either of two ways — treating the sink as a
+  hostname (a lookup of that constant name, never the destination), or rejecting the descriptor,
+  which Gecko resolves to the default (system) proxy and so exposes the destination name to that
+  proxy with only the cancel listener remaining. Both are re-checked per browser release by the
+  T186 probe modes below, whose destination, system-proxy and resolver surfaces detect either.
 - **T157 live evidence (refined attempt, 2026-09-24):** the complete candidate matrix passed
   16/16 scenarios in Mullvad Browser Alpha 16.0a12 / Gecko 153.3.0 with geckodriver 0.37.0.
   These are connection-level observations at independent ordinary-HTTP-proxy, direct-destination
@@ -1095,6 +1118,53 @@ six relays (three on each side) selected by Tor's path-selection algorithm
   ```
 
   </details>
+- **T186 live evidence (2026-09-29, review round 2):**
+  `tests/live-e2e/mullvad-browser-hardening/probe.py` observes four surfaces per request with no cancel listener: the destination catcher (the name
+  mapped to loopback via `network.dns.localDomains`), the configured ordinary HTTP proxy,
+  listeners standing at the descriptor's own target, and name resolution (strace of every browser
+  socket to port 53 with native resolution, plus MOZ_LOG `nsHostResolver` matched on the looked-up
+  host). Each request form uses a fresh random 56-character onion label: `.onion`, `.onion.`,
+  mixed-case `.OnIoN.` (all mapped) and an unmapped `.onion.` for DNS. Every request runs in its
+  own tab that no later request replaces, must reach a terminal document bound to its label (the
+  loaded page, or a browser error page naming that URL), and all tabs stay open at least twelve
+  seconds after the last terminal result — past Gecko's ten-second proxy failover bound. A
+  negative result also requires that terminal error; an incomplete request fails the probe.
+  - `--only descriptor-matrix` (proxy-only test extension; Mullvad Browser 140.16.0esr at
+    `/usr/lib/mullvad-browser`, report SHA-256
+    `f406b0babe51b88d2143502c792de80aa9749d3ca098b63aa1ad19f4f7bb357c`, and the pinned
+    153.3.0esr Alpha, `38336f1973824ef4fa92fbabc23e3a0c7f7d3a8fe5af8d0a408a7d2bb584de98`;
+    identical outcomes). Controls: a `null` result for a mapped `.test` name reached the
+    destination, `{type:'direct'}` reached the system proxy, and an unmapped `.invalid` name
+    appeared both in strace (`sendmmsg(…127.0.0.53:53…)`) and in MOZ_LOG. **D1 `null`:** `.onion`
+    was stopped by `network.dns.blockDotOnion`; `.onion.` and mixed-case loaded from the
+    destination directly; unmapped `.onion.` was sent to the stub resolver. **D1-style SOCKS
+    port:** a fake SOCKS listener received the onion name for all four forms. **D5:** the same
+    descriptor pointed at a listening Unix socket delivered every name (support calibrated);
+    pointed at the sink, strace shows `connect(AF_UNIX "/dev/null/stargate-blocked") = -1
+    ENOTDIR`, every request ended at its own `proxyConnectFailure` page, and all six surfaces were
+    empty for all four forms. **D4:** `127.0.0.1:1023` refused; a plain listener received only a
+    TLS ClientHello (no name, no `onion` bytes); a self-signed TLS listener saw `bad certificate`
+    and no request. Calibration: with certificate errors accepted, that listener decrypted
+    `GET http://<label>.onion.:<port>/…`.
+  - `--only blocked-proxy` (the real package with only its cancel listener removed; pinned
+    153.3.0esr; sessions with a missing token and with hardening closed). **Red** (pre-fix
+    package `7e4cc26c…83e9`, report `b547162a5af22ed4ac7dacab0a1e807522b21062b5bd8a8cd798bae05e52d814`):
+    in both sessions `.onion.` and mixed-case loaded from the destination and the unmapped
+    `.onion.` reached the resolver. **Candidate** (package `727777ce…b89b`, report
+    `d82e5bc0752c099529af31a9869f8a770b3ca2ae272956b192fb54c5a1ef9a4e`): every form in both
+    sessions reached its own `proxyConnectFailure` page (5.6–8.1 s) with all surfaces empty through
+    the observation window and 12 sink connects per session; the controls fired in the same
+    sessions. A Tor positive control with valid state delivered `.onion.` and mixed-case names to
+    the SOCKS catcher on 8881 with the matching credential. **Probe falsifiers** on the same
+    package: `--mutation delayed-null` (the `.onion.` request's proxy result becomes `null` after
+    six seconds) is RED — that request loaded from the destination at 14–17 s while the other
+    forms stayed clean (report `4e0143c42f64d22e6383e3a5a14e700d0aafa27d13cfa185509a61111ccbb4e7`);
+    `--mutation hung-proxy` (that result never arrives) is RED because the request never reaches
+    a terminal state (report `cdf44add50e6da30df2b348d9345c30d0e28b04da0041b4457e41131958cda61`).
+    The identical-command red/green records are in
+    `specs/001-tor-route/evidence/T186-tests-first.json`.
+  - With the cancel listener restored, the unchanged T157 full matrix passed 16/16 on the same
+    candidate package (report `c812d0f8436f7dc019fa49a52873f5bc9a66eba70fdcce317741e46c2de201c1`).
 - The data plane forwards SOCKS5 with the SOCKS5 username set to the
   first-party domain (architecture spec §14.3). For onion services, the
   "first-party domain" is the onion address itself, giving distinct
@@ -1638,7 +1708,8 @@ three route renderers with their positive tests in an atomic tests-first change.
 error response is reachable from Tor port 8881.
 
 T157 now supplies identity-unavailable browser cancellation and Alpha-candidate no-fallback
-captures rather than inferring safety from a non-SOCKS descriptor. Stable-target integrated
+captures rather than inferring safety from a non-SOCKS descriptor; T186 makes the blocked proxy
+result itself fail closed, independent of that cancellation. Stable-target integrated
 packet/circuit evidence remains T155.
 
 **Residual limitations:** parties within one defined partition may share circuits. Browser

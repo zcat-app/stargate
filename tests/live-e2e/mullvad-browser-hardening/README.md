@@ -70,7 +70,7 @@ hermetic test can inspect).
 | 3 | HTTP/3 off: `network.http.http3.enable == false` | arch §14.5 Part 1; FR-004 | read `prefs.js` |
 | 4 | WebRTC off: `media.peerconnection.enabled == false` (the Firefox `prefs.js` pref; the extension's runtime gate reads the same state via the stable `privacy.network.peerConnectionEnabled` API, which wraps it — the API path is NOT itself a `prefs.js` key) | arch §14.5 Part 1/Part 2; FR-004 | read `prefs.js` (automated in `run.sh`) AND assert the extension's runtime gate agrees (manual Part 2) |
 | 5 | Foreign-extension inventory: allowlisted present, disallowed flagged | arch §14.5 Part 3; THREAT-MODEL §2.7 | load the extension, read `storage.local.hardening.lastAuditResult` |
-| 6 | Fail-closed routing: with WebRTC forcibly enabled, `proxy.onRequest` returns no SOCKS descriptor for a `.onion` request | FR-004; Constitution III | flip `peerConnectionEnabled` true, assert the extension's `hardeningOk` flag is false and no SOCKS descriptor is returned |
+| 6 | Fail-closed routing: with WebRTC forcibly enabled, `proxy.onRequest` returns no routable Tor descriptor for a `.onion` request — only the T186 unreachable sink `[{socks, file:///dev/null/stargate-blocked, proxyDNS}, null]`, never `null` (which Gecko treats as Direct) | FR-004/FR-004a; Constitution III | flip `peerConnectionEnabled` true, assert the extension's `hardeningOk` flag is false and the result is the sink; `probe.py --only blocked-proxy` proves the network outcome |
 
 Properties 1–4 (the `prefs.js` reads) are **automated in `run.sh` (Part 1)**
 — these are the load-bearing checks, because the WebExtensions API does
@@ -86,6 +86,42 @@ not expose them); they are the load-bearing reason this live-e2e test
 exists. Property 4 is double-checked (profile pref + extension runtime
 gate). Properties 5–6 exercise the extension's real behaviour in the real
 browser.
+
+## Connection-level probe (`probe.py`; T157, T186)
+
+`probe.py` drives Mullvad Browser through geckodriver in ephemeral
+profiles with calibrated catchers (destination, ordinary proxy, SOCKS)
+and writes a JSON report to `--report-out`. T157's modes cover
+cancellation and no-fallback with the real extension. T186 adds two modes
+that run **without** a cancel listener and also capture name resolution
+(`strace` of the browser's port-53 sockets and MOZ_LOG `nsHostResolver`;
+`strace` must be installed):
+
+- `--only descriptor-matrix` — a generated proxy-only test extension
+  returns fixed results (`null`, a SOCKS impostor, the Unix-socket sink,
+  `https` targets with plain/TLS impostors) for `.onion`, `.onion.`,
+  mixed-case and unmapped names, with positive controls for every surface.
+- `--only blocked-proxy` — the candidate package with only its cancel
+  listener removed; blocked requests (missing token, closed hardening) must
+  reach no destination, proxy, SOCKS or resolver, with in-session controls
+  and a Tor-route positive control.
+
+Every T186 request runs in its own preserved tab and must reach a terminal
+document bound to its unique label before a twelve-second observation
+window (past Gecko's ten-second failover bound); an incomplete request is a
+failure. `--mutation delayed-null` and `--mutation hung-proxy` (blocked-proxy
+only) falsify the probe itself: a late `null` must be caught at the
+destination and a never-answered request must fail as incomplete.
+
+```sh
+python3 tests/live-e2e/mullvad-browser-hardening/probe.py \
+  --browser <mullvadbrowser binary> --driver <geckodriver> \
+  --extension extension/dist/stargate-extension.zip \
+  --only blocked-proxy --report-out target/runs/T186-blocked.json
+```
+
+The extension requires Gecko 153 or later; `descriptor-matrix` also runs
+on older browsers because it installs only its own test extension.
 
 ## Preserve / reset split
 
