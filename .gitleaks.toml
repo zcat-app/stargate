@@ -25,7 +25,7 @@ regexes = [
 ]
 
 [[allowlists]]
-description = "Test-fixture bearer token in tests/integration/dns_leak_test.go (T034) — FR-017-compliant 32-char hex placeholder labelled 'test fixture only, never deployed'; the data plane accepts it only via the test-only STARGATE_TEST_TOKEN_PLAINTEXT env-var path owned by T050."
+description = "Shared test-fixture bearer token in DP/CP unit and contract tests (e.g. tests/contract/socks5, controlclient, TokenLoaderTest) — FR-017-compliant 32-char hex placeholder, used only by tests, never deployed or provisioned. (T183: the T034 DNS-leak gate no longer uses it; it mints a per-run random token.)"
 regexes = [
   '''0123456789abcdef0123456789abcdef''',
 ]

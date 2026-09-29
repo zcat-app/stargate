@@ -10,7 +10,12 @@
 # asserts the verdict rules that are the falsifiable contract of T076:
 #
 # Workspace A (4 modules):
-#   moda (pr, passes)              -> PASS
+#   moda (pr, passes; one test
+#         t.Skip with a reason)    -> PASS, plus a named per-test
+#                                    `test SKIP:` line carrying the reason and
+#                                    a `test PASS:` line for the passing test
+#                                    (T183: a skipped privacy gate in a mixed
+#                                    package must be named, not only counted)
 #   modb (pr, all tests t.Skip)    -> SKIP, never PASS   (the core bug fix)
 #   modc (pr, //stargate:required,
 #         all t.Skip)              -> FAIL                (FAIL-when-required)
@@ -67,6 +72,8 @@ write_mod moda 'package moda
 import "testing"
 
 func TestPasses(t *testing.T) {}
+
+func TestNeedsCapability(t *testing.T) { t.Skip("SKIP: needs CAP_NET_RAW for capture") }
 '
 
 write_mod modb 'package modb
@@ -144,6 +151,15 @@ assert_grep "FAIL[[:space:]]+.*example\.com/modc" "modc-is-fail" "$HERMETIC_OUT"
 
 # modA passes.
 assert_grep "PASS[[:space:]]+.*example\.com/moda" "moda-is-pass" "$HERMETIC_OUT"
+
+# T183 (acceptance 4): a skipped test inside a PASSING mixed package is named
+# with its reason, and the test that ran is named too — the package's
+# aggregate `skip=1` alone hides which gate did not run. The per-test lines
+# are indented so verify.sh's gate-level `^SKIP:` sentinel cannot fire on them
+# (a named test skip must not downgrade the whole Go gate to SKIP).
+assert_grep "^    test SKIP: example\.com/moda\.TestNeedsCapability — SKIP: needs CAP_NET_RAW for capture$" "moda-skip-named" "$HERMETIC_OUT"
+assert_grep "^    test PASS: example\.com/moda\.TestPasses \(" "moda-pass-named" "$HERMETIC_OUT"
+assert_nogrep "^SKIP:" "no-gate-level-skip-sentinel" "$HERMETIC_OUT"
 
 # Cadence separation (§Acceptance #4): modD's docker build-tagged suite is
 # accounted SKIP[docker] in the hermetic run, NOT executed (no FAIL from its

@@ -45,6 +45,15 @@ CADENCE / REQUIRED MARKERS (grep-discovered, co-located with the test):
 Exit status: 1 if any package/gate is FAIL, else 0. Output is plain text on
 stdout (verify.sh tees it into target/verify.log); one record per line with
 a stable `pass=N fail=N skip=N` suffix makes the inventory machine-auditable.
+
+PER-TEST LINES (T183). Under each package record the gate names every
+top-level test that ran (`    test PASS: <pkg>.<Test> (<s>s)`) and every
+skipped test or subtest with its last reason line
+(`    test SKIP: <pkg>.<Test> — <reason>`). A package's aggregate `skip=N` alone
+cannot say WHICH gate did not run: a capability-gated privacy test (the T034
+DNS-leak gate) in an otherwise passing package would stay anonymous. The
+lines are indented so verify.sh's gate-level `^SKIP:` sentinel never fires
+on a single test's skip.
 """
 
 from __future__ import annotations
@@ -176,15 +185,26 @@ def classify_json(json_text: str) -> dict[str, dict]:
         if not pkg or not action:
             continue
         rec = pkgs.setdefault(pkg, {"pass": 0, "fail": 0, "skip": 0,
-                                    "buildfail": False, "pkg_skipped": False})
-        has_test = bool(ev.get("Test"))
+                                    "buildfail": False, "pkg_skipped": False,
+                                    "passed": [], "skipped": [], "reason": {}})
+        test = ev.get("Test")
+        has_test = bool(test)
         if has_test:
-            if action == "pass":
+            if action == "output":
+                # Keep the test's last own output line: for a t.Skip that is
+                # the reason, not go test's `--- SKIP:`/`=== RUN` framing.
+                text = ev.get("Output", "").strip()
+                if text and not text.startswith(("---", "===")):
+                    rec["reason"][test] = text[:240]
+            elif action == "pass":
                 rec["pass"] += 1
+                if "/" not in test:
+                    rec["passed"].append((test, ev.get("Elapsed", 0)))
             elif action == "fail":
                 rec["fail"] += 1
             elif action == "skip":
                 rec["skip"] += 1
+                rec["skipped"].append(test)
         else:
             if action == "fail":
                 rec["buildfail"] = True
@@ -424,7 +444,9 @@ def main() -> int:
         for ip, _d in pkgs:
             classified.setdefault(ip, {"pass": 0, "fail": 0, "skip": 0,
                                        "buildfail": False,
-                                       "pkg_skipped": False})
+                                       "pkg_skipped": False,
+                                       "passed": [], "skipped": [],
+                                       "reason": {}})
         # Forward stderr on any nonzero (a panic, race finding, or timeout
         # can exit nonzero without "FAIL" in stdout — keep diagnostics).
         if tproc.returncode != 0:
@@ -468,6 +490,13 @@ def main() -> int:
             else:
                 say(f"  {v}  go:{mod}:{ip}  {tail}")
                 skipped += 1
+            for test, elapsed in rec["passed"]:
+                say(f"    test PASS: {ip}.{test} ({elapsed}s)")
+            for test in rec["skipped"]:
+                reason = rec["reason"].get(test, "no reason given")
+                # A reason's own `file.go:NN: ` prefix is location noise.
+                reason = re.sub(r"^[\w./-]+\.go:\d+: ", "", reason)
+                say(f"    test SKIP: {ip}.{test} — {reason}")
 
     state = "FAIL" if failed else "GREEN"
     say(f"go-workspace: {state} — {passed} passed, {skipped} skip, "

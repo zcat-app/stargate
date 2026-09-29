@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 37 |
-| in-progress | 0 |
+| pending | 36 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 182 |
@@ -29,7 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T183 | Rebuild the T034 DNS-leak gate on the current DP interface | Foundation audit remediation | ✓ | ✓ |
 | T184 | Pin the Tor sidecar package closure against index rollback | Foundation audit remediation | ✓ | ✓ |
 | T185 | Lock control-plane Maven dependency identities | Foundation audit remediation | ✓ | ✓ |
 | T186 | Fail closed in proxy.onRequest for blocked protected request | Foundation audit remediation | ✓ | ✓ |
@@ -43,7 +42,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T183 | Rebuild the T034 DNS-leak gate on the current DP interface | in-progress | ✓ | Foundation audit remediation |
 
 ---
 
