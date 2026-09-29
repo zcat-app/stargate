@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 38 |
-| in-progress | 0 |
+| pending | 37 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 181 |
@@ -27,15 +27,15 @@
 
 Tickets where `status: pending` AND every `blocked_by` is `done`.
 
-| ID | Title | Phase | Priv? | Parallel? |
-|---|---|---|---|---|
-| T192 | Allow a per-ticket developer subagent under an orchestrator | Foundation audit remediation |  |  |
+_(none — every pending ticket has unsatisfied `blocked_by`, or no pending tickets.)_
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T192 | Allow a per-ticket developer subagent under an orchestrator | in-progress |  | Foundation audit remediation |
 
 ---
 

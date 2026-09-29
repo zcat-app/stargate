@@ -1,7 +1,7 @@
 ---
 id: T192
 title: 'Allow a per-ticket developer subagent under an orchestrator'
-status: pending
+status: in-progress
 created: 2026-09-29
 last_updated: 2026-09-29
 source: "maintainer decision 2026-09-29 session: orchestrated run of plan steps 9–10 with one developer subagent per ticket"
@@ -9,8 +9,10 @@ phase: "Foundation audit remediation"
 story: ''
 blocked_by: []
 parallel: false
-files_budget: 5   # ticket + .claude/skills/run/SKILL.md + .opencode/skills/run/SKILL.md
+files_budget: 6   # ticket + .claude/skills/run/SKILL.md + .opencode/skills/run/SKILL.md
                   # + docs/process/workflow.md + generated STATUS.md
+                  # + docs/process/analysis.md:126 ("developer (main conversation)"),
+                  # an orphan this ticket makes stale (user-authorized, no deferral)
 privacy_critical: false   # process text only; no runtime, reviewer or gate change
 tests_first: []
 test_for: []
@@ -78,3 +80,16 @@ current rule: the root is its developer.
 ## Out-of-scope
 
 Changing who may dispatch reviewers; parallel ticket execution; autopilot.md rewrite.
+
+## Notes
+
+- Consistency probe (Acceptance 4), run on the candidate before review:
+  `grep -rn "no developer subagent\|never a developer-subagent" .claude/ .opencode/ docs/`
+  returns no matches (exit 1). `scripts/run-task.sh:42` ("The script NEVER spawns a
+  developer-subagent") is about the driver script and stays true; it is out of scope.
+- Orphan fixed in this ticket: `docs/process/analysis.md` named the developer as
+  "main conversation"; it now names the ticket's developer (root or its one delegated
+  subagent). `files_budget` raised 5 → 6 for it (user-authorized, no deferral).
+- The `.claude/skills/run/SKILL.md` edit was applied by the maintainer via a
+  prepared script after the agent's edit was denied as self-modification.
+- `scripts/verify.sh` green is recorded by the driver's pre-review gate.

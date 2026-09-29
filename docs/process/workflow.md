@@ -121,8 +121,14 @@ feature branch squash-merges to `main` at milestone close.**
    - **Plan (high complexity only)** — if `complexity: high`, a fresh-context
      plan-writer drafts an outline sidecar at `specs/.handoffs/T-NNN-OUTLINE.md`
      (gitignored) before any code. `OUTLINE FAILED` → refine the ticket.
-3. **Implement** (the run-task `in-progress` phase) — the main conversation
-   IS the developer (never a developer-subagent). Surgical changes only,
+3. **Implement** (the run-task `in-progress` phase) — exactly one developer
+   owns the ticket: the main conversation, or one fresh subagent that an
+   orchestrating root dispatches for this ticket's whole lifecycle (START
+   through the done follow-up). A delegated developer never spawns another
+   developer. The orchestrator only sequences tickets and checks reports; it
+   never edits the ticket's files, stages paths, invokes review CLIs,
+   transcribes verdicts, bypasses gates or runs two tickets at once. Reviewer
+   dispatch and gates are unchanged. Surgical changes only,
    within `files_budget`. For `privacy_critical: true` tasks: **tests first**
    (Constitution Principle VII, no AI exception) — the test must exist and be
    failing before the implementation lands. For a new behavior or fix, stage

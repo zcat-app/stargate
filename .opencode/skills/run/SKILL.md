@@ -47,7 +47,14 @@ its reviewer. If a reviewer cannot write its file, surface that failure.
 
 ## Tool bindings
 
-The root is the developer; no developer subagent. Review dispatch is only
+Exactly one developer owns a ticket: the root session, or one fresh subagent
+an orchestrating root session dispatches for that ticket. A delegated developer
+runs every driver phase (START through the `docs: mark <id> done` follow-up)
+itself and never spawns another developer. The orchestrator sequences tickets
+and checks reports only: it does not edit the ticket's files, stage paths,
+invoke review CLIs, transcribe verdicts or bypass gates, and runs one ticket at
+a time. Whether a subagent can load this skill or spawn read-only agents
+depends on the environment; if it cannot load the skill, it follows this file. Review dispatch is only
 through `review-task.sh`; missing CLI/authentication, a partial set or a stale
 candidate fails closed. OpenCode deny rules are tool controls. Codex runs
 without an OS sandbox and receives read-only inspection instructions; fresh

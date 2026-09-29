@@ -123,7 +123,8 @@ reviewer focus on.
 - For `complexity: high` or `privacy_critical: true`, record the **property
   map** in the ticket's §Analysis section — it is the durable record of *why*
   the acceptance is what it is. Low, non-privacy tickets skip it.
-- The **developer (main conversation)** does the analysis — you hold the
+- The **ticket's developer** (the main conversation, or its one delegated
+  developer subagent; workflow.md step 3) does the analysis — you hold the
   context. Fan out a read-only `Explore` subagent for the ground-truth survey
   when breadth helps, but the judgment and the property map are yours.
 
