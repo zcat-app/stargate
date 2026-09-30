@@ -68,6 +68,9 @@ recorded under the widened allowlist.
 | 2026-09-30 | T193 | 2 (escalated at cap) | ESCALATE (1 Major) | REWORK (2 Major, 2 Minor) |
 | 2026-09-30 | T193 | 3 (refine re-review; counter reset to 1) | REWORK (1 Major) | APPROVE (0) |
 | 2026-09-30 | T193 | 4 (refine round 2) | APPROVE (0) | APPROVE (0) |
+| 2026-09-30 | T194 | 1 | REWORK (1 Major) | APPROVE (0) |
+| 2026-09-30 | T194 | 2 | APPROVE-WITH-FIXES (1 Minor) | APPROVE (0) |
+| 2026-09-30 | T194 | 2 (post-fix re-review) | APPROVE (0) | APPROVE (1 Minor) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -112,6 +115,10 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-09-30 | T193 | 2 | Minor | Live-residue evidence not reachable from the review candidate (`target/` gitignored) | missed | found | fixed | live results quoted in ticket §Notes |
 | 2026-09-30 | T193 | 2 | Major | Early exit of a bounded call's direct child leaves a descendant holding stdout, so the read can stay open | missed | missed | fixed | earlier-round row for the round-3 Major below |
 | 2026-09-30 | T193 | 3 | Major | Early exit of a bounded call's direct child leaves a descendant holding stdout, so the read can stay open | found | dismissed | fixed | glm: "no known docker CLI/compose-plugin behavior exits while leaving a descendant holding stdout". Group KILL now runs whenever the call ends; `exec-early` stub cases (exit 20, no survivor) |
+| 2026-09-30 | T194 | 1 | Major | A rejection imported while final verification runs is deleted unconsumed when that verification fails or the candidate drifts, so the round cap / escalation can still be bypassed | found | missed | fixed | glm's round-1 falsification covered only the sequential and passing-verify race paths. Every invalidation now takes the gate lock and consumes a valid REWORK/ESCALATE first; S16g/S16h race cases |
+| 2026-09-30 | T194 | 1 | Minor | Review-history records are mis-framed when a verdict lacks a trailing newline (Codex `-o` output): the next `===` header is appended to its last line | missed | missed | fixed | found by the developer while consuming round 1 (no data lost, only framing). Both writers newline-terminate each file; S16i case |
+| 2026-09-30 | T194 | 2 | Minor | workflow.md and a run-task.sh comment claimed every review-state retirement holds the launcher lock; only invalidation does | found | missed | fixed | comment/doc fix items applied verbatim; same-round re-review |
+| 2026-09-30 | T194 | 2 (post-fix) | Minor | Superseded red record 1 is internally inconsistent: its patch should fail S16i but its output omits S16i | missed | found | false-positive | that patch's S16i fixture used `truncate -s -1` on a verdict ending in a blank line, which leaves a trailing newline, so S16i legitimately passed against it (the vacuity was why the red was re-recorded) |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -150,6 +157,19 @@ rounds 3–4 are the refined cycle (driver archives `T193-r1.verdict`,
 `T193-r2.verdict`). Durations were not measured. glm recommended aligning
 `init`'s `command -v timeout` detection with `status` (out of T193's scope);
 not a row, reported to the orchestrator.
+
+T194: round 1 astra REWORK (1 Major) / glm APPROVE; round 2 astra
+APPROVE-WITH-FIXES (1 doc Minor) / glm APPROVE, then a same-round re-review
+of the comment/doc fix: both APPROVE (glm 1 Minor, falsified). The first
+re-review launch failed closed because the GLM verdict had a malformed
+FINDINGS field; the launcher was re-run and no verdict was transcribed.
+Durations were not measured. Every imported set is in gitignored
+`target/runs/T194.review-history` (the round-1 records there show the
+framing defect fixed in round 2). glm's round-1 recommended follow-ups (not
+rows): after a COMMIT handoff, staging the requested paths changes the
+snapshot and forces a fresh review (pre-existing); `--reset` records a local
+date in `aborted_attempts` while the history uses UTC (cosmetic). Reported to
+the orchestrator.
 
 T188: round 1 astra REWORK / glm APPROVE (1 Minor); round 2 both APPROVE,
 then three same-round re-reviews of changed snapshots: a behaviour-neutral

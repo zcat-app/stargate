@@ -1,7 +1,7 @@
 ---
 id: T194
 title: 'Keep review rejections and red evidence when the candidate changes'
-status: in-review
+status: done
 created: 2026-09-30
 last_updated: 2026-09-30
 source: "maintainer decision 2026-09-30 session: driver defect observed live on T193 (round-1 REWORK deleted unarchived); scope extended to the single-red evidence overwrite seen on the same ticket"
@@ -31,7 +31,7 @@ spec_refs:
   - .specify/memory/review-loop.md
 decision_refs:
   - "Maintainer decision 2026-09-30: fix the driver so rejections stick and approvals expire, keep an append-only verdict history, make --reset archive first, and never silently overwrite a red evidence record; run after T193 and before T184"
-reviews: {}
+reviews: { round: 2, date: 2026-09-30, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
