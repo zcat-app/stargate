@@ -15,9 +15,9 @@
 |---|---|
 | pending | 33 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 186 |
+| done | 187 |
 | deferred | 5 |
 | **total** | **225** |
 
@@ -39,9 +39,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T193 | Gate scripts/subcommands/status in verify and bound its dock | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -59,7 +57,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_186 ticket(s) done._
+_187 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -247,3 +245,4 @@ _186 ticket(s) done._
 - T187 — Report pending or stale revocation; count only after DP ack
 - T188 — Detect and require private-window access for the extension
 - T192 — Allow a per-ticket developer subagent under an orchestrator
+- T193 — Gate scripts/subcommands/status in verify and bound its docker read

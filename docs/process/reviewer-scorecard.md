@@ -64,6 +64,10 @@ recorded under the widened allowlist.
 | 2026-09-30 | T187 | 1 | REWORK (2 Major) | APPROVE (3 Minor) |
 | 2026-09-30 | T187 | 2 | APPROVE-WITH-FIXES (1 Minor) | APPROVE (1 Minor) |
 | 2026-09-30 | T187 | 2 (post-fix re-review) | APPROVE (0) | APPROVE (1 Minor) |
+| 2026-09-30 | T193 | 1 (source: developer report; verdict files lost to driver defect) | REWORK (1 Major) | APPROVE (2 Minor) |
+| 2026-09-30 | T193 | 2 (escalated at cap) | ESCALATE (1 Major) | REWORK (2 Major, 2 Minor) |
+| 2026-09-30 | T193 | 3 (refine re-review; counter reset to 1) | REWORK (1 Major) | APPROVE (0) |
+| 2026-09-30 | T193 | 4 (refine round 2) | APPROVE (0) | APPROVE (0) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -98,6 +102,16 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-09-30 | T187 | 1 | Minor | New `scripts/subcommands/status` had no gate coverage (not in verify.sh shell-quality discovery; no contract test) | missed | found | partly fixed | stubbed-docker JUnit case now covers vocabulary and exit codes; verify.sh discovery is outside the 14-path budget (glm re-raised in round 2; astra recorded it as advisory) and was reported as a follow-up |
 | 2026-09-30 | T187 | 2 | Minor | Quickstart, data-model and comments claimed an in-flight delivery is never UNKNOWN, but a failed PENDING write leaves it UNKNOWN | found | missed | fixed | doc/comment-only APPROVE-WITH-FIXES; astra's text probe passes |
 | 2026-09-30 | T187 | 2 (post-fix) | Minor | `stargate status` has no timeout on its `docker compose exec` read; a daemon wedged after preflight blocks it without output | missed | found | follow-up | outside the 14-path budget; reported to the orchestrator with the verify.sh discovery item |
+| 2026-09-30 | T193 | 1 | Major | A child ignoring SIGTERM outlives the timeout in both `bounded` branches | found | missed | fixed | source: developer report; verdict files lost to driver defect. Group SIGKILL after a 1s grace; TERM-ignoring stub cases |
+| 2026-09-30 | T193 | 1 | Minor | `command -v timeout` accepts a non-GNU `timeout` that signals only its direct child | missed | found | fixed | source: developer report; verdict files lost to driver defect. GNU detected via `timeout --version`; non-GNU stub cases |
+| 2026-09-30 | T193 | 1 | Minor | The ticket raised its own files_budget (8 -> 9) inside the change under review | missed | found | overridden | source: developer report; verdict files lost to driver defect. Maintainer accepted the raise under the standing no-deferral rule (ticket §Notes) |
+| 2026-09-30 | T193 | 1 | Minor | `docker compose version` preflight unbounded | missed | missed | fixed | source: developer report; verdict files lost to driver defect. Earlier-round row for the round-2 Minor below |
+| 2026-09-30 | T193 | 2 | Major | Tests-first record did not evidence the discovery red: the retained red's pre-fix patch already contained the verify.sh fix | found | found | fixed | maintainer refine: red re-recorded against the untouched baseline (only the two test files staged), labelled a re-recording in ticket §Notes |
+| 2026-09-30 | T193 | 2 | Major | GNU-`timeout` branch: post-timeout `kill -KILL -- "-$tpid"` reported a no-op; mixed tree (direct child obeys SIGTERM, descendant ignores it) untested | missed | found | false-positive | a re-runnable `term=mixed` case now exercises it and passes on all three PATH variants; GNU `timeout` observed as its own process-group leader (pgid == its pid) |
+| 2026-09-30 | T193 | 2 | Minor | `docker compose version` preflight unbounded | missed | found | fixed | bounded like the other calls; `version` stub hang cases |
+| 2026-09-30 | T193 | 2 | Minor | Live-residue evidence not reachable from the review candidate (`target/` gitignored) | missed | found | fixed | live results quoted in ticket §Notes |
+| 2026-09-30 | T193 | 2 | Major | Early exit of a bounded call's direct child leaves a descendant holding stdout, so the read can stay open | missed | missed | fixed | earlier-round row for the round-3 Major below |
+| 2026-09-30 | T193 | 3 | Major | Early exit of a bounded call's direct child leaves a descendant holding stdout, so the read can stay open | found | dismissed | fixed | glm: "no known docker CLI/compose-plugin behavior exits while leaving a descendant holding stdout". Group KILL now runs whenever the call ends; `exec-early` stub cases (exit 20, no survivor) |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -123,6 +137,19 @@ field; the launcher was re-run and no verdict was transcribed. Durations were
 not measured. The round-2 pre-fix verdict archive was overwritten by the
 post-fix set; its rows above come from the imported verdicts as read in the
 session.
+
+T193: four review sets. Round 1's verdict files were deleted unarchived by
+`run-task.sh`'s `invalidate_reviews` when the developer changed the snapshot
+before re-invoking the driver, so its rows come from the developer's report
+(source: developer report; verdict files lost to driver defect); the
+maintainer authorised a hand correction of the round counter to 2. Round 2
+(archive preserved as gitignored `target/runs/T193-prerefine-r2.verdict`)
+escalated at the cap; astra also noted the prior-round verdict was absent
+from its handoff (driver defect, not a row). The maintainer chose refine;
+rounds 3–4 are the refined cycle (driver archives `T193-r1.verdict`,
+`T193-r2.verdict`). Durations were not measured. glm recommended aligning
+`init`'s `command -v timeout` detection with `status` (out of T193's scope);
+not a row, reported to the orchestrator.
 
 T188: round 1 astra REWORK / glm APPROVE (1 Minor); round 2 both APPROVE,
 then three same-round re-reviews of changed snapshots: a behaviour-neutral

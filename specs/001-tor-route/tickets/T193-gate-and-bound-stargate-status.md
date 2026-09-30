@@ -1,7 +1,7 @@
 ---
 id: T193
 title: 'Gate scripts/subcommands/status in verify and bound its docker read'
-status: in-review
+status: done
 created: 2026-09-30
 last_updated: 2026-09-30
 source: "maintainer decision 2026-09-30 session: remediate two gaps T187's reviewers flagged (orchestrator-verified in code) instead of deferring them"
@@ -36,7 +36,7 @@ spec_refs:
   - specs/001-tor-route/quickstart.md
 decision_refs:
   - "Maintainer decision 2026-09-30: file a focused T187 remediation ticket and run it before T184 (no deferral into T191)"
-reviews: {}
+reviews: { round: 2, date: 2026-09-30, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
