@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 34 |
+| pending | 33 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 186 |
 | deferred | 5 |
@@ -34,13 +34,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T191 | Resolve surviving deployment-area redteam minors and audit g | Foundation audit remediation | ✓ | ✓ |
-| T193 | Gate scripts/subcommands/status in verify and bound its dock | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T193 | Gate scripts/subcommands/status in verify and bound its dock | in-review | ✓ | Foundation audit remediation |
 
 ---
 

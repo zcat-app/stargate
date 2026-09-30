@@ -1100,6 +1100,160 @@ class StargateControlPlaneTest {
         }
     }
 
+    /**
+     * T193: a Docker daemon that stops answering must not hang the operator's
+     * {@code stargate status}. Each docker call it makes (compose version,
+     * info, compose ps, compose exec) is stubbed to hang, with GNU coreutils
+     * {@code timeout} on PATH, without it, and with a non-GNU one (both the
+     * portable watchdog), and with the hung process tree obeying SIGTERM,
+     * ignoring it, or mixed (the direct child obeys while a background
+     * descendant ignores it); the bound must not rely on a cooperative child.
+     * The hung stub also leaves a background descendant holding its stdout,
+     * and the exec stub prints {@code ACKNOWLEDGED(7)} before hanging. Each
+     * run must end within the bound plus the kill grace with exit 70 and the
+     * static message, claim no state, and leave none of the stub's processes
+     * alive. An exec whose direct child prints {@code ACKNOWLEDGED(7)} and
+     * fails at once, leaving a TERM-ignoring descendant holding its stdout,
+     * must end promptly as "state unavailable" (exit 20) with no survivor. Output goes to a file, so the wait below is the only bound. An
+     * invalid bound is refused.
+     * Every case runs; failures are reported together.
+     */
+    @Test
+    void statusCommandBoundsAHangingDockerCall() throws Exception {
+        Path repo = Path.of("").toAbsolutePath();
+        while (repo != null && !Files.isRegularFile(repo.resolve("scripts/stargate"))) {
+            repo = repo.getParent();
+        }
+        assertNotNull(repo, "repository root with scripts/stargate");
+        Path timeoutTool = Path.of("/usr/bin/timeout");
+        assertTrue(Files.isExecutable(timeoutTool), "coreutils timeout is needed to cover its branch");
+        Path stub = Files.createDirectories(tmp.resolve("hang-stub")).resolve("docker");
+        Files.writeString(stub, """
+                #!/bin/sh
+                hang() {
+                  [ "$STUB_TERM" = ignore ] && trap '' TERM
+                  [ "$1" = exec ] && echo 'ACKNOWLEDGED(7)'
+                  if [ "$STUB_TERM" = mixed ]; then
+                    (trap '' TERM; exec sleep 30) &
+                  else
+                    sleep 30 &
+                  fi
+                  echo "$!" >> "$STUB_PIDS"
+                  echo "$$" >> "$STUB_PIDS"
+                  exec sleep 30
+                }
+                # Direct child fails at once, leaving a TERM-ignoring
+                # descendant that holds its stdout.
+                early() {
+                  echo 'ACKNOWLEDGED(7)'
+                  (trap '' TERM; exec sleep 30) &
+                  echo "$!" >> "$STUB_PIDS"
+                  exit 1
+                }
+                case "$1" in
+                  info) [ "$STUB_HANG" = info ] && hang info; exit 0 ;;
+                  compose)
+                    case "$*" in
+                      *" version"*) [ "$STUB_HANG" = version ] && hang version; exit 0 ;;
+                      *" ps "*) [ "$STUB_HANG" = ps ] && hang ps; echo 0123abcd; exit 0 ;;
+                      *" exec "*)
+                        [ "$STUB_HANG" = exec ] && hang exec
+                        [ "$STUB_HANG" = exec-early ] && early
+                        echo PENDING; exit 0 ;;
+                    esac ;;
+                esac
+                exit 0
+                """);
+        stub.toFile().setExecutable(true);
+        // The portable PATH has no `timeout`: only the stub and what the
+        // watchdog and stub need.
+        Path bare = Files.createDirectories(tmp.resolve("hang-bare"));
+        Files.createSymbolicLink(bare.resolve("docker"), stub);
+        for (String tool : List.of("bash", "sleep")) {
+            Path real = Path.of("/usr/bin", tool);
+            Files.createSymbolicLink(bare.resolve(tool), Files.isExecutable(real) ? real : Path.of("/bin", tool));
+        }
+        // A non-GNU `timeout` (busybox-like; this one does not bound at all)
+        // must not be trusted: the watchdog has to bound the call instead.
+        Path otherTimeout = Files.createDirectories(tmp.resolve("hang-other-timeout"));
+        for (Path entry : List.of(bare.resolve("docker"), bare.resolve("bash"), bare.resolve("sleep"))) {
+            Files.createSymbolicLink(otherTimeout.resolve(entry.getFileName()), Files.readSymbolicLink(entry));
+        }
+        Path fakeTimeout = otherTimeout.resolve("timeout");
+        Files.writeString(fakeTimeout, """
+                #!/bin/sh
+                [ "$1" = --version ] && { echo 'timeout (BusyBox-like, child-only)'; exit 0; }
+                shift
+                exec "$@"
+                """);
+        fakeTimeout.toFile().setExecutable(true);
+        String withTimeout = stub.getParent() + ":/usr/bin:/bin";
+        record Case(String path, String hang, String term, String bound, int exit, String shows) { }
+        List<Case> cases = new ArrayList<>();
+        for (String term : List.of("ignore", "mixed", "default")) {
+            for (String path : List.of(withTimeout, bare.toString(), otherTimeout.toString())) {
+                for (String hang : List.of("exec", "ps", "info", "version")) {
+                    cases.add(new Case(path, hang, term, "2", 70, "Docker did not answer within 2s"));
+                }
+            }
+        }
+        for (String path : List.of(withTimeout, bare.toString(), otherTimeout.toString())) {
+            cases.add(new Case(path, "exec-early", "default", "2", 20, "state unavailable"));
+        }
+        cases.add(new Case(withTimeout, "none", "default", "0", 2, "STARGATE_STATUS_TIMEOUT"));
+        cases.add(new Case(withTimeout, "none", "default", "5s", 2, "STARGATE_STATUS_TIMEOUT"));
+        cases.add(new Case(bare.toString(), "none", "default", "2", 30, "PENDING"));
+        List<String> failures = new ArrayList<>();
+        int n = 0;
+        for (Case c : cases) {
+            Path out = tmp.resolve("hang-" + n + ".out");
+            Path pids = tmp.resolve("hang-" + n++ + ".pids");
+            var pb = new ProcessBuilder("/bin/bash", repo.resolve("scripts/stargate").toString(), "status")
+                    .redirectErrorStream(true).redirectOutput(out.toFile());
+            pb.environment().put("PATH", c.path());
+            pb.environment().put("STUB_HANG", c.hang());
+            pb.environment().put("STUB_TERM", c.term());
+            pb.environment().put("STUB_PIDS", pids.toString());
+            pb.environment().put("STARGATE_STATUS_TIMEOUT", c.bound());
+            pb.environment().put("STARGATE_ENV_FILE", tmp.resolve("local.env").toString());
+            pb.environment().put("STARGATE_ENV_EXAMPLE", tmp.resolve("absent.env.example").toString());
+            Process process = pb.start();
+            // bound 2s + 1s kill grace + the watchdog's 1s poll, with slack.
+            boolean ended = process.waitFor(8, TimeUnit.SECONDS);
+            List<ProcessHandle> left = new ArrayList<>();
+            if (Files.exists(pids)) {
+                for (String line : Files.readAllLines(pids)) {
+                    ProcessHandle.of(Long.parseLong(line.trim())).ifPresent(left::add);
+                }
+            }
+            // A KILLed orphan is reaped by init asynchronously: allow 2s.
+            long reapDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            left.removeIf(h -> !h.isAlive());
+            while (!left.isEmpty() && System.nanoTime() < reapDeadline) {
+                Thread.sleep(50);
+                left.removeIf(h -> !h.isAlive());
+            }
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
+            process.destroyForcibly();
+            left.forEach(ProcessHandle::destroyForcibly);
+            String text = Files.readString(out, StandardCharsets.UTF_8);
+            if (!ended) {
+                failures.add(c + " did not end within the bound -> " + text);
+                continue;
+            }
+            if (process.exitValue() != c.exit() || !text.contains(c.shows())) {
+                failures.add(c + " exit " + process.exitValue() + " -> " + text);
+            }
+            if ((c.exit() == 70 || c.exit() == 20) && (text.contains("PENDING") || text.contains("ACKNOWLEDGED"))) {
+                failures.add(c + " an unavailable read claimed state -> " + text);
+            }
+            if (!left.isEmpty()) {
+                failures.add(c + " left stub processes alive: " + left);
+            }
+        }
+        assertTrue(failures.isEmpty(), String.join("\n", failures));
+    }
+
     /** T187: the production status file is CP-private, never in the DP-shared IPC volume. */
     @Test
     void deliveryStatusPathIsOutsideSharedIpcVolume() {

@@ -46,6 +46,14 @@
 #   40  STALE_CONFLICT
 #   50  UNKNOWN
 #   60  unrecognised state content (refused, not echoed)
+#   70  Docker did not answer within STARGATE_STATUS_TIMEOUT seconds
+#       (default 10) on one of its calls; nothing is claimed about delivery
+#
+# BOUNDED (T193): every docker call after the PATH check (compose version,
+# info, compose ps, compose exec) is bounded the way `init` bounds its probe — GNU coreutils
+# `timeout`, else a bash watchdog — with a SIGKILL of the whole process group
+# 1s after the SIGTERM, so a daemon that stops answering yields exit 70 and a
+# static message instead of a silent hang.
 #
 # No outbound network: only the local Docker daemon socket (Constitution III).
 
@@ -74,6 +82,9 @@ EXIT_PENDING=30
 EXIT_STALE_CONFLICT=40
 EXIT_UNKNOWN=50
 EXIT_UNRECOGNISED=60
+EXIT_TIMEOUT=70
+
+: "${STARGATE_STATUS_TIMEOUT:=10}"   # seconds, per Docker call
 
 say() { printf '%s\n' "$*" >&2; }
 
@@ -84,8 +95,75 @@ Usage: stargate status
 Print the control plane's current token-delivery state:
 ACKNOWLEDGED(<generation>), PENDING, STALE_CONFLICT or UNKNOWN.
 Exit codes: 0 acknowledged, 10 preflight, 20 state unavailable,
-30 pending, 40 stale conflict, 50 unknown, 60 unrecognised.
+30 pending, 40 stale conflict, 50 unknown, 60 unrecognised,
+70 Docker did not answer in time.
+Environment: STARGATE_STATUS_TIMEOUT  seconds each Docker call may take
+(positive integer, default 10).
 EOF
+}
+
+# bounded CMD... — run CMD for at most STARGATE_STATUS_TIMEOUT seconds, then
+# SIGTERM its whole process group and, after a 1s grace, SIGKILL it: the
+# bound must not depend on the child obeying SIGTERM. Whenever CMD ends —
+# early or stopped — whatever is left of its process group is KILLed, so no
+# descendant outlives it holding the caller's command-substitution pipe.
+# Returns 124 when it stopped CMD (coreutils `timeout`'s timeout status).
+bounded() {
+  local start=$SECONDS rc
+  if [ "$_SG_GNU_TIMEOUT" = 1 ]; then
+    # GNU `timeout` runs in its own process group and signals all of it;
+    # `-k` adds the KILL while its child survives (a KILLed run exits 137,
+    # reported as the timeout it was). Once its child is gone — at the
+    # deadline or earlier — it stops, so any descendant still in that group
+    # (e.g. a TERM-ignoring one under the child bash of bounded_compose) is
+    # KILLed here.
+    local tpid
+    timeout -k 1 "$STARGATE_STATUS_TIMEOUT" "$@" &
+    tpid=$!
+    wait "$tpid"; rc=$?
+    if [ "$rc" -eq 137 ] && [ $((SECONDS - start)) -ge "$STARGATE_STATUS_TIMEOUT" ]; then
+      rc=124
+    fi
+    kill -KILL -- "-$tpid" 2>/dev/null
+    return "$rc"
+  fi
+  # No GNU `timeout` (stock macOS/BSD have none; busybox's signals only its
+  # direct child). `set -m` puts the job in its own process group so the
+  # whole group is signalled: a surviving descendant (the compose plugin, a
+  # stub's sleep) would otherwise keep the caller's command-substitution pipe
+  # open and the command would still hang.
+  (
+    set -m
+    "$@" &
+    pid=$! waited=0
+    while kill -0 "$pid" 2>/dev/null && [ "$waited" -lt "$STARGATE_STATUS_TIMEOUT" ]; do
+      sleep 1
+      waited=$((waited + 1))
+    done
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -TERM -- "-$pid" 2>/dev/null
+      sleep 1
+      kill -KILL -- "-$pid" 2>/dev/null
+      wait "$pid" 2>/dev/null
+      exit 124
+    fi
+    kill -KILL -- "-$pid" 2>/dev/null   # descendants of an early exit
+    wait "$pid"
+  )
+}
+
+# bounded_compose ARGS... — compose_run under the bound. `timeout` cannot run
+# a shell function, so a child bash sources the same lib and calls
+# compose_run: the project identity keeps its single source (lib/compose.sh).
+bounded_compose() {
+  # shellcheck disable=SC2016  # $1 expands in the child bash, by design.
+  bounded "${BASH:-bash}" -c '. "$1" && shift && compose_run "$@"' stargate-status \
+    "$_SG_STATUS_DIR/../lib/compose.sh" "$@"
+}
+
+timed_out() {
+  echo "token delivery: state unavailable (Docker did not answer within ${STARGATE_STATUS_TIMEOUT}s; nothing is claimed)"
+  exit "$EXIT_TIMEOUT"
 }
 
 case "${1:-}" in
@@ -94,21 +172,42 @@ case "${1:-}" in
   *) say "stargate status: takes no arguments."; usage >&2; exit 2 ;;
 esac
 
+# Validated at the edge: the watchdog compares it arithmetically, and
+# `timeout` would reject it only after preflight had begun.
+case "$STARGATE_STATUS_TIMEOUT" in
+  ''|0*|*[!0-9]*)
+    say "stargate status: STARGATE_STATUS_TIMEOUT must be a positive integer (seconds)."
+    exit 2 ;;
+esac
+
 # docker presence is checked FIRST (no PATH-dependent work before it).
 if ! command -v docker >/dev/null 2>&1; then
   say "docker not found on PATH."
   exit "$EXIT_PREFLIGHT"
 fi
-if ! docker compose version >/dev/null 2>&1; then
+
+# Only GNU coreutils `timeout` is trusted to bound a whole process tree.
+_SG_GNU_TIMEOUT=0
+case "$(timeout --version 2>/dev/null)" in
+  *"GNU coreutils"*) _SG_GNU_TIMEOUT=1 ;;
+esac
+
+bounded docker compose version </dev/null >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 124 ] && timed_out
+if [ "$rc" -ne 0 ]; then
   say "docker compose v2 plugin not available."
   exit "$EXIT_PREFLIGHT"
 fi
-if ! docker info >/dev/null 2>&1; then
+bounded docker info </dev/null >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 124 ] && timed_out
+if [ "$rc" -ne 0 ]; then
   say "Docker daemon unreachable (is the service running / your user in the docker group?)."
   exit "$EXIT_PREFLIGHT"
 fi
 
-if [ -z "$(compose_run ps -q --status running "$CONTROL_SERVICE" 2>/dev/null)" ]; then
+running="$(bounded_compose ps -q --status running "$CONTROL_SERVICE" </dev/null 2>/dev/null)"; rc=$?
+[ "$rc" -eq 124 ] && timed_out
+if [ -z "$running" ]; then
   echo "control plane: not running (token delivery state unavailable; the data plane keeps its last acknowledged state)"
   exit "$EXIT_UNAVAILABLE"
 fi
@@ -118,9 +217,11 @@ fi
 # "unavailable" and claims nothing. The exec's own diagnostics are dropped so
 # nothing but the validated vocabulary below reaches the terminal.
 # shellcheck disable=SC2016  # $1 expands inside the container's sh, by design.
-if ! state="$(compose_run exec -T "$CONTROL_SERVICE" sh -c \
+state="$(bounded_compose exec -T "$CONTROL_SERVICE" sh -c \
     'if [ -e "$1" ]; then cat -- "$1"; else echo ABSENT; fi' sh "$DELIVERY_STATUS_FILE" \
-    </dev/null 2>/dev/null)"; then
+    </dev/null 2>/dev/null)"; rc=$?
+[ "$rc" -eq 124 ] && timed_out
+if [ "$rc" -ne 0 ]; then
   echo "token delivery: state unavailable (the control plane's status could not be read; nothing is claimed)"
   exit "$EXIT_UNAVAILABLE"
 fi

@@ -129,19 +129,26 @@ fi
 # requires it — the policy is enforced here so a shellcheck-less CI run can
 # never claim GREEN on release-critical shell.
 #
-# Discovery (§Acceptance #4): every tracked *.sh under scripts/ (incl. the
-# agent-cli/ adapters) PLUS the named non-.sh shell entrypoints
-# (scripts/stargate, scripts/subcommands/init). scripts/subcommands/.keep
-# is excluded explicitly — it is a placeholder, not shell. A new shell file
-# added under scripts/ is gated automatically — no gate edit needed.
+# Discovery (§Acceptance #4; T193): every tracked *.sh under scripts/ (incl.
+# the agent-cli/ adapters), every tracked file under scripts/subcommands/
+# (the operator subcommands are extension-less shell, e.g. init, status), and
+# the named extension-less dispatcher scripts/stargate.
+# scripts/subcommands/.keep is excluded explicitly — it is a placeholder, not
+# shell. A new *.sh anywhere under scripts/ or a new subcommand is gated
+# automatically; any OTHER extension-less shell file under scripts/ needs
+# adding here by name. Each checked path is logged ("shell-quality
+# entrypoint: <path>") so coverage is auditable
+# (tests/contract/workflow/shell_quality_test.sh runs this block).
 if ! have bash; then
   record "shell-quality" SKIP "bash toolchain not installed"
 else
   mapfile -t _shell_files < <(
     git ls-files 'scripts/*.sh' 'scripts/**/*.sh' \
-                 scripts/stargate scripts/subcommands/init 2>/dev/null \
+                 scripts/stargate 'scripts/subcommands/*' 2>/dev/null \
       | grep -v '^scripts/subcommands/\.keep$' || true
   )
+  [ "${#_shell_files[@]}" -eq 0 ] \
+    || printf 'shell-quality entrypoint: %s\n' "${_shell_files[@]}" >>"$LOG"
   if [ "${#_shell_files[@]}" -eq 0 ]; then
     record "shell-quality" SKIP "no shell entrypoints under scripts/"
   else

@@ -136,6 +136,7 @@ scripts/stargate status
 | `STALE_CONFLICT` / 40 | The data plane refused the set because it already holds a newer generation (typically after the control-plane database was lost or restored from an older backup). Nothing was applied and it is not retried. Follow the recovery below. |
 | `UNKNOWN` / 50 | This control-plane process has published no delivery state: it started no delivery (`tokens.yaml` missing or invalid, or its state store unavailable), it is still starting, or its status write is failing. The control plane attempts to publish `PENDING` before each delivery starts; UNKNOWN can also occur while a delivery is in flight if status publication fails. Check `tokens.yaml`, restart `stargate-control`, and check again. |
 | exit 20 | State unavailable: the control plane is not running or its status could not be read. Nothing is claimed about delivery; the data plane keeps serving its last acknowledged state. |
+| exit 70 | Docker did not answer within `STARGATE_STATUS_TIMEOUT` seconds (default 10) on one of the command's calls; the command stops instead of hanging. Nothing is claimed about delivery. Check the Docker daemon, then run the command again. |
 
 The value is one current state kept in the control plane's private
 memory-backed `/tmp` (volatile, lost when its container stops); it
