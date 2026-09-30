@@ -9,7 +9,8 @@ Usage: test-first-evidence.py red|green TNNN -- command [args...]
 The red record retains the exact pre-fix diff and probe output. The green
 record binds the implemented source diff. This proves the evidence belongs to
 the candidate; a reviewer still judges whether the probe falsifies the spec
-property and whether a failure is merely missing tooling.
+property and whether a failure is merely missing tooling. A repeated red keeps
+every earlier red/green under "superseded"; it never silently replaces them.
 """
 
 import hashlib
@@ -74,6 +75,23 @@ def read_evidence(path):
         return json.loads(path.read_text())
     except (ValueError, UnicodeDecodeError) as exc:
         fail(f"invalid evidence JSON: {exc}")
+
+
+def earlier_records(path):
+    # T194: a repeated red never silently replaces the first. The earlier
+    # red (with any green it carried) is appended to "superseded", so the red
+    # that first demonstrated the property stays reviewable. An unreadable
+    # record is refused rather than overwritten.
+    if not path.exists():
+        return []
+    try:
+        old = json.loads(path.read_text())
+    except (ValueError, UnicodeDecodeError) as exc:
+        fail(f"existing evidence is unreadable; refusing to overwrite it: {exc}")
+    if not isinstance(old, dict) or not isinstance(old.get("superseded", []), list):
+        fail("existing evidence is malformed; refusing to overwrite it")
+    kept = {key: old[key] for key in ("baseline", "red", "green") if key in old}
+    return [*old.get("superseded", []), *([kept] if kept else [])]
 
 
 def validate_red(record, ticket, base):
@@ -152,6 +170,9 @@ def main():
         record = {"schema": 1, "ticket": ticket, "baseline": base,
                   "red": {"patch": patch.decode(errors="surrogateescape"), "snapshot_sha256": digest(patch),
                           "command": command, "exit_code": code, "output": output}}
+        superseded = earlier_records(evidence_path)
+        if superseded:
+            record["superseded"] = superseded
         evidence_path.parent.mkdir(parents=True, exist_ok=True)
         evidence_path.write_text(json.dumps(record, indent=2) + "\n")
     else:

@@ -215,9 +215,19 @@ run_actual() {
     exit 1
   fi
 
+  # T194: rejections stick. An imported REWORK or ESCALATE the driver has not
+  # consumed yet (round advance or escalation) is never retired by a relaunch.
+  for output in "${REVIEWER_OUTPUTS[@]}"; do
+    if [ -f "$RUN_DIR/$output" ] && grep -Eq '^VERDICT:[[:space:]]*(REWORK|ESCALATE)[[:space:]]*$' "$RUN_DIR/$output"; then
+      echo "review-task: unconsumed rejection in $RUN_DIR/$output; run scripts/run-task.sh $TICKET_ID first" >&2
+      exit 1
+    fi
+  done
+
   # A new launch retires any previous approval set first: a failed rerun must
   # never leave stale verdicts + manifest standing for an unchanged tree the
-  # driver could still commit on.
+  # driver could still commit on. Approvals expire; each was archived to the
+  # per-ticket history when it was imported.
   rm -f "$RUN_DIR/$TICKET_ID.review-set"
   for output in "${REVIEWER_OUTPUTS[@]}"; do rm -f "$RUN_DIR/$output"; done
 
@@ -307,6 +317,17 @@ run_actual() {
       sha256sum "$RUN_DIR/$output" | sed "s#  $RUN_DIR/#  #"
     done
   } > "$ROOT_TMP/review-set"
+  # T194: append-only history, written before the manifest so no set is ever
+  # imported without its record. Nothing in the driver deletes this file.
+  {
+    printf '=== %s %s round=%s event=imported\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$TICKET_ID" "$round"
+    printf -- '--- %s.review-set\n' "$TICKET_ID"
+    cat "$ROOT_TMP/review-set"
+    for output in "${REVIEWER_OUTPUTS[@]}"; do
+      printf -- '--- %s\n' "$output"
+      printf '%s\n' "$(cat "$RUN_DIR/$output")"   # Codex -o output lacks a final newline
+    done
+  } >> "$RUN_DIR/$TICKET_ID.review-history"
   mv "$ROOT_TMP/review-set" "$manifest"
   echo "review-task: imported two isolated single-gate verdicts for $TICKET_ID"
 }

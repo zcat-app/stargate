@@ -231,7 +231,34 @@ done
 grep -q '^GATE: review$' "$ACTUAL/target/runs/T900.review-set" || bail "manifest is not the single gate"
 [ "$(cat "$ACTUAL/candidate.txt")" = "after" ] || bail "production path modified the live candidate"
 
+[ "$(grep -c '^VERDICT: APPROVE$' "$ACTUAL/target/runs/T900.review-history" 2>/dev/null)" = 2 ] ||
+  bail "T194: import did not append both verdicts to the per-ticket review history"
+
 cp -a "$ACTUAL" "$SANDBOX/gate-approved"
+
+# T194: an imported, unconsumed REWORK is never retired by a relaunch; the
+# driver must consume it (round advance) first. Approvals still retire.
+case_dir="$SANDBOX/sticky-rework"
+cp -a "$SANDBOX/gate-approved" "$case_dir"
+result="$({
+  cd "$case_dir" || exit 1
+  PATH="$ACTUAL/fake-bin:$PATH" STARGATE_FIXTURE_VERDICT=REWORK bash scripts/review-task.sh T900
+} 2>&1)"
+[ "$?" -eq 0 ] || bail "T194: REWORK import over an approval failed: $result"
+result="$({
+  cd "$case_dir" || exit 1
+  PATH="$ACTUAL/fake-bin:$PATH" bash scripts/review-task.sh T900
+} 2>&1)"
+[ "$?" -ne 0 ] || bail "T194: relaunch retired an unconsumed REWORK"
+grep -q '^VERDICT: REWORK$' "$case_dir/target/runs/T900.review-glm.verdict" 2>/dev/null ||
+  bail "T194: unconsumed REWORK verdict was removed by a relaunch"
+[ -s "$case_dir/target/runs/T900.review-set" ] || bail "T194: unconsumed REWORK manifest was removed by a relaunch"
+[ "$(grep -c '^VERDICT: REWORK$' "$case_dir/target/runs/T900.review-history" 2>/dev/null)" = 2 ] ||
+  bail "T194: REWORK import missing from history"
+(cd "$case_dir" && bash scripts/run-task.sh T900 >/dev/null 2>&1)
+grep -q '^status: in-progress' "$case_dir/specs/001-fixture/tickets/T900-fixture.md" ||
+  bail "T194: driver did not consume the preserved REWORK"
+[ "$(cat "$case_dir/target/runs/T900.round")" = 2 ] || bail "T194: preserved REWORK did not advance the round"
 
 # Each private output directory is a constrained import channel: an unexpected
 # directory or symlink must reject the whole set, not be ignored because it is

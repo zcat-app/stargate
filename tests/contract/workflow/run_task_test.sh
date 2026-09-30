@@ -842,11 +842,202 @@ gate_verdict T349 APPROVE
 run_task T349
 assert '[ "$(fm_field specs/001-testfeat/tickets/T349-fixture.md status)" = done ] && [ "$(verify_runs)" = 2 ]' "S15: a code edit re-runs verify at APPROVE (runs: $(verify_runs))"
 
+# ===========================================================================
+# Scenario 16 (T194): a changed candidate invalidates approvals; it never
+# erases an imported REWORK or ESCALATE. Every discarded set is archived in
+# the append-only per-ticket history; --reset archives first and is recorded.
+# ===========================================================================
+t194_fixture() {
+  setup_sandbox "$1"
+  write_ticket T394 "rejections stick" false in-review >/dev/null
+  commit_all "add T394 ticket"
+  git checkout -q -b 001-testfeat main
+  printf 'first\n' > c.txt
+  git add c.txt
+  mkdir -p target/runs
+  run_task T394
+}
+T394_TICKET=specs/001-testfeat/tickets/T394-fixture.md
+
+# (a) REWORK imported, candidate changed, driver re-invoked.
+t194_fixture s16a
+gate_verdict T394 REWORK 'T194-REWORK-ITEM'
+echo changed >> c.txt; git add c.txt
+run_task T394
+assert '[ "$(fm_field "$T394_TICKET" status)" = in-progress ]' "S16a: changed candidate still consumes REWORK (status in-progress)"
+assert '[ "$(cat target/runs/T394.round)" = 2 ]' "S16a: REWORK advances the round despite the change"
+assert 'grep -q T194-REWORK-ITEM target/runs/T394-r1.verdict 2>/dev/null' "S16a: REWORK archived for the next round"
+assert 'grep -q T194-REWORK-ITEM target/runs/T394.review-history 2>/dev/null' "S16a: REWORK kept in the append-only history"
+assert '! grep -q "(REVIEW, round 1)" target/runs/T394.prompt 2>/dev/null' "S16a: no fresh round-1 review handoff"
+[[ "$rt_out" != *'(REVIEW, round 1)'* ]] || bail "S16a: driver emitted a fresh same-round review"
+
+# (a') REWORK at the cap with a changed candidate escalates as before.
+t194_fixture s16a-cap
+echo 2 > target/runs/T394.round
+rm -f target/runs/T394.review-snapshot
+run_task T394
+gate_verdict T394 REWORK 'T194-CAP-ITEM'
+echo changed >> c.txt; git add c.txt
+run_task T394
+assert '[ "$(fm_field "$T394_TICKET" status)" = escalated ]' "S16a-cap: REWORK at cap escalates despite the change"
+assert 'grep -q T194-CAP-ITEM target/runs/T394.review-history 2>/dev/null' "S16a-cap: capped REWORK in history"
+
+# (b) ESCALATE imported, candidate changed.
+t194_fixture s16b
+gate_verdict T394 ESCALATE 'T194-ESCALATE-ITEM'
+echo changed >> c.txt; git add c.txt
+run_task T394
+assert '[ "$rt_rc" -ne 0 ]' "S16b: ESCALATE stops"
+assert '[ "$(fm_field "$T394_TICKET" status)" = escalated ]' "S16b: changed candidate still escalates"
+assert 'grep -q T194-ESCALATE-ITEM target/runs/T394.review-history 2>/dev/null' "S16b: ESCALATE kept in history"
+
+# (c) APPROVE imported, candidate changed: archived, expired, never committed.
+t194_fixture s16c
+gate_verdict T394 APPROVE 'T194-APPROVE-ITEM'
+echo changed >> c.txt; git add c.txt
+before="$(git rev-parse HEAD)"
+run_task T394
+assert '[ "$rt_rc" -ne 0 ]' "S16c: expired approval refuses"
+assert '[ "$(git rev-parse HEAD)" = "$before" ]' "S16c: expired approval cannot commit"
+assert '[ "$(fm_field "$T394_TICKET" status)" = in-review ]' "S16c: status stays in-review"
+assert '[ ! -e target/runs/T394.review-set ]' "S16c: approval expired"
+assert 'grep -q T194-APPROVE-ITEM target/runs/T394.review-history 2>/dev/null' "S16c: expired approval archived"
+
+# (d) --reset preserves prior verdicts in history and records itself.
+t194_fixture s16d
+gate_verdict T394 REWORK 'T194-RESET-ITEM'
+run_task T394 --reset
+assert '[ "$rt_rc" -eq 0 ]' "S16d: reset succeeds"
+assert 'grep -q T194-RESET-ITEM target/runs/T394.review-history 2>/dev/null' "S16d: reset archives the verdicts first"
+assert 'grep -Eq "^aborted_attempts: \[.*run-task --reset" "$T394_TICKET"' "S16d: reset recorded in aborted_attempts"
+gate_verdict T394 APPROVE 'T194-SECOND-SET'
+run_task T394 --reset
+assert 'grep -q T194-RESET-ITEM target/runs/T394.review-history 2>/dev/null && grep -q T194-SECOND-SET target/runs/T394.review-history' \
+  "S16d: history is append-only across resets"
+assert '[ "$(grep -o "run-task --reset" "$T394_TICKET" | wc -l)" = 2 ]' "S16d: each reset recorded"
+
+# (e) Round >= 2 with the prior archive missing: the handoff says so.
+setup_sandbox s16e
+write_ticket T395 "missing prior archive" false in-review >/dev/null
+commit_all "add T395 ticket"
+git checkout -q -b 001-testfeat main
+printf 'x\n' > e.txt; git add e.txt
+mkdir -p target/runs
+echo 2 > target/runs/T395.round
+run_task T395
+[[ "$rt_out" = *'prior round verdict: UNAVAILABLE'* ]] || bail "S16e: missing prior verdict must be stated in the handoff"
+
+# (f) A second red never silently replaces the first red record.
+setup_sandbox s16f
+write_ticket T396 "red evidence kept" true in-progress >/dev/null
+sed -i 's/^test_for: \[T999\]$/test_for: []/' specs/001-testfeat/tickets/T396-fixture.md
+commit_all "add T396 ticket"
+git checkout -q -b 001-testfeat main
+mkdir -p target/runs
+git rev-parse HEAD > target/runs/T396.start-sha
+printf 'spec test\n' > t396_test.txt
+git add t396_test.txt
+python3 scripts/test-first-evidence.py red T396 -- python3 -c 'print("T194-FIRST-RED property absent"); raise SystemExit(1)' >/dev/null 2>&1
+probe='from pathlib import Path; ok = Path("t396_impl.txt").exists(); print("T194-SECOND-RED property " + ("holds" if ok else "absent")); raise SystemExit(0 if ok else 1)'
+python3 scripts/test-first-evidence.py red T396 -- python3 -c "$probe" >/dev/null 2>&1
+T396_EVIDENCE=specs/001-testfeat/evidence/T396-tests-first.json
+assert 'grep -q T194-FIRST-RED "$T396_EVIDENCE" 2>/dev/null' "S16f: a second red keeps the first red record"
+printf 'fixed\n' > t396_impl.txt
+git add t396_impl.txt
+python3 scripts/test-first-evidence.py green T396 -- python3 -c "$probe" >/dev/null 2>&1
+git add "$T396_EVIDENCE"
+python3 scripts/test-first-evidence.py check T396 >/dev/null 2>&1
+t396_rc=$?
+assert '[ "$t396_rc" -eq 0 ]' "S16f: evidence with kept earlier reds still validates"
+assert 'grep -q T194-FIRST-RED "$T396_EVIDENCE"' "S16f: green keeps the earlier red record"
+
+# (g) A rejection imported while final verification runs is consumed even
+# when that verification fails or the candidate drifts afterwards; the
+# retirement paths never discard it unconsumed (T194 round-1 review).
+t194_race() {   # <tag> <replacement verdict> <fail|drift> <round>
+  setup_sandbox "$1"
+  write_ticket T397 "final verification race" false in-review >/dev/null
+  commit_all "add T397 ticket"
+  git checkout -q -b 001-testfeat main
+  cat > scripts/verify.sh <<'VSTUB'
+#!/bin/bash
+mkdir -p target
+echo "RESULT: GREEN" > target/verify.log
+if [ -f target/hold ]; then
+  : > target/holding
+  while [ ! -e target/release ]; do sleep 0.05; done
+  [ ! -f target/drift ] || echo drift >> g.txt
+  [ ! -f target/fail ] || exit 1
+fi
+exit 0
+VSTUB
+  chmod +x scripts/verify.sh
+  printf 'impl\n' > g.txt
+  git add scripts/verify.sh g.txt
+  mkdir -p target/runs
+  echo "$4" > target/runs/T397.round
+  run_task T397
+  gate_verdict T397 APPROVE
+  touch target/hold "target/$3"
+  bash scripts/run-task.sh T397 > target/race.log 2>&1 &
+  local pid=$! i
+  for i in $(seq 1 200); do [ -f target/holding ] && break; sleep 0.05; done
+  [ -f target/holding ] || bail "S16g-$1: driver never reached final verification"
+  # A concurrent launcher retires the approval and imports a rejection for
+  # the same candidate while verification is held.
+  rm -f target/runs/T397.review-set target/runs/T397.review-glm.verdict target/runs/T397.review-astra.verdict
+  gate_verdict T397 "$2" "T194-RACE-$2"
+  touch target/release
+  wait "$pid"; race_rc=$?
+}
+T397_TICKET=specs/001-testfeat/tickets/T397-fixture.md
+for race_mode in fail drift; do
+  t194_race "s16g-rework-$race_mode" REWORK "$race_mode" 1
+  assert '[ "$race_rc" -ne 0 ]' "S16g-rework-$race_mode: refuses commit"
+  assert '[ "$(git rev-list --count main..HEAD)" = 0 ]' "S16g-rework-$race_mode: no commit"
+  assert '[ "$(fm_field "$T397_TICKET" status)" = in-progress ]' "S16g-rework-$race_mode: REWORK consumed (in-progress)"
+  assert '[ "$(cat target/runs/T397.round)" = 2 ]' "S16g-rework-$race_mode: round advanced"
+  assert 'grep -q T194-RACE-REWORK target/runs/T397-r1.verdict 2>/dev/null' "S16g-rework-$race_mode: findings kept for round 2"
+  assert '! grep -q "(REVIEW, round 1)" target/runs/T397.prompt 2>/dev/null' "S16g-rework-$race_mode: no fresh same-round handoff"
+done
+t194_race s16g-rework-cap REWORK fail 2
+assert '[ "$(fm_field "$T397_TICKET" status)" = escalated ]' "S16g-rework-cap: capped REWORK escalates"
+assert '[ -s target/runs/T397.review-set ]' "S16g-rework-cap: reports preserved for the human decision"
+t194_race s16g-escalate ESCALATE fail 1
+assert '[ "$(fm_field "$T397_TICKET" status)" = escalated ]' "S16g-escalate: ESCALATE escalates"
+assert 'grep -q T194-RACE-ESCALATE target/runs/T397.review-history 2>/dev/null' "S16g-escalate: ESCALATE archived"
+
+# (h) While a launcher holds the gate lock, the driver never retires the set
+# it is about to replace; once the lock is released, the approval expires.
+t194_fixture s16h
+gate_verdict T394 APPROVE
+echo changed >> c.txt; git add c.txt
+mkdir target/runs/T394.review.lock
+run_task T394
+assert '[ "$rt_rc" -ne 0 ]' "S16h: driver refuses while a launch holds the gate lock"
+assert '[ -s target/runs/T394.review-set ]' "S16h: set left to the lock holder"
+rmdir target/runs/T394.review.lock
+run_task T394
+assert '[ ! -e target/runs/T394.review-set ]' "S16h: approval expires after the lock is released"
+
+# (i) Each history record starts on its own line, even when a verdict file
+# lacks a trailing newline (Codex -o output does).
+t194_fixture s16i
+gate_verdict T394 APPROVE
+for f in glm astra; do v="target/runs/T394.review-$f.verdict"; printf %s "$(cat "$v")" > "$v"; done
+review_manifest T394 "$(cat target/runs/T394.review-snapshot)" 1 \
+  T394.review-glm.verdict T394.review-astra.verdict
+echo changed >> c.txt; git add c.txt
+run_task T394 >/dev/null
+run_task T394 --reset
+assert 'grep -q "^=== .* event=invalidated$" target/runs/T394.review-history 2>/dev/null' "S16i: invalidated record framed on its own line"
+assert 'grep -q "^=== .* event=reset$" target/runs/T394.review-history 2>/dev/null' "S16i: reset record framed on its own line"
+
 # --- report ----------------------------------------------------------------
 if [ "${#errs[@]}" -gt 0 ]; then
   echo "FAIL: T096 run-task harness (${#errs[@]} finding(s)):" >&2
   for e in "${errs[@]}"; do echo "  - $e" >&2; done
   exit 1
 fi
-echo "OK: T096 workflow-driver regression harness (15 scenarios) — start, approve, single-gate review, commit, merge, dirty refusal, rework, lint, replacement race, gate lock, verify once"
+echo "OK: T096 workflow-driver regression harness (16 scenarios) — start, approve, single-gate review, commit, merge, dirty refusal, rework, lint, replacement race, gate lock, verify once, sticky rejections"
 exit 0

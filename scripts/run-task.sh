@@ -57,7 +57,9 @@
 #   scripts/run-task.sh T015              # drive ticket T015 one phase forward
 #   scripts/run-task.sh --next            # pick lowest runnable id, drive it
 #   scripts/run-task.sh T015 --merge      # in done: perform the squash-merge
-#   scripts/run-task.sh T015 --reset      # caution: reset round counter
+#   scripts/run-task.sh T015 --reset      # caution: reset round counter; archives
+#                                         # the review state to the append-only
+#                                         # history and records aborted_attempts
 
 set -euo pipefail
 
@@ -182,8 +184,53 @@ REVIEW_SNAPSHOT="$RUN_DIR/$TICKET_ID.review-snapshot"
 GREEN_CODE="$RUN_DIR/$TICKET_ID.green-code"
 AWF_FILE="$RUN_DIR/$TICKET_ID.awf-applied"      # sentinel: APPROVE-WITH-FIXES items applied (reviewer-prompt.md)
 PROMPT_FILE="$RUN_DIR/$TICKET_ID.prompt"
+# T194: append-only per-ticket record of every review set the driver discards
+# or consumes (review-task.sh appends each import). No driver path deletes or
+# truncates it; a same-user process deleting target/runs/ is outside this
+# protection, and the committed reviewer scorecard is the durable record.
+REVIEW_HISTORY="$RUN_DIR/$TICKET_ID.review-history"
+
+# record_history <event>: append the manifest and verdict files present now.
+record_history() {
+  local event="$1" path
+  {
+    printf '=== %s %s round=%s event=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$TICKET_ID" \
+      "$(cat "$ROUND_FILE" 2>/dev/null || echo 1)" "$event"
+    for path in "$REVIEW_SET" "${REVIEW_VERDICT_FILES[@]}"; do
+      [ -f "$path" ] || continue
+      printf -- '--- %s\n' "${path##*/}"
+      # Newline-terminate: Codex -o output has none, and the next record's
+      # header must start its own line.
+      printf '%s\n' "$(cat "$path")"
+    done
+  } >> "$REVIEW_HISTORY"
+}
 
 if [ "$RESET_ROUND" = "1" ]; then
+  # T194: a reset zeroes the round, so it is never silent. Record it in the
+  # ticket's aborted_attempts (refusing if that cannot be done), then archive
+  # the review state before anything is removed.
+  python3 - "$TICKET_PATH" "$(cat "$ROUND_FILE" 2>/dev/null || echo 1)" "$REVIEW_HISTORY" <<'PY'
+import datetime, re, sys
+path, round_number, history = sys.argv[1:]
+txt = open(path).read()
+m = re.match(r'^---\n(.*?\n)---\n', txt, re.DOTALL)
+if not m:
+    sys.exit('run-task: ticket has no frontmatter; refusing to reset')
+fm = m.group(1)
+entry = (f'{{ date: {datetime.date.today().isoformat()}, round: {round_number}, '
+         f'reason: "run-task --reset", history: {history} }}')
+line = re.search(r'^aborted_attempts:[ \t]*\[(.*)\][ \t]*(#.*)?$', fm, re.MULTILINE)
+if line:
+    inner = line.group(1).strip()
+    fm = fm[:line.start()] + f'aborted_attempts: [{inner + ", " if inner else ""}{entry}]' + fm[line.end():]
+elif re.search(r'^aborted_attempts:', fm, re.MULTILINE):
+    sys.exit('run-task: aborted_attempts is not a one-line list; refusing to reset')
+else:
+    fm += f'aborted_attempts: [{entry}]\n'
+open(path, 'w').write('---\n' + fm + '---\n' + txt[m.end():])
+PY
+  record_history reset
   rm -f "$ROUND_FILE" "$REVIEW_SNAPSHOT" "$AWF_FILE" \
     "$REVIEW_SET" "${REVIEW_VERDICT_FILES[@]}"
   # Reset is the documented manual-recovery entry: clear a gate lock stranded
@@ -416,9 +463,42 @@ verify_gate() {
   return 0
 }
 
+# consume_valid_rejection <rework-exit-code>: when the current set is a
+# complete, valid imported REWORK or ESCALATE for the snapshot it was issued
+# for (not the live candidate), act on it; act_on_rejection exits (T194).
+consume_valid_rejection() {
+  local snapshot verdict
+  [ -f "$REVIEW_SET" ] || return 0
+  snapshot="$(cat "$REVIEW_SNAPSHOT" 2>/dev/null || sed -n 's/^SNAPSHOT:[ \t]*//p' "$REVIEW_SET" | head -1)"
+  verdict="$(validate_review_set "$REVIEW_SET" "$snapshot" "${REVIEW_VERDICT_FILES[@]}" 2>/dev/null)" || return 0
+  case "$verdict" in
+    REWORK|ESCALATE) act_on_rejection "$verdict" "$1" ;;
+  esac
+}
+
+# Review-state invalidation goes through here. It holds the gate lock
+# review-task.sh imports under, so a set the launcher imports concurrently
+# (e.g. during final verification) cannot be deleted unseen; it consumes a
+# valid rejection instead of retiring it, so only approvals and invalid or
+# partial sets expire; and it archives whatever it removes (T194).
 invalidate_reviews() {
+  local owned_here=0
+  if [ "$GATE_LOCK_OWNED" != 1 ]; then
+    if ! mkdir "$RUN_DIR/$TICKET_ID.review.lock" 2>/dev/null; then
+      echo "run-task: a review set is being (re)launched for $TICKET_ID; leaving the review state to it. Re-invoke after it finishes." >&2
+      return 0
+    fi
+    GATE_LOCK_OWNED=1
+    owned_here=1
+  fi
+  consume_valid_rejection 1
+  record_history invalidated
   rm -f "$REVIEW_SET" "$REVIEW_SNAPSHOT" "$AWF_FILE" "$PROMPT_FILE" "${REVIEW_VERDICT_FILES[@]}"
-  echo "run-task: reviewed snapshot changed; a fresh single-gate review set is required." >&2
+  echo "run-task: reviewed snapshot changed or the set is unusable; any approval expired (archived in $REVIEW_HISTORY); a fresh single-gate review set is required." >&2
+  if [ "$owned_here" = 1 ]; then
+    rmdir "$RUN_DIR/$TICKET_ID.review.lock" 2>/dev/null || true
+    GATE_LOCK_OWNED=0
+  fi
 }
 
 any_file_exists() {
@@ -487,6 +567,66 @@ combined_verdicts() {
     printf '%s\n' "--- reviewer verdict: $(basename "$path")"
     cat "$path"
   done
+}
+
+# act_on_rejection <REWORK|ESCALATE> <rework-exit-code>: consume a complete,
+# valid imported rejection. Constitution VIII: a changed candidate invalidates
+# approvals, never a rejection, so this runs before any check that could clear
+# the set; editing the candidate before re-invoking cannot bypass the round
+# cap or the escalation stop (T194).
+act_on_rejection() {
+  local verdict="$1" rework_rc="$2" body
+  body="$(combined_verdicts "${REVIEW_VERDICT_FILES[@]}")"
+  # The NEXT round's reviewers need this round's FINDINGS + EVALUATED-AS
+  # probes to run the disposition protocol (reviewer-prompt.md).
+  printf '%s\n' "$body" > "$RUN_DIR/$TICKET_ID-r${ROUND}.verdict"
+  record_history "consumed-$verdict"
+  if [ "$verdict" = ESCALATE ]; then
+    echo "run-task: ESCALATE on $TICKET_ID (round $ROUND). Surfacing menu." >&2
+    update_ticket_status "escalated"
+    cat >&2 <<EOF
+
+$body
+
+---
+
+Escalation menu (workflow.md §"Escalation menu"). The user decides; the
+agent never picks. Reply with one of:
+
+  1. refine     — acceptance was ambiguous; rewrite the ticket, restart from pending
+  2. override   — reviewer was too strict; record why and approve
+  3. decompose  — split into smaller tickets; defer this one
+  4. defer      — blocked on new work; file the blocker, pause this one
+  5. amend      — the spec or Constitution itself is wrong (amend-spec / amend-constitution)
+
+To resume after a refine/override, edit the ticket file accordingly, run
+\`scripts/run-task.sh $TICKET_ID --reset\`, then re-invoke.
+EOF
+    exit 1
+  fi
+  if [ "$ROUND" -ge "$ROUND_CAP" ]; then
+    echo "run-task: REWORK round $ROUND = cap ($ROUND_CAP) on $TICKET_ID. Escalating." >&2
+    update_ticket_status "escalated"
+    # Preserve the reviewer reports and manifest for the human decision.
+    exit 1
+  fi
+  # Bump round counter, transition back to in-progress for the rework. The
+  # consumed set is archived above; clear it without invalidate_reviews'
+  # expiry message, which would misreport this deliberate round transition.
+  ROUND=$((ROUND + 1))
+  echo "$ROUND" > "$ROUND_FILE"
+  rm -f "$REVIEW_SET" "$REVIEW_SNAPSHOT" "$AWF_FILE" "$PROMPT_FILE" "${REVIEW_VERDICT_FILES[@]}"
+  update_ticket_status "in-progress"
+  cat <<EOF
+
+run-task: REWORK round $ROUND for $TICKET_ID. Address ONLY the named items
+in the verdict below; do not re-architect. Re-run scripts/verify.sh, then
+re-invoke this script.
+
+$body
+
+EOF
+  exit "$rework_rc"
 }
 
 review_trailers() {
@@ -687,6 +827,9 @@ EOF
     ;;
 
   in-review)
+    # T194: consume an imported rejection before any check below can clear
+    # it. It binds the snapshot it was issued for, not the live candidate.
+    consume_valid_rejection 0
     check_inventory || exit 1
     check_test_first_evidence || exit 1
     # Phase: emit the single-gate REVIEW handoff OR act on the manifest-complete
@@ -722,9 +865,14 @@ COUNT
       VERIFY_RESULT="$( (grep '^RESULT:' "$VERIFY_LOG" 2>/dev/null | tail -1) || true)"
       OOS_BLOCK="$( (sed -n '/^## Out-of-scope/,/^## /p' "$TICKET_PATH" | sed '1d;$d' | sed '/^$/d' | head -12) || true)"
       PRIOR_BLOCK=""
-      if [ "$ROUND" -ge 2 ] && [ -f "$RUN_DIR/$TICKET_ID-r$((ROUND-1)).verdict" ]; then
-        PRIOR_BLOCK="$(cat "$RUN_DIR/$TICKET_ID-r$((ROUND-1)).verdict"
+      PRIOR_FILE="$RUN_DIR/$TICKET_ID-r$((ROUND-1)).verdict"
+      if [ "$ROUND" -ge 2 ] && [ -f "$PRIOR_FILE" ]; then
+        PRIOR_BLOCK="$(cat "$PRIOR_FILE"
 printf '%s\n' "--- end of prior verdict — you MUST run the round-disposition protocol over every item above")"
+      elif [ "$ROUND" -ge 2 ]; then
+        # T194: never omit a missing prior verdict silently.
+        PRIOR_BLOCK="UNAVAILABLE — the round $((ROUND-1)) verdict archive ($PRIOR_FILE) is missing.
+  The prior round's findings cannot be supplied; state this limitation and review the full diff."
       fi
       REPORT_BLOCK="diff base:     $BASE_SHA   (git diff <base> is the review scope)
 diffstat:      ${STAT_LINE:-unknown}
@@ -732,9 +880,14 @@ files touched: ${FILES_TOUCHED:-unknown} of files_budget=${BUDGET:-?} → $BUDGE
 verify log:    $VERIFY_LOG last written ${VERIFY_FRESH:-unknown} — ${VERIFY_RESULT:-no RESULT line yet}
 out-of-scope (ticket §Out-of-scope, abridged):
 $(printf '%s' "$OOS_BLOCK" | sed 's/^/  /')"
-      [ -n "$PRIOR_BLOCK" ] && REPORT_BLOCK="$REPORT_BLOCK
+      if [ -n "$PRIOR_BLOCK" ] && [ -f "$PRIOR_FILE" ]; then
+        REPORT_BLOCK="$REPORT_BLOCK
 prior round verdict (items + EVALUATED-AS probes):
 $(printf '%s' "$PRIOR_BLOCK" | sed 's/^/  /')"
+      elif [ -n "$PRIOR_BLOCK" ]; then
+        REPORT_BLOCK="$REPORT_BLOCK
+prior round verdict: $PRIOR_BLOCK"
+      fi
       review_snapshot > "$REVIEW_SNAPSHOT"
       cat <<EOF | emit_prompt REVIEW
 Run the single-gate reviewer set against $TICKET_ID (workflow.md §"The flow" step 4):
@@ -787,11 +940,11 @@ EOF
       invalidate_reviews
       exit 1
     fi
+    case "$GATE_VERDICT" in
+      REWORK|ESCALATE) act_on_rejection "$GATE_VERDICT" 0 ;;
+    esac
     VERDICT_BODY="$(combined_verdicts "${REVIEW_VERDICT_FILES[@]}")"
-    # Archive per round: the NEXT round's reviewer needs this round's
-    # FINDINGS + EVALUATED-AS probes to run the disposition protocol
-    # (reviewer-prompt.md §"Round disposition"). Diffstats alone can't
-    # carry rework items.
+    # Archive per round (act_on_rejection archives rejections itself).
     printf '%s\n' "$VERDICT_BODY" > "$RUN_DIR/$TICKET_ID-r${ROUND}.verdict"
     # APPROVE-WITH-FIXES (reviewer-prompt.md §Verdict): comment/doc-only FIX
     # ITEMS applied without burning a review round. Fail-closed via sentinel:
@@ -860,7 +1013,7 @@ EOF
       fi
       if [ "$GATE_FINAL" != "$GATE_VERDICT" ]; then
         echo "run-task: review set changed during final verification ($GATE_VERDICT -> $GATE_FINAL); refusing commit." >&2
-        invalidate_reviews
+        invalidate_reviews   # consumes a replacement REWORK/ESCALATE (T194)
         exit 1
       fi
 
@@ -906,55 +1059,9 @@ PY
       exit 0
     fi
 
-    if [ "$GATE_VERDICT" = ESCALATE ]; then
-      echo "run-task: ESCALATE on $TICKET_ID (round $ROUND). Surfacing menu." >&2
-      update_ticket_status "escalated"
-      cat >&2 <<EOF
-
-$VERDICT_BODY
-
----
-
-Escalation menu (workflow.md §"Escalation menu"). The user decides; the
-agent never picks. Reply with one of:
-
-  1. refine     — acceptance was ambiguous; rewrite the ticket, restart from pending
-  2. override   — reviewer was too strict; record why and approve
-  3. decompose  — split into smaller tickets; defer this one
-  4. defer      — blocked on new work; file the blocker, pause this one
-  5. amend      — the spec or Constitution itself is wrong (amend-spec / amend-constitution)
-
-To resume after a refine/override, edit the ticket file accordingly, run
-\`scripts/run-task.sh $TICKET_ID --reset\`, then re-invoke.
-EOF
-      exit 1
-    fi
-
-    # REWORK.
-    if [ "$ROUND" -ge "$ROUND_CAP" ]; then
-      echo "run-task: REWORK round $ROUND = cap ($ROUND_CAP) on $TICKET_ID. Escalating." >&2
-      update_ticket_status "escalated"
-      # Preserve the reviewer reports and manifest for the human decision.
-      exit 1
-    fi
-
-    # Bump round counter, transition back to in-progress for the rework.
-    # Clear the consumed set silently — invalidate_reviews' "snapshot changed"
-    # message would misreport this deliberate round transition.
-    ROUND=$((ROUND + 1))
-    echo "$ROUND" > "$ROUND_FILE"
-    rm -f "$REVIEW_SET" "$REVIEW_SNAPSHOT" "$AWF_FILE" "$PROMPT_FILE" "${REVIEW_VERDICT_FILES[@]}"
-    update_ticket_status "in-progress"
-    cat <<EOF
-
-run-task: REWORK round $ROUND for $TICKET_ID. Address ONLY the named items
-in the verdict below; do not re-architect. Re-run scripts/verify.sh, then
-re-invoke this script.
-
-$VERDICT_BODY
-
-EOF
-    exit 0
+    # Unreachable: rejections are consumed above.
+    echo "run-task: unexpected gate verdict '$GATE_VERDICT' for $TICKET_ID" >&2
+    exit 1
     ;;
 
   done)

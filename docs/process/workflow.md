@@ -182,6 +182,16 @@ feature branch squash-merges to `main` at milestone close.**
    The gate binds HEAD, baseline, worktree, index, round and the non-ignored
    source inventory. Changes invalidate all approvals, including changes
    during final verification. Legacy or partial verdict files cannot approve work.
+   **A changed candidate invalidates approvals; it never erases a REWORK, an
+   ESCALATE or a red record** (T194). The driver consumes an imported
+   rejection (round advance, or `escalated`) before any check that could
+   clear it, serializes review-state invalidation with the launcher's gate lock (so a
+   rejection imported during final verification is consumed, not deleted),
+   and the launcher refuses to retire an unconsumed one. Every
+   imported, consumed or discarded set is appended to the per-ticket
+   `target/runs/<id>.review-history`, which no driver path deletes; `--reset`
+   archives first and records itself in the ticket's `aborted_attempts`; a
+   round ≥ 2 handoff states explicitly when the prior verdict is missing.
    Every reviewer verdict must copy the handoff's exact `SNAPSHOT` and `ROUND`,
    each once. Missing, duplicate or mismatched identity, a partial set, or a
    delayed response to an older handoff is refused.
@@ -274,7 +284,9 @@ Preserve the spec-derived falsifier, failing command/result and pre-fix snapshot
 passing result and implemented snapshot. Tooling failure alone is not the intended red result.
 The durable per-ticket JSON under `specs/<feature>/evidence/` records the task baseline,
 pre-fix diff and probe result, and the staged implementation digest and passing result
-from the identical probe command. Capture and review reject source differences between
+from the identical probe command. A repeated `red` keeps every earlier red (and any green it
+carried) under `superseded`, so the first red that demonstrated the property is never
+silently replaced (T194). Capture and review reject source differences between
 the index and working tree, because Git commits the index while the probe runs against
 working files.
 `run-task.sh` rejects a missing record or mismatched baseline/source for privacy-critical

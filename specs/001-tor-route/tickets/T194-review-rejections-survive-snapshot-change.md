@@ -1,7 +1,7 @@
 ---
 id: T194
 title: 'Keep review rejections and red evidence when the candidate changes'
-status: pending
+status: in-review
 created: 2026-09-30
 last_updated: 2026-09-30
 source: "maintainer decision 2026-09-30 session: driver defect observed live on T193 (round-1 REWORK deleted unarchived); scope extended to the single-red evidence overwrite seen on the same ticket"
