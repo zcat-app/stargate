@@ -42,11 +42,15 @@ per that tier; JVM bytecode itself must always compare equal.
 selects a **byte-stable package manifest**: the same set of packages at the
 same versions every build (96 packages as of the T099 pin), including `tor`
 and its full link-time closure (`libssl3`, `libevent-2.1-7`, `zlib1g`,
-`libc6`). This is asserted at release cadence by
-`tests/reproducibility/tor_sidecar_manifest_test.sh` and is the load-bearing
-reproducibility guarantee (Constitution Principle IV). It holds because the
-Debian archive is pinned to an immutable `snapshot.debian.org` run with
-explicit `=version` pins (T099).
+`libc6`). The snapshot run and `=version` pins (T099) select it but do not
+hold it alone: snapshot InRelease files carry no Valid-Until, so an older
+signed index can be replayed over HTTP. T184 makes it hold: every build
+checks the snapshot InRelease hash and compares its installed closure with
+the committed per-arch `sidecars/tor/package-closure.lock`, failing on any
+difference. `tests/reproducibility/tor_sidecar_manifest_test.sh` asserts at
+release cadence that cold rebuilds equal that lock and that a tampered lock
+or replayed older index fails the build; this is the load-bearing
+reproducibility guarantee (Constitution Principle IV).
 
 **Tor package content — independently checked (T160/T177).** A package-name/version
 manifest alone cannot detect same-version replacement. The upgraded Tor

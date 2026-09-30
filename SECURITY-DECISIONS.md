@@ -41,6 +41,64 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-09-30 — Refuse rolled-back Debian snapshot metadata for the Tor image (T184)
+
+**Finding.** Redteam `20260929-002-tor-closure-index-rollback` (area 3 M1) survived
+falsification. `snapshot.debian.org` InRelease files for 20260714, 20251201 and 20240101
+carry no `Valid-Until`, and apt's `Max-ValidTime` defaults to 0. Over the plain-HTTP
+snapshot transport an on-path attacker can therefore serve an older, genuinely signed
+bookworm index at the pinned URL. The `=version` pins floor that replay only at Debian
+12.12 for the runtime stage: the 20251201 index still carries `ca-certificates
+20230311+deb12u1` and `netcat-openbsd 1.219-1` but `libssl3 3.0.17-1~deb12u2`
+instead of `3.0.20-1~deb12u2`. The A-versus-B reproducibility test passed such a
+consistent attacker. A signature authenticates origin, not freshness.
+
+**Decision.** Pin the reviewed metadata itself and the resulting closure, both committed in
+`sidecars/tor/package-closure.lock` (Constitution IV: refuse rolled-back metadata; failed
+verification leaves nothing built):
+
+- **InRelease hash.** The snapshot run `20260714T082229Z` InRelease (bookworm 12.15, Date
+  2026-07-11 10:16:37 UTC) has SHA-256
+  `77737fa4b34f2693e982cc9ee35736816c35a7778fc2d326cc1bbf5b301fe1aa`.
+  `sidecars/tor/verify-closure.sh inrelease` checks the stored file after every
+  `apt-get update` in both stages, before anything is installed from it; the runtime
+  stage re-checks after its second update because that update re-fetches the snapshot
+  index. apt has already verified the signature, and the InRelease binds every Packages
+  index and therefore every `.deb` hash. A missing InRelease (forced `Release` fallback)
+  also fails.
+- **Closure lock.** After the last install, `verify-closure.sh closure` requires every
+  installed package's name, version, package architecture and archive SHA-256 (as recorded
+  by the enabled, signature-verified indexes, or `base` when no index carries it) to equal
+  the image architecture's lock rows exactly; an identity two indexes record with different
+  hashes never matches. The Tor row equals `tor-packages.sha256`.
+
+The amd64 rows (96 packages) were printed inside a real amd64 build. No arm64 builder
+exists on the grounding host, so the arm64 rows were resolved by bookworm APT 2.6.1 from the
+same pinned indexes and the arm64 base image's dpkg status, mirroring the build's install
+steps; the same procedure reproduced the real amd64 rows exactly. The arm64 rows are not
+build-confirmed; a wrong row fails the arm64 build closed rather than admitting drift.
+
+**Supersession.** This supersedes the T099 text in the 2026-07-04 entry that the snapshot
+pin freezes the closure ("every build selects the SAME bytes") and that the missing
+`Valid-Until` needs no handling. Those statements held only without an on-path attacker.
+The rest of that entry, including its residual risks, stays in force; the closure still
+rides Debian's archive signing key, and the lock makes it auditable, not trustworthy.
+
+**Evidence and limits.** `tests/reproducibility/tor_sidecar_manifest_test.sh` compares
+two cold builds with the committed lock and runs two negative controls: a tampered lock row,
+and a loopback proxy that serves the genuine 12.15 index to stage 1 and the signed 12.12
+index under the pinned URL to stage 2. Before this change the replay built an image with
+`libssl3 3.0.17-1~deb12u2`; after it, both controls fail at the named T184 check
+(`specs/001-tor-route/evidence/T184-tests-first.json`). The structural gate is
+`tests/contract/security-decisions/tor_build_inputs_test.sh` (B7). Refresh stays a
+manual, reviewed promotion: bump the snapshot run, every `=version` pin, the InRelease hash
+and the lock rows together, from `verify-closure.sh print` output and grounded metadata;
+never accept a changed row merely because a build failed. The Tor repository index remains
+mutable and freshness-bounded by its own `Valid-Until`; the Tor package stays content-pinned
+(T160/T177). Base image identity remains its digest. Final image digests remain T081's.
+
+---
+
 ## 2026-09-26 — Promote Tor 0.4.9.13 verified security package (T177)
 
 **Decision and authorization.** The maintainer authorized a separate update after T124's
@@ -1122,6 +1180,7 @@ cross-reference" above for the drift reconciliation plan under T018.
 ## 2026-07-04 — Tor sidecar trust rationale (FR-015)
 
 Superseded by: [T160 Tor security promotion](#2026-09-12--tor-04912-security-promotion-and-exact-package-content-pins-t160), for the Tor version/hash selection and same-version content-integrity claim only.
+Superseded by: [T184 Debian snapshot rollback refusal](#2026-09-30--refuse-rolled-back-debian-snapshot-metadata-for-the-tor-image-t184), for the T099 claims that the snapshot run and `=version` pins freeze the closure and need no Valid-Until handling only.
 
 **Decision.** Stargate builds its own Tor sidecar image
 (`sidecars/tor/Dockerfile`) from a digest-pinned `debian:12-slim` base,

@@ -159,11 +159,14 @@ or backdoored binary.
 Each sidecar is in the **per-route privacy TCB**. Pinned-digest selection
 and the contract-test gate (Principle IV; architecture spec §7) are the
 mitigations, but neither eliminates the risk. For the Tor sidecar
-specifically, the build inputs are pinned to an immutable
-`snapshot.debian.org` run with explicit `=version` pins (T099), so a clean
-rebuild selects byte-identical packages and the resolved closure (incl.
-`libssl3`) is frozen and auditable — but this makes the binary *auditable*,
-not *trustworthy*: the closure still rides Debian's archive key, and a
+specifically, the build inputs are pinned to a `snapshot.debian.org` run
+with explicit `=version` pins (T099). Those pins alone did not freeze the
+closure: snapshot InRelease files carry no Valid-Until, so an on-path attacker
+could replay an older signed index over HTTP (libssl3 3.0.20 → 3.0.17). T184
+pins the snapshot InRelease hash and checks the installed closure against the
+committed `sidecars/tor/package-closure.lock` in every build, so a clean
+rebuild selects the reviewed packages (incl. `libssl3`) or fails — but this
+makes the binary *auditable*, not *trustworthy*: the closure still rides Debian's archive key, and a
 malicious-but-behaviourally-conforming library is undetected. See §5.8,
 §5.9, and `SECURITY-DECISIONS.md` §"Debian archive snapshot pin".
 
@@ -1716,8 +1719,10 @@ a malicious version of Stargate or a sidecar to all users.
 - Releases are reproducibly built (Principle VI); auditors can verify
   the published artefacts match the source.
 - The Tor sidecar's Debian build inputs are pinned to an immutable
-  `snapshot.debian.org` run with explicit `=version` pins (T099), so a
-  compromised mirror cannot drift the resolved package set between builds;
+  `snapshot.debian.org` run with explicit `=version` pins (T099); the
+  snapshot InRelease hash and committed per-arch package closure (T184) make
+  any drift between builds — including a replayed older signed index from a
+  compromised mirror or on-path attacker — fail the build;
   the trust + rotation procedure is in `SECURITY-DECISIONS.md`.
 - CI Action code is selected by full commit identity. The agent workflow
   verifies exact-version CLI archives against recorded publisher digests

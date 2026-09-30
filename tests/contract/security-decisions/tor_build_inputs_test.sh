@@ -8,15 +8,16 @@
 # Why this is structural (no runtime bring-up): the immutability property
 # (Constitution Principle IV) lives in the Dockerfile's apt configuration, not
 # in Tor's runtime behaviour. The CONTRACT is (a) every apt package is
-# resolved from an immutable snapshot.debian.org run with an explicit
-# `=version` pin (so a clean rebuild selects the SAME bytes, freezing Tor's
-# transitive closure — libssl3 et al., the residual named in
-# SECURITY-DECISIONS.md §"Residual risk"), (b) the Tor package itself stays
+# resolved from a snapshot.debian.org run with an explicit `=version` pin —
+# which alone does NOT freeze Tor's transitive closure (libssl3 et al.):
+# snapshot InRelease has no Valid-Until, so an older signed index can be
+# replayed (T184); (e) below closes that — (b) the Tor package itself stays
 # on deb.torproject.org under the fingerprint-verified key (FR-015 — a Debian
 # archive rebuild would break the trust rationale), (c) fail-closed is
 # preserved (no `Check-Valid-Until false` defeating apt's metadata checks),
-# and (d) the resolved snapshot timestamp + retained hashes recorded in
-# SECURITY-DECISIONS.md do not drift from the Dockerfile.
+# (d) the resolved snapshot timestamp + retained hashes recorded in
+# SECURITY-DECISIONS.md do not drift from the Dockerfile, and (e) the build
+# refuses rolled-back metadata and closure drift via package-closure.lock.
 #
 # Properties gated (T099 §Acceptance):
 #   - B1 every `apt-get install` package token carries an explicit `=version`.
@@ -26,6 +27,11 @@
 #   - B5 `tor` is still resolved from deb.torproject.org (not Debian archive).
 #   - B6 snapshot timestamp pinned in the Dockerfile appears in
 #        SECURITY-DECISIONS.md (cross-file drift detection).
+#   - B7 (T184) every `apt-get update` is followed at once by the InRelease
+#        hash check; the closure check runs after the Tor install and before
+#        the lists are removed; the lock is well-formed for amd64 + arm64,
+#        names the Dockerfile's snapshot run, agrees with tor-packages.sha256,
+#        and its InRelease hash is recorded in SECURITY-DECISIONS.md.
 #
 # Hermetic: file reads + grep + awk only. No network, no daemon. Runs in the
 # default `scripts/verify.sh` Gate 4 (PR cadence). The behavioural rebuild
@@ -106,11 +112,52 @@ n_ts=$(echo "$ts" | wc -l | tr -d ' ')
 grep -qF "$ts" "$SD" \
   || bail "B6: snapshot timestamp $ts (from $TOR_DOCKERFILE) not recorded in $SD — trust log drifted from build"
 
+# --- B7: rolled-back metadata and closure drift are refused (T184) ---------
+# Structure only; tests/reproducibility/tor_sidecar_manifest_test.sh proves the
+# checks refuse a replayed older signed index and a tampered lock.
+LOCK="sidecars/tor/package-closure.lock"
+TOR_PINS="sidecars/tor/tor-packages.sha256"
+if [ ! -f "$LOCK" ]; then
+  bail "B7: $LOCK missing"
+else
+  # Comment lines are dropped first: prose may mention `apt-get update`.
+  flat=$(grep -v '^[[:space:]]*#' "$TOR_DOCKERFILE" \
+    | awk '/\\[[:space:]]*$/ { sub(/\\[[:space:]]*$/,""); printf "%s", $0; next } { print }')
+  n_update=$(printf '%s\n' "$flat" | grep -o 'apt-get update' | wc -l | tr -d ' ')
+  n_checked=$(printf '%s\n' "$flat" \
+    | grep -oE 'apt-get update[[:space:]]+&&[[:space:]]+sh /tmp/verify-closure\.sh inrelease /tmp/package-closure\.lock' \
+    | wc -l | tr -d ' ')
+  if [ "$n_update" -lt 3 ] || [ "$n_update" -ne "$n_checked" ]; then
+    bail "B7: $n_checked of $n_update apt-get update runs are immediately followed by the InRelease hash check"
+  fi
+  printf '%s\n' "$flat" | grep -qE 'install-tor\.sh [^&]*&&[[:space:]]+sh /tmp/verify-closure\.sh closure /tmp/package-closure\.lock[^;]*rm -rf /var/lib/apt/lists' \
+    || bail "B7: the closure check must follow install-tor.sh and precede removal of the apt lists"
+  [ "$(grep -c '^COPY verify-closure.sh package-closure.lock /tmp/$' "$TOR_DOCKERFILE")" -eq 2 ] \
+    || bail "B7: both stages must COPY verify-closure.sh and package-closure.lock"
+  bad=$(awk '!/^#/ && NF && !($1 == "inrelease" && NF == 3 && $2 ~ /^[0-9a-f]{64}$/) &&
+             !(($1 == "amd64" || $1 == "arm64") && NF == 5 && ($5 == "base" || $5 ~ /^[0-9a-f]{64}$/))' "$LOCK")
+  [ -z "$bad" ] || bail "B7: malformed $LOCK row(s): $bad"
+  for arch in amd64 arm64; do
+    grep -q "^$arch " "$LOCK" || bail "B7: $LOCK has no $arch closure"
+    lock_tor=$(awk -v a="$arch" '$1 == a && $2 == "tor" { print $5 }' "$LOCK")
+    pin_tor=$(awk -v a="$arch" '$2 ~ ("_" a "\\.deb$") { print $1 }' "$TOR_PINS")
+    if [ -z "$lock_tor" ] || [ "$lock_tor" != "$pin_tor" ]; then
+      bail "B7: $arch tor row in $LOCK disagrees with $TOR_PINS"
+    fi
+  done
+  inrel=$(awk '$1 == "inrelease"' "$LOCK")
+  [ "$(printf '%s\n' "$inrel" | grep -c .)" -eq 1 ] || bail "B7: $LOCK must pin exactly one InRelease"
+  [ "$(printf '%s\n' "$inrel" | awk '{ print $3 }')" = "snapshot.debian.org_archive_debian_${ts}_dists_bookworm_InRelease" ] \
+    || bail "B7: $LOCK InRelease row does not name the Dockerfile's snapshot run $ts"
+  grep -qF "$(printf '%s\n' "$inrel" | awk '{ print $2 }')" "$SD" \
+    || bail "B7: pinned InRelease hash not recorded in $SD"
+fi
+
 # --- report ----------------------------------------------------------------
 if [ "${#errs[@]}" -gt 0 ]; then
   echo "FAIL: T099 Tor build-inputs contract test (${#errs[@]} finding(s)):" >&2
   for e in "${errs[@]}"; do echo "  - $e" >&2; done
   exit 1
 fi
-echo "OK: T099 Tor build-inputs contract test (snapshot-pinned, version-pinned, fail-closed, cross-file)"
+echo "OK: T099/T184 Tor build-inputs contract test (snapshot-pinned, version-pinned, InRelease + closure locked, fail-closed, cross-file)"
 exit 0

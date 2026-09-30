@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 33 |
+| pending | 32 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 188 |
 | deferred | 5 |
@@ -29,7 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T184 | Pin the Tor sidecar package closure against index rollback | Foundation audit remediation | ✓ | ✓ |
 | T185 | Lock control-plane Maven dependency identities | Foundation audit remediation | ✓ | ✓ |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
@@ -39,7 +38,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T184 | Pin the Tor sidecar package closure against index rollback | in-review | ✓ | Foundation audit remediation |
 
 ---
 
