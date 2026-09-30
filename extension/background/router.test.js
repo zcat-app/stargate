@@ -115,6 +115,12 @@ function makeBrowser(state, recorded) {
           recorded.proxyExtraInfo.push(extraInfoSpec);
         },
       },
+      settings: {
+        get(details) {
+          recorded.proxySettingsReads.push(plain(details));
+          return state.proxySettings();
+        },
+      },
     },
     webRequest: {
       onBeforeRequest: {
@@ -144,6 +150,30 @@ function makeBrowser(state, recorded) {
         addListener(fn) {
           recorded.message.push(fn);
         },
+      },
+    },
+    // T188: the private-window access check and the blocking notification.
+    // Read live off `state` so a test can deny, fail or delay the answer.
+    extension: {
+      isAllowedIncognitoAccess() {
+        recorded.privateAccessChecks.push(1);
+        return state.privateAccess();
+      },
+    },
+    notifications: {
+      create(...args) {
+        recorded.notifications.push(plain(args));
+        // Firefox validates NotificationOptions and rejects unknown
+        // properties such as Chrome's `requireInteraction` (T188 live).
+        const allowed = ['type', 'title', 'message', 'iconUrl', 'contextMessage',
+          'priority', 'eventTime', 'imageUrl', 'items', 'progress', 'isClickable'];
+        const extra = Object.keys(args[args.length - 1] || {}).filter((k) => !allowed.includes(k));
+        if (extra.length > 0) {
+          return Promise.reject(new Error(`Unexpected property "${extra[0]}"`));
+        }
+        return state.notificationsHang
+          ? new Promise(() => {})
+          : Promise.resolve('stargate-notification');
       },
     },
     storage: {
@@ -181,6 +211,32 @@ function makeBrowser(state, recorded) {
   };
 }
 
+// T188: `browser.proxy.settings.get({})` for a profile running the shipped
+// browser-profile/user.js, in the shape Mullvad Browser 153 returned live
+// (THREAT-MODEL T188). Read from the template itself, so a template change
+// that the router's pinned baseline does not match fails these tests.
+function shippedProxySetting() {
+  const template = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'browser-profile', 'user.js'), 'utf8');
+  const pref = (name) => JSON.parse(
+    template.match(new RegExp(`^user_pref\\("${name.replace(/\./g, '\\.')}",\\s*(.+)\\);`, 'm'))[1]);
+  return {
+    levelOfControl: 'controllable_by_this_extension',
+    value: {
+      proxyType: 'manual',
+      autoConfigUrl: '',
+      autoLogin: false,
+      proxyDNS: pref('network.proxy.socks_remote_dns'),
+      httpProxyAll: pref('network.proxy.share_proxy_settings'),
+      socksVersion: pref('network.proxy.socks_version'),
+      passthrough: pref('network.proxy.no_proxies_on'),
+      http: pref('network.proxy.http'),
+      ssl: pref('network.proxy.ssl'),
+      socks: pref('network.proxy.socks'),
+    },
+  };
+}
+
 // Loads firstparty.js + storage.js + router.js into ONE fresh context —
 // the real background-page script sequence (manifest M4 order minus
 // hardening.js, whose `hardeningOk` flag is seeded directly). `device`
@@ -195,6 +251,11 @@ function loadRouter(options) {
     localSetError = null,
     deviceGet = null,
     crypto = null,
+    // T188: Firefox grants private-window access; tests deny or fail it.
+    privateAccess = () => Promise.resolve(true),
+    // T188: the dedicated profile's intact baseline, as Firefox reports it.
+    proxySettings = () => Promise.resolve(shippedProxySetting()),
+    notificationsHang = false,
   } = options || {};
   const recorded = {
     proxy: [],
@@ -210,9 +271,13 @@ function loadRouter(options) {
     committed: [],
     tabRemoved: [],
     publicSuffix: [],
+    privateAccessChecks: [],
+    notifications: [],
+    proxySettingsReads: [],
   };
   const state = {
     device, hardeningOk, isolationProfileId, localSetError, deviceGet,
+    privateAccess, proxySettings, notificationsHang,
   };
   const cryptoImpl = crypto || {
     subtle: webcrypto.subtle,
@@ -1557,4 +1622,337 @@ test('pendingMainNavigationClearsExistingTor', async () => {
     plain(await waitForCachedRoute(loaded.recorded.message[0], 7, 'tor')),
     { route: 'tor' }, 'the replacement publishes its own decision after completion'
   );
+});
+
+// ---------------------------------------------------------------------------
+// T188: private-window access. Mullvad Browser runs every window in private
+// browsing. Where the extension runs without private-window access, its
+// listeners cannot see private-window requests, so it must say so (blocking
+// notification, popup state) and must not route protected requests it can
+// see while access is missing, unreadable or not yet confirmed.
+// ---------------------------------------------------------------------------
+
+const LABEL_NO_PRIVATE_ACCESS =
+  'Stargate is not protecting private windows: "Run in Private Windows" is not ' +
+  'allowed or not confirmed. Stargate blocks the .onion requests it can see. ' +
+  'Allow it in about:addons > Stargate.';
+
+async function renderPopup(onMessage) {
+  const indicator = {};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../popup/popup.js'), 'utf8'), {
+    document: { getElementById: () => indicator },
+    browser: {
+      tabs: { query: async () => [{ id: 7 }], onUpdated: { addListener() {} } },
+      runtime: { sendMessage: onMessage },
+    },
+  });
+  await drain();
+  return indicator.textContent;
+}
+
+test('missingOrUnreadablePrivateWindowAccessBlocksProtectedRoutingAndNotifies', async () => {
+  const cases = [
+    ['denied', () => Promise.resolve(false)],
+    ['unreadable', () => Promise.reject(new Error('synthetic API failure'))],
+    ['throwing', () => { throw new Error('synthetic synchronous failure'); }],
+    ['malformed', () => Promise.resolve('true')],
+  ];
+  for (const [name, privateAccess] of cases) {
+    const loaded = loadRouter({ hardeningOk: true, privateAccess });
+    await drain();
+    requireConformance(loaded.sandbox);
+    assert.strictEqual(loaded.recorded.privateAccessChecks.length, 1,
+      `${name}: the access check runs once at startup (the about:addons toggle reloads the extension)`);
+    for (const host of [ONION_A, `${ONION_A}.`, `${ONION_A.toUpperCase()}.`]) {
+      const details = mainFrame(`https://${host}/page`, { requestId: `${name}:${host}` });
+      assertFailClosed(await loaded.recorded.proxy[0](details),
+        `${name}: a protected ${JSON.stringify(host)} request is not routed without confirmed access`);
+      assert.deepStrictEqual(plain(await loaded.recorded.webRequest[0](details)), { cancel: true },
+        `${name}: the cancel layer also blocks ${JSON.stringify(host)}`);
+    }
+    const clearnet = mainFrame('https://example.com/page', { requestId: `${name}:clearnet` });
+    assert.deepStrictEqual(plain(await loaded.recorded.proxy[0](clearnet)), { type: 'direct' },
+      `${name}: intentional Direct behaviour is unchanged`);
+
+    assert.strictEqual(loaded.recorded.notifications.length, 1,
+      `${name}: exactly one blocking notification at startup`);
+    const [notification] = loaded.recorded.notifications[0].slice(-1);
+    assert.strictEqual(notification.type, 'basic');
+    assert.ok(!('requireInteraction' in notification),
+      `${name}: only options Firefox accepts, or the notification is never shown`);
+    assert.match(notification.title, /private windows/i);
+    assert.match(notification.message, /Run in Private Windows/);
+    assert.match(notification.message, /about:addons/);
+    assert.match(notification.message, /cannot see/,
+      `${name}: the notification says the extension cannot see private-window requests`);
+    assert.doesNotMatch(notification.message, /protected|safe|routed through Tor/i,
+      `${name}: the notification claims no protection it cannot provide`);
+
+    const reply = await loaded.recorded.message[0]({ type: GET_ROUTE, tabId: 7 });
+    assert.deepStrictEqual(plain(reply), { route: 'no-private-access' },
+      `${name}: the popup's route query reports the unprotected state before any tab decision`);
+    assert.strictEqual(await renderPopup(loaded.recorded.message[0]), LABEL_NO_PRIVATE_ACCESS,
+      `${name}: the popup shows the unprotected state`);
+  }
+});
+
+test('protectedDecisionWaitsForThePrivateAccessCheck', async () => {
+  let answer;
+  const loaded = loadRouter({
+    hardeningOk: true,
+    privateAccess: () => new Promise((resolve) => { answer = resolve; }),
+  });
+  await drain();
+  const details = mainFrame(`https://${ONION_A}/pending`);
+  let settled = false;
+  const pending = loaded.recorded.proxy[0](details).then((value) => {
+    settled = true;
+    return value;
+  });
+  await drain();
+  assert.strictEqual(settled, false,
+    'no protected route is decided before private-window access is confirmed');
+  const popupReply = loaded.recorded.message[0]({ type: GET_ROUTE, tabId: 7 });
+  answer(false);
+  assertFailClosed(await pending, 'a denial arriving later still blocks the waiting request');
+  assert.deepStrictEqual(plain(await popupReply), { route: 'no-private-access' });
+
+  let grant;
+  const granted = loadRouter({
+    hardeningOk: true,
+    privateAccess: () => new Promise((resolve) => { grant = resolve; }),
+  });
+  await drain();
+  const waiting = granted.recorded.proxy[0](mainFrame(`https://${ONION_A}/granted`));
+  await drain();
+  grant(true);
+  assert.strictEqual(primaryProxy(await waiting).host, '127.0.0.1',
+    'a confirmed grant releases the waiting request to the Tor route');
+});
+
+test('grantedPrivateWindowAccessRoutesAndStaysSilent', async () => {
+  const loaded = loadHardenedTokened();
+  await drain();
+  const details = mainFrame(`https://${ONION_A}/page`);
+  const descriptor = await loaded.onRequest(details);
+  assert.strictEqual(descriptor.host, '127.0.0.1');
+  assert.deepStrictEqual(plain(await loaded.onBeforeRequest(details)), {});
+  assert.deepStrictEqual(plain(await waitForCachedRoute(loaded.onMessage, 7, 'tor')), { route: 'tor' });
+  assert.strictEqual(loaded.recorded.privateAccessChecks.length, 1);
+  assert.deepStrictEqual(loaded.recorded.notifications, [],
+    'no warning is shown when private-window access is granted');
+});
+
+// ---------------------------------------------------------------------------
+// T188 / option 6: the dedicated profile's fail-closed baseline
+// (browser-profile/user.js). Requests the extension does not route with a
+// Tor descriptor follow the browser's own proxy settings: extension absent or
+// not running (Mullvad's permanent private mode never starts an extension
+// lacking private-window access), or its unchanged `{type:'direct'}` result.
+// The template sends everything to the T186 Unix SOCKS sink with proxy-side
+// DNS, except `<local>` and the ICANN top-level domains. These tests pin the
+// shipped template; the live probe proves the browser outcome.
+// ---------------------------------------------------------------------------
+
+const PROFILE_TEMPLATE = path.join(__dirname, '..', '..', 'browser-profile', 'user.js');
+const PSL_PATH = '/usr/share/publicsuffix/public_suffix_list.dat';
+const PSL_SHA256 = '02074b85e6f1454055b82aa7812bcea05f6afd9076e9a60ae1eb30ad61a26881';
+
+function profilePrefs() {
+  const prefs = {};
+  const pattern = /^user_pref\("([^"]+)",\s*(.+)\);\s*$/gm;
+  for (const match of fs.readFileSync(PROFILE_TEMPLATE, 'utf8').matchAll(pattern)) {
+    assert.ok(!(match[1] in prefs), `${match[1]} is set once`);
+    prefs[match[1]] = JSON.parse(match[2]);
+  }
+  return prefs;
+}
+
+// The template's derivation, as documented in its header: the top-level
+// label of every ICANN-section rule, in ASCII form, minus the special-use
+// `onion` (the protected route) and `arpa` (special-use reverse-mapping and
+// home.arpa names), sorted and de-duplicated.
+function deriveTlds(pslText) {
+  const icann = pslText.split('// ===BEGIN ICANN DOMAINS===')[1]
+    .split('// ===END ICANN DOMAINS===')[0];
+  const tlds = new Set();
+  for (const raw of icann.split('\n')) {
+    const line = raw.trim();
+    if (line === '' || line.startsWith('//')) continue;
+    const label = line.replace(/^!/, '').replace(/^\*\./, '').split('.').pop();
+    const ascii = new URL(`http://x.${label}`).hostname.split('.').pop();
+    if (ascii !== 'onion' && ascii !== 'arpa') tlds.add(ascii);
+  }
+  return [...tlds].sort();
+}
+
+test('profileTemplateSendsUnroutedRequestsToTheSinkWithProxySideDns', () => {
+  const prefs = profilePrefs();
+  assert.strictEqual(prefs['network.proxy.type'], 1, 'manual proxy configuration');
+  assert.strictEqual(prefs['network.proxy.socks'], BLOCKED_CHAIN[0].host,
+    'the default proxy is the T186 Unix sink, whose path cannot exist');
+  assert.strictEqual(prefs['network.proxy.socks_version'], 5);
+  assert.strictEqual(prefs['network.proxy.socks_remote_dns'], true,
+    'names are never resolved locally for proxied requests');
+  assert.strictEqual(prefs['network.proxy.socks5_remote_dns'], true);
+  for (const name of ['network.proxy.http', 'network.proxy.ssl']) {
+    assert.strictEqual(prefs[name], '', `${name} stays empty, so nothing else is proxied`);
+  }
+  assert.strictEqual(prefs['network.proxy.share_proxy_settings'], false);
+});
+
+test('profileTemplateBypassesOnlyIcannTopLevelDomains', () => {
+  const entries = profilePrefs()['network.proxy.no_proxies_on'].split(',');
+  assert.strictEqual(entries[0], '<local>', 'single-label hosts stay direct');
+  const tlds = entries.slice(1);
+  for (const entry of tlds) {
+    assert.match(entry, /^\.[a-z0-9-]+$/, `${entry} is one leading-dot ASCII top-level label`);
+  }
+  const labels = tlds.map((entry) => entry.slice(1));
+  assert.deepStrictEqual(labels, [...new Set(labels)].sort(), 'sorted and unique');
+  for (const kept of ['onion', 'arpa', 'test', 'example', 'invalid', 'local', 'localhost', 'alt', 'i2p']) {
+    assert.ok(!labels.includes(kept), `.${kept} is never bypassed: it stays on the sink`);
+  }
+  for (const icann of ['com', 'org', 'net', 'de', 'uk', 'xn--p1ai']) {
+    assert.ok(labels.includes(icann), `.${icann} is an ordinary ICANN domain and goes direct`);
+  }
+  const header = fs.readFileSync(PROFILE_TEMPLATE, 'utf8');
+  assert.ok(header.includes(PSL_SHA256), 'the template records its PSL source hash');
+  assert.ok(header.includes('publicsuffix 20231001.0357-0.1'), 'and the package version');
+  // Reproduce the list whenever the recorded source file is present. Any
+  // other PSL version is a different input: updating is a reviewed promotion.
+  if (fs.existsSync(PSL_PATH)) {
+    const psl = fs.readFileSync(PSL_PATH);
+    const digest = require('node:crypto').createHash('sha256').update(psl).digest('hex');
+    if (digest === PSL_SHA256) {
+      assert.deepStrictEqual(labels, deriveTlds(psl.toString('utf8')),
+        'the shipped list is exactly the documented derivation of the recorded PSL');
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// T188 tamper check: while the extension runs, the live proxy settings are
+// compared with the shipped baseline. A missing, changed or unreadable
+// baseline warns (notification and popup); it never changes routing.
+// ---------------------------------------------------------------------------
+
+const BASELINE_WARNING =
+  'Warning: the Stargate fail-closed proxy baseline of this profile is missing, ' +
+  'changed or unverifiable, so requests Stargate does not route follow the browser ' +
+  'proxy settings. Reinstall browser-profile/user.js (quickstart).';
+
+function driftedSetting(change) {
+  const setting = shippedProxySetting();
+  change(setting.value);
+  return setting;
+}
+
+test('intactBaselineIsReadAtStartupAndStaysSilent', async () => {
+  const loaded = loadHardenedTokened();
+  await drain();
+  assert.ok(loaded.recorded.proxySettingsReads.length >= 1, 'the baseline is read at startup');
+  assert.deepStrictEqual(loaded.recorded.notifications, []);
+  const tor = mainFrame(`https://${ONION_A}/page`);
+  await loaded.onRequest(tor);
+  await loaded.onBeforeRequest(tor);
+  assert.deepStrictEqual(plain(await waitForCachedRoute(loaded.onMessage, 7, 'tor')), { route: 'tor' },
+    'an intact baseline adds nothing to the route answer');
+});
+
+test('changedMissingOrUnreadableBaselineWarnsWithoutChangingRoutes', async () => {
+  const cases = [
+    ['proxy type none', () => Promise.resolve(driftedSetting((v) => { v.proxyType = 'none'; }))],
+    ['socks emptied', () => Promise.resolve(driftedSetting((v) => { v.socks = ''; }))],
+    ['socks garbled', () => Promise.resolve(driftedSetting((v) => { v.socks = 'not a proxy host'; }))],
+    ['remote DNS off', () => Promise.resolve(driftedSetting((v) => { v.proxyDNS = false; }))],
+    ['socks v4', () => Promise.resolve(driftedSetting((v) => { v.socksVersion = 4; }))],
+    ['http proxy added', () => Promise.resolve(driftedSetting((v) => { v.http = '127.0.0.1:8080'; }))],
+    ['passthrough widened', () => Promise.resolve(driftedSetting((v) => { v.passthrough += ',.onion'; }))],
+    ['passthrough narrowed', () => Promise.resolve(driftedSetting((v) => {
+      v.passthrough = v.passthrough.replace(',.com,', ',');
+    }))],
+    ['pac instead', () => Promise.resolve(driftedSetting((v) => {
+      v.proxyType = 'autoConfig'; v.autoConfigUrl = 'data:,x';
+    }))],
+    ['unreadable', () => Promise.reject(new Error('synthetic API failure'))],
+    ['malformed', () => Promise.resolve({ value: null })],
+  ];
+  for (const [name, proxySettings] of cases) {
+    const loaded = loadRouter({ hardeningOk: true, proxySettings });
+    await drain();
+    const warned = loaded.recorded.notifications.filter(
+      (args) => /baseline/i.test(JSON.stringify(args)));
+    assert.strictEqual(warned.length, 1, `${name}: one baseline notification`);
+    const [notification] = warned[0].slice(-1);
+    assert.ok(!('requireInteraction' in notification));
+    assert.match(notification.message, /browser-profile\/user\.js/);
+    assert.match(notification.message, /browser proxy settings/,
+      `${name}: says where unrouted requests go instead`);
+
+    const tor = mainFrame(`https://${ONION_A}/page`, { requestId: `${name}:tor` });
+    assert.strictEqual(primaryProxy(await loaded.recorded.proxy[0](tor)).host, '127.0.0.1',
+      `${name}: the Tor route itself does not depend on the baseline`);
+    await loaded.recorded.webRequest[0](tor);
+    const reply = plain(await waitForCachedRoute(loaded.recorded.message[0], 7, 'tor'));
+    assert.strictEqual(reply.route, 'tor');
+    assert.ok(['mismatch', 'unknown'].includes(reply.baseline),
+      `${name}: the popup answer carries the baseline state (${JSON.stringify(reply)})`);
+    assert.strictEqual(await renderPopup(loaded.recorded.message[0]),
+      BASELINE_WARNING + ' Main navigation decision: Tor' +
+        ' Other requests may use different routes. Connection success is not verified.',
+      `${name}: the popup states the warning before the route`);
+  }
+});
+
+test('baselineIsComparedWithoutPrivateWindowAccessToo', async () => {
+  const loaded = loadRouter({
+    hardeningOk: true,
+    privateAccess: () => Promise.resolve(false),
+    proxySettings: () => Promise.resolve(driftedSetting((v) => { v.socks = ''; })),
+  });
+  await drain();
+  assert.ok(loaded.recorded.proxySettingsReads.length >= 1,
+    'reading proxy.settings needs no private-window access, so the check runs');
+  assert.strictEqual(loaded.recorded.notifications.length, 2,
+    'both the access and the baseline notification are raised');
+  assert.deepStrictEqual(plain(await loaded.recorded.message[0]({ type: GET_ROUTE, tabId: 7 })),
+    { route: 'no-private-access', baseline: 'mismatch' });
+  assert.strictEqual(await renderPopup(loaded.recorded.message[0]),
+    BASELINE_WARNING + ' ' + LABEL_NO_PRIVATE_ACCESS);
+});
+
+test('baselineIsRecheckedWhenThePopupAsks', async () => {
+  let setting = shippedProxySetting();
+  const loaded = loadRouter({ hardeningOk: true, proxySettings: () => Promise.resolve(setting) });
+  await drain();
+  assert.deepStrictEqual(loaded.recorded.notifications, []);
+  setting = driftedSetting((v) => { v.socks = ''; });
+  const drifted = plain(await loaded.recorded.message[0]({ type: GET_ROUTE, tabId: 7 }));
+  assert.deepStrictEqual(drifted, { baseline: 'mismatch' },
+    'a change after startup is found at the next popup query');
+  assert.strictEqual(loaded.recorded.notifications.length, 1, 'and notified once');
+  await loaded.recorded.message[0]({ type: GET_ROUTE, tabId: 7 });
+  assert.strictEqual(loaded.recorded.notifications.length, 1, 'without repeating while unchanged');
+  setting = shippedProxySetting();
+  assert.strictEqual(await loaded.recorded.message[0]({ type: GET_ROUTE, tabId: 7 }), undefined,
+    'a restored baseline clears the warning');
+});
+
+test('warningsNeverHoldRoutingOrPopupAnswers', async () => {
+  const denied = loadRouter({
+    hardeningOk: true, privateAccess: () => Promise.resolve(false), notificationsHang: true,
+  });
+  await drain();
+  assertFailClosed(await denied.recorded.proxy[0](mainFrame(`https://${ONION_A}/`)),
+    'a notification that never completes cannot delay the blocked decision');
+  assert.deepStrictEqual(plain(await denied.recorded.message[0]({ type: GET_ROUTE, tabId: 7 })),
+    { route: 'no-private-access' });
+  const drifted = loadRouter({
+    hardeningOk: true, notificationsHang: true,
+    proxySettings: () => Promise.resolve(driftedSetting((v) => { v.socks = ''; })),
+  });
+  await drain();
+  assert.deepStrictEqual(plain(await drifted.recorded.message[0]({ type: GET_ROUTE, tabId: 7 })),
+    { baseline: 'mismatch' }, 'nor the popup answer');
 });

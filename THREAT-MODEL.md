@@ -1165,6 +1165,96 @@ six relays (three on each side) selected by Tor's path-selection algorithm
     `specs/001-tor-route/evidence/T186-tests-first.json`.
   - With the cancel listener restored, the unchanged T157 full matrix passed 16/16 on the same
     candidate package (report `c812d0f8436f7dc019fa49a52873f5bc9a66eba70fdcce317741e46c2de201c1`).
+- **Private-window access and the fail-closed profile baseline (T188, redteam finding
+  20260929-006; maintainer-selected option 6).** Mullvad Browser runs every window in private
+  browsing (`browser.privatebrowsing.autostart`). A temporarily loaded extension has no
+  private-window access, and Gecko never starts the background page of an extension without it in
+  permanent private mode (`ext-backgroundPage.js`), so none of the listeners above run. Any request
+  the extension does not route with a Tor descriptor, including its unchanged `{type:'direct'}`
+  result, follows the browser's own proxy settings; before T188 a protected `.onion` navigation
+  then reached a configured ordinary proxy (Constitution III silent fallback), and only
+  `network.dns.blockDotOnion` stopped the bare `.onion` form when no proxy was set.
+  - *Baseline.* The dedicated profile's `browser-profile/user.js` sets manual SOCKS5 with
+    proxy-side DNS to the T186 Unix sink `file:///dev/null/stargate-blocked`, and
+    `no_proxies_on` = `<local>` plus one suffix entry per ICANN top-level domain (1,471 labels in
+    ASCII form from the Ubuntu `publicsuffix` package 20231001.0357-0.1,
+    `/usr/share/publicsuffix/public_suffix_list.dat` SHA-256
+    `02074b85e6f1454055b82aa7812bcea05f6afd9076e9a60ae1eb30ad61a26881`; `onion` excluded as the
+    protected special-use name, `arpa` as the special-use reverse-mapping/`home.arpa` zone).
+    Everything not bypassed — `.onion` in any case or trailing-dot form and any unknown TLD —
+    reaches the sink and fails with no local resolution; ICANN clearnet connects directly, as the
+    001 extension's Direct route does. The extension's Tor descriptor overrides the baseline; a
+    router misclassification of an onion as Direct falls to the baseline and reaches the sink.
+    Updating the list is a reviewed promotion (Principle IV); `router.test.js` reproduces it from
+    the recorded PSL file when present. Scoped to 001, where only `.onion` is protected: a
+    feature that protects clearnet must revisit the blanket clearnet bypass.
+  - *Detection where the extension runs.* At startup (the about:addons toggle reloads the
+    extension) it reads `extension.isAllowedIncognitoAccess()`; missing, unreadable or pending
+    access blocks every protected decision and raises one notification (transient: Firefox rejects
+    `requireInteraction` with "Unexpected property"), and the popup persistently shows only the
+    unprotected state. Whenever it runs (reading `proxy.settings` needs no private-browsing
+    access; Gecko requires it only to set them) it compares them (type, SOCKS host
+    and version, proxy DNS, HTTP/SSL/PAC fields, and a 64-bit FNV-1a fingerprint of the passthrough
+    list — drift detection, not forgery resistance: whoever can edit prefs can edit the extension)
+    with the shipped values at startup and on every popup query, and warns (notification and a
+    popup prefix) when they differ or cannot be read. The warning never changes routing.
+  - *Residues.* Skipping the profile step reverts to the browser's configured proxy settings. An
+    emptied or garbled `network.proxy.socks` makes non-bypassed names (including `.onion.` and
+    mixed case) connect directly; the running extension's comparison reports it, but nothing
+    reports it while the extension is not running. A TLD delegated after the recorded list, a
+    trailing-dot clearnet name and a non-loopback IP literal fail closed in this profile with or
+    without the extension (CIDR entries such as `0.0.0.0/0` did not bypass an IP literal). A
+    foreign extension with the `proxy` permission can change these settings (§2.7); the comparison
+    warns while Stargate runs. The notification and popup cannot appear in permanent private mode
+    without access; there the baseline is the enforcement and the quickstart's positive popup check
+    the user-visible signal. Rejected designs, all measured live: a full-sink manual baseline
+    breaks the Direct route because `{type:'direct'}` resolves through the browser's proxy
+    settings and only `null` is a real direct connection; a PAC baseline cannot express the Unix
+    sink (Gecko looks up a proxy host named `file`) and a missing, unreadable or syntactically
+    broken PAC falls back to DIRECT for `.onion.` and mixed-case names.
+- **T188 live evidence (2026-09-29).** `probe.py --only private-access` on the pinned Mullvad
+  Browser 153.3.0esr Alpha (archive `9039e153…83ab`), with the template `browser-profile/user.js`
+  (`9433de72…31d8`) applied to disposable geckodriver profiles and the T186 per-request tabs,
+  twelve-second observation window and destination / ordinary-proxy / SOCKS / resolver
+  surfaces (strace port 53 plus MOZ_LOG). Clearnet names use `.com` mapped to the loopback
+  destination catcher; the unknown TLD is `.zzqunknown`.
+  - Controls fired in-run: ordinary proxy, destination, resolver (`.invalid`). With the sink moved
+    to a live Unix SOCKS listener, `.onion`, `.onion.`, `.OnIoN.` and `.zzqunknown` all arrived there
+    by name with no resolver hit, while `.com` and `sub.<label>.CoM` loaded directly (suffix
+    entries match subdomains case-insensitively). `network.proxy.type`, `socks`,
+    `no_proxies_on` and `socks_remote_dns` are not locked; the 11,315-character list is accepted
+    (feasibility timing: five `.com` loads 0.76–1.57 s with the full list against 0.44–2.28 s
+    with `<local>,.com`).
+  - Permanent private mode, no extension, and the real package installed without private-window
+    access (background views 0): all four protected forms ended at `proxyConnectFailure` pages
+    with every surface empty (4 sink connects each); `.com` and the mixed-case subdomain loaded
+    from the destination.
+  - Ordinary windows without access: the notification `Stargate: allow "Run in Private Windows"`
+    opened, the popup showed the unprotected state, all protected forms stayed off every surface,
+    and `proxy.settings.get` was readable (Gecko's `ext-proxy.js` requires private-browsing access
+    only for `set`), so the tamper check runs there too. With access, in permanent private and in
+    ordinary windows (observed after an extension reload, as after the about:addons toggle; a
+    temporary install in ordinary windows first starts once without the grant and shows the access
+    notification): `.onion`, `.onion.` and `.OnIoN.` reached the 8881 catcher with the credential
+    and no other surface, `.com` loaded directly through `{type:'direct'}`, no notification. With `no_proxies_on` changed, the baseline notification opened and the popup
+    carried the warning prefix. A `delayed-fallback` mutant returning Direct for `.onion.` with
+    the cancel layer disabled reached the sink (clean); the same mutant under an ordinary proxy
+    reached that proxy (calibration).
+  - Recorded: an emptied or garbled `network.proxy.socks` let `.onion.`, `.OnIoN.` and the
+    unknown TLD load from the destination (bare `.onion` stopped by blockDotOnion) — the
+    disclosed residue above. A non-loopback IP literal failed closed with and without
+    `0.0.0.0/0,::/0` appended (one sink connect each).
+  - Red (template absent, pre-fix package; report `5e61c0c6…dfac`): every baseline scenario
+    failed because protected names reached the ordinary proxy, and detection was absent.
+    Committed package `fce2d112ffd960761faa86b5954f2dda4bc4effb4cb34992b155454c0a8e7788`, report
+    `0c29c84f6433a430de2ea222291bb205aad5b97e4320ba72abbe61317e8d4193`: 10/10 scenarios; it
+    supersedes the pre-rename review-round candidate `38751d1f…16f9` (report `7d79f929…5195`,
+    also 10/10), which differed only by a behaviour-neutral loop-variable rename. The
+    identical-command red/green records for the committed tree are in
+    `specs/001-tor-route/evidence/T188-tests-first.json`.
+  - Also found live: Firefox rejects `requireInteraction` in `notifications.create`, so the
+    existing WebRTC hardening notification (`background/hardening.js`) is never displayed; its
+    routing block is unaffected. Pre-existing (T034b/T055), outside T188: reported for remediation.
 - The data plane forwards SOCKS5 with the SOCKS5 username set to the
   first-party domain (architecture spec §14.3). For onion services, the
   "first-party domain" is the onion address itself, giving distinct

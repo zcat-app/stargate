@@ -137,6 +137,19 @@ older replies. State stays in background memory and is removed on tab close or b
 This scope supersedes the unqualified labels in historical T034c/T057 task text and walkthroughs.
 It changes no route descriptors, hardening gates or T157 failure-enforcement obligations.
 
+Two protection preconditions are stated before any route (T188). Where the extension runs without
+private-window access (not confirmed or unreadable counts as missing), the popup shows only:
+`Stargate is not protecting private windows: "Run in Private Windows" is not allowed or not
+confirmed. Stargate blocks the .onion requests it can see. Allow it in about:addons > Stargate.`
+Independently, when the live browser proxy settings differ from the shipped profile baseline or
+cannot be read, the label is prefixed with `Warning: the Stargate fail-closed proxy baseline of this
+profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser
+proxy settings. Reinstall browser-profile/user.js (quickstart).` Each state also raises one
+notification stating that protected routing is blocked or unverified; Firefox rejects
+`requireInteraction`, so the notification is transient and the popup is the persistent report. In permanent private browsing an extension without private-window access
+never starts, so neither message can appear there; the profile baseline below is what fails
+closed in that case.
+
 ---
 
 ### User Story 2 - Stream isolation per first-party domain (Priority: P2)
@@ -711,6 +724,25 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
   path. Alpha builds are development evidence only: v1 does not release until stable Mullvad
   Browser uses Gecko 153 or newer and retains MV2. If that stable release drops MV2, redesign and
   constitutional review replace this assumption; there is no silent legacy fallback.
+- **Browser precondition: private-window access and the fail-closed profile baseline (T188).**
+  Mullvad Browser runs every window in private browsing, and a temporarily loaded extension has no
+  private-window access until the user allows "Run in Private Windows"; without it the extension
+  never starts in permanent private mode. Any request the extension does not route with a Tor
+  descriptor, including its `{type:'direct'}` result, follows the browser's own proxy settings.
+  The dedicated Stargate profile therefore ships `browser-profile/user.js`: manual SOCKS5 with
+  proxy-side DNS to the T186 Unix sink, bypassed (`no_proxies_on`) only for `<local>` and the
+  ICANN top-level domains from the recorded `publicsuffix` package (`onion` and `arpa` excluded).
+  With the extension absent or not running, `.onion` in every form and any unknown TLD fail
+  closed while ICANN clearnet connects directly, as the extension's non-`.onion` route does. This
+  baseline is scoped to 001, where only `.onion` is protected; a feature that protects clearnet
+  must revisit the allowlist. Residues, disclosed in the quickstart: skipping the baseline
+  reverts to the browser's configured proxy settings; a TLD delegated after the recorded list,
+  a trailing-dot clearnet name (`example.com.`) and non-loopback IP literals fail closed in this
+  profile, with or without the extension, because its Direct result falls to the baseline (a new
+  TLD needs a reviewed list update; CIDR entries do not bypass IP literals); an emptied or garbled
+  `network.proxy.socks` falls open for non-bypassed names, which the running extension's
+  `proxy.settings` comparison reports. The extension blocks protected routing while its own
+  private-window access is missing or unconfirmed.
 - **`proxy.onRequest` failover timeout: Firefox default, with no route fallback.** The router
   does not set `failoverTimeout` on the returned SOCKS `proxy.ProxyInfo`
   descriptor; Firefox's default applies before the terminal `null` ends the extension-provided

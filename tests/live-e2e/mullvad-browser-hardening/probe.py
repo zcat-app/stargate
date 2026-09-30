@@ -31,6 +31,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+from typing import Callable
 
 
 PROTECTED_HOST = "abcd2345" * 7 + ".onion"
@@ -291,11 +292,15 @@ class WebDriver:
                  log_path: pathlib.Path, install_wait: float = 1.0,
                  extra_prefs: dict[str, object] | None = None,
                  accept_insecure_certs: bool = True,
-                 trace: "NameTrace | None" = None) -> None:
+                 trace: "NameTrace | None" = None,
+                 allow_private_browsing: bool = True,
+                 install: bool = True,
+                 before_install: "Callable[[WebDriver], None] | None" = None) -> None:
         reservation = socket.socket()
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
         reservation.close()
+        self.driver_port = port
         self.base = f"http://127.0.0.1:{port}"
         self.session: str | None = None
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -338,11 +343,16 @@ class WebDriver:
                 },
             }}})
             self.session = value.get("sessionId") or value["capabilities"]["sessionId"]
-            self.request("POST", f"/session/{self.session}/moz/addon/install", {
-                "path": str(extension.resolve()), "temporary": True,
-                "allowPrivateBrowsing": True,
-            })
-            time.sleep(install_wait)
+            if before_install is not None:
+                before_install(self)
+            # T188: a real about:debugging temporary load grants no
+            # private-window access; T157/T186 sessions grant it explicitly.
+            if install:
+                self.request("POST", f"/session/{self.session}/moz/addon/install", {
+                    "path": str(extension.resolve()), "temporary": True,
+                    "allowPrivateBrowsing": allow_private_browsing,
+                })
+                time.sleep(install_wait)
         except Exception:
             self.close()
             raise
@@ -632,6 +642,21 @@ class WebDriver:
             except subprocess.TimeoutExpired:
                 self.process.kill()
                 self.process.wait(timeout=5)
+        # Under a NameTrace the tracked process is strace; terminating it
+        # leaves its geckodriver child running. Stop that exact driver.
+        wanted = ["--allow-system-access", "--port", str(self.driver_port)]
+        for proc in pathlib.Path("/proc").iterdir():
+            try:
+                argv = (proc / "cmdline").read_bytes().split(b"\0")
+            except (OSError, ValueError):
+                continue
+            args = [a.decode(errors="replace") for a in argv if a]
+            if (args and args[0].endswith("geckodriver") and args[1:] == wanted and
+                    proc.name.isdigit()):
+                try:
+                    os.kill(int(proc.name), 15)
+                except OSError:
+                    pass
         self.log_file.close()
 
 
@@ -1113,6 +1138,68 @@ class ImpostorSocksHandler(socketserver.BaseRequestHandler):
             return
 
 
+# --- T188: private-window access and the dedicated profile's baseline -----
+#
+# Mullvad Browser runs every window in private browsing. An extension without
+# private-window access never starts there, and a request the extension does
+# not route with a Tor descriptor follows the browser's own proxy settings
+# (`{type:'direct'}` included). The dedicated profile's template
+# (browser-profile/user.js) makes those settings fail closed: the T186 Unix
+# SOCKS sink with proxy-side DNS, bypassed only for `<local>` and the ICANN
+# top-level domains. These scenarios read the shipped template itself;
+# without it they run today's ordinary-proxy configuration.
+
+T188_NO_PRIVATE_ACCESS_LABEL = (
+    'Stargate is not protecting private windows: "Run in Private Windows" is not '
+    "allowed or not confirmed. Stargate blocks the .onion requests it can see. "
+    "Allow it in about:addons > Stargate."
+)
+T188_BASELINE_WARNING = (
+    "Warning: the Stargate fail-closed proxy baseline of this profile is missing, "
+    "changed or unverifiable, so requests Stargate does not route follow the browser "
+    "proxy settings. Reinstall browser-profile/user.js (quickstart)."
+)
+
+
+# Extension notifications are transient XUL alert windows (with
+# `alerts.useSystemBackend=false`). Record each one's full title and text
+# (alert.js window arguments 1 and 2; the window itself truncates) as it
+# opens, installed before the extension so a closed alert is still observed.
+T188_ALERT_RECORDER = (
+    "const seen=[];window.t188Alerts=seen;"
+    "Services.ww.registerNotification({observe(w,topic){"
+    "if(topic!=='domwindowopened')return;"
+    "w.addEventListener('load',()=>{if(w.document.documentElement.getAttribute('windowtype')"
+    "!=='alert:alert')return;const a=w.arguments||[];"
+    "seen.push(String(a[1]||'')+' | '+String(a[2]||''));},{once:true});}});"
+)
+
+
+def t188_record_alerts(browser: "WebDriver") -> None:
+    browser.set_context("chrome")
+    browser.execute(T188_ALERT_RECORDER)
+
+
+def t188_template_prefs(path: pathlib.Path) -> dict[str, object] | None:
+    if not path.is_file():
+        return None
+    prefs: dict[str, object] = {}
+    for match in re.finditer(r'^user_pref\("([^"]+)",\s*(.+)\);\s*$',
+                             path.read_text(), re.MULTILINE):
+        prefs[match.group(1)] = json.loads(match.group(2))
+    return prefs
+
+
+def t188_lan_address() -> str:
+    """A local non-loopback IPv4 address: an IP-literal destination."""
+    probe_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe_socket.connect(("10.255.255.255", 1))  # no packet is sent
+        return probe_socket.getsockname()[0]
+    finally:
+        probe_socket.close()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--browser", type=pathlib.Path, required=True)
@@ -1124,8 +1211,10 @@ def main() -> int:
     parser.add_argument("--report-out", type=pathlib.Path,
                         default=pathlib.Path("target/runs/T157.browser.json"))
     parser.add_argument("--only", choices=("full", "startup", "sidecar", "context", "fixture", "navigation",
-                                           "descriptor-matrix", "blocked-proxy"),
+                                           "descriptor-matrix", "blocked-proxy", "private-access"),
                         default="full")
+    parser.add_argument("--profile-template", type=pathlib.Path,
+                        default=pathlib.Path("browser-profile/user.js"))
     parser.add_argument("--mutation", choices=("none", "observe", "terminal-null", "opaque-context",
                         "terminal-null-and-blocker", "suppress-subrequest",
                         "delayed-fallback", "startup-release", "delayed-main-navigation",
@@ -1617,13 +1706,317 @@ def main() -> int:
         finally:
             socks.stop()
 
+    def run_private_access() -> None:
+        workdir = args.report_out.with_suffix(".t188")
+        template = t188_template_prefs(args.profile_template)
+        report["t188Template"] = {
+            "path": str(args.profile_template), "present": template is not None,
+            "sha256": sha256(args.profile_template) if template is not None else None,
+        }
+        # Without the template this is today's configuration: the probe's
+        # ordinary HTTP proxy catcher is the browser's own proxy.
+        baseline = dict(template or {})
+        port = destination.port
+        socks = Server(SocksHandler, 8881)  # Stargate's Tor port
+        socks.start()
+        # A destination on a local non-loopback address, reached by IP literal.
+        wide = ThreadingServer(("0.0.0.0", 0), DestinationHandler)
+        threading.Thread(target=wide.serve_forever, daemon=True).start()
+        lan = t188_lan_address()
+
+        def request(host: str, mode: str) -> dict[str, object]:
+            label = t186_label()
+            T186_LABELS.append(label)
+            name = host.replace("L", label)
+            return {"label": label, "host": name, "mapped": True,
+                    "url": f"http://{name}:{port}/{mode}/{label}"}
+
+        def protected(mode: str) -> dict[str, dict[str, object]]:
+            # Every form that must fail closed: the onion forms and a TLD that
+            # is not in the ICANN list.
+            return {"onion": request("L.onion", mode), "trailing-dot": request("L.onion.", mode),
+                    "mixed-case": request("L.OnIoN.", mode),
+                    "unknown-tld": request("L.zzqunknown", mode)}
+
+        def clearnet(mode: str) -> dict[str, dict[str, object]]:
+            return {"icann": request("L.com", mode), "subdomain-mixed-case": request("sub.L.CoM", mode)}
+
+        def session(name: str, requests: list[dict[str, object]], *, extension: pathlib.Path | None,
+                    allow: bool = True, autostart: bool = True, prefs: dict[str, object] | None = None,
+                    seed: bool = False, settle: float = 12,
+                    popup: bool = False, read_settings: bool = False,
+                    reload: bool = False) -> dict[str, object]:
+            trace = NameTrace(workdir, name)
+            session_prefs = dict(baseline)
+            session_prefs.update(t186_session_prefs(
+                [str(r["host"]) for r in requests if r.get("mapped")]))
+            session_prefs.update({"browser.privatebrowsing.autostart": autostart,
+                                  # Observation aid: extension notifications
+                                  # open an inspectable alert window.
+                                  "alerts.useSystemBackend": False})
+            session_prefs.update(prefs or {})
+            CAPTURES.reset("http", "destination", "socks", "impostor")
+            browser = WebDriver(args.browser, args.driver, extension or args.extension,
+                                http_proxy.port, True, args.driver_log, install_wait=3,
+                                extra_prefs=session_prefs, accept_insecure_certs=False,
+                                trace=trace, allow_private_browsing=allow,
+                                install=extension is not None,
+                                before_install=t188_record_alerts)
+            state: dict[str, object] = {}
+            try:
+                browser.set_context("chrome")
+                state["browser"] = browser.execute(
+                    "const {ExtensionParent}=ChromeUtils.importESModule("
+                    "'resource://gre/modules/ExtensionParent.sys.mjs');"
+                    "const e=ExtensionParent.GlobalManager.extensionMap.get('stargate@stargate.local');"
+                    "const locked=['network.proxy.type','network.proxy.socks',"
+                    "'network.proxy.no_proxies_on','network.proxy.socks_remote_dns'];"
+                    "return {proxyType:Services.prefs.getIntPref('network.proxy.type'),"
+                    "locked:Object.fromEntries(locked.map(n=>[n,Services.prefs.prefIsLocked(n)])),"
+                    "passthroughLength:Services.prefs.getStringPref('network.proxy.no_proxies_on').length,"
+                    "permanentPrivate:PrivateBrowsingUtils.permanentPrivateBrowsing,"
+                    "extensionLoaded:!!e,privateAllowed:e?e.privateBrowsingAllowed:null,"
+                    "backgroundViews:e?[...e.views].filter(v=>v.viewType==='background').length:0};"
+                )
+                if seed:
+                    browser.seed_valid_device()
+                if reload:
+                    # A temporary install starts the extension once before the
+                    # granted access applies (as a user's first load does);
+                    # observe the reloaded instance, as after the toggle.
+                    browser.restart_extension()
+                    time.sleep(3)
+                    browser.set_context("chrome")
+                    state["alertsBeforeReload"] = browser.execute(
+                        "const a=window.t188Alerts||[];return a.splice(0,a.length);")
+                    browser.navigate("moz-extension://stargate-test/options/options.html", timeout=3)
+                if read_settings:
+                    # From the extension's own options page (seed opened it).
+                    browser.set_context("content")
+                    state["proxySettingsRead"] = browser.execute_async(
+                        "const done=arguments[arguments.length-1];"
+                        "browser.proxy.settings.get({}).then(v=>done({value:v.value}),"
+                        "e=>done({error:String(e)}));"
+                    )
+                if popup:
+                    state["popupLabel"] = browser.blocked_popup_label()
+                t186_run_requests(browser, requests, settle=settle)
+                browser.set_context("chrome")
+                state["alerts"] = browser.execute("return window.t188Alerts || [];")
+            finally:
+                browser.close()
+            results = {}
+            for item in requests:
+                hits = t186_hits(str(item["label"]), trace)
+                results[str(item["host"])] = {
+                    "terminal": item.get("terminal"), "terminalError": t186_terminal_error(item),
+                    "hits": hits, "clean": t186_clean(hits),
+                }
+            state.update({"results": results, "socks": CAPTURES.snapshot("socks"),
+                          "sinkConnectAttempts": len(trace.connects("/dev/null/stargate-blocked"))})
+            return state
+
+        def fails_closed(state: dict[str, object], forms: dict[str, dict[str, object]]) -> bool:
+            return all(state["results"][str(r["host"])]["clean"] and
+                       state["results"][str(r["host"])]["terminalError"] for r in forms.values())
+
+        def never_loads(state: dict[str, object], forms: dict[str, dict[str, object]]) -> bool:
+            # The extension cancels the requests it sees; a canceled
+            # navigation leaves no error page, so "incomplete" after the
+            # observation window with every surface empty is the blocked
+            # outcome (T157 records the cancellation itself).
+            return all(state["results"][str(r["host"])]["clean"] and
+                       (state["results"][str(r["host"])]["terminal"] or {}).get("kind") != "loaded"
+                       for r in forms.values())
+
+        def loads_direct(state: dict[str, object], forms: dict[str, dict[str, object]]) -> bool:
+            out = True
+            for item in forms.values():
+                result = state["results"][str(item["host"])]
+                hits = result["hits"]
+                out = out and (bool(hits["destination"]) and not hits["systemProxy"] and
+                               not hits["socks"] and (result["terminal"] or {}).get("kind") == "loaded")
+            return out
+
+        def unlocked(state: dict[str, object]) -> bool:
+            return not any(state["browser"]["locked"].values())
+
+        try:
+            # Calibrated surfaces: destination, resolver, ordinary proxy.
+            controls = t186_controls(port, "sysproxy", "direct")
+            state = session("controls-ordinary-proxy", [controls["system-proxy"]], extension=None,
+                            prefs={"network.proxy.type": 1, "network.proxy.http": "127.0.0.1",
+                                   "network.proxy.http_port": http_proxy.port,
+                                   "network.proxy.no_proxies_on": ""}, settle=0)
+            sys_ok = bool(state["results"][str(controls["system-proxy"]["host"])]["hits"]["systemProxy"])
+            dstate = session("controls-direct", [controls["destination"], controls["dns"]],
+                             extension=None, prefs={"network.proxy.type": 0}, settle=2)
+            dhits = {n: dstate["results"][str(controls[n]["host"])]["hits"]
+                     for n in ("destination", "dns")}
+            record("t188-positive-controls", sys_ok and bool(dhits["destination"]["destination"]) and
+                   bool(dhits["dns"]["dnsStrace"]) and bool(dhits["dns"]["dnsMozLog"]),
+                   extra={"ordinaryProxy": state, "direct": dstate})
+
+            # The baseline's sink, replaced by a live Unix SOCKS listener, must
+            # receive every protected name by name (proxy-side DNS) while the
+            # ICANN names bypass it.
+            live_path = workdir / "live-sink.sock"
+            live = UnixServer(ImpostorSocksHandler, live_path)
+            live.start()
+            try:
+                forms, clear = protected("calibration"), clearnet("calibration")
+                state = session("baseline-live-sink-calibration",
+                                list(forms.values()) + list(clear.values()), extension=None,
+                                prefs={"network.proxy.socks": "file://" + str(live_path.resolve())}
+                                if template is not None else {}, settle=3)
+            finally:
+                live.stop()
+            named = {k: [x for x in state["socks"] if str(r["label"]) in str(x.get("host"))]
+                     for k, r in forms.items()}
+            record("t188-baseline-sink-receives-protected-names-remotely", (
+                template is not None and all(named.values()) and loads_direct(state, clear) and
+                all(not state["results"][str(r["host"])]["hits"]["dnsStrace"] and
+                    not state["results"][str(r["host"])]["hits"]["dnsMozLog"] for r in forms.values())
+            ), extra={"session": state, "namesAtSink": named})
+
+            # Checks 1, 2 and 4: extension absent, or present without
+            # private-window access (permanent private mode never starts it).
+            for name, extension, allow in (("no-extension", None, True),
+                                           ("extension-without-access", args.extension, False)):
+                forms, clear = protected(name), clearnet(name)
+                state = session("ppb-" + name, list(forms.values()) + list(clear.values()),
+                                extension=extension, allow=allow)
+                record(f"t188-ppb-{name}-protected-fail-closed-clearnet-direct", (
+                    fails_closed(state, forms) and loads_direct(state, clear) and unlocked(state) and
+                    state["browser"]["permanentPrivate"] is True and
+                    state["browser"]["passthroughLength"] > 10000 and
+                    (extension is None or state["browser"]["backgroundViews"] == 0)
+                ), extra={"session": state})
+
+            # Check 5 (recorded, not asserted): an emptied or garbled SOCKS pref.
+            # Check 6 (recorded): CIDR entries and IP-literal destinations.
+            informational: dict[str, object] = {}
+            if template is not None:
+                for name, value in (("emptied", ""), ("garbled", "not a proxy host")):
+                    forms = protected("socks-" + name)
+                    st = session("socks-" + name, list(forms.values()), extension=None,
+                                 prefs={"network.proxy.socks": value})
+                    informational["socks-" + name] = {
+                        "failsClosed": fails_closed(st, forms),
+                        "surfaces": {k: sorted(h for h, v in st["results"][str(r["host"])]["hits"].items() if v)
+                                     for k, r in forms.items()},
+                        "terminals": {k: (st["results"][str(r["host"])]["terminal"] or {}).get("kind")
+                                      for k, r in forms.items()}}
+                for name, extra in (("list-only", {}), ("with-cidr", {
+                        "network.proxy.no_proxies_on":
+                            str(baseline["network.proxy.no_proxies_on"]) + ",0.0.0.0/0,::/0"})):
+                    label = t186_label()
+                    T186_LABELS.append(label)
+                    item = {"label": label, "host": lan, "mapped": False,
+                            "url": f"http://{lan}:{wide.server_address[1]}/ip-literal/{label}"}
+                    st = session("ip-literal-" + name, [item], extension=None, prefs=extra, settle=3)
+                    informational["ip-literal-" + name] = {
+                        "reachedDestination": bool(st["results"][lan]["hits"]["destination"]),
+                        "terminal": (st["results"][lan]["terminal"] or {}).get("kind"),
+                        "sinkConnectAttempts": st["sinkConnectAttempts"]}
+            record("t188-socks-pref-and-ip-literal-observations", True, extra=informational)
+
+            # Detection where the extension runs: ordinary windows, no access.
+            forms = protected("detect")
+            state = session("ordinary-extension-without-access", list(forms.values()),
+                            extension=args.extension, allow=False, autostart=False, seed=True, popup=True,
+                            read_settings=True)
+            alerts = [a for a in state["alerts"] if "Run in Private Windows" in a and "about:addons" in a]
+            # Gecko refuses only proxy.settings.set without private-browsing
+            # access; reading works, so the tamper check runs here too.
+            settings_read = "value" in (state.get("proxySettingsRead") or {})
+            record("t188-ordinary-windows-without-access-detected-and-blocked", (
+                state["browser"]["permanentPrivate"] is False and state["browser"]["backgroundViews"] == 1 and
+                state["browser"]["privateAllowed"] is False and bool(alerts) and settings_read and
+                not [a for a in state["alerts"] if "baseline" in a] and
+                str(state.get("popupLabel")).endswith(T188_NO_PRIVATE_ACCESS_LABEL) and
+                never_loads(state, forms)
+            ), extra={"session": state, "matchingAlerts": alerts,
+                      "proxySettingsReadableWithoutAccess": settings_read})
+
+            # Check 3: with access, in both browser modes, Tor overrides the
+            # baseline, `{type:'direct'}` reaches the ICANN bypass, and the
+            # intact baseline raises no warning.
+            for mode, autostart in (("ppb", True), ("ordinary", False)):
+                onions = {k: v for k, v in protected("tor-" + mode).items() if k != "unknown-tld"}
+                clear = clearnet("tor-" + mode)
+                state = session(f"{mode}-extension-with-access",
+                                list(onions.values()) + list(clear.values()),
+                                extension=args.extension, autostart=autostart, seed=True,
+                                settle=2, popup=True, read_settings=True, reload=True)
+                reached = {k: [x for x in state["socks"] if str(r["label"]) in str(x.get("host")) and
+                               x.get("passwordMatches") is True] for k, r in onions.items()}
+                leaks = {k: sorted(n for n, v in state["results"][str(r["host"])]["hits"].items()
+                                   if v and n != "socks") for k, r in onions.items()}
+                record(f"t188-{mode}-with-access-tor-and-direct", (
+                    all(reached.values()) and not any(leaks.values()) and
+                    loads_direct(state, clear) and not state["alerts"] and
+                    state["browser"]["backgroundViews"] == 1 and
+                    state["browser"]["privateAllowed"] is True and
+                    state["browser"]["permanentPrivate"] is autostart and
+                    "value" in (state.get("proxySettingsRead") or {}) and
+                    str(state.get("popupLabel")).startswith("Main navigation decision:")
+                ), extra={"session": state, "socksReached": reached, "protectedLeaks": leaks})
+
+            # Tamper check: the same session with the baseline changed.
+            if template is not None:
+                trimmed = str(baseline["network.proxy.no_proxies_on"]).replace(",.zw", "")
+                clear = clearnet("drift")
+                state = session("ppb-extension-baseline-drift", list(clear.values()),
+                                extension=args.extension, seed=True, settle=2, popup=True,
+                                prefs={"network.proxy.no_proxies_on": trimmed + ",.test"})
+                warned = [a for a in state["alerts"] if "baseline" in a and "user.js" in a]
+                record("t188-baseline-drift-warned", (
+                    bool(warned) and str(state.get("popupLabel")).startswith(T188_BASELINE_WARNING)
+                ), extra={"session": state, "matchingAlerts": warned})
+
+            # Check 3: a router misclassification of `.onion.` as Direct, with
+            # the cancel layer disabled, reaches the sink. The same mutant under
+            # today's ordinary proxy calibrates the mutation.
+            mutant, identity = variant_extension(
+                args.extension, workdir / "forced-direct.zip", "delayed-fallback")
+            caught: dict[str, object] = {}
+            for name, prefs in (("baseline", {}), ("ordinary-proxy-calibration", {
+                    "network.proxy.type": 1, "network.proxy.socks": "",
+                    "network.proxy.http": "127.0.0.1", "network.proxy.http_port": http_proxy.port,
+                    "network.proxy.no_proxies_on": ""})):
+                item = request("L.onion.", "delayed-fallback")
+                st = session("forced-direct-" + name, [item], extension=mutant,
+                             seed=True, prefs=prefs)
+                caught[name] = {"state": st, "result": st["results"][str(item["host"])]}
+            record("t188-forced-direct-onion-reaches-the-sink", (
+                template is not None and caught["baseline"]["result"]["clean"] and
+                caught["baseline"]["result"]["terminalError"] and
+                bool(caught["ordinary-proxy-calibration"]["result"]["hits"]["systemProxy"])
+            ), extra={"mutation": identity, "sessions": caught})
+        finally:
+            socks.stop()
+            wide.shutdown()
+            wide.server_close()
+
     def finish() -> int:
         report["result"] = "GREEN" if not failures else "RED"
         report["failures"] = failures
         rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
         args.report_out.parent.mkdir(parents=True, exist_ok=True)
         args.report_out.write_text(rendered)
-        if args.only in ("descriptor-matrix", "blocked-proxy"):
+        if args.only == "private-access":
+            # The complete record is in --report-out; stdout carries verdicts.
+            observed = scenarios.get("t188-socks-pref-and-ip-literal-observations", {})
+            print(json.dumps({
+                "browserVersion": report["browserVersion"], "result": report["result"],
+                "failures": report["failures"], "template": report.get("t188Template"),
+                "passed": {name: value["passed"] for name, value in scenarios.items()},
+                "observations": {k: v for k, v in observed.items()
+                                 if k not in ("passed", "httpCaptures", "destinationCaptures",
+                                              "socksCaptures")},
+            }, indent=1, sort_keys=True))
+        elif args.only in ("descriptor-matrix", "blocked-proxy"):
             # The complete record (captures, strace and MOZ_LOG lines) is in
             # --report-out; stdout carries the per-request surface verdicts.
             print(json.dumps(t186_summary(report), indent=1, sort_keys=True))
@@ -1631,10 +2024,12 @@ def main() -> int:
             print(rendered, end="")
         return 0 if not failures else 1
 
-    if args.only in ("descriptor-matrix", "blocked-proxy"):
+    if args.only in ("descriptor-matrix", "blocked-proxy", "private-access"):
         try:
             if args.only == "descriptor-matrix":
                 run_descriptor_matrix()
+            elif args.only == "private-access":
+                run_private_access()
             else:
                 run_blocked_proxy()
         finally:

@@ -3,8 +3,9 @@
 //
 // router.js — per-request `.onion` routing plus the T136
 // authenticated-device/browser-profile/top-level-site isolation tuple, the
-// T157 terminal fail-closed decision shared by proxy/webRequest events and
-// the T186 unreachable proxy sink for blocked protected requests.
+// T157 terminal fail-closed decision shared by proxy/webRequest events,
+// the T186 unreachable proxy sink for blocked protected requests, and the
+// T188 private-window access gate and profile-baseline tamper check.
 
 'use strict';
 
@@ -33,6 +34,36 @@
   const MAX_REQUEST_DECISIONS = 512;
   const textEncoder = new TextEncoder();
 
+  // T188 / Principle III: Mullvad Browser runs every window in private
+  // browsing. Without private-window access these listeners cannot see
+  // private-window requests (in permanent private mode the extension does not
+  // start at all), so protected routing is never offered while access is
+  // missing, unreadable or not yet confirmed, and the user is told.
+  const PRIVATE_ACCESS_NOTIFICATION = 'stargate-private-window-access';
+  // T188 option 6: requests this extension does not route with a Tor
+  // descriptor (its `{type:'direct'}` result included) follow the browser's
+  // proxy settings. The dedicated profile's browser-profile/user.js makes
+  // those fail closed; this is its expected `proxy.settings` reading
+  // (router.test.js derives every field from the template). The 11 KB
+  // passthrough list is pinned by a 64-bit FNV-1a fingerprint: this detects
+  // drift and damage, not a forger, who could equally edit this extension.
+  // It is synchronous, so popup answers never wait on a crypto worker. A
+  // mismatch warns only: it never changes routing.
+  const BASELINE_NOTIFICATION = 'stargate-proxy-baseline';
+  const BASELINE = Object.freeze({
+    proxyType: 'manual',
+    autoConfigUrl: '',
+    proxyDNS: true,
+    httpProxyAll: false,
+    socksVersion: 5,
+    http: '',
+    ssl: '',
+    socks: 'file:///dev/null/stargate-blocked',
+    passthroughFnv1a64: '810100f78ef443af',
+  });
+
+  let privateAccess = false;
+  let baselineState = null;
   let mirroredToken = null;
   let mirroredKey = null;
   let tokenGeneration = 0;
@@ -122,6 +153,88 @@
     }
     if (mirroredKey !== null) mirroredKey.catch(() => {});
   }
+
+  // Firefox's notifications.create rejects `requireInteraction` ("Unexpected
+  // property", Mullvad Browser 153 live, THREAT-MODEL T188), so a
+  // notification is transient; the popup state is the persistent report.
+  function notify(id, title, message) {
+    try {
+      return Promise.resolve(browser.notifications.create(id, {
+        type: 'basic',
+        title,
+        message,
+      })).catch(() => {});
+    } catch {
+      return Promise.resolve();
+    }
+  }
+
+  const privateAccessReady = (async () => {
+    let allowed = false;
+    try {
+      allowed = (await browser.extension.isAllowedIncognitoAccess()) === true;
+    } catch {
+      allowed = false;
+    }
+    privateAccess = allowed;
+    // Not awaited: the blocked state must never wait on the notification UI.
+    if (!allowed) {
+      void notify(
+        PRIVATE_ACCESS_NOTIFICATION,
+        'Stargate: allow "Run in Private Windows"',
+        'Open about:addons > Stargate and allow "Run in Private Windows". ' +
+          'Until then Stargate cannot see or route private-window requests ' +
+          '(Mullvad Browser uses private windows for all browsing) and blocks ' +
+          'the .onion requests it can see.'
+      );
+    }
+  })();
+
+  function fnv1a64(text) {
+    let hash = 0xcbf29ce484222325n;
+    for (const byte of textEncoder.encode(text)) {
+      hash = ((hash ^ BigInt(byte)) * 0x100000001b3n) & 0xffffffffffffffffn;
+    }
+    return hash.toString(16).padStart(16, '0');
+  }
+
+  async function readBaseline() {
+    try {
+      const setting = await browser.proxy.settings.get({});
+      const value = setting !== null && typeof setting === 'object' ? setting.value : null;
+      if (value === null || typeof value !== 'object' || typeof value.passthrough !== 'string') {
+        return 'unknown';
+      }
+      for (const [field, expected] of Object.entries(BASELINE)) {
+        const actual = field === 'passthroughFnv1a64' ? fnv1a64(value.passthrough) : value[field];
+        if (actual !== expected) return 'mismatch';
+      }
+      return 'match';
+    } catch {
+      return 'unknown';
+    }
+  }
+
+  async function checkBaseline() {
+    const state = await readBaseline();
+    const changed = state !== baselineState;
+    baselineState = state;
+    if (state !== 'match' && changed) {
+      void notify(
+        BASELINE_NOTIFICATION,
+        'Stargate: fail-closed baseline missing or changed',
+        'Reinstall browser-profile/user.js as the quickstart describes and ' +
+          'restart the browser. Until then requests Stargate does not route ' +
+          'follow the browser proxy settings and may connect directly.'
+      );
+    }
+  }
+
+  // Reading proxy.settings needs no private-browsing access (Gecko requires
+  // it only to set them; confirmed live, THREAT-MODEL T188), so the baseline
+  // is compared whenever the extension runs.
+  const baselineReady = checkBaseline();
+  baselineReady.catch(() => {});
 
   const tokenReady = (() => {
     const startingGeneration = tokenGeneration;
@@ -261,6 +374,8 @@
 
   async function route(details) {
     if (!onionDestination(details)) return { route: 'direct' };
+    await privateAccessReady;
+    if (privateAccess !== true) return { route: 'blocked' };
     if (hardeningOk !== true) return { route: 'blocked' };
 
     await tokenReady;
@@ -388,6 +503,7 @@
 
   function decisionStillCurrent(decision) {
     return (
+      privateAccess === true &&
       hardeningOk === true &&
       decision.route === 'tor' &&
       decision.tokenGeneration === tokenGeneration &&
@@ -515,11 +631,19 @@
     if (message.type !== GET_ROUTE) return undefined;
     const tabId = message.tabId;
     if (!validTabId(tabId)) return undefined;
-    const decision = tabDecisions.get(tabId)?.route;
-    if (decision === 'tor') return Promise.resolve({ route: 'tor' });
-    if (decision === 'direct') return Promise.resolve({ route: 'unrouted' });
-    if (decision === 'blocked') return Promise.resolve({ route: 'blocked' });
-    return Promise.resolve(undefined);
+    // T188: each popup query re-reads the baseline, so a change after
+    // startup is reported; the access answer takes precedence over routes.
+    return Promise.all([privateAccessReady, checkBaseline()])
+      .catch(() => {})
+      .then(() => {
+        const warning = baselineState === 'match' ? {} : { baseline: baselineState ?? 'unknown' };
+        if (privateAccess !== true) return { route: 'no-private-access', ...warning };
+        const decision = tabDecisions.get(tabId)?.route;
+        if (decision === 'tor') return { route: 'tor', ...warning };
+        if (decision === 'direct') return { route: 'unrouted', ...warning };
+        if (decision === 'blocked') return { route: 'blocked', ...warning };
+        return Object.keys(warning).length === 0 ? undefined : warning;
+      });
   });
 
   browser.storage.onChanged.addListener(function stargateOnStorageChanged(

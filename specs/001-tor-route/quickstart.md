@@ -121,26 +121,62 @@ your token.
 
 ---
 
-## Step 3 — Install the Stargate WebExtension (1 minute)
+## Step 3 — Create the Stargate browser profile and install the WebExtension (2 minutes)
+
+Stargate uses a **dedicated Mullvad Browser profile** whose own proxy settings fail
+closed (T188). Mullvad Browser runs every window in private browsing, and any request
+the extension does not route through Tor (because it is not installed, not allowed in
+private windows, disabled or still starting) uses the browser's proxy settings. The
+template `browser-profile/user.js` sets those to an unreachable SOCKS5 proxy with
+proxy-side DNS, bypassed only for ordinary ICANN top-level domains. Do not use it in
+your daily profile.
 
 ```bash
+# Create the profile with the baseline before its first start:
+mkdir -p ~/.stargate-browser-profile
+cp browser-profile/user.js ~/.stargate-browser-profile/user.js
+mullvad-browser --no-remote --profile ~/.stargate-browser-profile
+
 # Build the deterministic extension zip:
 ./extension/package.sh
 # produces dist/stargate-extension.zip
 ```
 
-In Mullvad Browser:
+Always start Stargate browsing with that `--profile` command. In that profile:
 
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Extract `dist/stargate-extension.zip` to a temporary directory.
 3. Click **Load Temporary Add-on** and select the extracted
    `manifest.json`. (Firefox's "Load Temporary Add-on" accepts an
    unpacked `manifest.json` or a signed `.xpi`, not a raw `.zip`.)
-
-The extension's icon appears in the toolbar.
+4. **Required:** open `about:addons` → **Stargate** → set **Run in Private
+   Windows** to **Allow**. A temporary load does not grant it, and without it
+   the extension never starts in Mullvad Browser's private windows.
+5. **Positive check:** the Stargate icon is in the toolbar (or the extensions
+   menu) and clicking it opens the Stargate popup. If the popup does not open, or
+   shows `Stargate is not protecting private windows` or a `Warning: the Stargate
+   fail-closed proxy baseline …` line, Stargate is not protecting this browser:
+   fix step 4 or reinstall `user.js`, then restart the browser.
 
 > **Note**: temporary load is for v1 quickstart only. The signed-add-on
-> distribution flow is a later feature.
+> distribution flow is a later feature. A temporary add-on is removed when the
+> browser closes: repeat steps 1–5 after every restart. Until you do, the
+> profile baseline keeps `.onion` addresses from loading at all.
+
+**What the baseline does and does not cover** (THREAT-MODEL §4.2, T188):
+
+- With the extension missing, disabled or without private-window access,
+  `.onion` addresses in any spelling and names under unknown top-level domains
+  fail to load; ordinary clearnet sites load directly, as they do through the
+  extension's Direct route.
+- Skipping the profile step reverts to whatever proxy settings the browser has:
+  `.onion` requests the extension cannot see may then reach a configured proxy.
+- A top-level domain delegated after the list in `user.js`, a name with a
+  trailing dot (`example.com.`) and non-loopback IP addresses fail to load in this
+  profile until a reviewed list update.
+- Emptying or changing the SOCKS setting (`network.proxy.socks`) makes names
+  that are not bypassed connect directly; the running extension warns when the
+  live settings differ from `user.js`, but cannot warn when it is not running.
 
 ---
 

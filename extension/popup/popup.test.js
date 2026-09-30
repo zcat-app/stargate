@@ -530,3 +530,56 @@ test('refreshClearsTorWhileTheNewDecisionIsUnreadable', async () => {
   await drain();
   assert.strictEqual(renderedLabel(h), LABEL_DIRECT);
 });
+
+// T188: where the extension runs without private-window access, the
+// background answers `no-private-access`. The popup shows the unprotected
+// state (spec.md §Per-tab indicator scope) instead of any route label.
+const LABEL_NO_PRIVATE_ACCESS =
+  'Stargate is not protecting private windows: "Run in Private Windows" is not ' +
+  'allowed or not confirmed. Stargate blocks the .onion requests it can see. ' +
+  'Allow it in about:addons > Stargate.';
+
+test('missingPrivateWindowAccessShowsUnprotectedState', async () => {
+  const state = {
+    activeTab: { id: 7, url: `https://${ONION}/page` },
+    reply: () => Promise.resolve({ route: 'no-private-access' }),
+  };
+  const h = loadPopup(state);
+  requireConformance(h.sandbox);
+  await drain();
+  assert.strictEqual(renderedLabel(h), LABEL_NO_PRIVATE_ACCESS,
+    'the popup reports the unprotected private-window state byte-exact');
+  for (const reply of [{ route: 'NO-PRIVATE-ACCESS' }, { route: 'no-private-access ' }]) {
+    const other = loadPopup({ activeTab: { id: 7 }, reply: () => Promise.resolve(reply) });
+    await drain();
+    assert.strictEqual(renderedLabel(other), LABEL_UNKNOWN,
+      'only the exact answer selects the unprotected label');
+  }
+});
+
+// T188 tamper check: when the background reports that the profile's
+// fail-closed proxy baseline is missing, changed or unverifiable, the popup
+// states it before the route label.
+const BASELINE_WARNING =
+  'Warning: the Stargate fail-closed proxy baseline of this profile is missing, ' +
+  'changed or unverifiable, so requests Stargate does not route follow the browser ' +
+  'proxy settings. Reinstall browser-profile/user.js (quickstart).';
+
+test('baselineDriftPrefixesTheWarningToEveryLabel', async () => {
+  const cases = [
+    [{ route: 'tor', baseline: 'mismatch' }, LABEL_TOR],
+    [{ route: 'unrouted', baseline: 'unknown' }, LABEL_DIRECT],
+    [{ baseline: 'mismatch' }, LABEL_UNKNOWN],
+    [{ route: 'no-private-access', baseline: 'mismatch' }, LABEL_NO_PRIVATE_ACCESS],
+  ];
+  for (const [reply, label] of cases) {
+    const h = loadPopup({ activeTab: { id: 7 }, reply: () => Promise.resolve(reply) });
+    requireConformance(h.sandbox);
+    await drain();
+    assert.strictEqual(renderedLabel(h), BASELINE_WARNING + ' ' + label,
+      `reply ${JSON.stringify(reply)} shows the baseline warning first`);
+  }
+  const intact = loadPopup({ activeTab: { id: 7 }, reply: () => Promise.resolve({ route: 'tor' }) });
+  await drain();
+  assert.strictEqual(renderedLabel(intact), LABEL_TOR, 'an intact baseline adds nothing');
+});

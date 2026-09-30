@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 35 |
+| pending | 34 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 184 |
 | deferred | 5 |
@@ -32,7 +32,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T184 | Pin the Tor sidecar package closure against index rollback | Foundation audit remediation | ✓ | ✓ |
 | T185 | Lock control-plane Maven dependency identities | Foundation audit remediation | ✓ | ✓ |
 | T187 | Report pending or stale revocation; count only after DP ack | Foundation audit remediation | ✓ | ✓ |
-| T188 | Detect and require private-window access for the extension | Foundation audit remediation | ✓ | ✓ |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T191 | Resolve surviving deployment-area redteam minors and audit g | Foundation audit remediation | ✓ | ✓ |
@@ -41,7 +40,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T188 | Detect and require private-window access for the extension | in-review | ✓ | Foundation audit remediation |
 
 ---
 

@@ -123,6 +123,47 @@ python3 tests/live-e2e/mullvad-browser-hardening/probe.py \
 The extension requires Gecko 153 or later; `descriptor-matrix` also runs
 on older browsers because it installs only its own test extension.
 
+## Private-window access and the profile baseline (`probe.py`; T188)
+
+`--only private-access` applies the shipped `browser-profile/user.js`
+(`--profile-template`) to every session and uses the same per-request tabs,
+twelve-second observation and four surfaces as T186. Sessions install the
+real package without private-window access unless a scenario grants it, as a
+temporary about:debugging load does. It checks, with in-run controls:
+
+- the baseline sink, moved to a live Unix SOCKS listener, receives every
+  protected name by name (proxy-side DNS) while ICANN names bypass it;
+- permanent private mode with no extension, and with the extension installed
+  without access (its background never starts): `.onion`, `.onion.`,
+  mixed-case and an unknown TLD fail closed on every surface; `.com` and a
+  mixed-case subdomain load directly; the proxy prefs are not locked;
+- ordinary windows without access: the extension's notification (title and
+  text recorded as its alert window opens, with `alerts.useSystemBackend=false`),
+  the popup's unprotected state, a blocked protected request, and a readable
+  `proxy.settings` (Gecko requires private-browsing access only to set it);
+- with access, in permanent private and in ordinary windows (observed after an
+  extension reload, as after the about:addons toggle; a temporary install first
+  starts once without the grant): Tor reaches the
+  8881 catcher with the credential and no other surface, clearnet
+  `{type:'direct'}` loads directly, `proxy.settings` is readable and no warning
+  appears; with a changed `no_proxies_on` the baseline warning appears in the
+  notification and popup;
+- a `delayed-fallback` mutant whose router returns Direct for `.onion.` with
+  the cancel layer disabled reaches the sink (calibrated under an ordinary
+  proxy, where the same mutant reaches that proxy);
+- recorded, not asserted: an emptied or garbled `network.proxy.socks`, and
+  whether CIDR entries bypass a non-loopback IP literal.
+
+Without the template file the sessions run today's ordinary-proxy
+configuration, which is the red state.
+
+```sh
+python3 tests/live-e2e/mullvad-browser-hardening/probe.py \
+  --browser <mullvadbrowser binary> --driver <geckodriver> \
+  --extension extension/dist/stargate-extension.zip \
+  --only private-access --report-out target/runs/T188-private-access.json
+```
+
 ## Preserve / reset split
 
 - **Preserve** (carry across runs): the test profile's hardened pref
