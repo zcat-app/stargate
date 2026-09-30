@@ -64,7 +64,8 @@ maintains the in-memory token list and the data-plane snapshot file.
    │  - drop plaintext from the mutable buffer    │
    │  - reserve changed generation, then persist   │
    │    the full configured_tokens candidate      │
-   │  - Increment hourly operational counts       │
+   │  - count enrolled/revoked only after the DP  │
+   │    acknowledges this exact generation (T187) │
    └────────────────────────┬─────────────────────┘
                             │ gRPC ReloadTokens(generation, verifiers[])
                             ▼
@@ -334,6 +335,7 @@ has accepted any generation ≥ 1 — sol-review M1).
 | Write              | After a successful changed `tokens.yaml` parse, the CP reserves the next generation before changing verifier rows, commits the full candidate, then issues durable `ReloadTokens`. A crash before row commit may consume a number but cannot bind new content to an old number. Delivery/ack loss leaves the exact candidate pending for same-generation replay/redelivery. |
 | Stale recovery | Refuse stale credential contents. No rejection, timeout, response field, or restart automatically promotes old content to `current + 1`. Explicit rollback is offline and operator-confirmed. |
 | DB-wipe recovery | Missing CP authority does not authorize an empty or old list. T159 defines explicit recovery; retain valid DP state meanwhile. |
+| Delivery status (T187) | The running CP's current delivery state for its candidate is `PENDING` (no exact acknowledgment yet), `ACKNOWLEDGED(<generation>)` (exact durable acknowledgment) or `STALE_CONFLICT` (stale refusal; terminal for that CP process, never retried or renumbered). It is one overwritten ASCII line in the CP container's private `/tmp` tmpfs file `/tmp/stargate-control/auth-delivery` (mode 0600 in a 0700 directory; not the shared `/run/stargate` IPC volume or persistent `/var/lib/stargate`), removed at CP start, and the CP attempts to write `PENDING` before the initial RPC. UNKNOWN can also occur while a delivery is in flight if status publication fails. A failed replacement write withdraws the previous value (an obsolete state never reads as current) and is retried in the background until the latest state is written. `scripts/stargate status` reads it through `docker compose exec` and prints only validated vocabulary: an absent file is `UNKNOWN` (exit 50) and an unreadable one is "state unavailable" (exit 20), neither claiming a lifecycle. No history, timestamp, label or count is recorded (Constitution III current-lifecycle-enum allowance). Stale-conflict recovery is the operator procedure in quickstart.md §"Stale-conflict recovery" (THREAT-MODEL §5.15). |
 | Durability         | The generation is durable state, not a cache. Losing it does NOT revoke clients (the DP keeps serving) and does NOT authorize automatic reseeding; use the explicit offline recovery procedure. A running CP redelivers its intact pending candidate when DP IPC returns and retains the latest acknowledged non-stale authority for one event-driven replay after a peer-side authenticated-channel disconnect. Scheduled local channel retirement sends no reload. |
 
 ### 1.9 `configured_tokens` — the manual-YAML token record (T092 / sol-review M1)
@@ -486,6 +488,13 @@ is used. The other two arguments are discarded immediately, never put into accum
 transaction state. An invalid category raises a static error without echoing input. Existing
 loader/parser tests can inspect transient caller arguments; those fixtures are not a storage
 contract or permission to retain them.
+
+T187: `enrolled`/`revoked` describe applied credential changes. The loader records them outside
+the candidate transaction, only after the DP acknowledges that exact generation, as standalone
+observations in the acknowledgment's hour. A pending delivery counts nothing until acknowledged
+while this CP runs; a stale refusal never counts; a CP restart before acknowledgment replays the
+same candidate with no diff, so that change is never counted (an undercount, never a premature
+success claim). A later reconnect re-acknowledgment does not count again.
 
 A transaction stores only a five-counter vector in transaction-local memory. Only a successful
 commit contributes it, using the UTC hour at completion. Rollback and rollback-only transactions

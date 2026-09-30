@@ -2019,6 +2019,26 @@ retained DP state until the update arrives. The operator may stop the route to s
 After acknowledged revocation, new admissions using that credential are denied; existing
 byte pipes may finish. Revocation does not claim to terminate established application sessions.
 
+**Operator-visible delivery state (T187).** The running CP reports one current state for its
+credential candidate: `PENDING` until an exact durable acknowledgment, `ACKNOWLEDGED(<generation>)`
+after it, or `STALE_CONFLICT` when the DP refuses it as stale. `scripts/stargate status` reads it
+through `docker compose exec` from a CP-private tmpfs file (`/tmp/stargate-control/auth-delivery`,
+outside the DP-shared IPC volume) and prints only validated vocabulary with distinct exit codes.
+`PENDING` is published before the initial RPC; a failed replacement write withdraws the previous
+value and is retried, so an obsolete state never reads as current; an absent or unreadable file is
+reported as `UNKNOWN` or unavailable, never as a lifecycle claim.
+It carries no history, timestamp, label or count and is removed at CP start (Constitution III
+current-lifecycle-enum allowance); Docker-daemon access is the operator authentication, and anyone
+with it already controls the stack. `enrolled`/`revoked` operational counts are written only on
+the exact acknowledgment, never at candidate commit or on a stale refusal, so no persisted trace
+claims a pending or refused revocation succeeded. Residue: the status describes this CP process
+only. With the CP stopped, `status` reports the CP unavailable rather than the DP's generation, and
+a revocation still pending when the CP stops is never counted after restart (the replay has no
+diff). The status is advisory: a local process able to write the CP container's private `/tmp` could forge
+it, but such a process already has CP authority. `STALE_CONFLICT` is terminal for the CP process;
+recovery is the explicit operator procedure below (quickstart §"Stale-conflict recovery"), never
+automatic renumbering.
+
 Valid durable snapshots support CP-down restart. Missing/corrupt/incompatible snapshots deny
 new admission. Supported crash/restart must not undo an acknowledged revocation, and ordinary
 reconnect must not relabel credentials restored from a stale CP backup as fresh authority.

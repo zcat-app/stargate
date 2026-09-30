@@ -119,6 +119,69 @@ this is the first token load). After the restart, the new generation is
 pushed via gRPC and the data plane accepts requests authenticated with
 your token.
 
+### Check token delivery (and revocation)
+
+A change to `tokens.yaml` — including removing a label to revoke it — is
+**not effective until the data plane acknowledges it**. Check the control
+plane's current delivery state (T187):
+
+```bash
+scripts/stargate status
+```
+
+| Output / exit | Meaning |
+|---|---|
+| `ACKNOWLEDGED(<generation>)` / 0 | The data plane durably applied exactly this credential set. A removed token is refused for new requests; already-open connections may finish. |
+| `PENDING` / 30 | Not acknowledged yet (typically the data plane is down or restarting). The control plane keeps redelivering while it runs; **a revocation is not effective yet**. Stop the route (`$COMPOSE stop stargate-dp`) if access must end now. |
+| `STALE_CONFLICT` / 40 | The data plane refused the set because it already holds a newer generation (typically after the control-plane database was lost or restored from an older backup). Nothing was applied and it is not retried. Follow the recovery below. |
+| `UNKNOWN` / 50 | This control-plane process has published no delivery state: it started no delivery (`tokens.yaml` missing or invalid, or its state store unavailable), it is still starting, or its status write is failing. The control plane attempts to publish `PENDING` before each delivery starts; UNKNOWN can also occur while a delivery is in flight if status publication fails. Check `tokens.yaml`, restart `stargate-control`, and check again. |
+| exit 20 | State unavailable: the control plane is not running or its status could not be read. Nothing is claimed about delivery; the data plane keeps serving its last acknowledged state. |
+
+The value is one current state kept in the control plane's private
+memory-backed `/tmp` (volatile, lost when its container stops); it
+records no history, timestamps, labels or counts. The hourly
+`enrolled`/`revoked` operational counts likewise include a change only once
+this running control plane observes the acknowledgement.
+
+#### Stale-conflict recovery
+
+`STALE_CONFLICT` never renumbers or forces the older set onto the data
+plane automatically, because doing so could silently re-authorize revoked
+tokens from an old backup (Constitution II; THREAT-MODEL §5.15). Choose one:
+
+1. **Restore the newer control-plane state (preferred).** If you still have
+   the `stargate-control-state` volume content that matches the data plane
+   (the state before the loss/restore), stop `stargate-control`, put that
+   content back (with the matching `stargate-control-config`, and the matching
+   `stargate-keys` pepper/IPC keys if those were replaced too), start it
+   again, and confirm
+   `scripts/stargate status` reports `ACKNOWLEDGED(<generation>)`. Then
+   re-apply any intended `tokens.yaml` change and check again.
+2. **Deliberately adopt the control plane's current set (explicit
+   rollback).** This can re-authorize tokens that the newer data-plane state
+   had revoked, so first make sure `tokens.yaml` lists only tokens you want
+   valid. Stop both planes (`$COMPOSE stop stargate-control stargate-dp`;
+   open connections end), then move the data plane's active snapshot aside
+   without editing it:
+
+   ```bash
+   # Resolve the volume by Compose label (never a guessed name); PROJECT is the
+   # Compose project `init` used (default `stargate`, or your STARGATE_PROJECT).
+   PROJECT=${STARGATE_PROJECT:-stargate}
+   DP_VOL=$(docker volume ls -q --filter "label=com.docker.compose.project=${PROJECT}" \
+     --filter "label=com.docker.compose.volume=stargate-dp-state")
+   echo "$DP_VOL"   # must be exactly one volume name; stop here otherwise
+   DP_STATE=$(docker volume inspect "$DP_VOL" --format '{{ .Mountpoint }}')
+   sudo mv "${DP_STATE}/dp-snapshot.json" "${DP_STATE}/dp-snapshot.json.stale-conflict"
+   $COMPOSE start stargate-dp stargate-control
+   scripts/stargate status
+   ```
+
+   The data plane admits nobody until the control plane reseeds it. Proceed
+   only after the status shows `ACKNOWLEDGED(<generation>)` and a removed
+   token is actually refused. Keep or securely delete the moved-aside file
+   deliberately; it holds verifiers of the newer state.
+
 ---
 
 ## Step 3 — Create the Stargate browser profile and install the WebExtension (2 minutes)

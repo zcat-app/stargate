@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 
 import org.yaml.snakeyaml.Yaml;
@@ -34,9 +35,10 @@ import org.yaml.snakeyaml.nodes.SequenceNode;
  * T035a. One {@link #load()} per CP start (FR-018 startup-only reload;
  * T041's {@code @QuarkusMain} wiring is the caller): parse, validate, diff
  * against the persisted record set, persist, bump the generation, push
- * verifiers to the data plane, and increment §4 operational counts through
- * the injected {@link TokenLoaderContract.AuditSink}. The production sink
- * discards legacy label/detail arguments (T152 / Constitution III).
+ * verifiers to the data plane, and — only once the data plane acknowledges
+ * that exact generation (T187) — increment the §4 {@code enrolled}/{@code revoked}
+ * counts through the injected {@link TokenLoaderContract.AuditSink}. The
+ * production sink discards legacy label/detail arguments (T152 / Constitution III).
  *
  * <p><strong>Failure semantics (§1.6, T092 / sol-review M1).</strong> A
  * missing, unreadable, unparseable, structurally invalid, or all-invalid
@@ -313,21 +315,26 @@ public final class TokenLoader {
             generations.record(generation);
         }
 
+        List<String> enrolled = new ArrayList<>();
+        for (String label : newLabels) {
+            if (!storedLabels.contains(label)) {
+                enrolled.add(label);
+            }
+        }
+        List<String> revoked = new ArrayList<>();
+        for (String label : storedLabels) {
+            if (!newLabels.contains(label)) {
+                revoked.add(label);
+            }
+        }
+
         store.begin();
         try {
             for (int i = 0; i < valid.size(); i++) {
                 store.upsert(valid.get(i).label(), verifiers.get(i));
             }
-            for (String label : newLabels) {
-                if (!storedLabels.contains(label)) {
-                    audit.write(ACTION_ENROLLED, label, diffDetail(generation));
-                }
-            }
-            for (String label : storedLabels) {
-                if (!newLabels.contains(label)) {
-                    audit.write(ACTION_REVOKED, label, diffDetail(generation));
-                    store.delete(label);
-                }
+            for (String label : revoked) {
+                store.delete(label);
             }
             store.commit();
         }
@@ -337,8 +344,41 @@ public final class TokenLoader {
         }
 
         // §1.7 write order: generation reservation, store, then ReloadTokens
-        // — the push is the last action of a successful load.
-        reload.push(generation, verifiers);
+        // — the push is the last store/generation/delivery action of a load.
+        TokenLoaderContract.PushResult result = reload.push(generation, verifiers);
+
+        // T187 / Constitution II failure table: enrolled/revoked describe
+        // APPLIED credential changes, so they are counted only after the DP
+        // acknowledges this exact generation — never at commit, never for a
+        // stale refusal. A pending delivery registers the count with the
+        // channel; the one-shot guard keeps a reconnect re-acknowledgement
+        // from counting twice. Outside the store transaction, the §4 sink
+        // counts in the acknowledgement's observation hour.
+        Runnable countOnce = acknowledgedDiffCounter(generation, enrolled, revoked);
+        if (result.stale()) {
+            return;
+        }
+        if (result.currentGeneration() == generation) {
+            countOnce.run();
+        }
+        else {
+            reload.whenAcknowledged(generation, countOnce);
+        }
+    }
+
+    private Runnable acknowledgedDiffCounter(long generation, List<String> enrolled, List<String> revoked) {
+        AtomicBoolean counted = new AtomicBoolean();
+        return () -> {
+            if (!counted.compareAndSet(false, true)) {
+                return;
+            }
+            for (String label : enrolled) {
+                audit.write(ACTION_ENROLLED, label, diffDetail(generation));
+            }
+            for (String label : revoked) {
+                audit.write(ACTION_REVOKED, label, diffDetail(generation));
+            }
+        };
     }
 
     private static boolean sameVerifierMultiset(

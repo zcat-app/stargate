@@ -333,10 +333,12 @@ class TokenLoaderTest {
     }
 
     /**
-     * Body case (e): mixed add+remove → both diff rows and every store
-     * mutation inside ONE begin/commit pair (no interleaved partial state
-     * visible to a concurrent reader), with the push strictly last (§1.7
-     * write order: store → generation → ReloadTokens).
+     * Body case (e): mixed add+remove → every store mutation inside ONE
+     * begin/commit pair (no interleaved partial state visible to a
+     * concurrent reader), the push after the store (§1.7 write order:
+     * store → generation → ReloadTokens), and both diff rows only after
+     * the acknowledged push (T187). The method name is kept for T035a
+     * traceability; the rows are no longer inside the transaction.
      */
     @Test
     void mixedAddRemoveEmitsBothRowsInsideOneStoreTransaction(@TempDir Path dir) throws Throwable {
@@ -564,6 +566,66 @@ class TokenLoaderTest {
             "transport loss/missing ack remains pending at the exact candidate generation");
         assertFalse(restarted.gens.recordedSet,
             "pending replay must not consume another generation number");
+    }
+
+    /**
+     * T187 / Constitution II failure table: a revocation whose delivery is
+     * still pending (DP unreachable, missing or inexact acknowledgement) is
+     * not counted. The loader registers the diff counts for the exact
+     * candidate generation; they are written once when that generation is
+     * acknowledged and never again for a later re-acknowledgement.
+     */
+    @Test
+    void pendingDeliveryDefersDiffCountsUntilExactAcknowledgement(@TempDir Path dir)
+            throws Throwable {
+        Path file = writeTokens(dir, tokensFile(LABEL_A, TOKEN_A, LABEL_C, TOKEN_C));
+        Harness h = runLoad(file, Map.of(LABEL_A, STALE_VERIFIER, LABEL_B, STALE_VERIFIER), 7L,
+            new TokenLoaderContract.PushResult(false, 0L));
+
+        assertEquals(List.of(), rows(h, "revoked"), "pending revocation must not be counted");
+        assertEquals(List.of(), rows(h, "enrolled"), "pending enrollment must not be counted");
+        assertEquals(List.of(8L), h.reload.ackWaits,
+            "the diff counts wait for the exact candidate generation");
+
+        h.reload.acknowledge(7L);
+        assertEquals(List.of(), rows(h, "revoked"), "another generation's ack is not this candidate's");
+
+        h.reload.acknowledge(8L);
+        assertEquals(Set.of(LABEL_B), labelsOf(rows(h, "revoked")),
+            "the revocation counts once the exact generation is acknowledged");
+        assertEquals(Set.of(LABEL_C), labelsOf(rows(h, "enrolled")));
+
+        h.reload.acknowledge(8L);
+        assertEquals(1, rows(h, "revoked").size(), "a reconnect re-acknowledgement never counts twice");
+        assertEquals(1, rows(h, "enrolled").size());
+        assertTransactionalWrite(h);
+        assertPushIsLast(h);
+        assertNoPlaintextEscapes(h);
+    }
+
+    /** T187: a stale reply is a conflict; the revocation is never counted. */
+    @Test
+    void staleDeliveryNeverCountsDiff(@TempDir Path dir) throws Throwable {
+        Path file = writeTokens(dir, tokensFile(LABEL_A, TOKEN_A));
+        Harness h = runLoad(file, Map.of(LABEL_A, STALE_VERIFIER, LABEL_B, STALE_VERIFIER), 7L,
+            new TokenLoaderContract.PushResult(true, 0L));
+
+        assertEquals(List.of(), rows(h, "revoked"), "a stale-refused revocation must not be counted");
+        assertEquals(List.of(), h.reload.ackWaits, "a stale candidate waits for no acknowledgement");
+        h.reload.acknowledge(8L);
+        assertEquals(List.of(), rows(h, "revoked"));
+    }
+
+    /** T187: an exact synchronous acknowledgement counts the diff after the push. */
+    @Test
+    void acknowledgedDeliveryCountsDiffAfterPush(@TempDir Path dir) throws Throwable {
+        Path file = writeTokens(dir, tokensFile(LABEL_A, TOKEN_A));
+        Harness h = runLoad(file, Map.of(LABEL_A, STALE_VERIFIER, LABEL_B, STALE_VERIFIER), 7L);
+
+        assertEquals(Set.of(LABEL_B), labelsOf(rows(h, "revoked")));
+        assertTrue(h.journal.firstIndexOf("audit.write(revoked") > h.journal.firstIndexOf("reload.push("),
+            "the revoked count follows the acknowledged push");
+        assertEquals(List.of(), h.reload.ackWaits, "an immediate exact ack needs no deferred wait");
     }
 
     @Test
@@ -858,6 +920,9 @@ class TokenLoaderTest {
         final Journal journal;
         final List<CapturedPush> pushes = new ArrayList<>();
         final TokenLoaderContract.@Nullable PushResult forcedResult;
+        /** T187: deferred acknowledgement actions, keyed by exact generation. */
+        final List<Long> ackWaits = new ArrayList<>();
+        final List<Runnable> ackActions = new ArrayList<>();
 
         FakeReload(Journal journal, TokenLoaderContract.@Nullable PushResult forcedResult) {
             this.journal = journal;
@@ -872,6 +937,21 @@ class TokenLoaderTest {
             return forcedResult == null
                 ? new TokenLoaderContract.PushResult(false, generation)
                 : forcedResult;
+        }
+
+        @Override
+        public void whenAcknowledged(long generation, Runnable onAcknowledged) {
+            ackWaits.add(generation);
+            ackActions.add(onAcknowledged);
+        }
+
+        /** Simulates a later exact acknowledgement delivered by the channel. */
+        void acknowledge(long generation) {
+            for (int i = 0; i < ackWaits.size(); i++) {
+                if (ackWaits.get(i) == generation) {
+                    ackActions.get(i).run();
+                }
+            }
         }
     }
 
@@ -976,14 +1056,18 @@ class TokenLoaderTest {
     }
 
     /**
-     * §1.6 atomicity: store.begin precedes every store mutation and every
-     * diff-row audit write; store.commit follows them. config_error rows are
+     * §1.6 atomicity: store.begin precedes every store mutation; store.commit
+     * follows them. T187: enrolled/revoked counts are NOT part of the
+     * candidate transaction. They describe acknowledged application, so they
+     * may appear only after the ReloadTokens push (Constitution II failure
+     * table: report pending delivery, not success). config_error rows are
      * deliberately exempt — validation failures are discovered during
      * parsing, before the transaction opens.
      */
     private static void assertTransactionalWrite(Harness h) {
         int begin = h.journal.firstIndexOf("store.begin");
         int commit = h.journal.firstIndexOf("store.commit");
+        int push = h.journal.firstIndexOf("reload.push(");
         assertTrue(begin >= 0, "successful loads open a store transaction");
         assertTrue(commit > begin, "store.commit must follow store.begin");
         for (int i = 0; i < h.journal.lines.size(); i++) {
@@ -991,18 +1075,30 @@ class TokenLoaderTest {
             boolean inside = i > begin && i < commit;
             boolean mutation = line.startsWith("store.upsert(") || line.startsWith("store.delete(");
             boolean diffRow = line.startsWith("audit.write(enrolled") || line.startsWith("audit.write(revoked");
-            if (mutation || diffRow) {
+            if (mutation) {
                 assertTrue(inside, "partial state leak in journal: " + line);
+            }
+            if (diffRow) {
+                assertTrue(push >= 0 && i > push,
+                    "T187: an enrolled/revoked count before DP acknowledgement claims success early: " + line);
             }
         }
     }
 
-    /** §1.7 write order: the ReloadTokens push is the LAST call of a load. */
+    /**
+     * §1.7 write order: the ReloadTokens push is the last store/generation/
+     * delivery call of a load. T187: only acknowledged enrolled/revoked
+     * counts may follow it.
+     */
     private static void assertPushIsLast(Harness h) {
         int push = h.journal.firstIndexOf("reload.push(");
         assertTrue(push >= 0, "a successful load pushes once");
-        assertEquals(h.journal.lines.size() - 1, push,
-            "the push must be the last observed call (§1.7: store, then generation, then ReloadTokens)");
+        for (int i = push + 1; i < h.journal.lines.size(); i++) {
+            String line = h.journal.lines.get(i);
+            assertTrue(line.startsWith("audit.write(enrolled") || line.startsWith("audit.write(revoked"),
+                "only acknowledged diff counts may follow the push (§1.7: store, then generation, "
+                    + "then ReloadTokens): " + line);
+        }
         assertTrue(h.journal.firstIndexOf("gen.record(") < push,
             "§1.7: the generation is recorded before the push");
     }

@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jspecify.annotations.Nullable;
 
 import app.zcat.stargate.auth.HmacVerifierMinter;
 import app.zcat.stargate.auth.TokenLoader;
@@ -53,7 +54,9 @@ import stargate.v1.EventsOuterClass.SidecarEvent;
  *       {@code ReloadTokens} (T038) strictly last. A missing, unreadable, or
  *       invalid file does NOT push (the DP keeps its last-known
  *       list and keeps serving — Principle II; only a successfully-parsed
- *       explicit {@code tokens: []} is the revoke-all path). A broken store
+ *       explicit {@code tokens: []} is the revoke-all path). The channel
+ *       publishes the current delivery state (T187) and the loader counts
+ *       enrolled/revoked only on the DP's exact acknowledgement. A broken store
  *       during this load is contained without a diagnostic journal. This
  *       containment does not cover startup: Flyway and the operational sink
  *       require usable SQLite state before this bootstrap runs.</li>
@@ -73,6 +76,15 @@ import stargate.v1.EventsOuterClass.SidecarEvent;
 @QuarkusMain
 public class StargateControlPlane implements QuarkusApplication {
 
+
+    /**
+     * T187 current token-delivery state, read by {@code scripts/stargate status}
+     * through {@code docker compose exec}. It lives on the CP container's private
+     * {@code /tmp} tmpfs (Compose mounts it mode 1777; the root-owned 0755 {@code /run}
+     * tmpfs is not writable by the CP user) — volatile, and deliberately NOT under
+     * {@code /run/stargate}, the IPC volume shared with the DP.
+     */
+    static final Path DELIVERY_STATUS = Path.of("/tmp/stargate-control/auth-delivery");
 
     @Inject
     AuditLogService auditService;
@@ -112,16 +124,25 @@ public class StargateControlPlane implements QuarkusApplication {
     public int run(String... args) throws Exception {
         BootConfig cfg = new BootConfig(Path.of(tokensPath), Path.of(pepperPath), Path.of(keysDir),
                 Path.of(controlSock), Path.of(dpSock), Path.of(torObserverSock),
-                monitorPoll);
+                monitorPoll, DELIVERY_STATUS);
         try (BootHandle handle = bootstrap(cfg, auditService, tokenState, tokenState)) {
             Quarkus.waitForExit();
         }
         return 0;
     }
 
-    /** Immutable boot topology — one place the paths/topology enter the sequence. */
+    /**
+     * Immutable boot topology — one place the paths/topology enter the sequence.
+     * {@code deliveryStatus} is the T187 volatile current-state file; {@code null}
+     * publishes none (callers that do not exercise the operator surface).
+     */
     record BootConfig(Path tokensYaml, Path pepperFile, Path keysDir, Path controlSock,
-            Path dpSock, Path observerSock, Duration pollInterval) {
+            Path dpSock, Path observerSock, Duration pollInterval, @Nullable Path deliveryStatus) {
+
+        BootConfig(Path tokensYaml, Path pepperFile, Path keysDir, Path controlSock,
+                Path dpSock, Path observerSock, Duration pollInterval) {
+            this(tokensYaml, pepperFile, keysDir, controlSock, dpSock, observerSock, pollInterval, null);
+        }
     }
 
     /** The started surfaces, closed in reverse start order. */
@@ -179,7 +200,7 @@ public class StargateControlPlane implements QuarkusApplication {
             monitor.start();
 
             TokenLoader loader = new TokenLoader(cfg.tokensYaml(), pepper, store, generations,
-                    audit, new GrpcReloadChannel(client), new HmacVerifierMinter(pepper));
+                    audit, new GrpcReloadChannel(client, cfg.deliveryStatus()), new HmacVerifierMinter(pepper));
             try {
                 loader.load(); // never throws on file input (FR-018); push happens inside, §1.7 last
             } catch (GrpcReloadChannel.IncompatiblePeerVersionException incompatiblePeer) {

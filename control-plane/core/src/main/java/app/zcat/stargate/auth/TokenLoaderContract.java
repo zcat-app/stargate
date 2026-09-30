@@ -43,9 +43,10 @@ public final class TokenLoaderContract {
      * record set (§1.7 "writes the new verifiers" — same-label rewrites
      * keep stored verifiers fresh, which is what a pepper rotation §1.7
      * relies on) inside {@link #begin()} / {@link #commit()}, so a
-     * concurrent reader never sees interleaved partial state. Audit rows
-     * for the label diff are emitted through {@link AuditSink} between
-     * the same begin/commit pair.
+     * concurrent reader never sees interleaved partial state. The label
+     * diff's {@code enrolled}/{@code revoked} counts are NOT part of this
+     * transaction: T187 emits them through {@link AuditSink} only after the
+     * data plane acknowledges the candidate's exact generation.
      *
      * <p>Timestamps are store-side: {@code created_at} is stamped when a
      * label is first seen, {@code revoked_at} when {@link #delete} is
@@ -140,6 +141,17 @@ public final class TokenLoaderContract {
 
         /** Pushes {@code generation} with its complete verifier set. */
         PushResult push(long generation, List<byte[]> verifiers);
+
+        /**
+         * T187 (Constitution II failure table): runs {@code onAcknowledged} at
+         * most once, when exactly {@code generation} is later acknowledged by
+         * the data plane after {@link #push} returned pending. A stale reply
+         * or a closed channel drops it. The default never runs it: an adapter
+         * without asynchronous redelivery can only undercount, never report an
+         * unacknowledged revocation as applied.
+         */
+        default void whenAcknowledged(long generation, Runnable onAcknowledged) {
+        }
     }
 
     /**

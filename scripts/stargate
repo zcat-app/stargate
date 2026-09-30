@@ -9,15 +9,15 @@
 # zero runtime deps for ops tooling." This file dispatches ONLY; every real
 # command lives under scripts/subcommands/<name>.
 #
-# Scope (T016 / research.md §8): only the `init` subcommand is wired in this
-# feature. `export`, `import`, `wipe`, and any `--profile` selection are
+# Scope (T016 / research.md §8): `init` and the read-only `status` (T187)
+# subcommands are wired in this feature. `export`, `import`, `wipe`, and any `--profile` selection are
 # deferred to later features (see T016 §Out-of-scope) and are rejected here
 # as unknown subcommands / unknown flags so a future feature wires them
 # explicitly rather than inheriting an accidental half-implementation.
 #
 # No outbound network. The dispatcher never opens a socket itself; subcommands
 # inherit the Constitution-III doctrine (no outbound except what an operator
-# action explicitly needs — the Docker daemon socket for `init`).
+# action explicitly needs — the Docker daemon socket for `init` and `status`).
 #
 # Path-independence: this script resolves its own directory via pure bash
 # parameter expansion (no `dirname`/`readlink` call), so dispatch works even
@@ -47,6 +47,9 @@ Stargate operator entry point.
 Subcommands:
   init        Initialise a fresh Stargate stack (local profile). See
               `stargate init` for details. (T016)
+  status      Show the control plane's current token-delivery state
+              (ACKNOWLEDGED(<generation>), PENDING, STALE_CONFLICT or
+              UNKNOWN). See `stargate status --help`. (T187)
 
 Other subcommands (export, import, wipe) and profile selection (--profile)
 are not yet implemented; they ship with later features.
@@ -111,5 +114,6 @@ fi
 # `bash`, so `exec "$subcmd_path"` would fail with 127 instead of reaching
 # init's preflight. Routing through "$BASH" side-steps both PATH and the
 # shebang, and inherits the same bash binary running this dispatcher.
-# The subcommand owns its exit codes (init: 0/10/20/30/40/50 per arch §9.1).
+# The subcommand owns its exit codes (init: 0/10/20/30/40/50/60 per arch §9.1;
+# status: 0/10/20/30/40/50/60, documented in scripts/subcommands/status).
 exec "${BASH:-bash}" "$subcmd_path" "$@"

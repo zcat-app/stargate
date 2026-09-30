@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# Copyright 2026 The Stargate Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# scripts/subcommands/status — `stargate status`: report the control plane's
+# CURRENT token-delivery state (T187; Constitution II failure table "Report
+# pending delivery, not success"; THREAT-MODEL §5.15).
+#
+# WHAT IT READS: one fixed-vocabulary line the running control plane keeps in
+# its private volatile tmpfs file /tmp/stargate-control/auth-delivery, via the
+# authoritative project-scoped `docker compose exec` (scripts/lib/compose.sh).
+# Access to the local Docker daemon is the operator authentication; there is
+# no new socket, port or network surface. The file is not in the stargate-ipc
+# volume shared with the data plane and does not survive the CP container.
+#
+# CONSTITUTION III: the state is a finite current-lifecycle enum. It carries
+# no history, timestamps, labels, token material or counts; only a validated
+# value from the fixed vocabulary is ever printed, never raw file content.
+#
+# STATES:
+#   ACKNOWLEDGED(<generation>)  the data plane durably applied exactly this
+#                               control plane's current credential set; a
+#                               revocation in it is effective for new requests
+#   PENDING                     not acknowledged yet (data plane unreachable or
+#                               no exact acknowledgement); a revocation is NOT
+#                               effective and the DP keeps its last state
+#   STALE_CONFLICT              the data plane refused the credential set as
+#                               stale (it holds newer authority, e.g. after CP
+#                               state loss/restore); NOT applied and not retried.
+#                               Follow the stale-conflict recovery procedure in
+#                               specs/001-tor-route/quickstart.md
+#   UNKNOWN                     this control-plane process has published no
+#                               delivery state: it started no delivery
+#                               (tokens.yaml missing or invalid, or the CP
+#                               state store unavailable), it is still starting,
+#                               or its status write is failing. The CP attempts
+#                               to publish PENDING before its first delivery RPC.
+# UNKNOWN can also occur while a delivery is in flight if status publication fails.
+#
+# EXIT CODES (stable contract surface, same style as `stargate init`):
+#   0   ACKNOWLEDGED
+#   10  preflight failure (docker / compose v2 / daemon)
+#   20  state unavailable (control plane not running, or its state could not
+#       be read); nothing is claimed about delivery
+#   30  PENDING
+#   40  STALE_CONFLICT
+#   50  UNKNOWN
+#   60  unrecognised state content (refused, not echoed)
+#
+# No outbound network: only the local Docker daemon socket (Constitution III).
+
+set -uo pipefail
+
+# Resolve our own directory without external commands so `PATH= stargate
+# status` reaches the preflight and exits 10 (T016 M3 convention).
+case "${BASH_SOURCE[0]}" in
+  */*) _SG_STATUS_DIR="${BASH_SOURCE[0]%/*}" ;;
+  *)   _SG_STATUS_DIR="." ;;
+esac
+case "$_SG_STATUS_DIR" in
+  /*) : ;;
+  *)  _SG_STATUS_DIR="$(cd "$_SG_STATUS_DIR" && pwd)" ;;
+esac
+# shellcheck source=lib/compose.sh
+. "$_SG_STATUS_DIR/../lib/compose.sh"
+
+CONTROL_SERVICE="stargate-control"
+DELIVERY_STATUS_FILE="/tmp/stargate-control/auth-delivery"
+
+EXIT_ACKNOWLEDGED=0
+EXIT_PREFLIGHT=10
+EXIT_UNAVAILABLE=20
+EXIT_PENDING=30
+EXIT_STALE_CONFLICT=40
+EXIT_UNKNOWN=50
+EXIT_UNRECOGNISED=60
+
+say() { printf '%s\n' "$*" >&2; }
+
+usage() {
+  cat <<'EOF'
+Usage: stargate status
+
+Print the control plane's current token-delivery state:
+ACKNOWLEDGED(<generation>), PENDING, STALE_CONFLICT or UNKNOWN.
+Exit codes: 0 acknowledged, 10 preflight, 20 state unavailable,
+30 pending, 40 stale conflict, 50 unknown, 60 unrecognised.
+EOF
+}
+
+case "${1:-}" in
+  -h|--help|help) usage; exit 0 ;;
+  "") : ;;
+  *) say "stargate status: takes no arguments."; usage >&2; exit 2 ;;
+esac
+
+# docker presence is checked FIRST (no PATH-dependent work before it).
+if ! command -v docker >/dev/null 2>&1; then
+  say "docker not found on PATH."
+  exit "$EXIT_PREFLIGHT"
+fi
+if ! docker compose version >/dev/null 2>&1; then
+  say "docker compose v2 plugin not available."
+  exit "$EXIT_PREFLIGHT"
+fi
+if ! docker info >/dev/null 2>&1; then
+  say "Docker daemon unreachable (is the service running / your user in the docker group?)."
+  exit "$EXIT_PREFLIGHT"
+fi
+
+if [ -z "$(compose_run ps -q --status running "$CONTROL_SERVICE" 2>/dev/null)" ]; then
+  echo "control plane: not running (token delivery state unavailable; the data plane keeps its last acknowledged state)"
+  exit "$EXIT_UNAVAILABLE"
+fi
+
+# Distinguish an absent file (the CP published nothing) from a failed read:
+# only the in-container sentinel means absent; any exec/read failure is
+# "unavailable" and claims nothing. The exec's own diagnostics are dropped so
+# nothing but the validated vocabulary below reaches the terminal.
+# shellcheck disable=SC2016  # $1 expands inside the container's sh, by design.
+if ! state="$(compose_run exec -T "$CONTROL_SERVICE" sh -c \
+    'if [ -e "$1" ]; then cat -- "$1"; else echo ABSENT; fi' sh "$DELIVERY_STATUS_FILE" \
+    </dev/null 2>/dev/null)"; then
+  echo "token delivery: state unavailable (the control plane's status could not be read; nothing is claimed)"
+  exit "$EXIT_UNAVAILABLE"
+fi
+if [ "$state" = "ABSENT" ]; then
+  echo "token delivery: UNKNOWN (no delivery state published by this control-plane process: it started no delivery, e.g. tokens.yaml missing or invalid; it is still starting; or its status write is failing)"
+  exit "$EXIT_UNKNOWN"
+fi
+
+if [[ "$state" =~ ^ACKNOWLEDGED\(([1-9][0-9]{0,18})\)$ ]]; then
+  echo "token delivery: ACKNOWLEDGED(${BASH_REMATCH[1]}) (the data plane applied this credential set)"
+  exit "$EXIT_ACKNOWLEDGED"
+fi
+case "$state" in
+  PENDING)
+    echo "token delivery: PENDING (not yet acknowledged by the data plane; revocations are NOT effective yet)"
+    exit "$EXIT_PENDING" ;;
+  STALE_CONFLICT)
+    echo "token delivery: STALE_CONFLICT (the data plane refused this credential set as stale; NOT applied)"
+    echo "See the stale-conflict recovery procedure in specs/001-tor-route/quickstart.md."
+    exit "$EXIT_STALE_CONFLICT" ;;
+esac
+echo "token delivery: unrecognised state (refused)"
+exit "$EXIT_UNRECOGNISED"

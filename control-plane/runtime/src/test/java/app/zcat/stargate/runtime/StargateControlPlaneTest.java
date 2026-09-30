@@ -190,7 +190,45 @@ class StargateControlPlaneTest {
     private StargateControlPlane.BootConfig cfg(Path tokensYaml, Path keys, Path dpSock) {
         return new StargateControlPlane.BootConfig(tokensYaml, tmp.resolve("pepper.key"), keys,
                 runDir().resolve("control.sock"), dpSock,
-                runDir().resolve("observer.sock"), Duration.ofSeconds(10));
+                runDir().resolve("observer.sock"), Duration.ofSeconds(10), deliveryStatus());
+    }
+
+    /** T187: the CP-private volatile status file (tmpfs in deployment). */
+    private Path deliveryStatus() {
+        return tmp.resolve("cp-status").resolve("auth-delivery");
+    }
+
+    /** Current status file content, or {@code null} when none is published. */
+    private String readDeliveryStatus() throws IOException {
+        Path status = deliveryStatus();
+        return Files.exists(status) ? Files.readString(status, StandardCharsets.US_ASCII) : null;
+    }
+
+    private String awaitDeliveryStatus(String expected) throws Exception {
+        return awaitDeliveryStatus(expected, Duration.ofSeconds(10));
+    }
+
+    private String awaitDeliveryStatus(String expected, Duration within) throws Exception {
+        long deadline = System.nanoTime() + within.toNanos();
+        String seen = readDeliveryStatus();
+        while (!expected.equals(seen) && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+            seen = readDeliveryStatus();
+        }
+        return seen;
+    }
+
+    private static long rowCount(RecordingAudit audit, String action) {
+        return audit.rows.stream().filter(row -> row[0].equals(action)).count();
+    }
+
+    /** Durable CP authority at generation 1 holding laptop + phone. */
+    private static RecordingState laptopAndPhoneAtGeneration1() {
+        RecordingState state = new RecordingState();
+        state.stored.add(new TokenLoaderContract.StoredToken("laptop", referenceMint(TEST_PEPPER, EXAMPLE_HEX)));
+        state.stored.add(new TokenLoaderContract.StoredToken("phone", referenceMint(TEST_PEPPER, REPLACEMENT_HEX)));
+        state.lastGeneration = 1;
+        return state;
     }
 
     private static ReloadTokensClient shortLivedReloadClient(Path keys, Path dpSock,
@@ -299,21 +337,28 @@ class StargateControlPlaneTest {
         }
 
         static RecordingDp start(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub) throws Exception {
-            return start(dpSock, keysDir, dpPubPath, cpPub, false, false);
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, false, null);
+        }
+
+        /** T187: every reply waits for {@code release}, holding the RPC outstanding. */
+        static RecordingDp startHeld(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub,
+                java.util.concurrent.CountDownLatch release) throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, false, release);
         }
 
         static RecordingDp startWithDelayedStaleThenOk(
                 Path dpSock, Path keysDir, Path dpPubPath, Path cpPub) throws Exception {
-            return start(dpSock, keysDir, dpPubPath, cpPub, true, false);
+            return start(dpSock, keysDir, dpPubPath, cpPub, true, false, null);
         }
 
         static RecordingDp startLegacy(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub)
                 throws Exception {
-            return start(dpSock, keysDir, dpPubPath, cpPub, false, true);
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, true, null);
         }
 
         private static RecordingDp start(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub,
-                boolean delayedStaleThenOk, boolean legacyResponse) throws Exception {
+                boolean delayedStaleThenOk, boolean legacyResponse,
+                java.util.concurrent.@org.jspecify.annotations.Nullable CountDownLatch hold) throws Exception {
             // The DP stand-in's identity: a cert carrying the pinned dp keypair,
             // derived through the public file-based path (deriveCpIdentity's CN
             // is cosmetic — §3 pins the public key, not the name).
@@ -336,6 +381,13 @@ class StargateControlPlaneTest {
                             public void reloadTokens(ControlOuterClass.ReloadTokensRequest request,
                                     StreamObserver<ControlOuterClass.ReloadTokensResponse> response) {
                                 captured.add(request);
+                                if (hold != null) {
+                                    try {
+                                        hold.await(20, TimeUnit.SECONDS);
+                                    } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
+                                    }
+                                }
                                 int attempt = attempts.incrementAndGet();
                                 var reply = ControlOuterClass.ReloadTokensResponse.newBuilder();
                                 if (delayedStaleThenOk && attempt == 1) {
@@ -814,6 +866,248 @@ class StargateControlPlaneTest {
             assertEquals(List.of(1L), state.recorded,
                     "the pending candidate retains its originally assigned generation");
         }
+    }
+
+    // --- T187: finite current delivery state; counts only after exact ack --------
+
+    /**
+     * T187 acceptance 3 (Constitution II failure table): with the DP
+     * unreachable the revocation is reported PENDING and not counted. When
+     * the DP returns while this CP runs, the exact acknowledgement turns the
+     * status into ACKNOWLEDGED(2) and the revocation is counted once.
+     */
+    @Test
+    void unreachableDataPlaneReportsPendingAndCountsOnlyAfterAcknowledgement() throws Exception {
+        Path keys = keysDir();
+        pepperFile(TEST_PEPPER);
+        Path tokens = tokensFile("tokens:\n  - label: laptop\n    token: " + EXAMPLE_HEX + "\n");
+        Path dpSock = runDir().resolve("dp-late-revocation.sock");
+        RecordingState state = laptopAndPhoneAtGeneration1();
+        RecordingAudit audit = new RecordingAudit();
+        try (StargateControlPlane.BootHandle handle = StargateControlPlane.bootstrap(
+                cfg(tokens, keys, dpSock), audit, state, state)) {
+            assertNotNull(handle);
+            assertEquals(List.of("phone"), state.deletes, "the candidate itself is durable");
+            assertEquals("PENDING\n", readDeliveryStatus(),
+                    "an undelivered revocation is reported pending, not success");
+            assertEquals(0, rowCount(audit, "revoked"), "a pending revocation is never counted");
+
+            try (RecordingDp dp = RecordingDp.start(dpSock, keys, keys.resolve("dp.pub"),
+                    keys.resolve("cp.pub"))) {
+                assertEquals("ACKNOWLEDGED(2)\n", awaitDeliveryStatus("ACKNOWLEDGED(2)\n"),
+                        "the exact redelivered acknowledgement is reported with its generation");
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                while (rowCount(audit, "revoked") == 0 && System.nanoTime() < deadline) {
+                    Thread.sleep(20);
+                }
+                assertEquals(1, rowCount(audit, "revoked"), "the acknowledged revocation counts once");
+                assertEquals(0, rowCount(audit, "enrolled"));
+            }
+        }
+    }
+
+    /** T187 acceptance 3: a stale reply is STALE_CONFLICT and never counted. */
+    @Test
+    void staleReplyReportsStaleConflictAndNeverCountsRevocation() throws Exception {
+        Path keys = keysDir();
+        pepperFile(TEST_PEPPER);
+        Path tokens = tokensFile("tokens:\n  - label: laptop\n    token: " + EXAMPLE_HEX + "\n");
+        Path dpSock = runDir().resolve("dp.sock");
+        RecordingState state = laptopAndPhoneAtGeneration1();
+        RecordingAudit audit = new RecordingAudit();
+        try (RecordingDp dp = RecordingDp.startWithDelayedStaleThenOk(
+                        dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
+                StargateControlPlane.BootHandle handle = StargateControlPlane.bootstrap(
+                        cfg(tokens, keys, dpSock), audit, state, state)) {
+            assertNotNull(handle);
+            assertEquals("STALE_CONFLICT\n", readDeliveryStatus(),
+                    "a refused stale candidate is a conflict, not success and not pending");
+            Thread.sleep(500);
+            assertEquals(1, dp.requests.size(), "the stale candidate is not retried");
+            assertEquals("STALE_CONFLICT\n", readDeliveryStatus());
+            assertEquals(0, rowCount(audit, "revoked"), "a stale-refused revocation is never counted");
+        }
+    }
+
+    /** T187 acceptance 3: an exact acknowledgement is ACKNOWLEDGED(gen) and counts once. */
+    @Test
+    void acknowledgedRevocationReportsGenerationAndCountsOnce() throws Exception {
+        Path keys = keysDir();
+        pepperFile(TEST_PEPPER);
+        Path tokens = tokensFile("tokens:\n  - label: laptop\n    token: " + EXAMPLE_HEX + "\n");
+        Path dpSock = runDir().resolve("dp.sock");
+        RecordingState state = laptopAndPhoneAtGeneration1();
+        RecordingAudit audit = new RecordingAudit();
+        try (RecordingDp dp = RecordingDp.start(dpSock, keys, keys.resolve("dp.pub"),
+                        keys.resolve("cp.pub"));
+                StargateControlPlane.BootHandle handle = StargateControlPlane.bootstrap(
+                        cfg(tokens, keys, dpSock), audit, state, state)) {
+            assertNotNull(handle);
+            assertEquals("ACKNOWLEDGED(2)\n", readDeliveryStatus());
+            assertEquals(1, rowCount(audit, "revoked"));
+            assertEquals(0, rowCount(audit, "enrolled"));
+        }
+    }
+
+    /**
+     * T187 / Constitution III: the status is current state only. A boot
+     * clears any earlier value and publishes nothing until it delivers.
+     */
+    @Test
+    void bootClearsEarlierStatusAndPublishesNothingWithoutDelivery() throws Exception {
+        Path keys = keysDir();
+        pepperFile(TEST_PEPPER);
+        Files.createDirectories(deliveryStatus().getParent());
+        Files.writeString(deliveryStatus(), "ACKNOWLEDGED(9)\n");
+        RecordingState state = new RecordingState();
+        try (StargateControlPlane.BootHandle handle = StargateControlPlane.bootstrap(
+                cfg(tmp.resolve("tokens.yaml"), keys, runDir().resolve("dp.sock")),
+                new RecordingAudit(), state, state)) {
+            assertNotNull(handle);
+            assertEquals(null, readDeliveryStatus(), "no earlier state survives into this boot");
+        }
+    }
+
+    /**
+     * T187 review r1 (astra Major 1): a delivery whose initial RPC is still
+     * outstanding is already PENDING — the status is never absent (which the
+     * operator surface reads as "no delivery state published") while a
+     * revocation is in flight.
+     */
+    @Test
+    void pendingIsPublishedWhileInitialDeliveryIsOutstanding() throws Exception {
+        Path keys = keysDir();
+        pepperFile(TEST_PEPPER);
+        Path tokens = tokensFile("tokens:\n  - label: laptop\n    token: " + EXAMPLE_HEX + "\n");
+        Path dpSock = runDir().resolve("dp-held.sock");
+        RecordingState state = laptopAndPhoneAtGeneration1();
+        RecordingAudit audit = new RecordingAudit();
+        var release = new java.util.concurrent.CountDownLatch(1);
+        var boot = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try (RecordingDp dp = RecordingDp.startHeld(dpSock, keys, keys.resolve("dp.pub"),
+                keys.resolve("cp.pub"), release)) {
+            var booted = boot.submit(() -> StargateControlPlane.bootstrap(
+                    cfg(tokens, keys, dpSock), audit, state, state));
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+            while (dp.requests.isEmpty() && System.nanoTime() < deadline) {
+                Thread.sleep(20);
+            }
+            assertEquals(1, dp.requests.size(), "the initial ReloadTokens is outstanding at the DP");
+            // Well inside the client's 10 s RPC deadline: the RPC is still outstanding.
+            assertEquals("PENDING\n", awaitDeliveryStatus("PENDING\n", Duration.ofSeconds(3)),
+                    "an outstanding delivery is reported PENDING, never as absent state");
+            assertEquals(0, rowCount(audit, "revoked"));
+            release.countDown();
+            try (StargateControlPlane.BootHandle handle = booted.get(20, TimeUnit.SECONDS)) {
+                assertEquals("ACKNOWLEDGED(2)\n", awaitDeliveryStatus("ACKNOWLEDGED(2)\n"));
+                assertEquals(1, rowCount(audit, "revoked"));
+            }
+        } finally {
+            release.countDown();
+            boot.shutdownNow();
+        }
+    }
+
+    /**
+     * T187 review r1 (astra Major 2): if replacing the status fails, the
+     * previous value must not survive as the current state. The obsolete
+     * PENDING is withdrawn and the terminal outcome is published once the
+     * status can be written again, without resending stale authority.
+     */
+    @Test
+    void failedStatusWriteNeverLeavesObsoleteState() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-publish-failure.sock");
+        Path status = deliveryStatus();
+        Path obstacle = status.resolveSibling(status.getFileName() + ".tmp").resolve("obstacle");
+        try (ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, status);
+            channel.push(2L, List.of(repeat((byte) 0x2a, 32)));
+            assertEquals("PENDING\n", readDeliveryStatus(), "absent DP: delivery is pending");
+
+            Files.createDirectories(obstacle); // the next replacement write cannot create its sibling
+            try (RecordingDp dp = RecordingDp.startWithDelayedStaleThenOk(dpSock, keys,
+                    keys.resolve("dp.pub"), keys.resolve("cp.pub"))) {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+                while (Files.exists(status) && System.nanoTime() < deadline) {
+                    Thread.sleep(20);
+                }
+                assertEquals(null, readDeliveryStatus(),
+                        "a failed STALE_CONFLICT write must withdraw the obsolete PENDING");
+                Files.delete(obstacle);
+                Files.delete(obstacle.getParent());
+                assertEquals("STALE_CONFLICT\n", awaitDeliveryStatus("STALE_CONFLICT\n"),
+                        "the terminal state is published once the status is writable again");
+                assertEquals(1, dp.requests.size(), "stale authority is never resent");
+            }
+        }
+    }
+
+    /**
+     * T187 review r1: the operator command prints only validated vocabulary
+     * and never turns an unreadable state into a claim. Docker is a local
+     * stub; the real dispatcher and subcommand run.
+     */
+    @Test
+    void statusCommandPrintsValidatedStatesAndRefusesUnreadableState() throws Exception {
+        Path repo = Path.of("").toAbsolutePath();
+        while (repo != null && !Files.isRegularFile(repo.resolve("scripts/stargate"))) {
+            repo = repo.getParent();
+        }
+        assertNotNull(repo, "repository root with scripts/stargate");
+        Path bin = Files.createDirectories(tmp.resolve("stub-bin"));
+        Path docker = bin.resolve("docker");
+        Files.writeString(docker, """
+                #!/bin/sh
+                case "$1" in
+                  info) exit 0 ;;
+                  compose)
+                    case "$*" in
+                      *" version"*) exit 0 ;;
+                      *" ps "*) [ "$STUB_CP" = down ] || echo 0123abcd; exit 0 ;;
+                      *" exec "*)
+                        [ "$STUB_EXEC" = fail ] && exit 126
+                        printf '%s\\n' "$STUB_EXEC"; exit 0 ;;
+                    esac ;;
+                esac
+                exit 0
+                """);
+        docker.toFile().setExecutable(true);
+        record Case(String cp, String exec, int exit, String shows) { }
+        List<Case> cases = List.of(
+                new Case("up", "ACKNOWLEDGED(7)", 0, "ACKNOWLEDGED(7)"),
+                new Case("up", "PENDING", 30, "PENDING"),
+                new Case("up", "STALE_CONFLICT", 40, "STALE_CONFLICT"),
+                new Case("up", "ABSENT", 50, "UNKNOWN"),
+                new Case("up", "fail", 20, "unavailable"),
+                new Case("down", "PENDING", 20, "not running"),
+                new Case("up", "PENDING leaked-label", 60, "unrecognised"));
+        for (Case c : cases) {
+            var pb = new ProcessBuilder("/bin/bash", repo.resolve("scripts/stargate").toString(), "status")
+                    .redirectErrorStream(true);
+            pb.environment().put("PATH", bin + ":/usr/bin:/bin");
+            pb.environment().put("STUB_CP", c.cp());
+            pb.environment().put("STUB_EXEC", c.exec());
+            pb.environment().put("STARGATE_ENV_FILE", tmp.resolve("local.env").toString());
+            pb.environment().put("STARGATE_ENV_EXAMPLE", tmp.resolve("absent.env.example").toString());
+            Process process = pb.start();
+            String out = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(process.waitFor(30, TimeUnit.SECONDS));
+            assertEquals(c.exit(), process.exitValue(), c + " -> " + out);
+            assertTrue(out.contains(c.shows()), c + " -> " + out);
+            assertFalse(out.contains("no delivery attempted"), "never claims an unestablished lifecycle: " + out);
+            assertFalse(out.contains("leaked-label"), "raw status content is never echoed: " + out);
+        }
+    }
+
+    /** T187: the production status file is CP-private, never in the DP-shared IPC volume. */
+    @Test
+    void deliveryStatusPathIsOutsideSharedIpcVolume() {
+        Path status = StargateControlPlane.DELIVERY_STATUS;
+        assertTrue(status.isAbsolute() && status.startsWith("/tmp"),
+                "the status lives on the CP container's private /tmp tmpfs");
+        assertFalse(status.startsWith("/run/stargate"), "never inside the stargate-ipc volume");
+        assertFalse(status.startsWith("/var/lib/stargate"), "never in persistent CP state");
     }
 
     @Test

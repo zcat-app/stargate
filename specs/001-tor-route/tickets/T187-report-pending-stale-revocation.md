@@ -1,15 +1,15 @@
 ---
 id: T187
 title: 'Report pending or stale revocation; count only after DP ack'
-status: pending
+status: in-progress
 created: 2026-09-29
-last_updated: 2026-09-29
+last_updated: 2026-09-30
 source: "reviews/redteam-20260929-694dbd8.md (area 2 M3, survived falsification, narrowed to observability)"
 phase: "Foundation audit remediation"
 story: ''
 blocked_by: ["T192"]
 parallel: true
-files_budget: 7
+files_budget: 14   # TokenLoader.java + TokenLoaderContract.java + GrpcReloadChannel.java + StargateControlPlane.java + TokenLoaderTest.java + StargateControlPlaneTest.java + scripts/subcommands/status + scripts/stargate + quickstart.md + data-model.md + THREAT-MODEL.md + this ticket + STATUS.md regen + evidence/T187-tests-first.json (7 -> 14 maintainer-authorised 2026-09-30; anything beyond 14 is a stop)
 privacy_critical: true
 tests_first: []
 test_for: []
@@ -73,3 +73,45 @@ and is not changed here.
 ## Out-of-scope
 
 Changing stale-generation handling; terminating established pipes on revocation.
+
+## Notes
+
+Maintainer decisions (2026-09-30, maintainer-authorised, relayed by the orchestrator):
+
+1. `files_budget` raised 7 -> 14 to cover the fourteen paths in the frontmatter comment
+   (option B of the developer's budget stop). Anything beyond 14 is a stop.
+2. The operator surface is a new `scripts/stargate status` subcommand following the `init`
+   conventions (PATH independence, exit codes, T016). It reads the CP's volatile tmpfs
+   status file via `docker compose exec`: a current-state enum PENDING /
+   ACKNOWLEDGED(gen) / STALE_CONFLICT, no history, no timestamps, outside the shared IPC
+   volume, within Constitution III's current-lifecycle-enum allowance.
+
+## Evidence
+
+- Tests first: `specs/001-tor-route/evidence/T187-tests-first.json` (red: TokenLoaderTest counted
+  pending/stale diffs inside the store transaction; StargateControlPlaneTest found no status).
+- Live (saved QEMU guest, real DP + CP images, project `stargate-t187`; gitignored
+  `target/runs/T187-vm/live.sh`, log `live-run3.log`): `scripts/stargate status` reported
+  ACKNOWLEDGED(1) → PENDING/30 with the DP stopped after revoking a label → ACKNOWLEDGED(2)
+  when the DP returned without a CP restart → STALE_CONFLICT/40 after restoring an older CP
+  database with different content → ACKNOWLEDGED(2) after the quickstart recovery option 2 →
+  20 with the CP stopped → NONE/50 without `tokens.yaml` (round-1 wording; round 2 renamed
+  the absent-file state UNKNOWN/50 and made an unreadable file exit 20). The status file was
+  `/tmp/stargate-control/auth-delivery` (0600, directory 0700, uid 5101, tmpfs); the DP
+  mounts no CP `/tmp` path. The first live attempt showed the CP's `/run` tmpfs is root-owned
+  0755, so the file moved to the CP-private `/tmp` tmpfs (Compose mode 1777).
+- Round 2 (review r1 astra Majors, GLM Minors): PENDING is published before the initial RPC
+  (`pendingIsPublishedWhileInitialDeliveryIsOutstanding`, DP reply held); a failed status write
+  withdraws the old value and is retried (`failedStatusWriteNeverLeavesObsoleteState`); the
+  command distinguishes an absent file (UNKNOWN/50) from an unreadable one (unavailable/20) and
+  its vocabulary/exit codes run against a stubbed `docker`
+  (`statusCommandPrintsValidatedStatesAndRefusesUnreadableState`). The three failed before the
+  fix (`target/runs/T187-vm/r2-red.log`); the recorded tests-first JSON keeps the round-1 red and
+  its green reruns the same probe over the round-2 snapshot. The quickstart recovery resolves the
+  DP volume by Compose label. Live rerun `live-run4.log`: all seven steps pass (UNKNOWN/50 at
+  step 7; recovery used the label-resolved volume).
+- Residue: the hour-closure half of acceptance 3 relies on AuditLogService's existing
+  standalone-count rule (AuditLogServiceTest); the new tests assert the count is written only
+  after exact acknowledgement. `scripts/subcommands/status` is not in verify.sh's shell-quality
+  list (verify.sh is outside the budget); `shellcheck -x` was run by hand (only the SC1091 info
+  that `init` also reports). Its behaviour is exercised by the stubbed-docker JUnit case above.
