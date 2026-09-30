@@ -1,7 +1,7 @@
 ---
 id: T187
 title: 'Report pending or stale revocation; count only after DP ack'
-status: in-progress
+status: done
 created: 2026-09-29
 last_updated: 2026-09-30
 source: "reviews/redteam-20260929-694dbd8.md (area 2 M3, survived falsification, narrowed to observability)"
@@ -26,7 +26,7 @@ decision_refs:
   - "data-model §1.8 / T159: keeping DP state on a stale reply is required and stays"
   - "T178: this silence already hid a real initial token-load failure"
 remediates: "T159"
-reviews: {}
+reviews: { round: 2, date: 2026-09-30, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

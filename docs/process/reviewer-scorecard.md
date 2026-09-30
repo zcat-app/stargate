@@ -61,6 +61,9 @@ recorded under the widened allowlist.
 | 2026-09-30 | T188 | 2 (post-gitleaks rename re-review) | APPROVE (0) | APPROVE-WITH-FIXES (1 Minor) |
 | 2026-09-30 | T188 | 2 (post-fix re-review) | APPROVE (0) | APPROVE (0) |
 | 2026-09-30 | T188 | 2 (ticket-note re-review) | APPROVE (0) | APPROVE (0) |
+| 2026-09-30 | T187 | 1 | REWORK (2 Major) | APPROVE (3 Minor) |
+| 2026-09-30 | T187 | 2 | APPROVE-WITH-FIXES (1 Minor) | APPROVE (1 Minor) |
+| 2026-09-30 | T187 | 2 (post-fix re-review) | APPROVE (0) | APPROVE (1 Minor) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -89,6 +92,12 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-09-29 | T188 | 1 | Major | Live probe exercised granted-access routing only in permanent private mode; acceptance 4 also needs ordinary windows with access | found | missed | fixed | glm called acceptance 4 met; fix: `ordinary-with-access` live scenario (credential-bearing SOCKS for every onion spelling, no other surface, Direct loads, no warning), green re-recorded |
 | 2026-09-29 | T188 | 1 | Minor | Tamper check gated on private-window access on an unevidenced "proxy.settings needs access" claim | missed | found | fixed | falsified live: Gecko requires access only for `set`; gate dropped, readable-without-access asserted live and in a unit test |
 | 2026-09-30 | T188 | 2 | Minor | THREAT-MODEL cited the pre-rename candidate package/report while ticket Note 7 named the committed package | missed | found | fixed | doc-only APPROVE-WITH-FIXES; both now cite the committed package with the superseded candidate qualified |
+| 2026-09-30 | T187 | 1 | Major | `stargate status` reported a failed read, and the window while the initial ReloadTokens RPC was outstanding, as NONE ("no delivery attempted") | found | found (Minor; exec-failure half only) | fixed | PENDING now published before the RPC; absent file is UNKNOWN/50, unreadable is unavailable/20; held-DP and stubbed-docker regressions failed before the fix |
+| 2026-09-30 | T187 | 1 | Major | A failed status replacement left an obsolete PENDING readable indefinitely after a terminal stale refusal | found | missed | fixed | failed write withdraws the old value and a background republisher writes the latest state; obstacle-injection regression failed before the fix |
+| 2026-09-30 | T187 | 1 | Minor | Quickstart stale-conflict recovery hard-coded the default-project physical DP volume name | missed | found | fixed | resolved by Compose project + volume labels; exercised in the live rerun |
+| 2026-09-30 | T187 | 1 | Minor | New `scripts/subcommands/status` had no gate coverage (not in verify.sh shell-quality discovery; no contract test) | missed | found | partly fixed | stubbed-docker JUnit case now covers vocabulary and exit codes; verify.sh discovery is outside the 14-path budget (glm re-raised in round 2; astra recorded it as advisory) and was reported as a follow-up |
+| 2026-09-30 | T187 | 2 | Minor | Quickstart, data-model and comments claimed an in-flight delivery is never UNKNOWN, but a failed PENDING write leaves it UNKNOWN | found | missed | fixed | doc/comment-only APPROVE-WITH-FIXES; astra's text probe passes |
+| 2026-09-30 | T187 | 2 (post-fix) | Minor | `stargate status` has no timeout on its `docker compose exec` read; a daemon wedged after preflight blocks it without output | missed | found | follow-up | outside the 14-path budget; reported to the orchestrator with the verify.sh discovery item |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -105,6 +114,15 @@ Durations were not measured; the round-1 set is archived in gitignored
 run timestamps in evidence JSON so feasibility-before-implementation order is
 mechanically provable) is not a row. The maintainer-directed D5/D4
 feasibility matrix ran before the fix and again on the round-2 probe.
+
+T187: round 1 astra REWORK (2 Major) / glm APPROVE (3 Minor); round 2 astra
+APPROVE-WITH-FIXES (1 doc Minor) / glm APPROVE (1 Minor), then a same-round
+re-review of the comment/doc fix: both APPROVE (glm 1 new Minor). The first
+round-2 launch failed closed because the GLM verdict had a malformed FINDINGS
+field; the launcher was re-run and no verdict was transcribed. Durations were
+not measured. The round-2 pre-fix verdict archive was overwritten by the
+post-fix set; its rows above come from the imported verdicts as read in the
+session.
 
 T188: round 1 astra REWORK / glm APPROVE (1 Minor); round 2 both APPROVE,
 then three same-round re-reviews of changed snapshots: a behaviour-neutral

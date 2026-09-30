@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 33 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 185 |
+| done | 186 |
 | deferred | 5 |
 | **total** | **224** |
 
@@ -39,9 +39,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T187 | Report pending or stale revocation; count only after DP ack | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -59,7 +57,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_185 ticket(s) done._
+_186 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -244,5 +242,6 @@ _185 ticket(s) done._
 - T182 — Repair stale T059/T033 live harnesses: control socket, sg1 names
 - T183 — Rebuild the T034 DNS-leak gate on the current DP interface
 - T186 — Fail closed in proxy.onRequest for blocked protected requests
+- T187 — Report pending or stale revocation; count only after DP ack
 - T188 — Detect and require private-window access for the extension
 - T192 — Allow a per-ticket developer subagent under an orchestrator
