@@ -15,9 +15,9 @@
 |---|---|
 | pending | 32 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 188 |
+| done | 189 |
 | deferred | 5 |
 | **total** | **226** |
 
@@ -38,9 +38,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T184 | Pin the Tor sidecar package closure against index rollback | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -58,7 +56,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_188 ticket(s) done._
+_189 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -242,6 +240,7 @@ _188 ticket(s) done._
 - T181 — Replace topology suite Docker-health poll with authenticated probe
 - T182 — Repair stale T059/T033 live harnesses: control socket, sg1 names
 - T183 — Rebuild the T034 DNS-leak gate on the current DP interface
+- T184 — Pin the Tor sidecar package closure against index rollback
 - T186 — Fail closed in proxy.onRequest for blocked protected requests
 - T187 — Report pending or stale revocation; count only after DP ack
 - T188 — Detect and require private-window access for the extension

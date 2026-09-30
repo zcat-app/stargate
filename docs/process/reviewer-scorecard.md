@@ -71,6 +71,7 @@ recorded under the widened allowlist.
 | 2026-09-30 | T194 | 1 | REWORK (1 Major) | APPROVE (0) |
 | 2026-09-30 | T194 | 2 | APPROVE-WITH-FIXES (1 Minor) | APPROVE (0) |
 | 2026-09-30 | T194 | 2 (post-fix re-review) | APPROVE (0) | APPROVE (1 Minor) |
+| 2026-09-30 | T184 | 1 | APPROVE (0) | APPROVE (1 Minor) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -119,6 +120,7 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-09-30 | T194 | 1 | Minor | Review-history records are mis-framed when a verdict lacks a trailing newline (Codex `-o` output): the next `===` header is appended to its last line | missed | missed | fixed | found by the developer while consuming round 1 (no data lost, only framing). Both writers newline-terminate each file; S16i case |
 | 2026-09-30 | T194 | 2 | Minor | workflow.md and a run-task.sh comment claimed every review-state retirement holds the launcher lock; only invalidation does | found | missed | fixed | comment/doc fix items applied verbatim; same-round re-review |
 | 2026-09-30 | T194 | 2 (post-fix) | Minor | Superseded red record 1 is internally inconsistent: its patch should fail S16i but its output omits S16i | missed | found | false-positive | that patch's S16i fixture used `truncate -s -1` on a verdict ending in a blank line, which leaves a trailing newline, so S16i legitimately passed against it (the vacuity was why the red was re-recorded) |
+| 2026-09-30 | T184 | 1 | Minor | Rollback-proxy readiness wait in the release-cadence repro test is a fixed 5 s (50×0.1 s); a slow python3 start fails an honest tree with "rollback proxy did not start" | missed | found | open | fail-closed, release cadence (STARGATE_VERIFY_REPRO=1), recoverable by rerun; not fixed in the approved candidate; reported to the orchestrator |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -157,6 +159,14 @@ rounds 3–4 are the refined cycle (driver archives `T193-r1.verdict`,
 `T193-r2.verdict`). Durations were not measured. glm recommended aligning
 `init`'s `command -v timeout` detection with `status` (out of T193's scope);
 not a row, reported to the orchestrator.
+
+T184: round 1 both APPROVE (glm 1 Minor, open). Durations were not
+measured. Both reviewers relied on the mechanical GREEN report and the
+recorded red/green evidence; neither ran builds. glm's recommended follow-ups
+(not rows): name the T184 mechanism in `specs/000-architecture/spec.md`'s
+Tor row (glm itself judged the existing sentence literally true), and note
+that the repro gate needs python3 on the release host. Reported to the
+orchestrator.
 
 T194: round 1 astra REWORK (1 Major) / glm APPROVE; round 2 astra
 APPROVE-WITH-FIXES (1 doc Minor) / glm APPROVE, then a same-round re-review

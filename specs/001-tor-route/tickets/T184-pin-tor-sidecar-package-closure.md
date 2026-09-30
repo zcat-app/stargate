@@ -1,7 +1,7 @@
 ---
 id: T184
 title: 'Pin the Tor sidecar package closure against index rollback'
-status: in-review
+status: done
 created: 2026-09-29
 last_updated: 2026-09-30
 source: "reviews/redteam-20260929-694dbd8.md (area 3 M1, survived falsification, narrowed scope)"
@@ -24,7 +24,7 @@ spec_refs:
 decision_refs:
   - "SECURITY-DECISIONS.md T099 entry: claims the snapshot closure is frozen; falsification shows it is not against an on-path attacker"
 remediates: "T160"
-reviews: {}
+reviews: { round: 1, date: 2026-09-30, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
