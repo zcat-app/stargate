@@ -56,6 +56,11 @@ recorded under the widened allowlist.
 | 2026-09-29 | T183 | 3 (refine) | APPROVE (0) | APPROVE (1 Minor) |
 | 2026-09-29 | T186 | 1 | REWORK (1 Major) | APPROVE-WITH-FIXES (2 Minor) |
 | 2026-09-29 | T186 | 2 | APPROVE (0) | APPROVE (0) |
+| 2026-09-29 | T188 | 1 | REWORK (1 Major) | APPROVE (1 Minor) |
+| 2026-09-29 | T188 | 2 | APPROVE (0) | APPROVE (0) |
+| 2026-09-30 | T188 | 2 (post-gitleaks rename re-review) | APPROVE (0) | APPROVE-WITH-FIXES (1 Minor) |
+| 2026-09-30 | T188 | 2 (post-fix re-review) | APPROVE (0) | APPROVE (0) |
+| 2026-09-30 | T188 | 2 (ticket-note re-review) | APPROVE (0) | APPROVE (0) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -81,6 +86,9 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-09-29 | T186 | 1 | Major | Live probe replaced each negative navigation in the same tab after ≤4 s and never required a terminal result, so a delayed fallback could be cancelled by the test itself | found | missed | fixed | glm called acceptance 3 met on the same evidence; fix: one preserved tab per request, label-bound terminal error required, `delayed-null` (RED, destination capture) and `hung-proxy` (RED, incomplete) falsifiers, red/green re-recorded |
 | 2026-09-29 | T186 | 1 | Minor | THREAT-MODEL residue named only the "sink treated as hostname" branch, omitting descriptor rejection → default (system) proxy with the destination name | missed | found | fixed | doc-only; glm's evaluation probe passes |
 | 2026-09-29 | T186 | 1 | Minor | router.js comment and THREAT-MODEL claimed no process "root included" can listen at the sink; root can replace `/dev/null` | missed | found | fixed | reworded to the unprivileged boundary; both evaluation probes pass |
+| 2026-09-29 | T188 | 1 | Major | Live probe exercised granted-access routing only in permanent private mode; acceptance 4 also needs ordinary windows with access | found | missed | fixed | glm called acceptance 4 met; fix: `ordinary-with-access` live scenario (credential-bearing SOCKS for every onion spelling, no other surface, Direct loads, no warning), green re-recorded |
+| 2026-09-29 | T188 | 1 | Minor | Tamper check gated on private-window access on an unevidenced "proxy.settings needs access" claim | missed | found | fixed | falsified live: Gecko requires access only for `set`; gate dropped, readable-without-access asserted live and in a unit test |
+| 2026-09-30 | T188 | 2 | Minor | THREAT-MODEL cited the pre-rename candidate package/report while ticket Note 7 named the committed package | missed | found | fixed | doc-only APPROVE-WITH-FIXES; both now cite the committed package with the superseded candidate qualified |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -97,6 +105,16 @@ Durations were not measured; the round-1 set is archived in gitignored
 run timestamps in evidence JSON so feasibility-before-implementation order is
 mechanically provable) is not a row. The maintainer-directed D5/D4
 feasibility matrix ran before the fix and again on the round-2 probe.
+
+T188: round 1 astra REWORK / glm APPROVE (1 Minor); round 2 both APPROVE,
+then three same-round re-reviews of changed snapshots: a behaviour-neutral
+rename after the pre-commit gitleaks hook flagged a generic-api-key false
+positive in router.js (hooks never skipped), glm's doc-only fix item, and a
+ticket-note rewording after the same false positive in the ticket text.
+Durations were not measured. Both reviewers recommended that the
+pre-existing `background/hardening.js` WebRTC notification defect found live
+in T188 (Firefox rejects `requireInteraction`, so it is never shown) get its
+own remediation ticket; not a row, reported to the orchestrator.
 
 T183: rounds 1–2 then the refine re-review (round counter reset to 1 by
 `run-task.sh --reset`; recorded here as round 3). Per-reviewer durations were

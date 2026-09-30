@@ -1,9 +1,9 @@
 ---
 id: T188
 title: 'Detect and require private-window access for the extension'
-status: in-review
+status: done
 created: 2026-09-29
-last_updated: 2026-09-29
+last_updated: 2026-09-30
 source: "reviews/redteam-20260929-694dbd8.md (area 2 m4, survived falsification, promoted to Major)"
 phase: "Foundation audit remediation"
 story: ''
@@ -23,7 +23,7 @@ spec_refs:
   - specs/001-tor-route/quickstart.md
 decision_refs: []
 remediates: "T157"
-reviews: {}
+reviews: { round: 2, date: 2026-09-30, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

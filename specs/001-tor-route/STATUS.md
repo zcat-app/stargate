@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-09-29
+**Last updated:** 2026-09-30
 
 ---
 
@@ -15,9 +15,9 @@
 |---|---|
 | pending | 34 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 184 |
+| done | 185 |
 | deferred | 5 |
 | **total** | **224** |
 
@@ -40,9 +40,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T188 | Detect and require private-window access for the extension | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -60,7 +58,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_184 ticket(s) done._
+_185 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -245,4 +243,5 @@ _184 ticket(s) done._
 - T182 — Repair stale T059/T033 live harnesses: control socket, sg1 names
 - T183 — Rebuild the T034 DNS-leak gate on the current DP interface
 - T186 — Fail closed in proxy.onRequest for blocked protected requests
+- T188 — Detect and require private-window access for the extension
 - T192 — Allow a per-ticket developer subagent under an orchestrator
