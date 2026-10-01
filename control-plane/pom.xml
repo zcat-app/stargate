@@ -189,6 +189,16 @@
                     <artifactId>reproducible-build-maven-plugin</artifactId>
                     <version>0.17</version>
                 </plugin>
+                <!-- persistence/ and ui/ bind jandex without a version, so
+                     Maven picked it from repository metadata, which the
+                     .mvn/checksums lock does not cover. Pinned at the locked
+                     version so a new upstream release cannot change what
+                     runs or break a fresh build (T185, Principle IV). -->
+                <plugin>
+                    <groupId>io.smallrye</groupId>
+                    <artifactId>jandex-maven-plugin</artifactId>
+                    <version>3.6.0</version>
+                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>

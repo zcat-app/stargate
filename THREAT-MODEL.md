@@ -1730,6 +1730,21 @@ a malicious version of Stargate or a sidecar to all users.
   curl pipelines to sh/bash (including line continuations), and unversioned
   npm/pip/go/apt install lines. A reviewer promotes pin changes under
   `CONTRIBUTING.md` §"Updating executable CI inputs".
+- The control-plane Maven build (Docker image and `scripts/verify.sh`)
+  verifies every resolved artifact — dependencies, plugins, annotation
+  processors, build extensions and POMs — against the committed SHA-256 lock
+  `control-plane/.mvn/checksums/checksums.sha256` before use, with strict
+  transport checksums; a tampered or unlisted artifact fails the build (T185).
+  The amd64 closure is build-confirmed. The arm64-only entries were derived by
+  aarch64 profile-activation emulation on an amd64 host and are not
+  build-confirmed (no arm64 builder); a wrong arm64 entry fails that build
+  closed. Refreshing the lock is a deliberate reviewed change (procedure in
+  `control-plane/Dockerfile`). Exclusions: remote SNAPSHOT artifacts are not
+  checked (only the release-only Maven Central repository is configured);
+  repository metadata is not locked, though any version it selects must still
+  be in the lock; the lock identifies content but does not authenticate the
+  publisher (no PGP check) — recorded bytes are trusted as first fetched from
+  Central over HTTPS with matching Central checksums.
 - Release artefacts are signed (architecture spec §12.5 — signing tool
   NEEDS CLARIFICATION).
 

@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 32 |
-| in-progress | 0 |
+| pending | 31 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 189 |
@@ -29,7 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T185 | Lock control-plane Maven dependency identities | Foundation audit remediation | ✓ | ✓ |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T191 | Resolve surviving deployment-area redteam minors and audit g | Foundation audit remediation | ✓ | ✓ |
@@ -38,7 +37,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T185 | Lock control-plane Maven dependency identities | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

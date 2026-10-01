@@ -45,10 +45,48 @@ FROM maven:3.9-eclipse-temurin-25@sha256:1c3a703ab39fee7ac0880f46e6ccd22c0d701f1
 
 WORKDIR /src
 
+# Dependency lock (T185, Principle IV). The image pin covers Maven and the JDK,
+# not what Maven downloads. .mvn/maven.config turns on --strict-checksums and the
+# Maven Resolver "trusted checksums" check. Every artifact the build resolves
+# (dependency, plugin, annotation processor, build extension, POM, Quarkus
+# deployment jar) must match its SHA-256 in .mvn/checksums/checksums.sha256
+# before it is used. An unlisted artifact fails the build too (failIfMissing).
+# mvn reads .mvn/ from /src, so this COPY must precede every RUN mvn. The same
+# file applies to ./mvnw in scripts/verify.sh. Remote SNAPSHOTs are not
+# checked; only the release-only Central repository is configured.
+# tests/contract/workflow/maven_dependency_lock_test.sh gates this.
+#
+# Refreshing the lock is a reviewed change, never automatic. Run it after any
+# change to a dependency, plugin or the Maven version (wrapper or this image):
+#   1. cd control-plane && : > .mvn/checksums/checksums.sha256
+#      (start empty so no stale entry survives; record mode only adds lines)
+#   2. R=$(mktemp -d); ./mvnw -B -Dmaven.repo.local="$R" \
+#        -Daether.artifactResolver.postProcessor.trustedChecksums.record=true \
+#        -Dmaven.test.failure.ignore=true clean verify
+#      Run this twice. The first pass downloads from Central under strict
+#      checksums. Tests that start a child Maven fail on that pass because the
+#      lock is only written at the end of the session.
+#   2b. Record the arm64 closure too: the base images are multi-arch, and
+#      some natives are chosen by the build host's arch (brotli4j via a Maven
+#      <os> profile). Run step 2 once more with MAVEN_OPTS=-Dos.arch=aarch64
+#      and -Dquarkus.grpc.protoc-os-classifier=linux-x86_64. The second flag
+#      keeps an amd64 host able to execute protoc; every protoc classifier is
+#      already locked. No amd64 gate resolves the resulting arm64-only
+#      entries, so copy their new digests into ARM64_ONLY in
+#      tests/contract/workflow/maven_dependency_lock_test.sh. Where an arm64
+#      builder or emulator exists, also run step 4 with --platform linux/arm64.
+#   3. ./mvnw -B -Dmaven.repo.local="$R" clean verify   (enforcing; must pass)
+#   4. docker build -f control-plane/Dockerfile . (from the repo root; this
+#      image's own Maven version must pass against the lock too)
+#   5. Review the lock diff: each added or changed line is a new executable
+#      input and needs a justification in the PR.
+COPY control-plane/.mvn ./.mvn
+
 # Pom-first layer: rebuilds only when reactor wiring changes, not when
 # Java source changes. Quarkus's quarkus-maven-plugin resolves some
 # artefacts at package time (extension processors), so a separate
-# `dependency:go-offline` step is best-effort at best and we skip it;
+# `dependency:go-offline` step is best-effort at best and we skip it
+# (the lock above still checks those package-time artefacts);
 # the structured COPY still gives Docker a stable cache key for the
 # poms-only layer. COPY paths are repo-root relative: the build context
 # is the REPO ROOT (T122) because the codegen reads the repo-top proto/
