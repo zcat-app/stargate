@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 31 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 190 |
+| done | 191 |
 | deferred | 5 |
 | **total** | **227** |
 
@@ -29,6 +29,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
+| T155 | Validate repaired foundation before feature work | Foundation audit remediation | ✓ |  |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T191 | Resolve surviving deployment-area redteam minors and audit g | Foundation audit remediation | ✓ | ✓ |
@@ -37,9 +38,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T195 | Ship WebRTC off and make the hardening failure visible and t | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -57,7 +56,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_190 ticket(s) done._
+_191 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -249,3 +248,4 @@ _190 ticket(s) done._
 - T192 — Allow a per-ticket developer subagent under an orchestrator
 - T193 — Gate scripts/subcommands/status in verify and bound its docker read
 - T194 — Keep review rejections and red evidence when the candidate changes
+- T195 — Ship WebRTC off and make the hardening failure visible and truthful

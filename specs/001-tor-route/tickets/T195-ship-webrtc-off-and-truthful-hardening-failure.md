@@ -1,7 +1,7 @@
 ---
 id: T195
 title: 'Ship WebRTC off and make the hardening failure visible and truthful'
-status: in-progress
+status: done
 created: 2026-10-01
 last_updated: 2026-10-01
 source: "T155 attempt 2 cumulative redteam (candidate 79d49e9), area 2 finding A2-M2, survived falsification; orchestrator spot-checked the cited lines; maintainer approved filing 2026-10-01"
@@ -39,7 +39,7 @@ spec_refs:
   - THREAT-MODEL.md
 decision_refs:
   - "Maintainer decision 2026-10-01: file A2-M2 as a Major blocking T155; fold in the T157 full-probe label orphan from T188"
-reviews: {}
+reviews: { round: 1, date: 2026-10-01, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
