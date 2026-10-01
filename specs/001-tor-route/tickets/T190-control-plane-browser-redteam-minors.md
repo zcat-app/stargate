@@ -9,7 +9,7 @@ phase: "Foundation audit remediation"
 story: ''
 blocked_by: ["T192"]
 parallel: true
-files_budget: 12
+files_budget: 17   # raised 12 -> 17 for T155 attempt-2 additions (maintainer-approved 2026-10-01): TokenLoader.java, TokenLoaderTest.java, data-model.md, quickstart.md, THREAT-MODEL.md
 privacy_critical: true
 tests_first: []
 test_for: []
@@ -68,6 +68,32 @@ below.
 6. Nits: token input `type="password"`; stale "non-persistent" comment in
    `hardening.js`; drop or constrain unused timestamped V001 tables before any
    writer lands; correct the `ControlGrpcService` and `HealthEndpoint` javadocs.
+
+
+Added 2026-10-01 from the T155 attempt-2 redteam (`reviews/redteam-20261001-79d49e9.md`),
+maintainer-approved:
+
+- Item 1 addition (A2-M1 gap): `hardening.test.js` re-calls `auditHardening()`
+  (`hardening.js:48`; test :184, :196, `reauditObservesChangedProfileState` :341) but no
+  production path does; the only production call is load-time (`hardening.js:129`) and the
+  `:29` comment ("re-reads the setting every call") implies otherwise. Either add a
+  production re-read caller (per protected decision, failing closed) or relabel those
+  tests as API-contract-only and fix the comment.
+
+7. THREAT-MODEL.md:707 "The destination service does not learn the user's IP address"
+   is scoped to the onion route: in 001 only `.onion` destinations are Tor-routed, and
+   clearnet resources an onion page causes the browser to fetch go Direct (with local DNS),
+   revealing the user's IP and resolver to those hosts (cf. §2.5, §6.2; spec.md:123). (A2-M3)
+8. `TokenLoader` (`TokenLoader.java:145` uses SnakeYAML `compose()`, which keeps duplicate
+   keys; `:184-189` takes the first top-level `tokens`; `:216-225` keeps the last duplicate
+   within a record) rejects the whole file on any duplicate key at document, top-level or
+   record level as `config_error` (no store, generation or push), documented in data-model
+   §1.1. TokenLoaderTest covers a duplicate top-level `tokens` (e.g. an appended
+   `tokens: []`) and duplicate `label`/`token` in a record. (A2-M4)
+9. Quickstart "Check token delivery (and revocation)" (`quickstart.md:122-137`) states that
+   `scripts/stargate status` reflects only the credential set the running control plane
+   last loaded, so `stargate-control` must be restarted after editing `tokens.yaml` before
+   checking; the `ACKNOWLEDGED(<generation>)` row at :134 is made true. (A2-m6)
 
 ## Out-of-scope
 

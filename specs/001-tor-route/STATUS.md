@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 31 |
+| pending | 32 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 190 |
 | deferred | 5 |
-| **total** | **226** |
+| **total** | **227** |
 
 ---
 
@@ -29,10 +29,10 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T155 | Validate repaired foundation before feature work | Foundation audit remediation | ✓ |  |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T191 | Resolve surviving deployment-area redteam minors and audit g | Foundation audit remediation | ✓ | ✓ |
+| T195 | Ship WebRTC off and make the hardening failure visible and t | Foundation audit remediation | ✓ |  |
 
 ---
 

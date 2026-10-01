@@ -9,7 +9,7 @@ phase: "Foundation audit remediation"
 story: ''
 blocked_by: ["T192"]
 parallel: true
-files_budget: 14
+files_budget: 20   # raised 14 -> 20 for T155 attempt-2 additions (maintainer-approved 2026-10-01): docker-compose.local.yml, local_compose_test.sh, quickstart.md, a docs URL lint, t162 SKIP fixture, THREAT-MODEL.md
 privacy_critical: true
 tests_first: []
 test_for: []
@@ -75,6 +75,42 @@ contract, CP exec /tmp per T129) are out of scope except where wording is listed
    observer image in T081's acceptance.
 10. Wording: SECURITY-DECISIONS T099 rotation note says removal happens on every
     Tor release; quickstart avoids shell-history token exposure.
+
+
+Added 2026-10-01 from the T155 attempt-2 redteam (`reviews/redteam-20261001-79d49e9.md`),
+maintainer-approved:
+
+- Item 2 addition (A3-M7): until the rule is narrowed, THREAT-MODEL §3.1
+  (THREAT-MODEL.md:273) states that the host-netns DP (`compose/docker-compose.local.yml:29`)
+  can read the host's `/proc/self/net/{tcp,tcp6,udp,unix,arp,route}` under
+  `/proc/** r` (`compose/apparmor/stargate-dp:25`). The fix adds
+  `deny @{PROC}/*/net/** r` and is proven by a confined UID-5102 helper getting EACCES on
+  `/proc/self/net/tcp`, with an unconfined positive control.
+- Item 3 addition (A3-M3): `scripts/verify.sh` (SKIP detection at :95-96 matches only
+  line-start `SKIP:`) also reports the docker tier of
+  `tests/contract/stargate-cli/t162_enforcement_test.sh` as SKIP (its :86 prints
+  `OK: …; SKIP[docker] packet falsifiers` and exits 0); add a regression fixture for this
+  output shape alongside the R1–R9 case.
+- Item 4 addition: pin the runner image instead of `runs-on: ubuntu-latest`
+  (`.github/workflows/verify.yml:30,73,93`; `agent-task.yml:78,145`).
+- Item 6 addition (A3-M5): the token-bearing run job (`agent-task.yml`, `contents: write`
+  at :150, checkout at :160) sets `persist-credentials: false`; only `agent/$TICKET` is
+  pushed, in a separate post-agent step; opencode config denies `git push*`; the MERGE
+  prompt's `git push origin $FEATURE_BRANCH` (`scripts/run-task.sh:1149`) is not reachable
+  from the CI agent. Item 6's risk-acceptance alternative does not cover this direct-push
+  path. `ci_inputs_test.sh` requires `persist-credentials: false` in token-bearing jobs and
+  the push deny rule.
+
+11. `compose/docker-compose.local.yml` sets `pull_policy: build` on `stargate-dp` (:25),
+    `stargate-control` (:62) and `tor` (:96), each of which declares `build:` plus
+    `image: stargate/<name>:local`; without it a plain `up`/`pull` pulls
+    `docker.io/stargate/*:local` from an unrelated third-party account.
+    `tests/contract/compose/local_compose_test.sh` fails any service with `build:` lacking
+    `pull_policy: build`. (A3-M1)
+12. `specs/001-tor-route/quickstart.md:28` clones `https://github.com/zcat-app/stargate.git`
+    (was `zcatapp`, which returns 404 and is claimable); a docs lint asserts every
+    `github.com/<owner>/stargate` URL in `*.md`/`*.html` uses owner `zcat-app`. Becomes a
+    Major at public release. (A3-M6)
 
 ## Out-of-scope
 
