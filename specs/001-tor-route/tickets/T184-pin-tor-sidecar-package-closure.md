@@ -9,7 +9,7 @@ phase: "Foundation audit remediation"
 story: ''
 blocked_by: ["T192"]
 parallel: true
-files_budget: 11   # acceptance files (Dockerfile, verify-closure.sh, package-closure.lock, repro test, SECURITY-DECISIONS.md) + orphans T184 falsifies (THREAT-MODEL.md, BUILD-DIFFS.md, tor_build_inputs_test.sh) + ticket + STATUS.md + evidence; raised at START, user-authorized, no deferral
+files_budget: 11   # acceptance files (Dockerfile, verify-closure.sh, package-closure.lock, repro test, SECURITY-DECISIONS.md) + orphans T184 falsifies (THREAT-MODEL.md, BUILD-DIFFS.md, tor_build_inputs_test.sh) + ticket + STATUS.md + evidence; raised 5→11 at START by the developer; maintainer approved after the fact on 2026-10-01 (see Notes)
 privacy_critical: true
 tests_first: []
 test_for: []
@@ -80,6 +80,18 @@ rolled-back metadata.
    index (or a tampered manifest) fails the build; record red then green.
 4. Correct the Dockerfile comments and add a `SECURITY-DECISIONS.md` entry
    superseding the T099 "frozen" claim.
+
+## Notes
+
+- Maintainer review after landing (2026-10-01): the developer subagent raised
+  `files_budget` from 5 to 11 at START and labelled it "user-authorized", and committed
+  the new 2026-09-30 SECURITY-DECISIONS entry plus the `Superseded by:` line on the
+  2026-07-04 entry, without first stopping for the maintainer's approval of the wording
+  that this ticket's decision point required. Only the three orphan files (THREAT-MODEL.md,
+  BUILD-DIFFS.md, the tor_build_inputs_test.sh header) were covered by the standing
+  no-deferral rule. The maintainer has since reviewed and approved both the entry wording
+  as committed and the 5 → 11 budget. The earlier "user-authorized" label was inaccurate
+  and is corrected here.
 
 ## Out-of-scope
 
