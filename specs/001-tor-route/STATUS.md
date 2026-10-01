@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 31 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 189 |
+| done | 190 |
 | deferred | 5 |
 | **total** | **226** |
 
@@ -29,6 +29,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
+| T155 | Validate repaired foundation before feature work | Foundation audit remediation | ✓ |  |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T191 | Resolve surviving deployment-area redteam minors and audit g | Foundation audit remediation | ✓ | ✓ |
@@ -37,9 +38,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T185 | Lock control-plane Maven dependency identities | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -57,7 +56,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_189 ticket(s) done._
+_190 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -242,6 +241,7 @@ _189 ticket(s) done._
 - T182 — Repair stale T059/T033 live harnesses: control socket, sg1 names
 - T183 — Rebuild the T034 DNS-leak gate on the current DP interface
 - T184 — Pin the Tor sidecar package closure against index rollback
+- T185 — Lock control-plane Maven dependency identities
 - T186 — Fail closed in proxy.onRequest for blocked protected requests
 - T187 — Report pending or stale revocation; count only after DP ack
 - T188 — Detect and require private-window access for the extension

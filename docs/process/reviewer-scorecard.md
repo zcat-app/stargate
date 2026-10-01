@@ -72,6 +72,9 @@ recorded under the widened allowlist.
 | 2026-09-30 | T194 | 2 | APPROVE-WITH-FIXES (1 Minor) | APPROVE (0) |
 | 2026-09-30 | T194 | 2 (post-fix re-review) | APPROVE (0) | APPROVE (1 Minor) |
 | 2026-09-30 | T184 | 1 | APPROVE (0) | APPROVE (1 Minor) |
+| 2026-10-01 | T185 | 1 | REWORK (1 Major, 1 Minor) | APPROVE (1 Minor) |
+| 2026-10-01 | T185 | 2 | REWORK (1 Major) | APPROVE (0) |
+| 2026-10-01 | T185 | 3 (refine re-review; counter reset to 1) | APPROVE (0) | APPROVE (0) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -121,6 +124,10 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-09-30 | T194 | 2 | Minor | workflow.md and a run-task.sh comment claimed every review-state retirement holds the launcher lock; only invalidation does | found | missed | fixed | comment/doc fix items applied verbatim; same-round re-review |
 | 2026-09-30 | T194 | 2 (post-fix) | Minor | Superseded red record 1 is internally inconsistent: its patch should fail S16i but its output omits S16i | missed | found | false-positive | that patch's S16i fixture used `truncate -s -1` on a verdict ending in a blank line, which leaves a trailing newline, so S16i legitimately passed against it (the vacuity was why the red was re-recorded) |
 | 2026-09-30 | T184 | 1 | Minor | Rollback-proxy readiness wait in the release-cadence repro test is a fixed 5 s (50×0.1 s); a slow python3 start fails an honest tree with "rollback proxy did not start" | missed | found | open | fail-closed, release cadence (STARGATE_VERIFY_REPRO=1), recoverable by rerun; not fixed in the approved candidate; reported to the orchestrator |
+| 2026-10-01 | T185 | 1 | Major | Lock omitted the arm64 closure: brotli4j selects `native-linux-aarch64` through a Maven `<os>` profile, so an arm64 image build fails closed on unlisted artifacts | found | missed | fixed | confirmed; aarch64 profile-activation recording added exactly the jar + POM; test requires both platforms' arch-selected entries |
+| 2026-10-01 | T185 | 1 | Minor | THREAT-MODEL §5.9 not updated with the Maven lock mechanism and its exclusions | found | missed | fixed | budget 8→9 maintainer-authorised; maintainer-edited arm64 wording |
+| 2026-10-01 | T185 | 1 | Minor | Static override tripwire misses `-s`/`--settings` (a settings file can carry resolver properties) | missed | found | fixed | glm marked it optional; fixed at the maintainer's request (also `-gs`/`--global-settings`) |
+| 2026-10-01 | T185 | 2 | Major | arm64 closure not build-confirmed, and the platform assertion caught a deleted but not a corrupted arm64 Brotli entry | found | dismissed | fixed | glm: arm64 gap "fail-closed, disclosed, and environment-blocked (→ follow-up)". Fix: `ARM64_ONLY` reviewed digests in the test (zeroed-digest probe fails). The maintainer-time-boxed real `--platform linux/arm64` build failed on emulation (TLS handshake under nested TCG), so maintainer refine: Acceptance 1 states arm64 is emulation-derived, not build-confirmed |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -159,6 +166,18 @@ rounds 3–4 are the refined cycle (driver archives `T193-r1.verdict`,
 `T193-r2.verdict`). Durations were not measured. glm recommended aligning
 `init`'s `command -v timeout` detection with `status` (out of T193's scope);
 not a row, reported to the orchestrator.
+
+T185: round 1 astra REWORK (1 Major, 1 Minor) / glm APPROVE (1 Minor);
+round 2 astra REWORK (1 Major) / glm APPROVE; after the maintainer's refine
+the round counter was reset (`run-task.sh --reset`, history archived in
+gitignored `target/runs/T185.review-history`), and the fresh review (recorded
+here as round 3) was both APPROVE with no findings. Durations were not
+measured. Both reviewers relied on the mechanical GREEN report and the
+recorded red/green evidence. Astra independently fetched the arm64 brotli4j
+artifacts from Central and matched the lock. glm's round-3 recommended
+follow-ups (not rows): a tripwire for MAVEN_OPTS/MAVEN_ARGS exports on
+build lines, and the compose image-output digest once the CP image changes
+(manual promotion). Reported to the orchestrator.
 
 T184: round 1 both APPROVE (glm 1 Minor, open). Durations were not
 measured. Both reviewers relied on the mechanical GREEN report and the

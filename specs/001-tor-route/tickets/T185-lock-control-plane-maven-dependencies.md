@@ -1,7 +1,7 @@
 ---
 id: T185
 title: 'Lock control-plane Maven dependency identities'
-status: in-progress
+status: done
 created: 2026-09-29
 last_updated: 2026-10-01
 source: "reviews/redteam-20260929-694dbd8.md (area 3 M2, survived falsification)"
@@ -24,7 +24,7 @@ spec_refs:
 decision_refs:
   - "T098/T145/T176 cover the Maven wrapper distribution only"
 remediates: "T098"
-reviews: {}
+reviews: { round: 1, date: 2026-10-01, verdict: APPROVE }
 overrides: []
 aborted_attempts: [{ date: 2026-10-01, round: 3, reason: "run-task --reset", history: target/runs/T185.review-history }]
 reopens: []
