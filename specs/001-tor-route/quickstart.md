@@ -192,8 +192,10 @@ closed (T188). Mullvad Browser runs every window in private browsing, and any re
 the extension does not route through Tor (because it is not installed, not allowed in
 private windows, disabled or still starting) uses the browser's proxy settings. The
 template `browser-profile/user.js` sets those to an unreachable SOCKS5 proxy with
-proxy-side DNS, bypassed only for ordinary ICANN top-level domains. Do not use it in
-your daily profile.
+proxy-side DNS, bypassed only for ordinary ICANN top-level domains. It also turns
+WebRTC off (`media.peerconnection.enabled=false`; THREAT-MODEL §5.3): Mullvad Browser
+ships it enabled, and while it is enabled the extension blocks every `.onion` request.
+Do not use it in your daily profile.
 
 ```bash
 # Create the profile with the baseline before its first start:
@@ -281,13 +283,24 @@ drift in either location fails CI. The warning satisfies spec FR-019.
 
 ## Step 5 — Verify hardening (30 seconds)
 
-The extension runs the hardening audit (arch §14.5) automatically on
-first run. If a check fails, it blocks routing and shows a dialog.
-Mullvad Browser's defaults pass every check out of the box, so this
-step is usually a no-op.
+The extension audits the one hardening surface it can read at runtime, WebRTC
+(arch §14.5), whenever it starts. Mullvad Browser's own default has WebRTC
+**enabled**, so a profile without `browser-profile/user.js` fails the audit; the
+`user.js` from Step 3 sets `media.peerconnection.enabled=false`, so the audit passes.
+DoH, DoT and HTTP/3 cannot be read by an extension; they are verified outside it at
+each Stargate release (THREAT-MODEL §5.4, §5.5) and nothing here checks them.
 
-If the dialog appears, follow its instructions to disable DoH, restrict
-WebRTC, and disable HTTP/3, then click **Re-audit**.
+If the audit fails, Stargate blocks every non-Direct route (`.onion` requests do not
+load) and:
+
+- shows a brief browser notification (it disappears by itself) naming WebRTC; and
+- keeps the blocked state in the Stargate popup, which shows
+  `Main navigation decision: Blocked by Stargate` for a `.onion` page.
+
+To recover, set `media.peerconnection.enabled` to `false` in `about:config` (or
+reinstall `user.js`) and restart the browser, then re-load the extension (Step 3
+steps 1-4). There is no Re-audit button: the audit runs again at each extension
+start.
 
 ---
 

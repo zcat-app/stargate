@@ -39,6 +39,13 @@
 // extension compares the live settings with these values and warns on drift.
 // Live evidence: THREAT-MODEL T188.
 
+// WebRTC off (T195; THREAT-MODEL 5.3). Mullvad Browser defaults
+// media.peerconnection.enabled to true, which closes the extension's WebRTC
+// gate and blocks every .onion request (fail-closed, but the route never
+// works). The extension reads this state through
+// privacy.network.peerConnectionEnabled and cannot set it.
+user_pref("media.peerconnection.enabled", false);
+
 user_pref("network.proxy.type", 1);
 user_pref("network.proxy.socks", "file:///dev/null/stargate-blocked");
 user_pref("network.proxy.socks_port", 0);

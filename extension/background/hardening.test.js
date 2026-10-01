@@ -46,6 +46,45 @@ const implPresent = () => fs.existsSync(HARDENING_PATH);
 // recorded so the no-invented-API-claims property is assertable.
 // ---------------------------------------------------------------------------
 
+// Gecko's notifications.create schema (T195). Transcribed from
+// toolkit/components/extensions/schemas/notifications.json
+// (CreateNotificationOptions) as shipped in Mullvad Browser 153.3.0esr
+// (omni.ja chrome/toolkit/content/extensions/schemas/notifications.json).
+// Gecko rejects any property outside it, and `buttons` is marked
+// `unsupported`. Chromium-only options such as `requireInteraction` are
+// therefore absent: a mock that accepted them let this module ship a
+// notification the real browser never displayed.
+const GECKO_CREATE_NOTIFICATION_PROPERTIES = new Set([
+  'type', 'iconUrl', 'appIconMaskUrl', 'title', 'message', 'contextMessage',
+  'priority', 'eventTime', 'imageUrl', 'items', 'progress', 'isClickable',
+]);
+const GECKO_CREATE_NOTIFICATION_REQUIRED = ['type', 'title', 'message'];
+const GECKO_NOTIFICATION_TEMPLATES = new Set(['basic', 'image', 'list', 'progress']);
+
+// Returns the rejection message Gecko would produce, or null when valid.
+function geckoCreateOptionsRejection(payload) {
+  if (payload === null || typeof payload !== 'object') {
+    return 'Error processing options: expected an object';
+  }
+  for (const key of Object.keys(payload)) {
+    if (!GECKO_CREATE_NOTIFICATION_PROPERTIES.has(key)) {
+      return `Error processing ${key}: Unexpected property "${key}"`;
+    }
+  }
+  for (const key of GECKO_CREATE_NOTIFICATION_REQUIRED) {
+    if (payload[key] === undefined) {
+      return `Property "${key}" is required`;
+    }
+  }
+  if (!GECKO_NOTIFICATION_TEMPLATES.has(payload.type)) {
+    return `Invalid enumeration value "${payload.type}"`;
+  }
+  if (typeof payload.title !== 'string' || typeof payload.message !== 'string') {
+    return 'title and message must be strings';
+  }
+  return null;
+}
+
 function makeBrowser(profile) {
   const recorded = {
     // property paths touched under browser.privacy, e.g. 'privacy.network'
@@ -54,6 +93,8 @@ function makeBrowser(profile) {
     proxyTouches: [],
     // payloads passed to browser.notifications.create
     notifications: [],
+    // payloads Gecko's notifications.create schema would reject
+    notificationRejections: [],
     // argument objects passed to browser.storage.local.set
     storageSets: [],
   };
@@ -117,7 +158,17 @@ function makeBrowser(profile) {
     privacy,
     proxy,
     notifications: {
+      // Behaves like Gecko's `notifications.create`: options outside the
+      // CreateNotificationOptions schema reject (T195; Mullvad Browser 153
+      // rejects `requireInteraction` with "Unexpected property"), so the
+      // notification is never shown. A rejected payload is recorded apart
+      // from `notifications`, which holds only what Gecko would display.
       create(payload) {
+        const rejection = geckoCreateOptionsRejection(payload);
+        if (rejection !== null) {
+          recorded.notificationRejections.push(rejection);
+          return Promise.reject(new Error(rejection));
+        }
         recorded.notifications.push(payload);
         return Promise.resolve(1);
       },
@@ -203,7 +254,7 @@ test('webrtcEnabledFailsClosedAndDialogNamesActualPref', { skip: !implPresent() 
   // so the absolute count here is >= 1; the exact per-audit count is
   // pinned by auditRunsAtScriptLoadWithoutExplicitCall (exactly 1 with no
   // explicit call) and reauditObservesChangedProfileState (0 -> 1).
-  assert.ok(recorded.notifications.length >= 1, 'a failing audit surfaces the blocking dialog');
+  assert.ok(recorded.notifications.length >= 1, 'a failing audit surfaces the notification');
   for (const payload of recorded.notifications) {
     assert.ok(payload && typeof payload.message === 'string', 'dialog payload carries a message string');
     assert.match(payload.message, /webrtc/i, 'dialog names WebRTC as the runtime-blocked surface');
@@ -228,10 +279,14 @@ test('webrtcEnabledFailsClosedAndDialogNamesActualPref', { skip: !implPresent() 
       'dialog preserves the release-only boundary for the remaining hardening surfaces'
     );
     assert.strictEqual(
-      payload.requireInteraction, true,
-      'dialog is blocking (arch §14.5 failure UX) — a self-dismissing toast is not'
+      payload.requireInteraction, undefined,
+      'Gecko rejects requireInteraction, so the notification would never display (T195)'
     );
   }
+  assert.deepStrictEqual(
+    recorded.notificationRejections, [],
+    "every notification option must be accepted by Gecko's notifications.create schema"
+  );
   assert.ok(recorded.storageSets.length >= 1, 'failure is written for the operator');
   const items = recorded.storageSets[recorded.storageSets.length - 1];
   assert.ok(
@@ -385,5 +440,34 @@ test('extensionTouchesOnlyRealPrivacyApiSurfaces', { skip: !implPresent() && IMP
       recorded.proxyTouches, [],
       'the proxy surface belongs to router.js (T054); hardening.js must not touch it'
     );
+  }
+});
+
+// The mock must actually reject what Gecko rejects, or the schema gate
+// above is vacuous (T195).
+test('geckoNotificationSchemaMockRejectsRequireInteraction', () => {
+  assert.match(
+    geckoCreateOptionsRejection({
+      type: 'basic', title: 't', message: 'm', requireInteraction: true,
+    }),
+    /Unexpected property "requireInteraction"/
+  );
+  assert.strictEqual(
+    geckoCreateOptionsRejection({ type: 'basic', title: 't', message: 'm' }), null
+  );
+});
+
+test('failureNotificationIsDisplayableOnEveryFailureShape', { skip: !implPresent() && IMPL_ABSENT }, async () => {
+  for (const profile of [
+    { peerConnectionEnabled: true },
+    { peerConnectionEnabled: undefined },
+    { rejectRead: true },
+  ]) {
+    const { sandbox, recorded } = loadHardening(profile);
+    requireConformance(sandbox);
+    await sandbox.auditHardening();
+    await drain();
+    assert.deepStrictEqual(recorded.notificationRejections, [], JSON.stringify(profile));
+    assert.ok(recorded.notifications.length >= 1, JSON.stringify(profile));
   }
 });

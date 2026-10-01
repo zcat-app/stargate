@@ -286,6 +286,11 @@ class Server:
         self.thread.join(timeout=5)
 
 
+WEBRTC_PREF = "media.peerconnection.enabled"
+# Filled from the shipped browser-profile/user.js in main() (T195).
+SHIPPED_TEMPLATE_PREFS: dict[str, object] = {}
+
+
 class WebDriver:
     def __init__(self, browser: pathlib.Path, driver: pathlib.Path,
                  extension: pathlib.Path, proxy_port: int, hardened: bool,
@@ -323,7 +328,6 @@ class WebDriver:
                 "extensions.webextensions.uuids": json.dumps({
                     "stargate@stargate.local": "stargate-test",
                 }),
-                "media.peerconnection.enabled": not hardened,
                 "network.proxy.allow_hijacking_localhost": True,
                 "network.dns.localDomains": PROTECTED_HOST,
                 "network.proxy.http": "127.0.0.1",
@@ -334,6 +338,16 @@ class WebDriver:
                 "network.proxy.type": 1,
                 "xpinstall.signatures.required": False,
             }
+            # T195: never inject a WebRTC pref that a user following the
+            # quickstart would not have. A hardened session carries only what
+            # the shipped template sets (absent there, the browser's own
+            # default applies, which in Mullvad Browser is enabled and closes
+            # the extension's WebRTC gate: the defect T195 fixes); `hardened=
+            # False` is the explicit negative control (WebRTC forced on).
+            if not hardened:
+                prefs["media.peerconnection.enabled"] = True
+            elif WEBRTC_PREF in SHIPPED_TEMPLATE_PREFS:
+                prefs[WEBRTC_PREF] = SHIPPED_TEMPLATE_PREFS[WEBRTC_PREF]
             prefs.update(extra_prefs or {})
             value = self.request("POST", "/session", {"capabilities": {"alwaysMatch": {
                 "browserName": "firefox", "acceptInsecureCerts": accept_insecure_certs,
@@ -1225,6 +1239,8 @@ def main() -> int:
     for path in (args.browser, args.driver, args.extension):
         if not path.is_file():
             parser.error(f"missing file: {path}")
+    # T195: hardened sessions start from the shipped template's WebRTC value.
+    SHIPPED_TEMPLATE_PREFS.update(t188_template_prefs(args.profile_template) or {})
 
     report: dict[str, object] = {
         "command": sys.argv,
@@ -1272,6 +1288,14 @@ def main() -> int:
         if not passed:
             failures.append(name)
 
+    def blocked_label(label: str) -> bool:
+        # T188: this mode runs without the shipped user.js, so the baseline
+        # warning precedes the decision line; either form must then report
+        # the main navigation as blocked by Stargate.
+        if label.startswith(T188_BASELINE_WARNING):
+            label = label[len(T188_BASELINE_WARNING):].lstrip()
+        return label.startswith("Main navigation decision: Blocked by Stargate")
+
     def record_negative(name: str, terminal: dict[str, object],
                         markers: set[str] | None = None) -> None:
         terminal["observedAtMonotonic"] = round(time.monotonic(), 6)
@@ -1281,8 +1305,7 @@ def main() -> int:
         time.sleep(11)
         passed = (
             terminal.get("completed") is True and markers_ok and
-            ("popupLabel" not in terminal or str(terminal["popupLabel"]).startswith(
-                "Main navigation decision: Blocked by Stargate")) and
+            ("popupLabel" not in terminal or blocked_label(str(terminal["popupLabel"]))) and
             not protected_captures() and not CAPTURES.snapshot("destination") and
             not CAPTURES.snapshot("socks")
         )
@@ -2099,10 +2122,25 @@ def main() -> int:
         finally:
             browser.close()
 
+        # Negative control: WebRTC forced on. Notifications open an
+        # inspectable alert window with the system backend off; the recorder
+        # is installed before the extension so every alert is observed (T195).
         browser = WebDriver(args.browser, args.driver, args.extension,
-                            http_proxy.port, False, args.driver_log)
+                            http_proxy.port, False, args.driver_log,
+                            extra_prefs={"alerts.useSystemBackend": False},
+                            before_install=t188_record_alerts)
         try:
             browser.seed_valid_device()
+            time.sleep(1)
+            browser.set_context("chrome")
+            alerts = browser.execute("return window.t188Alerts || [];")
+            shown = [a for a in alerts
+                     if str(a).startswith("Stargate: non-Direct routing blocked | ") and
+                     "media.peerconnection.enabled" in str(a)]
+            record("hardening-failure-notification-displayed", bool(shown), None, {
+                "alerts": alerts,
+                "note": "Gecko displays the WebRTC hardening failure notification (T195)",
+            })
             CAPTURES.reset("http", "destination", "socks")
             terminal = browser.blocked_navigation(protected_url("/hardening-closed"))
             record_negative("hardening-failure-no-fallback", terminal)

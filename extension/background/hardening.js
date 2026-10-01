@@ -28,7 +28,7 @@
 //     non-Direct routes (FR-004); Direct routes are unaffected.
 //   - `auditHardening()` — async; re-reads the setting every call
 //     (never serves a cached flag), updates `hardeningOk`, and on
-//     failure fires the blocking notification plus the
+//     failure fires the (transient) notification plus the
 //     `storage.local.hardening.lastAuditResult` operator record
 //     (arch §14.5 failure UX items 1 and 3). Success is silent and
 //     write-free. Resolves only after its side effects are observable.
@@ -72,8 +72,13 @@ var auditHardening = async function auditHardening() {
     return hardeningOk;
   }
 
-  // Failure UX item 1 (arch §14.5): a blocking dialog naming WebRTC and
-  // the pref remediation. It states — without naming them — that the
+  // Failure UX item 1 (arch §14.5): a notification naming WebRTC and the
+  // pref remediation. It is transient, not modal: Gecko's
+  // `notifications.create` schema has no `requireInteraction` and rejects
+  // it ("Unexpected property", Mullvad Browser 153), which silently
+  // suppressed the whole notification until T195. Blocking is the routing
+  // gate itself (`hardeningOk`); the persistent report is the popup's
+  // blocked state. It states — without naming them — that the
   // remaining hardening surfaces are verified outside the extension at
   // release cadence; naming them is neither needed nor safe, since the
   // only runtime-true sentence about them is the one this copy makes.
@@ -94,7 +99,6 @@ var auditHardening = async function auditHardening() {
         'only hardening surface this extension can verify at runtime; ' +
         'the rest of the hardened profile is verified outside the ' +
         'extension at each Stargate release.',
-      requireInteraction: true,
     });
   } catch (err) {
     console.warn('stargate: hardening notification failed:', err);

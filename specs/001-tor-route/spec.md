@@ -317,9 +317,13 @@ tests-first suite (Principle VII) before implementation lands.
   the extension gates WebRTC via the stable
   `browser.privacy.network.peerConnectionEnabled` API (the only hardening
   surface Firefox's stable WebExtensions API exposes — sol-review B4). If
-  WebRTC is enabled at runtime, the extension MUST display a blocking
-  dialog (architecture spec §14.5 failure UX) and MUST NOT route non-Direct
-  requests through port 8881 until the user remediates. The extension does
+  WebRTC is enabled at runtime, the extension MUST raise a notification
+  naming WebRTC and the remediation (architecture spec §14.5 failure UX; Gecko
+  rejects `requireInteraction`, so the notification is transient and the popup's
+  blocked state is the persistent report), MUST write the failure record, and MUST NOT route non-Direct
+  requests through port 8881 until the user remediates. The shipped profile
+  template (`browser-profile/user.js`) sets `media.peerconnection.enabled=false`,
+  because Mullvad Browser's default is enabled. The extension does
   NOT claim to read or write the DoH/DoT/HTTP-3 preferences via the
   WebExtensions API; those three surfaces are release-cadence-verified, not
   runtime-enforced, and their post-verification drift is accepted residue

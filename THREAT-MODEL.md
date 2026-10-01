@@ -1533,8 +1533,15 @@ the other hardening prefs (DoH/DoT/HTTP-3) are not extension-readable and
 are enforced as an externally verified profile precondition (§5.4, §5.5).
 The setting and its values are documented at
 [https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/privacy/network].
-The hardening audit displays a blocking dialog if WebRTC is enabled, and
-the externally verified profile (release-cadence live-e2e test
+The hardening audit raises a transient notification if WebRTC is enabled
+(Gecko rejects `requireInteraction`, so it is not modal; T195), the routing
+block itself is what is enforced, and the Stargate popup shows the blocked
+state persistently. Mullvad Browser's own default is WebRTC **enabled**:
+without the shipped `browser-profile/user.js` (which sets
+`media.peerconnection.enabled=false`) every `.onion` request is blocked, so
+the failure is fail-closed, not a leak. The live probe starts hardened
+sessions from the shipped template's value, never from a pref it injects
+itself. The externally verified profile (release-cadence live-e2e test
 `tests/live-e2e/mullvad-browser-hardening/`) additionally confirms
 `peerConnectionEnabled = false` in a test profile that models the target
 browser's hardened defaults.

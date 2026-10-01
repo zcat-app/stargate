@@ -72,6 +72,12 @@ hermetic test can inspect).
 | 5 | Foreign-extension inventory: allowlisted present, disallowed flagged | arch §14.5 Part 3; THREAT-MODEL §2.7 | load the extension, read `storage.local.hardening.lastAuditResult` |
 | 6 | Fail-closed routing: with WebRTC forcibly enabled, `proxy.onRequest` returns no routable Tor descriptor for a `.onion` request — only the T186 unreachable sink `[{socks, file:///dev/null/stargate-blocked, proxyDNS}, null]`, never `null` (which Gecko treats as Direct) | FR-004/FR-004a; Constitution III | flip `peerConnectionEnabled` true, assert the extension's `hardeningOk` flag is false and the result is the sink; `probe.py --only blocked-proxy` proves the network outcome |
 
+`probe.py` (T195) never injects `media.peerconnection.enabled` into a hardened
+session: it carries only the value in the shipped `browser-profile/user.js` (Mullvad
+Browser's own default is enabled, so a template without it fails the Tor positive
+controls). WebRTC is forced on only in the explicit negative-control session, which
+also asserts that Gecko displays the failure notification.
+
 Properties 1–4 (the `prefs.js` reads) are **automated in `run.sh` (Part 1)**
 — these are the load-bearing checks, because the WebExtensions API does
 not expose prefs 1–3 and the `prefs.js` read is the ONLY verification for

@@ -1096,9 +1096,11 @@ remains `pending`, `blocked_by: [T091]`.
 stable WebExtensions API exposes — Part 2). On `peerConnectionEnabled !=
 false` at runtime (browser startup and on restart), the extension:
 
-1. Displays a blocking dialog naming WebRTC as the runtime-blocked surface
-   and the remediation ("WebRTC is enabled — disable
-   `peerConnectionEnabled` in your Mullvad Browser profile"). The dialog
+1. Raises a notification naming WebRTC as the runtime-blocked surface
+   and the remediation ("WebRTC is enabled — set `media.peerconnection.enabled`
+   to false in your Mullvad Browser profile"). It is transient (Gecko rejects
+   `requireInteraction`; T195); the routing block and the popup's blocked state
+   are what persist. The notification
    must NOT claim a runtime block on DoH/DoT/HTTP-3; it states those
    surfaces are release-cadence-verified (Part 1) and names their drift as
    accepted residue (THREAT-MODEL §5.4/§5.5).

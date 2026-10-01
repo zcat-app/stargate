@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 32 |
-| in-progress | 0 |
+| pending | 31 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 190 |
@@ -32,13 +32,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T191 | Resolve surviving deployment-area redteam minors and audit g | Foundation audit remediation | ✓ | ✓ |
-| T195 | Ship WebRTC off and make the hardening failure visible and t | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T195 | Ship WebRTC off and make the hardening failure visible and t | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

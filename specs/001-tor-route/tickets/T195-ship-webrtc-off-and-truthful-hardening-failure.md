@@ -1,7 +1,7 @@
 ---
 id: T195
 title: 'Ship WebRTC off and make the hardening failure visible and truthful'
-status: pending
+status: in-progress
 created: 2026-10-01
 last_updated: 2026-10-01
 source: "T155 attempt 2 cumulative redteam (candidate 79d49e9), area 2 finding A2-M2, survived falsification; orchestrator spot-checked the cited lines; maintainer approved filing 2026-10-01"
@@ -9,13 +9,21 @@ phase: "Foundation audit remediation"
 story: ''
 blocked_by: []
 parallel: false
-files_budget: 11  # ticket + generated STATUS.md + evidence/T195-tests-first.json
+files_budget: 12  # ticket + generated STATUS.md + evidence/T195-tests-first.json
                   # + browser-profile/user.js + extension/background/hardening.js
                   # + extension/background/hardening.test.js
                   # + tests/live-e2e/mullvad-browser-hardening/probe.py
                   # + tests/live-e2e/mullvad-browser-hardening/README.md
                   # + specs/001-tor-route/quickstart.md + specs/001-tor-route/spec.md (FR-004(b))
                   # + THREAT-MODEL.md (§5.3)
+                  # + specs/000-architecture/spec.md (§14.5 failure UX item 1)
+                  #   — pre-granted (rule 2026-10-01): orphan this change makes
+                  #   stale (it describes the same non-existent blocking dialog
+                  #   as FR-004(b); acceptance 4 requires truthful docs)
+# maintainer-approved 2026-10-01: short TMPDIR for socket path limit
+# (driver verify/review runs use TMPDIR=/tmp/T195; .scratch/tmp/T195 paths
+# exceed the 108-byte Unix socket limit for long Go test names; /tmp/T195 is
+# removed after the ticket and its done follow-up land)
 privacy_critical: true
 tests_first: []
 test_for: []
