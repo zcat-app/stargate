@@ -106,7 +106,12 @@ runtime_gate_present=0
 if [ "$runtime_gate_files_present" = "1" ] || [ "$runtime_content_detected" = "1" ]; then
   runtime_gate_present=1
 fi
+# T191 item 3: every runtime row that does not run is collected here and
+# reported as one line-start "SKIP:" (verify.sh's skip sentinel), so a run
+# that exercised only the structural tier is never recorded PASS.
+skipped_rows=()
 if [ "$runtime_gate_present" = "0" ]; then
+  skipped_rows+=(R1 R2 R3 R4 R5 R6 R7 R8 R9)
   echo "RUNTIME tier SKIP: T038/T045/T050 impl absent — self-lifts when all land (FAIL-forcing; see T095 §Notes)." >&2
 elif [ "$(grep -cE '^# LIFT-MARKER: R[0-9]+$' "$0" 2>/dev/null || true)" -ge 9 ]; then
   echo "RUNTIME tier LIFTED: R1-R9 authored (T045 lift); rows run against a live stargate init stack, SKIP otherwise." >&2
@@ -502,14 +507,17 @@ else
   # present (the properties under test need the real UDS topology).
   need_stack() {
     if [ -z "$IPC_VOL" ] || [ -z "$KEYS_VOL" ]; then
+      skipped_rows+=("$1")
       echo "$1: SKIP (compose volumes not renderable — docker/jq absent or stack never inited)" >&2
       return 1
     fi
     if ! svc_running stargate-dp || ! svc_running stargate-control; then
+      skipped_rows+=("$1")
       echo "$1: SKIP (stargate init stack not running — bring it up to exercise the runtime rows)" >&2
       return 1
     fi
     if ! ipc_run 0:0 test -S /run/stargate/dp.sock || ! ipc_run 0:0 test -S /run/stargate/control.sock; then
+      skipped_rows+=("$1")
       echo "$1: SKIP (stack running but sockets not present yet — boot still in progress?)" >&2
       return 1
     fi
@@ -520,6 +528,7 @@ else
   # never disturb a dev stack brought up for other purposes.
   need_mutate() {
     if [ "${STARGATE_WIRE_RUNTIME_MUTATE:-0}" != "1" ]; then
+      skipped_rows+=("$1")
       echo "$1: SKIP (would mutate a live stack; set STARGATE_WIRE_RUNTIME_MUTATE=1)" >&2
       return 1
     fi
@@ -663,6 +672,21 @@ else
   if need_stack "R9" && need_mutate "R9"; then # per-handshake pin re-read: rotate cp.* + restart CP; the running DP accepts the new identity on its next dial (wire-auth.md §3.1 step 3; §6.2)
     row_begin
     probe_run status -socket /run/stargate/dp.sock || bail "R9: pre-rotation status probe failed — fix that before testing rotation"
+    # T191 item 1: the observer authenticates the CP against its OWN cp.pub
+    # copy (stargate-observer-keys), re-read per authentication. A rotation
+    # must refresh that copy (§6.2) or CP health stays dark; the refresh is
+    # init's own helper, so this row exercises the production code path.
+    OBS_FABRIC_VOL="$(docker compose -f "$COMPOSE" --env-file "$ENV_FILE" config --format json 2>/dev/null | jq -r '.volumes["stargate-tor-cp-fabric"].name // ""')"
+    OBS_KEYS_VOL="$(docker compose -f "$COMPOSE" --env-file "$ENV_FILE" config --format json 2>/dev/null | jq -r '.volumes["stargate-observer-keys"].name // ""')"
+    if [ -z "$OBS_FABRIC_VOL" ] || [ -z "$OBS_KEYS_VOL" ]; then bail "R9: observer volumes not renderable"; fi
+    svc_running tor-observer || bail "R9: tor-observer is not running — the observer leg needs the init stack"
+    probe_observer() { # probe_observer observer|observer-refused: as the CP identity
+      docker run --rm --user 5101:5100 --network none \
+        -v "$OBS_FABRIC_VOL:/run/stargate-tor-observer:ro" \
+        -v "$KEYS_VOL:/etc/stargate/keys:ro" \
+        -v "$PWD":/src -w /src "$GOIMG" "/src/$PROBE_BIN" "$1"
+    }
+    probe_observer observer || bail "R9: pre-rotation observer authentication failed — fix that before testing rotation"
     # §6.2 rotation order: the rotated plane (CP) must be DOWN during the
     # keyfile rename.
     docker compose -f "$COMPOSE" --env-file "$ENV_FILE" stop stargate-control >/dev/null 2>&1 || bail "R9: could not stop stargate-control for the rotation window"
@@ -673,10 +697,19 @@ else
     docker run --rm --user 0:0 -v "$KEYS_VOL:/etc/stargate/keys" "$GOIMG" bash -c \
       'chown 5101:5100 /etc/stargate/keys/cp.priv /etc/stargate/keys/cp.pub && chmod 600 /etc/stargate/keys/cp.priv && chmod 644 /etc/stargate/keys/cp.pub' \
       || bail "R9: could not enforce §6.1 ownership/mode on the rotated keyfiles"
+    # Negative control: before the refresh the observer still pins the old
+    # key and must refuse the rotated CP identity.
+    probe_observer observer-refused \
+      || bail "R9: the observer did not refuse a CP key absent from its pinned copy — it is not pinning per authentication"
+    # shellcheck source=../../../scripts/lib/compose.sh
+    ( . scripts/lib/compose.sh && refresh_observer_cp_pub "$KEYS_VOL" "$OBS_KEYS_VOL" ) \
+      || bail "R9: refreshing the observer's cp.pub copy (init's helper) failed"
+    probe_observer observer \
+      || bail "R9: the running observer still refuses the rotated CP after the §6.2 refresh — rotation would need an observer restart"
     compose_restart_wait stargate-control || bail "R9: stargate-control did not come back after the rotation"
     probe_run status -socket /run/stargate/dp.sock \
       || bail "R9: DP still pins the OLD cp.pub after rotation — §3.1 step 3 (fresh per-handshake re-read) violated; rotation would need a peer restart"
-    row_end R9 "running DP accepted the rotated CP identity on the next dial — pin re-read per handshake"
+    row_end R9 "running DP accepted the rotated CP identity on the next dial; the running observer refused it until its copy was refreshed, then accepted it"
   fi
 fi
 
@@ -687,4 +720,7 @@ if [ "${#errs[@]}" -gt 0 ]; then
   exit 1
 fi
 echo "OK: T095 inter-plane wire-auth contract (structural tier green; runtime tier content-gated)"
+if [ "${#skipped_rows[@]}" -gt 0 ]; then
+  echo "SKIP: inter-plane runtime rows not exercised: ${skipped_rows[*]}"
+fi
 exit 0

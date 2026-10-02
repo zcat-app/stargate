@@ -1,0 +1,69 @@
+# Copyright 2026 The Stargate Authors
+# SPDX-License-Identifier: Apache-2.0
+#
+# T191 item 4: the Docker cadence of scripts/verify.sh for changes the
+# hermetic PR gate cannot exercise — sidecar sources and Dockerfiles, plus the
+# Compose topology and DP AppArmor profile those images run under. It runs the
+# SAME entrypoint with STARGATE_TEST_TAGS=docker (the docker-tagged Go suites
+# and the docker tiers of the contract tests), never a divergent command list.
+#
+# Why a separate workflow: GitHub path filters apply per workflow, not per
+# job. verify.yml stays fast and runs on every push; this one runs when its
+# inputs change, and on demand.
+#
+# Limits: the docker tiers need a Docker daemon, sudo, AppArmor and iptables
+# on the runner (ubuntu-24.04 provides them). Live Tor-network suites stay
+# gated by their own opt-in variables and report SKIP here.
+
+name: docker-cadence
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sidecars/**'
+      - '**/Dockerfile'
+      - 'compose/**'
+      - '.github/workflows/docker-cadence.yml'
+  pull_request:
+    paths:
+      - 'sidecars/**'
+      - '**/Dockerfile'
+      - 'compose/**'
+      - '.github/workflows/docker-cadence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-verify:
+    name: scripts/verify.sh (docker cadence)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false   # no job token in .git/config
+
+      - name: Set up toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: verify.sh (docker cadence)
+        env:
+          STARGATE_TEST_TAGS: docker
+          STARGATE_GROUND_ONLINE: '0'
+        run: |
+          bash scripts/verify.sh
+
+      - name: Upload verify log
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: verify-docker-log
+          path: target/verify.log
+          if-no-files-found: warn
+          retention-days: 14

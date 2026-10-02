@@ -28,21 +28,20 @@
 // Deliberately minimal: one assertion covering the whole pyramid above
 // it. Isolation semantics live in T059/T126 (same package, same
 // machinery); the smoke test asserts the path works once, not how
-// streams separate. Bring-up reuses the T059-landed compensations
-// (two-phase up: tor bootstrapped before the planes — T124's product
-// fix obsoletes the split; token seed with the pre-created keys/
-// mountpoint — T123's). Those compensations are DELETED by the product
-// fixes that obsolete them, and this file shrinks with them.
+// streams separate.
 //
-// Operator prerequisite (T059 §Residue, same runbook): before the live
-// run, the init-equivalent provisioning must exist for THIS project's
-// volumes — ed25519 keypairs + 32-byte pepper in
-// <project>_stargate-keys (cp.priv 0600 5101:5100, dp.priv 0600
-// 5102:5100, pubs 0644, pepper 0640 cp:ipc) and the volume-root
-// ownership initialisation (stargate-keys 5101:5100 0750,
-// stargate-ipc 5102:5100 0770, stargate-control-state /
-// stargate-dp-state / stargate-tor-config 0750) — scripts/stargate
-// init steps 2–3 scoped to the project's volume names.
+// T191 item 8: bring-up is the REAL installer, `scripts/stargate init`,
+// scoped to this suite's project and a private env file. The T131
+// compensations are deleted: no pre-provisioned keys or pepper (init
+// generates them), no Tor-first two-phase bring-up (init waits for the
+// observer's authenticated READY), and no keys/ mountpoint mkdir in the
+// config volume (init's T167 step creates it). The test only seeds
+// tokens.yaml and restarts the CP, exactly as quickstart Step 2 does.
+//
+// Host prerequisite: init installs the DP AppArmor profile and owner-match
+// rules, so the runner must be root or have passwordless `sudo -n` and
+// apparmor_parser/iptables/ip6tables (a disposable host or VM; never a
+// shared workstation).
 //
 // stargate:cadence docker — named Docker job
 // (STARGATE_TEST_TAGS=docker scripts/verify.sh); the hermetic PR gate
@@ -76,13 +75,11 @@ import (
 
 // T131 constants. The compose project is THIS suite's own (never shared
 // with a sibling suite — T058a's live-found split-project failure; the
-// shared-runner hoist is T121). Deadlines mirror T059's: per-phase up
-// windows, bootstrap under the suite's own 5-minute deadline (T124's
-// healthcheck window is bypassed by the two-phase bring-up). Stacked
-// worst case with T132: up 10m + boot 5m + up 10m + two CONNECT/read
-// windows of 13m (cold CP) and 6m (recovery) + stop 0.5m + restart 2m
-// = 46.5m. The 48-minute suite context and 50-minute go-test outer bound
-// leave cleanup room.
+// shared-runner hoist is T121). Stacked worst case with T132: init 20m
+// (builds plus init's own Tor-readiness window) + CP restart 2m + two
+// CONNECT/read windows of 13m (cold CP) and 6m (recovery) + stop 0.5m +
+// restart 2m = 43.5m. The 48-minute suite context and 50-minute go-test
+// outer bound leave cleanup room.
 const (
 	t131Project = "stargate-t131-test"
 	t131DPAddr  = "127.0.0.1:8881" // FR-005; host-published DP loopback
@@ -90,13 +87,12 @@ const (
 	t131Onion    = "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion"
 	t131OnionPrt = 443 // served (TLS); T033 proved this port through the DP
 
-	t131UpDead      = 10 * time.Minute
-	t131BootDead    = 5 * time.Minute
+	t131InitDead    = 20 * time.Minute
+	t131InitReady   = "600" // init's STARGATE_HEALTHCHECK_TIMEOUT (seconds) for a TCG guest
 	t131ConnectWait = 3 * time.Minute
 	// As in T173's live fixture, a TCG-emulated JVM gets a separate cold
 	// startup budget. Recovery and individual wire/read deadlines stay 3m.
 	t131InitialWait = 10 * time.Minute
-	t131PollEvery   = 5 * time.Second
 	t131StreamPoll  = 2 * time.Second
 	t131ExecDead    = 15 * time.Second
 	t132StopDead    = 30 * time.Second
@@ -115,8 +111,9 @@ func TestT131PartitionUsernameReferenceVector(t *testing.T) {
 	}
 }
 
-// TestStackSmoke brings up the stack, seeds a token, carries application
-// bytes through authenticated SOCKS, then proves T132 DP-only recovery.
+// TestStackSmoke brings up the stack with `scripts/stargate init`, seeds a
+// token, carries application bytes through authenticated SOCKS, then proves
+// T132 DP-only recovery.
 func TestStackSmoke(t *testing.T) {
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker CLI not on PATH: %v", err)
@@ -127,11 +124,22 @@ func TestStackSmoke(t *testing.T) {
 
 	repoRoot := t131FindRepoRoot(t)
 	composeFile := filepath.Join(repoRoot, "compose", "docker-compose.local.yml")
-	envFile := filepath.Join(repoRoot, "compose", "env", "local.env.example")
-	for _, p := range []string{composeFile, envFile} {
+	example := filepath.Join(repoRoot, "compose", "env", "local.env.example")
+	for _, p := range []string{composeFile, example} {
 		if _, err := os.Stat(p); err != nil {
 			t.Fatalf("required file missing: %v", err)
 		}
+	}
+	// init writes the observer's verified local image ID into this private
+	// env file. Seed it from the example first so teardown can render the
+	// project even when init fails before that write.
+	envFile := filepath.Join(t.TempDir(), "local.env")
+	seed, err := os.ReadFile(example)
+	if err != nil {
+		t.Fatalf("read env example: %v", err)
+	}
+	if err := os.WriteFile(envFile, seed, 0o600); err != nil {
+		t.Fatalf("write private env file: %v", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), t131OverallDead)
@@ -165,21 +173,26 @@ func TestStackSmoke(t *testing.T) {
 		}
 	})
 
-	// Phase 1: tor up + bootstrapped under this suite's own deadline (the
-	// T059-landed compensation for T124's ~150 s healthcheck window; the
-	// scoped phase-2 up never recreates the healthy tor container).
-	t.Log("phase 1: tor up + bootstrap…")
-	upCtx, upCancel := context.WithTimeout(ctx, t131UpDead)
-	if out, err := t131Compose(upCtx, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
-		upCancel()
-		t.Fatalf("docker compose up tor: %v\n%s", err, out)
+	// The real installer: host boundary, volumes, keys and pepper, the
+	// verified observer image, Compose up and the observer's authenticated
+	// Tor READY, all under this suite's project and env file.
+	t.Log("stargate init…")
+	initCtx, initCancel := context.WithTimeout(ctx, t131InitDead)
+	initCmd := exec.CommandContext(initCtx, "bash", filepath.Join(repoRoot, "scripts", "stargate"), "init")
+	initCmd.Env = append(os.Environ(),
+		"STARGATE_PROJECT="+t131Project,
+		"STARGATE_COMPOSE_FILE="+composeFile,
+		"STARGATE_ENV_DIR="+filepath.Dir(envFile),
+		"STARGATE_ENV_FILE="+envFile,
+		"STARGATE_HEALTHCHECK_TIMEOUT="+t131InitReady)
+	out, err := initCmd.CombinedOutput()
+	initCancel()
+	if err != nil {
+		t.Fatalf("stargate init: %v\n%s", err, out)
 	}
-	upCancel()
-	t131WaitBootstrapped(t, ctx, composeFile, envFile)
 
-	// Seed the token BEFORE the CP's first start (T059-landed shape:
-	// tokens.yaml + pre-created keys/ mountpoint in the config volume,
-	// created under compose's labels so down --volumes still reaps it).
+	// Seed the token the way quickstart Step 2 does: write tokens.yaml into
+	// the config volume init created, then restart the CP to load it.
 	token, err := t059NewToken() // project-agnostic (same module/package)
 	if err != nil {
 		t.Fatalf("generate bearer token: %v", err)
@@ -187,14 +200,10 @@ func TestStackSmoke(t *testing.T) {
 	if err := t131SeedToken(ctx, token); err != nil {
 		t.Fatalf("seed token into %s_stargate-control-config: %v", t131Project, err)
 	}
-
-	// Phase 2: the planes (scoped — a list-less up would rebuild tor and
-	// re-race its healthcheck window; the T059 live-run finding).
-	t.Log("phase 2: data plane + control plane up…")
-	up2Ctx, up2Cancel := context.WithTimeout(ctx, t131UpDead)
-	defer up2Cancel()
-	if out, err := t131Compose(up2Ctx, composeFile, envFile, "up", "-d", "--build", "stargate-dp", "stargate-control"); err != nil {
-		t.Fatalf("docker compose up (planes): %v\n%s", err, out)
+	restartCtx, restartCancel := context.WithTimeout(ctx, t132RestartDead)
+	defer restartCancel()
+	if out, err := t131Compose(restartCtx, composeFile, envFile, "restart", "stargate-control"); err != nil {
+		t.Fatalf("restart CP to load tokens.yaml: %v\n%s", err, out)
 	}
 
 	// THE assertion: one authenticated CONNECT through the full path,
@@ -351,59 +360,22 @@ func t131LogTail(t *testing.T, ctx context.Context, composeFile, envFile, servic
 	return fmt.Sprintf("— %s log tail:\n%s", service, strings.TrimSpace(string(out)))
 }
 
-// t131SeedToken provisions this suite's config volume before the CP's
-// first start — the T059-landed seed step (minus its redundant FR-017
-// shape re-check: both suites share t059NewToken, which guarantees the
-// 32-hex shape by construction) with this suite's project:
-// create under compose's labels (so down --volumes reaps it), pre-create
-// the keys/ mountpoint (T123 compensation), write tokens.yaml (FR-017
-// shape) on stdin (token never in argv).
+// t131SeedToken writes tokens.yaml (FR-017 shape; both suites share
+// t059NewToken, which guarantees the 32-hex shape) into the config volume
+// init created and labelled for this project. The token travels on stdin,
+// never in argv. init's T167 step already created the keys/ mountpoint.
 func t131SeedToken(ctx context.Context, token string) error {
 	vol := t131Project + "_stargate-control-config"
-	create := exec.CommandContext(ctx, "docker", "volume", "create",
-		"--label", "com.docker.compose.project="+t131Project,
-		"--label", "com.docker.compose.volume=stargate-control-config",
-		vol)
-	if out, err := create.CombinedOutput(); err != nil {
-		return fmt.Errorf("create config volume: %v: %s", err, out)
-	}
 	tokensYAML := fmt.Sprintf("tokens:\n  - label: t131-smoke\n    token: %s\n", token)
 	write := exec.CommandContext(ctx, "docker", "run", "--rm", "-i", "--user", "0:0",
 		"--entrypoint", "sh",
 		"-v", vol+":/tgt", "stargate/tor:local",
-		"-c", "mkdir -p /tgt/keys && cat > /tgt/tokens.yaml")
+		"-c", "test -d /tgt/keys && cat > /tgt/tokens.yaml")
 	write.Stdin = strings.NewReader(tokensYAML)
 	if out, err := write.CombinedOutput(); err != nil {
 		return fmt.Errorf("write tokens.yaml into volume: %v: %s", err, out)
 	}
 	return nil
-}
-
-// t131WaitBootstrapped polls Tor's private control socket for PROGRESS=100
-// (T162's current torrc contract; this suite's project + deadlines).
-func t131WaitBootstrapped(t *testing.T, ctx context.Context, composeFile, envFile string) {
-	t.Helper()
-	deadline := time.Now().Add(t131BootDead)
-	shell := `COOKIE=$(find /var/lib/tor -name control_auth_cookie 2>/dev/null | head -1)` +
-		` && [ -n "$COOKIE" ]` +
-		` && HEX=$(od -An -tx1 "$COOKIE" | tr -d ' \n')` +
-		` && { printf 'AUTHENTICATE %s\r\n' "$HEX"` +
-		`      ; printf 'GETINFO status/bootstrap-phase\r\n'` +
-		`      ; printf 'QUIT\r\n'` +
-		`      ; } | nc -q 1 -U /var/lib/tor/control/tor-control.sock`
-	for {
-		eCtx, cancel := context.WithTimeout(ctx, t131ExecDead)
-		out, err := t131Compose(eCtx, composeFile, envFile, "exec", "-T", "tor", "sh", "-c", shell)
-		cancel()
-		if err == nil && strings.Contains(string(out), "PROGRESS=100") {
-			t.Logf("OK: tor bootstrapped")
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("tor did not reach PROGRESS=100 within %s (last: %q, err: %v)", t131BootDead, strings.TrimSpace(string(out)), err)
-		}
-		time.Sleep(t131PollEvery)
-	}
 }
 
 // t131Compose runs a compose subcommand under this suite's project.

@@ -12,6 +12,24 @@ init=scripts/subcommands/init
 [ -f "$profile" ] || { echo "FAIL: DP AppArmor profile absent" >&2; exit 1; }
 command -v apparmor_parser >/dev/null && apparmor_parser -T -Q "$profile"
 
+# T191 item 2 (A3-M7): the DP runs in the host network namespace, so any
+# /proc/<pid>/net file it can read is the HOST's socket, ARP and route table.
+# The profile grants only the procfs reads the static Go DP performs and
+# denies the net tables explicitly (process and per-thread views).
+profile_rules="$(grep -vE '^[[:space:]]*(#|$)' "$profile")"
+if grep -qE '^[[:space:]]*/proc/\*\*[[:space:]]+[a-z]*r' <<< "$profile_rules"; then
+  echo "FAIL: DP profile grants blanket /proc/** read" >&2; exit 1
+fi
+for rule in 'deny /proc/*/net/** r,' 'deny /proc/*/task/*/net/** r,'; do
+  grep -qxF "  $rule" <<< "$profile_rules" || { echo "FAIL: DP profile lacks '$rule'" >&2; exit 1; }
+done
+# `*` matches any one path component, so the deny also covers /proc/sys/net/**
+# and an explicit deny wins over any allow: an allow there is dead text that
+# documents a grant the DP does not have (T191 round 2, GLM R1 Minor).
+if grep -E '^[[:space:]]*/proc/[^/[:space:]]+/net/' <<< "$profile_rules"; then
+  echo "FAIL: DP profile allows a /proc/<x>/net path that its net deny overrides" >&2; exit 1
+fi
+
 grep -q 'install_host_boundary' "$init" || { echo "FAIL: init has no host-boundary installation" >&2; exit 1; }
 grep -q 'verify_host_boundary' "$init" || { echo "FAIL: init has no host-boundary verification" >&2; exit 1; }
 grep -q -- '--uid-owner.*5102\|--uid-owner.*DP_UID' "$init" || { echo "FAIL: no DP uid owner rule" >&2; exit 1; }
@@ -79,11 +97,38 @@ grep -q ' stop stargate-dp' "$T162_FAKE_DOCKER_LOG" || {
 if grep -Eq '(^| )up( |$)' "$T162_FAKE_DOCKER_LOG"; then
   echo 'FAIL: init started DP after ineffective host policy' >&2; exit 1
 fi
+
+# T191 F1: Compose interpolation prefers the shell environment over the env
+# file, so a STARGATE_OBSERVER_IMAGE exported where init runs would replace
+# the observer image ID init built and checked. init must refuse with the
+# preflight code before it touches host policy, volumes or any container. The
+# two legs above are the positive control: without the variable, init passes
+# this check and reaches the host-boundary phase.
+: > "$T162_FAKE_DOCKER_LOG"
+if STARGATE_OBSERVER_IMAGE=sha256:1111111111111111111111111111111111111111111111111111111111111111 \
+  STARGATE_PROJECT="t162-hermetic-$$" \
+  STARGATE_COMPOSE_FILE="$PWD/compose/docker-compose.local.yml" \
+  STARGATE_ENV_DIR="$hermetic_tmp" STARGATE_ENV_FILE="$hermetic_tmp/local.env" \
+  PATH="$hermetic_tmp/bin:$PATH" bash "$init" >"$hermetic_tmp/override.out" 2>&1; then
+  hermetic_rc=0
+else
+  hermetic_rc=$?
+fi
+[ "$hermetic_rc" -eq 10 ] || { echo "FAIL: observer image override returned $hermetic_rc, want 10" >&2; exit 1; }
+grep -q 'STARGATE_OBSERVER_IMAGE' "$hermetic_tmp/override.out" || {
+  echo 'FAIL: observer image override refusal does not name the variable' >&2; exit 1;
+}
+if grep -Eq '(^| )(stop|up|run|build|volume)( |$)' "$T162_FAKE_DOCKER_LOG"; then
+  echo 'FAIL: init acted on Docker before refusing the observer image override' >&2; exit 1
+fi
 rm -rf -- "$hermetic_tmp"
 trap - EXIT
 
 if [[ "${STARGATE_TEST_TAGS:-}" != *docker* ]]; then
-  echo 'OK: T162 host-boundary structure; SKIP[docker] packet falsifiers'
+  # T191 item 3: a line-start SKIP: is verify.sh's skip sentinel. Without it
+  # this gate was recorded PASS although the falsifiers below never ran.
+  echo 'OK: T162 host-boundary structure'
+  echo 'SKIP: T162 docker packet and AppArmor profile falsifiers (run with STARGATE_TEST_TAGS=docker)'
   exit 0
 fi
 
@@ -356,6 +401,23 @@ for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
   sleep 0.5
 done
 "$tor_ready" || { echo 'FAIL: profile denied authorized Tor SOCKS dial' >&2; exit 1; }
+
+# T191 item 2 (A3-M7): under the profile, UID 5102 in the host network
+# namespace cannot read the host's procfs socket tables, for the process or a
+# thread view. The unconfined control proves the same read otherwise succeeds,
+# so the denial is the profile's and not a missing file. Only byte counts and
+# error text are recorded, never table content.
+probe_container unconfined read /proc/self/net/tcp >"$tmpdir/procnet-open.out" 2>&1 || {
+  echo 'FAIL: unconfined /proc/self/net/tcp positive control could not read' >&2; exit 1;
+}
+for procnet in /proc/self/net/tcp /proc/thread-self/net/tcp; do
+  if probe_container "$profile_name" read "$procnet" >"$tmpdir/procnet.out" 2>&1; then
+    echo "FAIL: profiled DP read host socket table $procnet" >&2; exit 1
+  fi
+  grep -q 'permission denied' "$tmpdir/procnet.out" || {
+    echo "FAIL: $procnet denial was not policy-mediated" >&2; exit 1;
+  }
+done
 
 abstract_name="t162-abstract-$suffix"
 docker run -d --name "$abstract_server" --network host \

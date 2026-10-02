@@ -23,6 +23,9 @@ services:
       context: ..
       dockerfile: data-plane/Dockerfile
     image: stargate/stargate-dp:local
+    # T191 item 11: build locally, never pull this unqualified name from a
+    # registry (docker.io/stargate is an unrelated third-party account).
+    pull_policy: build
     user: "5102:5100"
     group_add:
       - "5200"
@@ -60,6 +63,9 @@ services:
       context: ..
       dockerfile: control-plane/Dockerfile
     image: stargate/stargate-control:local
+    # T191 item 11: build locally, never pull this unqualified name from a
+    # registry (docker.io/stargate is an unrelated third-party account).
+    pull_policy: build
     user: "5101:5100"
     network_mode: none
     volumes:
@@ -67,7 +73,6 @@ services:
       - stargate-keys:/etc/stargate/keys
       - stargate-control-config:/etc/stargate:ro
       - stargate-control-state:/var/lib/stargate
-      - stargate-tor-config:/etc/tor
       - stargate-tor-cp-fabric:/run/stargate-tor-observer:ro
     read_only: true
     tmpfs:
@@ -94,6 +99,8 @@ services:
       context: ../sidecars/tor
       dockerfile: Dockerfile
     image: stargate/tor:local
+    # T191 item 11: build locally, never pull (see stargate-dp).
+    pull_policy: build
     group_add:
       - "5200"
     volumes:
@@ -157,7 +164,6 @@ volumes:
   stargate-control-state:
   stargate-dp-state:
   stargate-tor-state:
-  stargate-tor-config:
   stargate-tor-dp-fabric:
   stargate-tor-cp-fabric:
   stargate-observer-keys:

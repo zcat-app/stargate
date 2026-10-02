@@ -41,6 +41,76 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-10-02 — Tor observer image identity is a checked local build, not published provenance (T191)
+
+**Context.** T138 ("Packaging and identity") required the observer's "immutable digest and
+verified provenance before deployment" and said that "a mutable tag or unverified local build
+cannot close this ticket". T164 deferred image provenance and shipped a narrower model, recorded
+in `specs/001-tor-route/contracts/foundation-boundaries.md` ("T138/T164 observer boundary"):
+`scripts/stargate init` builds the observer from `sidecars/tor-observer/Dockerfile` on a
+digest-pinned Go builder (Go verifies downloaded modules against `go.sum`), labels the image with
+init's SHA-256 over the module files, the observer's `main.go` and that Dockerfile, re-reads the
+label and recomputes the hash after the build, and deploys the resulting local `sha256:` image ID
+through the generated env file. The shipped env example holds an all-zero placeholder that cannot
+resolve to an image, and Compose has no `build:` for the observer. The 2026-09-29 redteam
+reconciliation (gap G3) found no decision record reconciling the two texts; the 2026-10-01
+reconciliation closes finding 20260727-001 with this residue.
+
+**Decision.** For source-built Local deployments, the only path init supports until T081's
+release Compose exists, the observer's deployed identity is the image ID init's own build
+returned: a content-addressed local image ID, recorded with init's hash of the checkout's observer
+source files. This narrows T138's "verified provenance" requirement for that path; it does not
+meet it in the Principle IV sense. The label records which checkout bytes init asked the daemon to
+build. init has no reviewed reference value to compare them with, so the source is only as
+reviewed as the operator's checkout. It is not a signature, an attestation, or a claim that an
+independently published binary was verified. init writes only the ID its own build returned into
+the env file and never writes a mutable tag. init refuses to run when `STARGATE_OBSERVER_IMAGE`
+is set in its environment, which Compose interpolation would otherwise let override the env file.
+
+**Residual risk.** The binding trusts the operator's checkout, Docker daemon and builder
+(including any remote BuildKit worker selected by `BUILDX_BUILDER`), the pinned Go builder image
+and the module bytes fixed by `go.sum`. A compromised build host can produce a correct label over
+different bytes. init's refusal branches (label mismatch, non-digest result) are implemented but
+have no negative-control test; the positive path was measured in T165's live run. Observer binary
+and image reproducibility are neither claimed nor measured here. Published-artifact provenance
+(registry digest, signature, SBOM) and Constitution VI release reproducibility evidence for the
+observer belong to T081, whose acceptance names the observer image alongside the DP, CP and Tor
+images. Direct Compose starts outside init remain unsupported (2026-09-20 T162 entry).
+(THREAT-MODEL §3.1 trusted parties, §5.9, §8.6.)
+
+**Owner and re-evaluation.** Owner: the maintainer; T081 for published provenance and
+reproducibility. Re-evaluate when T081's release Compose lands, when the observer's source set,
+Dockerfile or init's build path changes, or when a LAN/VPS profile deploys the observer.
+
+**Evidence.** `scripts/subcommands/init` (`observer_source_hash`, `build_observer_image`, the
+`STARGATE_OBSERVER_IMAGE` refusal); `tests/contract/stargate-cli/t162_enforcement_test.sh`; `tests/contract/stargate-cli/init_test.sh`
+(static literals); `tests/contract/compose/local_compose_test.sh` (rendered Compose: a `sha256:`
+reference and no `build:`); `specs/001-tor-route/analysis/T165-observer-evidence.md` (deployed
+label matched the tested source hash); `contracts/foundation-boundaries.md` T138/T164 paragraph.
+
+---
+
+## 2026-10-02 — Erratum: the Tor repository drops the pinned build with each new bookworm build (T191)
+
+**Finding.** The 2026-07-04 Tor sidecar entry (T099, "Rotation" bullet) describes the loss of
+an old `.deb` from `deb.torproject.org` as a residual the Tor Project "could" cause. It happens
+whenever the repository publishes a new bookworm `tor` build, in practice each Tor stable release; T124's fresh-volume build already failed this way when 0.4.9.13 replaced 0.4.9.12 (2026-09-26 T177 entry). The repository's bookworm index lists only the current Tor build (fetched
+2026-10-02: exactly one `tor` version, `0.4.9.13-1~d12.bookworm+1`, the one pinned in
+`sidecars/tor/tor-packages.sha256`), so the pinned version leaves the index when the next
+release ships. The 2026-09-29 redteam falsification pass confirmed this upstream behaviour.
+
+**Decision (wording only; mechanism unchanged).** A clean build still fetches Tor only by its
+pinned `=version` through `sidecars/tor/install-tor.sh` (`apt-get download tor=<version>`) and
+then checks the reviewed content pin. After each new bookworm `tor` build that fetch fails and the
+build stops before any image exists (fail closed). Recovery is the reviewed promotion T160 and
+T177 already used: verify the new signed metadata and package bytes, then update the Dockerfile version, `tor-packages.sha256` and the Tor rows of `package-closure.lock` together (2026-09-12 T160 update procedure; 2026-09-30 T184 entry). Plan for this on each new bookworm build, not as a rare event. Running containers are unaffected, but a clean build fails, including first-time `stargate init` and any re-init without the cached Tor layer; init stops the DP before rebuilding, so such a re-init leaves the data plane, and so the Tor route, stopped (fail closed); the control plane, Tor and observer keep running. A reviewed candidate's Tor image cannot be rebuilt from clean after the next upstream build, so reproducibility and release builds (T081) must run before it or follow a promotion.
+
+**Owner and re-evaluation.** Owner: the maintainer (Tor promotions). Re-evaluate if the Tor Project offers a retained or snapshotted index, or Stargate keeps a reviewed local copy of the pinned package.
+
+**Supersession.** This supersedes only the clause of the T099 "Rotation" bullet that the Tor Project "could remove an old `.deb`"; T160 already superseded that sentence's immutability claim. The rest of that entry and its other supersessions stay in force.
+
+---
+
 ## 2026-09-30 — Refuse rolled-back Debian snapshot metadata for the Tor image (T184)
 
 **Finding.** Redteam `20260929-002-tor-closure-index-rollback` (area 3 M1) survived
@@ -1181,6 +1251,7 @@ cross-reference" above for the drift reconciliation plan under T018.
 
 Superseded by: [T160 Tor security promotion](#2026-09-12--tor-04912-security-promotion-and-exact-package-content-pins-t160), for the Tor version/hash selection and same-version content-integrity claim only.
 Superseded by: [T184 Debian snapshot rollback refusal](#2026-09-30--refuse-rolled-back-debian-snapshot-metadata-for-the-tor-image-t184), for the T099 claims that the snapshot run and `=version` pins freeze the closure and need no Valid-Until handling only.
+Superseded by: [T191 Tor repository erratum](#2026-10-02--erratum-the-tor-repository-drops-the-pinned-build-with-each-new-bookworm-build-t191), for the T099 "Rotation" bullet's framing of an old `.deb` removal as possible rather than recurring only.
 
 **Decision.** Stargate builds its own Tor sidecar image
 (`sidecars/tor/Dockerfile`) from a digest-pinned `debian:12-slim` base,

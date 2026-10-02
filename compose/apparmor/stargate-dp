@@ -22,7 +22,21 @@ profile stargate-dp flags=(attach_disconnected,mediate_deleted) {
   # DP dials through its read-only fabric mount (verified by the live denial).
   /run/tor-fabric/private/tor-socks.sock rw,
   /dev/null rw,
-  /proc/** r,
+  # T191 / Constitution III: the DP shares the host network namespace, so any
+  # /proc/<pid>/net file is the HOST's socket, ARP and route table. Grant only
+  # the procfs reads the static Go DP needs (measured with strace): the
+  # runtime's cgroup-aware GOMAXPROCS (cgroup, mountinfo) and T168's scan of
+  # its own descriptors. The net tables are denied explicitly, for the process
+  # and per-thread views, so a later broadening of the allow rules cannot
+  # re-expose them. `*` also matches `sys`, so the deny covers
+  # /proc/sys/net/** too: Go's read of the listen backlog limit
+  # (/proc/sys/net/core/somaxconn) is denied, and its net package falls back
+  # to its built-in constant (the kernel still caps the backlog at somaxconn).
+  /proc/*/cgroup r,
+  /proc/*/mountinfo r,
+  /proc/*/fd/ r,
+  deny /proc/*/net/** r,
+  deny /proc/*/task/*/net/** r,
   /sys/kernel/mm/transparent_hugepage/hpage_pmd_size r,
   /sys/fs/cgroup/cpu.max r,
   /tmp/ rw,

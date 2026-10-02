@@ -380,6 +380,17 @@ shared GID.
   what makes the rotation live without restarting the peer plane; a
   verifier that cached the pin at startup would require a peer-plane
   restart on every rotation — another reason the cadence is pinned in §3.1.
+- **Observer copy of `cp.pub` (T191).** The Tor observer authenticates the CP
+  against its own copy, `stargate-observer-keys/cp.pub` (foundation-boundaries
+  T164), re-read on every authentication. A CP rotation MUST also replace
+  that copy atomically (write-tmp + rename within the observer key volume)
+  while the CP is down, before it starts; otherwise the observer refuses the
+  rotated CP and CP health stays unavailable. `stargate init` performs this
+  refresh on every run (`refresh_observer_cp_pub` in `scripts/lib/compose.sh`),
+  so re-running init after the rename completes it; no observer restart is
+  needed. R9 of `tests/contract/compose/inter_plane_wire_test.sh` proves the
+  running observer refuses the rotated key before the refresh and accepts it
+  after.
 
 ### 6.3 Operator visibility
 

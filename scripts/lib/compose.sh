@@ -88,7 +88,6 @@ IPC_VOLUME="stargate-ipc"
 CONTROL_STATE_VOLUME="stargate-control-state"
 CONTROL_CONFIG_VOLUME="stargate-control-config"
 DP_STATE_VOLUME="stargate-dp-state"
-TOR_CONFIG_VOLUME="stargate-tor-config"
 PEPPER_FILE="pepper.key"   # co-located with the keypairs in stargate-keys
 
 # ---- helpers --------------------------------------------------------------
@@ -173,8 +172,8 @@ ensure_project_volume() {
 # init_volume_root <physical-volume> <owner-uid> <gid> <mode> — initialise a
 # named volume's root directory ownership/mode via a throwaway digest-pinned
 # helper container (named volumes are not host-writable at arbitrary UID).
-# Non-recursive (root only): the four state volumes (ipc/control-state/
-# dp-state/tor-config) are empty at install time, and stargate-keys gets its
+# Non-recursive (root only): the three state volumes (ipc/control-state/
+# dp-state) are empty at install time, and stargate-keys gets its
 # per-file ownership/mode from the subsequent key+pepper install step. B1:
 # empty named-volume roots are root-owned, so the non-root service UIDs
 # cannot create their files there. The helper image MUST be `*@sha256:*`
@@ -212,6 +211,32 @@ init_control_config_mountpoint() {
     --read-only --tmpfs /tmp -v "${vol}:/v" "$STARGATE_KEYGEN_IMAGE" \
     sh -c 'if [ -L /v/keys ]; then exit 1; fi; if [ -e /v/keys ]; then test -d /v/keys; else mkdir -m 0755 /v/keys; fi' \
     >/dev/null 2>&1
+}
+
+# refresh_observer_cp_pub <keys-phys> <observer-keys-phys> — copy the CP's
+# current public key from stargate-keys into the observer's own key volume,
+# atomically (write-tmp + rename in the same directory). T191 item 1: the
+# observer authenticates the CP against this copy (re-read per authentication,
+# foundation-boundaries.md T164), so after a CP key rotation (wire-auth.md
+# §6.2) a stale copy keeps CP health dark. init calls this on every run; the
+# rotation procedure calls it before restarting the CP. The helper runs as the
+# observer UID with the stargate-ipc group: it can read the 0644 public key
+# through the 0750 keys root and write only its own 0700 volume, so it needs
+# no capability, no root and no network, and it never sees a private key's
+# contents (cp.priv/dp.priv are 0600 to other owners).
+refresh_observer_cp_pub() {
+  local keys="$1" observer="$2"
+  case "$STARGATE_KEYGEN_IMAGE" in
+    *@sha256:*) : ;;
+    *) _compose_note "refresh_observer_cp_pub: STARGATE_KEYGEN_IMAGE must be digest-pinned"
+       return 1 ;;
+  esac
+  docker run --rm --network none --cap-drop ALL --read-only \
+    --user "$OBSERVER_UID:$OBSERVER_UID" --group-add "$IPC_GID" \
+    -v "${keys}:/keys:ro" -v "${observer}:/observer" "$STARGATE_KEYGEN_IMAGE" \
+    sh -c 'set -e
+      install -m '"$KEY_PUBLIC_MODE"' /keys/cp.pub /observer/.cp.pub.new
+      mv -f /observer/.cp.pub.new /observer/cp.pub' >/dev/null 2>&1
 }
 
 # compose_health_ids <service...> — echo each service's container id (via

@@ -15,9 +15,12 @@
 #   - key volume is fail-closed + correct ownership/mode, AND the pepper
 #     (T092 amendment) is provisioned                [acceptance #4]
 #   - writable volume roots are initialised for the non-root service UIDs
-#     (ipc / control-state / dp-state / tor-config)  [B1]
+#     (ipc / control-state / dp-state); no CP-writable tor-config volume
+#     is created (T191 item 7)                         [B1]
 #   - health discovery uses `compose ps -q <svc>`, never guessed names    [B1]
 #   - idempotent rerun (existing keys + pepper preserved)                [acceptance]
+#   - a rerun after a CP key rotation refreshes the observer's cp.pub copy
+#     (T191 item 1; wire-auth.md §6.2)
 #   - two-project isolation (distinct physical volumes, no cross-leak)   [B1]
 #
 # Principle VII (tests-first, no AI exception): this test MUST fail against
@@ -216,13 +219,12 @@ read -r puid pgid pmode psize <<<"$(vol_stat "$keys_a" pepper.key)"
 [ "$puid" = "5101" ] || bail "A: pepper.key uid '$puid' (expected 5101 stargate-cp)"
 [ "$psize" = "32" ] || bail "A: pepper.key size '$psize' bytes (expected 32)"
 
-# writable volume roots initialised (B1): ipc/control-state/dp-state/tor-config
-# roots owned by the service UID + group stargate-ipc, mode 750.
+# writable volume roots initialised (B1): ipc/control-state/dp-state roots
+# owned by the service UID + group stargate-ipc, mode 750.
 declare -A ROOT_SPEC=(
   [stargate-ipc]="5102 5100"        # DP writes its UDS first; shared via GID 5100
   [stargate-control-state]="5101 5100"
   [stargate-dp-state]="5102 5100"
-  [stargate-tor-config]="5101 5100"
 )
 for vol in "${!ROOT_SPEC[@]}"; do
   phys="$(phys_of "$PROJ_A" "$vol")"
@@ -232,6 +234,10 @@ for vol in "${!ROOT_SPEC[@]}"; do
   [ "$rgid" = "$want_gid" ] || bail "A: $vol root gid '$rgid' (expected $want_gid)"
   case "$rmode" in 750|770|755) : ;; *) bail "A: $vol root mode '$rmode' (expected group-accessible 750/770)";; esac
 done
+# T191 item 7: the CP-writable Tor config volume was an orphan (T089 bakes
+# torrc into the image); init must not create it.
+[ -z "$(phys_of "$PROJ_A" stargate-tor-config)" ] \
+  || bail "A: init still creates the orphan CP-writable stargate-tor-config volume"
 
 # health discovery via `compose ps -q` (B1): each service resolves to a
 # container id (no guessed names). compose_health_ids is the lib helper init
@@ -281,6 +287,43 @@ observer_priv_a2="$(vol_sha "$observer_keys_a" observer.priv)"
   || bail "idempotence: observer.priv changed on rerun"
 [ "$pepper_a" = "$pepper_a2" ] \
   || bail "idempotence: pepper.key changed on rerun (pepper must be preserved)"
+
+# T191 item 1: an operator CP key rotation (wire-auth.md §6.2) replaces
+# cp.priv/cp.pub in stargate-keys. The observer authenticates the CP against
+# its OWN copy, so a rerun of init on the complete (6:2) install must refresh
+# that copy, or the observer keeps refusing the rotated CP.
+cp_pub_old="$(vol_sha "$keys_a" cp.pub)"
+rot="$(mktemp -d "$TMP/rot.XXXXXX")"
+openssl genpkey -algorithm ED25519 -out "$rot/cp.priv" 2>/dev/null \
+  && openssl pkey -in "$rot/cp.priv" -pubout -out "$rot/cp.pub" 2>/dev/null \
+  || bail "rotation fixture: openssl could not generate a CP keypair"
+docker run --rm --network none --cap-drop ALL --cap-add CHOWN --cap-add FOWNER \
+  --cap-add DAC_OVERRIDE --read-only -v "${keys_a}:/keys" -v "$rot:/src:ro" \
+  "$STAT_IMAGE" sh -c '
+    set -e
+    install -m 0600 -o 5101 -g 5100 /src/cp.priv /keys/.cp.priv.new
+    install -m 0644 -o 5101 -g 5100 /src/cp.pub /keys/.cp.pub.new
+    mv -f /keys/.cp.priv.new /keys/cp.priv
+    mv -f /keys/.cp.pub.new /keys/cp.pub' >/dev/null 2>&1 \
+  || bail "rotation fixture: could not rename the new CP keypair into stargate-keys"
+cp_pub_new="$(vol_sha "$keys_a" cp.pub)"
+[ -n "$cp_pub_new" ] && [ "$cp_pub_new" != "$cp_pub_old" ] \
+  || bail "rotation fixture: stargate-keys cp.pub did not change"
+[ "$(vol_sha "$observer_keys_a" cp.pub)" = "$cp_pub_old" ] \
+  || bail "rotation fixture precondition: observer copy should still hold the old cp.pub"
+out="$(run_init "$PROJ_A" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] || { echo "$out" >&2; bail "re-init after CP rotation exited $rc (expected 0)"; }
+[ "$(vol_sha "$observer_keys_a" cp.pub)" = "$cp_pub_new" ] \
+  || bail "re-init after CP rotation left the observer pinning the OLD cp.pub (T191 item 1)"
+read -r ocuid ocgid ocmode _ <<<"$(vol_stat "$observer_keys_a" cp.pub)"
+[ "$ocuid:$ocgid:$ocmode" = "5103:5103:644" ] \
+  || bail "refreshed observer cp.pub ownership/mode '$ocuid:$ocgid:$ocmode' (expected 5103:5103:644)"
+leftover="$(docker run --rm -v "${observer_keys_a}:/v:ro" "$STAT_IMAGE" \
+  sh -c 'ls -A /v | grep -vx -e observer.priv -e cp.pub' 2>/dev/null)"
+[ -z "$leftover" ] || bail "observer key volume holds leftover files after refresh: $leftover"
+[ "$(vol_sha "$keys_a" pepper.key)" = "$pepper_a" ] \
+  || bail "re-init after CP rotation changed pepper.key"
+cp_priv_a="$(vol_sha "$keys_a" cp.priv)"
 
 # Simulate a T162 installation: the original CP/DP keys and pepper exist,
 # while no observer identity has been provisioned. T164 must add only its

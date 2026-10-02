@@ -6,10 +6,12 @@
 # Why a Stargate-built image rather than an upstream one (FR-015):
 # the Tor Project does not publish an official Docker image, so we build
 # one from a digest-pinned Debian-slim base installing `tor` from the
-# Tor Project's official Debian repository (deb.torproject.org). Both
-# the base AND the final composed image are pinned by sha256 digest per
-# Principle IV — the base here, the final image in
-# compose/docker-compose.local.yml (T015). The trust rationale (why
+# Tor Project's official Debian repository (deb.torproject.org). The base
+# image is pinned by sha256 digest here (Principle IV). The final image is
+# NOT digest-pinned anywhere yet: compose/docker-compose.local.yml builds it
+# locally from this file (`build:` + `pull_policy: build`, local tag
+# stargate/tor:local). Final-image digests are recorded at release time by
+# T081's release workflow. The trust rationale (why
 # deb.torproject.org over a fork, key rotation policy, residual risk)
 # is recorded by T017 in SECURITY-DECISIONS.md.
 #

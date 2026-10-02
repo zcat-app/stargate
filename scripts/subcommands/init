@@ -40,7 +40,8 @@
 #
 # EXIT CODES (arch §9.1 §7):
 #   0   success
-#   10  preflight failure (docker / compose / socket / openssl missing or dead)
+#   10  preflight failure (docker / compose / socket / openssl missing or dead,
+#       or STARGATE_OBSERVER_IMAGE set in init's environment)
 #   20  key-generation failure
 #   30  compose failure (build / up)
 #   40  readiness timeout
@@ -48,8 +49,15 @@
 #   60  mandatory host-network boundary unavailable or ineffective
 #
 # PRIVACY / SUPPLY-CHAIN:
-#   - No outbound network except the Docker daemon socket and the image pulls
-#     the daemon performs (Constitution III). No curl/wget, no telemetry.
+#   - init itself opens no network connection: it talks only to the local
+#     Docker daemon socket (Constitution III). No curl/wget, no telemetry.
+#     The daemon and its builder DO reach the network on init's behalf: they
+#     pull the digest-pinned base and helper images, and the image builds
+#     fetch their inputs (Tor's signing key and apt packages for
+#     sidecars/tor, Go modules for the data plane and observer, Maven
+#     artifacts for the control plane). Those inputs are pinned and verified
+#     in the Dockerfiles; the built images are local and unpinned until the
+#     release workflow (T081) records their digests.
 #   - The key-gen helper reuses the exact debian:12-slim digest pinned in
 #     sidecars/tor/Dockerfile (Constitution IV). The T016 contract test
 #     cross-checks the two digests match; drift fails the gate.
@@ -236,6 +244,20 @@ preflight() {
   return 0
 }
 
+# T191 F1 / Constitution IV: Compose interpolation prefers the shell
+# environment over the env file, so a STARGATE_OBSERVER_IMAGE exported where
+# init runs would replace the observer image ID init builds and checks below.
+# Refuse it before any host policy, volume or container is touched. Init's own
+# scoped, parse-only assignment for the early DP stop (install_host_boundary)
+# happens after this check and never leaves the variable set.
+observer_image_guard() {
+  if [ -n "${STARGATE_OBSERVER_IMAGE+set}" ]; then
+    note "STARGATE_OBSERVER_IMAGE is set in this environment; it would override the observer image init builds and checks. Unset it and re-run."
+    return "$EXIT_PREFLIGHT"
+  fi
+  return 0
+}
+
 # ---- 2. SUPPLY-CHAIN GUARD + PROJECT VOLUMES (arch §9.1 step 3; B1) ---------
 # Defence-in-depth (Constitution IV): the key-gen/init helper image runs as
 # root with RW on the keys volume. Refuse an unpinned override so a hostile
@@ -280,13 +302,13 @@ supply_chain_guard() {
 # their roots for the non-root service UIDs — empty named-volume roots are
 # root-owned, so UID 5101/5102 cannot create their UDS / SQLite / snapshot
 # files there. stargate-keys root is chowned before the key+pepper install
-# step; the four state volumes to their owning plane. T167 also prepares
+# step; the three state volumes to their owning plane. T167 also prepares
 # the config volume's child mountpoint before Compose mounts it read-only.
 ensure_volumes() {
   local vol phys
   for vol in "$KEYS_VOLUME" "$OBSERVER_KEYS_VOLUME" "$OBSERVER_FABRIC_VOLUME" \
              "$IPC_VOLUME" "$CONTROL_STATE_VOLUME" "$CONTROL_CONFIG_VOLUME" \
-             "$DP_STATE_VOLUME" "$TOR_CONFIG_VOLUME"; do
+             "$DP_STATE_VOLUME"; do
     phys="$(ensure_project_volume "$vol")"
     [ -n "$phys" ] || { note "ensure_project_volume failed for $vol"; return "$EXIT_KEYGEN"; }
   done
@@ -311,9 +333,6 @@ ensure_volumes() {
   init_volume_root "$(ensure_project_volume "$DP_STATE_VOLUME")" \
     "$DP_UID" "$IPC_GID" 0750 \
     || { note "init_volume_root failed for $DP_STATE_VOLUME"; return "$EXIT_KEYGEN"; }
-  init_volume_root "$(ensure_project_volume "$TOR_CONFIG_VOLUME")" \
-    "$CP_UID" "$IPC_GID" 0750 \
-    || { note "init_volume_root failed for $TOR_CONFIG_VOLUME"; return "$EXIT_KEYGEN"; }
   init_control_config_mountpoint "$(ensure_project_volume "$CONTROL_CONFIG_VOLUME")" \
     || { note "init_control_config_mountpoint failed for $CONTROL_CONFIG_VOLUME"; return "$EXIT_KEYGEN"; }
   return 0
@@ -381,6 +400,11 @@ generate_keys() {
   case "$existing:$observer_existing" in
     6:2)
       note "inter-plane and observer identities already initialised; preserving keys and pepper."
+      # T191 item 1: an operator CP key rotation (wire-auth.md §6.2) changes
+      # stargate-keys/cp.pub, but the observer pins its own copy. Re-sync it
+      # on every run so a rerun of init completes the rotation.
+      refresh_observer_cp_pub "$keys_phys" "$observer_phys" \
+        || { note "refreshing the observer's CP public key failed"; return "$EXIT_KEYGEN"; }
       return 0
       ;;
     0:0)
@@ -466,19 +490,25 @@ generate_keys() {
           fi
           install -m '"$KEY_PUBLIC_MODE"'  -o '"$CP_UID"' -g '"$IPC_GID"' /src/observer.pub /keys/observer.pub
           install -m '"$KEY_PRIVATE_MODE"' -o '"$OBSERVER_UID"' -g '"$OBSERVER_UID"' /src/observer.priv /observer/observer.priv
-          install -m '"$KEY_PUBLIC_MODE"'  -o '"$OBSERVER_UID"' -g '"$OBSERVER_UID"' /keys/cp.pub /observer/cp.pub
         ' >/dev/null 2>&1; then
     note "installing keys+pepper into $keys_phys failed"
     return "$EXIT_KEYGEN"
   fi
+  # The observer's copy of cp.pub comes from the installed key, through the
+  # same atomic helper every later run uses (T191 item 1).
+  refresh_observer_cp_pub "$keys_phys" "$observer_phys" \
+    || { note "installing the observer's CP public key failed"; return "$EXIT_KEYGEN"; }
 
   note "provisioned observer identity without replacing existing CP/DP keys or pepper."
   return 0
 }
 
 # T138/T164: build the observer from its pinned Go builder and deploy only its
-# content-addressed local image ID. Record source-to-image binding before
-# Compose can start it; a mutable tag or operator-supplied image is refused.
+# content-addressed local image ID. Record init's hash of the checkout's
+# observer source files as a label before Compose can start it. init never
+# writes a mutable tag, and observer_image_guard refuses a STARGATE_OBSERVER_IMAGE
+# in init's environment (T191 F1); a direct Compose start outside init is
+# unsupported (SECURITY-DECISIONS 2026-10-02, T191).
 observer_source_hash() {
   local source part
   {
@@ -678,6 +708,9 @@ print_status() {
 
 # ---- main -----------------------------------------------------------------
 preflight; rc=$?
+[ "$rc" -eq 0 ] || exit "$rc"
+
+observer_image_guard; rc=$?
 [ "$rc" -eq 0 ] || exit "$rc"
 
 install_host_boundary; rc=$?

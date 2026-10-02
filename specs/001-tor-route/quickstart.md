@@ -25,7 +25,7 @@ runs in a Stargate-managed container.
 ## Step 1 — Clone and build (1 minute)
 
 ```bash
-git clone https://github.com/zcatapp/stargate.git
+git clone https://github.com/zcat-app/stargate.git
 cd stargate
 ./scripts/stargate init
 ```
@@ -85,11 +85,13 @@ access; the fix is documented in the error message.
 
 ## Step 2 — Generate and configure a bearer token (1 minute)
 
-Generate the token:
+Generate the token into a shell variable. Never type or paste the token
+itself on a command line: interactive shells save command lines, including
+here-document bodies, to history.
 
 ```bash
-openssl rand -hex 16
-# example output: 9f2c3a14b8d7e60f5a3c2e1d0b9c8a7f
+# Only this command line is recorded in history, not the token value.
+TOKEN=$(openssl rand -hex 16)
 ```
 
 Write the token file. The path inside the control-plane container is
@@ -102,11 +104,15 @@ directly:
 # name is <project>_<volume> = stargate_stargate-control-config.
 VOL_PATH=$(docker volume inspect stargate_stargate-control-config --format '{{ .Mountpoint }}')
 
-cat <<EOF | sudo tee "${VOL_PATH}/tokens.yaml"
-tokens:
-  - label: my-laptop
-    token: 9f2c3a14b8d7e60f5a3c2e1d0b9c8a7f
-EOF
+# printf is a shell builtin, so the token does not appear in the process
+# list; tee's copy of it goes to /dev/null instead of the terminal.
+printf 'tokens:\n  - label: my-laptop\n    token: %s\n' "$TOKEN" \
+  | sudo tee "${VOL_PATH}/tokens.yaml" > /dev/null
+
+# Show the token once to copy into the extension (Step 4), then drop it.
+# To see it again later, read the file: sudo cat "${VOL_PATH}/tokens.yaml"
+printf '%s\n' "$TOKEN"   # 32 lowercase hex, e.g. 9f2c3a14b8d7e60f5a3c2e1d0b9c8a7f
+unset TOKEN
 
 # Re-read the file by restarting the control-plane container (same project
 # identity + env file `init` uses — T088):

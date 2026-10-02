@@ -25,6 +25,12 @@
 //	rotate    — generates a fresh Ed25519 keypair and installs it as
 //	            cp.priv/cp.pub atomically (write-tmp + rename, §6.2
 //	            rotation order); run as 5101:5100 with the keys volume RW
+//	observer  — T191: authenticates to the Tor observer's health socket as
+//	            the CP (cp.priv signs the challenge, observer.pub verifies
+//	            the reply) and requires one health token; exit 0 iff the
+//	            observer accepted this CP identity
+//	observer-refused — the negative: exit 0 iff the observer greeted the
+//	            caller and then closed without accepting it (a stale pin)
 //
 // TLS is deliberately REIMPLEMENTED here instead of importing
 // data-plane/internal/controlclient: Go's internal-package rule already
@@ -70,7 +76,7 @@ const (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatal("usage: wireprobe <status|major|minor|nomajor|wrongkey|proxy|rotate> [flags]")
+		fatal("usage: wireprobe <status|major|minor|nomajor|wrongkey|proxy|rotate|observer|observer-refused> [flags]")
 	}
 	mode := os.Args[1]
 	fs := flag.NewFlagSet(mode, flag.ExitOnError)
@@ -98,6 +104,16 @@ func main() {
 		err = probeProxy(*proxyAddr)
 	case "rotate":
 		err = rotateCPKeys(*keysDir)
+	case "observer", "observer-refused":
+		path := *socket
+		if path == "/run/stargate/dp.sock" {
+			path = "/run/stargate-tor-observer/health.sock"
+		}
+		var accepted bool
+		accepted, err = probeObserver(path, *keysDir, *timeout)
+		if err == nil && accepted != (mode == "observer") {
+			err = fmt.Errorf("observer accepted=%v, want %v", accepted, mode == "observer")
+		}
 	default:
 		fatal("unknown mode %q", mode)
 	}
@@ -431,6 +447,90 @@ func rotateCPKeys(keysDir string) error {
 		return err
 	}
 	return nil
+}
+
+// probeObserver speaks the CP side of the observer challenge
+// (foundation-boundaries.md T164): read OBS/1 + server nonce, send CP/1 +
+// client nonce + the CP signature over the transcript, then require OK/1 +
+// the observer's signature, verified against observer.pub. accepted=false
+// with a nil error means the observer greeted the caller and closed without
+// OK/1 (it refused the CP key); any other deviation is an error, so a missing
+// socket can never pass as a refusal.
+func probeObserver(socket, keysDir string, d time.Duration) (bool, error) {
+	priv, err := loadSigner(keysDir + "/cp.priv")
+	if err != nil {
+		return false, err
+	}
+	observerPub, err := loadPublic(keysDir + "/observer.pub")
+	if err != nil {
+		return false, err
+	}
+	conn, err := net.DialTimeout("unix", socket, 5*time.Second)
+	if err != nil {
+		return false, err
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(d))
+	var greeting [6 + 32]byte
+	if _, err := io.ReadFull(conn, greeting[:]); err != nil || string(greeting[:6]) != "OBS/1\n" {
+		return false, fmt.Errorf("observer greeting: %v", err)
+	}
+	var clientNonce [32]byte
+	if _, err := rand.Read(clientNonce[:]); err != nil {
+		return false, err
+	}
+	transcript := append(append([]byte{}, greeting[6:]...), clientNonce[:]...)
+	signature := ed25519.Sign(priv, append([]byte("stargate-observer/1 client\n"), transcript...))
+	if _, err := conn.Write(append(append([]byte("CP/1\n"), clientNonce[:]...), signature...)); err != nil {
+		return false, err
+	}
+	var reply [5 + ed25519.SignatureSize]byte
+	n, err := io.ReadFull(conn, reply[:])
+	if n == 0 && errors.Is(err, io.EOF) {
+		return false, nil // closed without accepting: the observer refused this CP key
+	}
+	if err != nil || string(reply[:5]) != "OK/1\n" {
+		return false, fmt.Errorf("observer reply after %d bytes: %v", n, err)
+	}
+	if !ed25519.Verify(observerPub, append([]byte("stargate-observer/1 server\n"), transcript...), reply[5:]) {
+		return false, errors.New("observer proof does not verify against observer.pub")
+	}
+	if _, err := io.WriteString(conn, "HEALTH/1\n"); err != nil {
+		return false, err
+	}
+	if err := conn.(*net.UnixConn).CloseWrite(); err != nil {
+		return false, err
+	}
+	token, err := io.ReadAll(io.LimitReader(conn, 64))
+	if err != nil {
+		return false, err
+	}
+	switch string(token) {
+	case "READY/1\n", "NOT_READY/1\n", "UNAVAILABLE/1\n":
+		return true, nil
+	}
+	return false, fmt.Errorf("observer token %q is not in the closed vocabulary", token)
+}
+
+// loadPublic reads a PKIX PEM Ed25519 public key (stargate-keys format).
+func loadPublic(path string) (ed25519.PublicKey, error) {
+	pemBytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		return nil, fmt.Errorf("%s: no PEM block", path)
+	}
+	parsed, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	pub, ok := parsed.(ed25519.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("%s: %T, want ed25519", path, parsed)
+	}
+	return pub, nil
 }
 
 // protomajor is the runtime-tier major under test (the proto package is

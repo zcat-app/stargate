@@ -284,7 +284,7 @@ func TestStreamIsolationPerFirstPartyDomain(t *testing.T) {
 	// 5101:5100 resp. 5102:5100, pubs 0644, pepper 0640 cp:ipc) AND the
 	// volume-root ownership initialisation for stargate-keys (5101:5100
 	// 0750), stargate-ipc (5102:5100 0770), stargate-control-state /
-	// stargate-dp-state / stargate-tor-config (5101/5102:5100 0750) —
+	// stargate-dp-state (5101/5102:5100 0750) —
 	// scripts/stargate init steps 2–3 (scripts/subcommands/init), scoped
 	// to this project's volume names. Without it the DP fail-fasts on the
 	// missing pepper (main.go auth.LoadPepper → exit 1) and the CP on its

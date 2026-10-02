@@ -121,10 +121,11 @@ func TestOnionLoad(t *testing.T) {
 	if _, err := os.Stat(fwdTor); err != nil {
 		t.Skipf("blocked: %s absent — T047 (forward/tor.go) not landed", fwdTor)
 	}
-	// The control plane renders the torrc into stargate-tor-config; without
-	// it, tor has no config to load and the full vertical cannot work.
+	// The full vertical needs the control plane to push the token generation
+	// (Tor's torrc is baked into its image, T087/T089); without CP sources
+	// there is nothing to build.
 	if t033CountSuffix(filepath.Join(repoRoot, "control-plane"), ".java") == 0 {
-		t.Skip("blocked: no .java sources under control-plane/ — CP not buildable (cannot render torrc)")
+		t.Skip("blocked: no .java sources under control-plane/ — CP not buildable (cannot push tokens)")
 	}
 
 	ctx := context.Background()

@@ -49,7 +49,6 @@ services:
       - stargate-keys:/etc/stargate/keys
       - stargate-control-config:/etc/stargate:ro
       - stargate-control-state:/var/lib/stargate
-      - stargate-tor-config:/etc/tor
     restart: "no"
 
   # Mirrors the real tor sidecar: just needs to be RUNNING.
@@ -68,10 +67,10 @@ services:
     restart: "no"
 
 volumes:
-  # The seven named volumes from data-model.md §6; the real Compose adds
-  # two T162 Tor fabric volumes. init initialises the roots of the five
-  # UID-5101/5102-writable ones (keys, ipc, control-state, dp-state,
-  # tor-config); control-config
+  # The six named volumes from data-model.md §6 (T191 removed the orphan
+  # stargate-tor-config); the real Compose adds two T162 Tor fabric volumes.
+  # init initialises the roots of the four UID-5101/5102-writable ones
+  # (keys, ipc, control-state, dp-state); control-config
   # is operator-authored and :ro at runtime, with only its keys mountpoint
   # created by init. Tor-state is written by the tor user, not 5101/5102.
   stargate-keys: {}
@@ -80,6 +79,5 @@ volumes:
   stargate-control-state: {}
   stargate-dp-state: {}
   stargate-tor-state: {}
-  stargate-tor-config: {}
   stargate-observer-keys: {}
   stargate-tor-cp-fabric: {}

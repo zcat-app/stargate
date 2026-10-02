@@ -16,6 +16,19 @@
 # --merge` lands on a local branch; the PR is what surfaces it for human
 # review and the final push.
 #
+# CREDENTIAL BOUNDARY (T191 item 6): the agent runs with --auto and the
+# provider key, so it is treated as untrusted code. Its job (`run`) holds only
+# a read-scoped token that is never written to .git/config
+# (persist-credentials: false) or handed to a step, so nothing the agent runs
+# can push — including the MERGE handoff's `git push origin <feature>`. It
+# uploads a git bundle of agent/$TICKET as an artifact. A separate `publish`
+# job, on a fresh runner that never executes repository or agent code, checks
+# that the bundle carries exactly refs/heads/agent/$TICKET, pushes only that
+# ref and opens the PR. Every value from `run` (outputs, artifact text) is
+# data: the agent can forge its step outputs through $GITHUB_OUTPUT, so no
+# expression is ever substituted into a script body. opencode.json's bash
+# deny rules are a second, pattern-level control, not this boundary.
+#
 # Trigger: issue or PR comment matching `/^\/agent\s+T-\d+[a-z]?$/`. The
 # comment author must have write access (enforced below); this is NOT an
 # arbitrary-issue-comment trigger that would let anyone burn CI minutes.
@@ -75,7 +88,7 @@ jobs:
        startsWith(github.event.comment.body, '/agent T') &&
        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
                 github.event.comment.author_association))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -142,13 +155,15 @@ jobs:
   run:
     needs: gate
     if: needs.gate.outputs.authorized == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60   # hard cap; agent loop can stall on a bright-line stop
-    # The write-capable token lives here and only here — this job runs after
-    # authorization and consumes only the validated ticket id from `gate`.
+    # T191 item 6: the agent job holds no write-capable token. The token below
+    # can only read; publish holds the write scopes on a separate runner.
     permissions:
-      contents: write        # to push the branch
-      pull-requests: write   # to open the PR
+      contents: read
+    outputs:
+      phase: ${{ steps.drive.outputs.phase }}
+      iterations: ${{ steps.drive.outputs.iterations }}
     env:
       TICKET: ${{ needs.gate.outputs.ticket }}
       AGENT_BRANCH: agent/${{ needs.gate.outputs.ticket }}
@@ -160,6 +175,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0   # need history for branch resolution + squash-merge
+          persist-credentials: false   # T191: no token in .git/config for the agent
 
       - name: Set up toolchain
         uses: ./.github/actions/setup-toolchain
@@ -269,31 +285,118 @@ jobs:
       # The PR is what surfaces the run for human review. Even on a bright-line
       # stop, the partial state + the emitted handoff prompt are valuable.
       - name: Commit any state changes
+        # The phase output is agent-forgeable ($GITHUB_OUTPUT), so it reaches
+        # the shell only as data through env, never as substituted source.
+        env:
+          PHASE: ${{ steps.drive.outputs.phase }}
+          ITERATIONS: ${{ steps.drive.outputs.iterations }}
         run: |
           # Status transitions, frontmatter updates, derive-deps results, etc.
           git add -A || true
-          git diff --cached --quiet || git commit -m "agent: drive $TICKET (phase: ${{ steps.drive.outputs.phase }}, iter: ${{ steps.drive.outputs.iterations }})"
+          git diff --cached --quiet || git commit -m "agent: drive $TICKET (phase: $PHASE, iter: $ITERATIONS)"
+
+      # The branch leaves this job only as a bundle artifact. No credential
+      # is present here; publish validates and pushes it. run-task.sh moves
+      # the agent onto the feature branch before implementing
+      # (ensure_feature_branch), so agent/$TICKET still names the commit the
+      # run started from: point it at the result (HEAD, after the state
+      # commit) before bundling (T191 round 2).
+      - name: Bundle agent branch
+        if: always()
+        run: |
+          out="$RUNNER_TEMP/agent-result"
+          mkdir -p "$out"
+          git update-ref "refs/heads/$AGENT_BRANCH" HEAD
+          git bundle create "$out/branch.bundle" "refs/heads/$AGENT_BRANCH"
+          for f in prompt agent-output; do
+            if [ -f "target/runs/$TICKET.$f" ]; then
+              cp "target/runs/$TICKET.$f" "$out/$f.txt"
+            fi
+          done
+
+      - name: Upload agent result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: agent-result
+          path: ${{ runner.temp }}/agent-result
+          if-no-files-found: error
+          retention-days: 7
+
+  # --- publish: the only push, on a runner the agent never touched ----------
+  # The write-capable token lives here and only here. This job checks out
+  # nothing and runs no repository or agent code; the bundle and text files
+  # are untrusted data. It always opens a PR (success or bright-line stop):
+  # the PR is what surfaces the run for human review.
+  publish:
+    needs: [gate, run]
+    if: always() && needs.gate.outputs.authorized == 'true' && needs.run.result != 'skipped'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write        # to push agent/$TICKET
+      pull-requests: write   # to open the PR
+    env:
+      TICKET: ${{ needs.gate.outputs.ticket }}
+      AGENT_BRANCH: agent/${{ needs.gate.outputs.ticket }}
+      AGENT_CLI: ${{ github.event.inputs.agent_cli || 'opencode' }}
+      PHASE: ${{ needs.run.outputs.phase }}
+      ITERATIONS: ${{ needs.run.outputs.iterations }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: agent-result
+          path: ${{ runner.temp }}/agent-result
+
+      - name: Import agent branch
+        # The bundle is untrusted input, so it is parsed in a step that holds
+        # no credential (T191 round 2). It must carry exactly
+        # refs/heads/agent/$TICKET (ticket id validated by `gate`). The
+        # repository is a fresh, empty one this step creates, so no hook or
+        # config the agent wrote reaches the push below.
+        run: |
+          bundle="$RUNNER_TEMP/agent-result/branch.bundle"
+          git init --quiet "$RUNNER_TEMP/push"
+          cd "$RUNNER_TEMP/push"
+          heads="$(git bundle list-heads "$bundle" | awk '{print $2}')"
+          if [ "$heads" != "refs/heads/$AGENT_BRANCH" ]; then
+            echo "::error::bundle must carry exactly refs/heads/$AGENT_BRANCH"
+            exit 1
+          fi
+          git fetch --quiet --no-tags "$bundle" "refs/heads/$AGENT_BRANCH:refs/heads/$AGENT_BRANCH"
+
+      - name: Push agent branch
+        # Only refs/heads/agent/$TICKET is pushed, from the repository the
+        # import step created; this is the only step holding the token.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          cd "$RUNNER_TEMP/push"
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c core.hooksPath=/dev/null \
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            push --quiet "https://github.com/$REPO.git" "refs/heads/$AGENT_BRANCH:refs/heads/$AGENT_BRANCH"
 
       - name: Open PR
-        if: always()
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const fs = require('fs');
+            const path = require('path');
             const ticket = process.env.TICKET;
-            const phase = '${{ steps.drive.outputs.phase }}';
-            const iters = '${{ steps.drive.outputs.iterations }}';
-            const cli   = process.env.AGENT_CLI;
-            const promptPath = `target/runs/${ticket}.prompt`;
-            const outPath    = `target/runs/${ticket}.agent-output`;
-            let promptBody = '(no prompt emitted — phase transitioned without a handoff)';
-            if (fs.existsSync(promptPath)) {
-              promptBody = fs.readFileSync(promptPath, 'utf8');
-            }
-            let agentOut = '(no agent output captured)';
-            if (fs.existsSync(outPath)) {
-              agentOut = fs.readFileSync(outPath, 'utf8').slice(-4000);  // tail-cap to keep PR body sane
-            }
+            const cli = process.env.AGENT_CLI;
+            // run's outputs are agent-forgeable: accept only known values.
+            const phases = ['start', 'terminal', 'bright-line-stop', 'agent-cli-failed'];
+            const phase = phases.includes(process.env.PHASE) ? process.env.PHASE : 'unknown';
+            const iters = /^[0-9]{1,3}$/.test(process.env.ITERATIONS || '') ? process.env.ITERATIONS : 'unknown';
+            const dir = path.join(process.env.RUNNER_TEMP, 'agent-result');
+            const read = (name, fallback, cap) => {
+              const file = path.join(dir, name);
+              return fs.existsSync(file) ? fs.readFileSync(file, 'utf8').slice(-cap) : fallback;
+            };
+            const promptBody = read('prompt.txt', '(no prompt emitted — phase transitioned without a handoff)', 20000);
+            const agentOut = read('agent-output.txt', '(no agent output captured)', 4000);  // tail-cap to keep PR body sane
             const title = `agent (${cli}): ${ticket} — ${phase}`;
             const body = `## Agent-driven run for ${ticket}
 

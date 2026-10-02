@@ -332,6 +332,21 @@ enforcing profile and passes under the repaired one. This preserves the durable-
 boundary in Principle II; directory sync remains mandatory. Network, Unix-socket and
 signal restrictions are unchanged. It adds no trust boundary or cryptographic mechanism.
 
+**T191 procfs narrowing:** because the DP shares the host network namespace, every
+`/proc/<pid>/net/*` file it can open is the host's table (`tcp`, `tcp6`, `udp`, `unix`,
+`arp`, `route`). Until T191 the profile's blanket `/proc/** r` let the DP read them, so a
+compromised DP could map host listeners, peers and neighbours. The profile now grants only
+the procfs reads the static Go DP needs (its cgroup and mountinfo for the runtime's
+GOMAXPROCS sizing and its own descriptor directory for T168's start-up scan) and explicitly
+denies `/proc/*/net/**` and `/proc/*/task/*/net/**`. Because `*` also matches `sys`, the
+deny covers `/proc/sys/net/**` as well: Go's read of the listen backlog limit
+(`/proc/sys/net/core/somaxconn`) is denied and its net package falls back to its built-in
+constant; the kernel still caps the backlog at somaxconn. The
+T162 docker-tier test shows UID 5102 under the loaded profile getting EACCES on
+`/proc/self/net/tcp` and `/proc/thread-self/net/tcp`, with an unconfined positive
+control. Host-netns socket tables remain readable to any other unconfined host process;
+this narrows only the DP.
+
 **T171 evidence timing:** probe processes have a separate bounded startup/run
 allowance; ordinary socket-operation deadlines remain 0.8 seconds. Loopback
 fixtures start after recorder readiness and drain queued attempts before
@@ -1965,6 +1980,9 @@ inter-plane UDS sockets (`/run/stargate/control.sock` or
 - **No automated key rotation in v1.** Replacing the on-disk
   `cp.priv`/`cp.pub` / `dp.priv`/`dp.pub` keypairs is operator-manual
   (write-tmp + rename + plane restart, ordered per `wire-auth.md` §6.2).
+  A CP rotation also refreshes the Tor observer's own `cp.pub` copy, which
+  `stargate init` re-syncs on every run (T191); until then the observer
+  refuses the rotated CP and CP health stays unavailable (advisory only).
   Automated rotation is a future feature with its own threat-model row.
 - **A same-host attacker who reads a plane's process memory obtains the
   long-lived private key** (loaded from `*.priv` for handshake signing)

@@ -23,6 +23,12 @@
 #                 a bash syntax error (exit 2) lands FAIL — the case that
 #                 makes a sentinel convention mandatory over an exit-code
 #                 one. (§Acceptance #3 — the run summary reflects skips.)
+#   4. CONTRACT — T191 item 3: two contract gates skipped work without a
+#                 line-start "SKIP:" and were recorded PASS. The wire gate
+#                 printed "R<n>: SKIP (...)" per runtime row and t162 printed
+#                 "OK: ...; SKIP[docker] ..." mid-line. The REAL scripts run,
+#                 in the state where they skip, through the same harness and
+#                 must land SKIP, never PASS.
 #
 # HERMETIC: throwaway sandbox + shim PATH; no network, no docker builds.
 # The repro runs skip at their first tool probe (~ms). Self-skip if bash
@@ -137,14 +143,42 @@ grep -qE '\[FAIL\] fixture:syntax' "$SANDBOX/red.out" \
 grep -q 'PASS=0  SKIP=1  FAIL=3' "$SANDBOX/red.out" \
   || bail "red-run summary counts wrong (want PASS=0 SKIP=1 FAIL=3)"
 
+# --- 4. CONTRACT: real contract gates that skip work land SKIP (T191) -------
+# The wire gate's runtime rows skip without a stack: a docker stub that
+# refuses every call leaves the Compose volumes unresolved, so R1-R9 all
+# skip. t162's hermetic tier skips the docker packet falsifiers unless
+# STARGATE_TEST_TAGS names the docker cadence.
+mkdir "$SANDBOX/nodocker"
+printf '#!/bin/sh\nexit 1\n' > "$SANDBOX/nodocker/docker"
+chmod +x "$SANDBOX/nodocker/docker"
+cat > "$SANDBOX/contract-fixtures.sh" <<FIXTURES
+run_cmd "fixture:wire-rows" -- env PATH="$SANDBOX/nodocker:\$PATH" bash "$REPO_ROOT/tests/contract/compose/inter_plane_wire_test.sh"
+run_cmd "fixture:t162-hermetic" -- env -u STARGATE_TEST_TAGS bash "$REPO_ROOT/tests/contract/stargate-cli/t162_enforcement_test.sh"
+FIXTURES
+build_harness "$SANDBOX/contract.sh" "$SANDBOX/contract-fixtures.sh"
+STARGATE_VERIFY_LOG="$SANDBOX/contract.log" \
+  bash "$SANDBOX/contract.sh" > "$SANDBOX/contract.out" 2>&1
+contract_rc=$?
+[ "$contract_rc" -eq 0 ] \
+  || bail "CONTRACT harness exited $contract_rc — a skipping contract gate must not fail the run"
+grep -qE '\[SKIP\] fixture:wire-rows — .*R1.*R9' "$SANDBOX/contract.out" \
+  || bail "wire gate without a stack was not recorded SKIP naming the skipped rows R1-R9"
+grep -qE '\[SKIP\] fixture:t162-hermetic — .*docker' "$SANDBOX/contract.out" \
+  || bail "t162 hermetic tier was not recorded SKIP naming the docker falsifiers"
+grep -qE '\[PASS\] fixture:(wire-rows|t162-hermetic)' "$SANDBOX/contract.out" \
+  && bail "a contract gate that skipped work was recorded PASS (T191 item 3, live)"
+grep -q 'PASS=0  SKIP=2  FAIL=0' "$SANDBOX/contract.out" \
+  || bail "contract-run summary counts wrong (want PASS=0 SKIP=2 FAIL=0)"
+
 # --- report ---------------------------------------------------------------
 if [ "${#errs[@]}" -gt 0 ]; then
   printf 'FAIL: verify_skip_convention_test.sh — %d assertion(s) failed:\n' "${#errs[@]}" >&2
   for e in "${errs[@]}"; do printf '  - %s\n' "$e" >&2; done
   printf '\n--- green harness output ---\n%s\n' "$(cat "$SANDBOX/green.out" 2>/dev/null)" >&2
   printf '\n--- red harness output ---\n%s\n' "$(cat "$SANDBOX/red.out" 2>/dev/null)" >&2
+  printf '\n--- contract harness output ---\n%s\n' "$(cat "$SANDBOX/contract.out" 2>/dev/null)" >&2
   exit 1
 fi
 
-echo "PASS: verify_skip_convention_test.sh — wired + adopted + recorded (T108 §A1–#3)."
+echo "PASS: verify_skip_convention_test.sh — wired + adopted + recorded (T108 §A1–#3) + contract skips (T191)."
 exit 0

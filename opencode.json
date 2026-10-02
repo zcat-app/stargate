@@ -78,7 +78,17 @@
       "[ *": "allow",
       "python3 *": "allow",
       "bash *": "allow",
-      "*": "ask"
+      "*": "ask",
+      "git push*": "deny",
+      "curl*": "deny",
+      "wget*": "deny",
+      "nc *": "deny",
+      "ncat*": "deny",
+      "socat*": "deny",
+      "ssh *": "deny",
+      "scp *": "deny",
+      "env": "deny",
+      "printenv*": "deny"
     },
     "external_directory": {
       "/home/ubuntu5/Projects/quarkus-projects/infochat/**": "allow",

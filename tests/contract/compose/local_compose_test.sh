@@ -90,8 +90,21 @@ check "$(q '.services["tor-observer"] | has("build")')" false "observer deploys 
 check "$(q '.services["tor-observer"].image | test("^sha256:[a-f0-9]{64}$")')" \
     true "observer image uses immutable local ID"
 check "$(q '.volumes | keys | sort | join(",")')" \
-    "stargate-control-config,stargate-control-state,stargate-dp-state,stargate-ipc,stargate-keys,stargate-observer-keys,stargate-tor-config,stargate-tor-cp-fabric,stargate-tor-dp-fabric,stargate-tor-state" \
+    "stargate-control-config,stargate-control-state,stargate-dp-state,stargate-ipc,stargate-keys,stargate-observer-keys,stargate-tor-cp-fabric,stargate-tor-dp-fabric,stargate-tor-state" \
     "named volume set"
+# T191 item 7: Tor's torrc is baked into its image (T089); the CP has no
+# writable Tor configuration mount.
+check "$(q '[.services["stargate-control"].volumes[] | select(.target == "/etc/tor")] | length')" \
+    0 "CP has no Tor config mount"
+
+# T191 item 11 (A3-M1): a service that builds a local image must never pull
+# its unqualified `stargate/<name>:local` name from a registry. Without
+# pull_policy: build, a plain `up`/`pull` asks docker.io for an unrelated
+# third-party account's image.
+while IFS= read -r svc; do
+    check "$(q ".services[\"$svc\"].pull_policy // \"\"")" build "$svc builds, never pulls, its local image"
+done < <(q '.services | to_entries[] | select(.value | has("build")) | .key')
+check "$(q '[.services[] | select(has("build"))] | length')" 3 "services that build locally"
 
 for svc in stargate-dp stargate-control tor; do
     check "$(q ".services[\"$svc\"].read_only")" true "$svc read-only rootfs"

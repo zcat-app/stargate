@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 33 |
-| in-progress | 0 |
+| pending | 32 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 192 |
@@ -31,7 +31,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
-| T191 | Resolve surviving deployment-area redteam minors and audit g | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
 | T198 | Gate init on af_unix mediation; truthful init and quickstart | Foundation audit remediation | ✓ | ✓ |
 
@@ -39,7 +38,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T191 | Resolve surviving deployment-area redteam minors and audit g | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

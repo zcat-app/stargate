@@ -3,7 +3,7 @@ id: T081
 title: 'Prepare immutable reviewed release artifacts and workflow'
 status: pending
 created: 2026-07-04
-last_updated: "2026-09-12"
+last_updated: "2026-10-02"
 source: review/sol-review.md#M7
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
@@ -63,7 +63,10 @@ creation is authorized merely by completing workflow implementation.
    run current verify, online grounding and release reproducibility with explicit flags:
    STARGATE_GROUND_ONLINE=1 and STARGATE_VERIFY_REPRO=1. Required skips or missing evidence must
    block release. Preparation fixtures can run without publication credentials or real pushes.
-3. Build DP, JVM CP and Tor artifacts from the reviewed candidate with pinned toolchains/inputs.
+3. Build DP, JVM CP, Tor and Tor-observer (`sidecars/tor-observer/Dockerfile`) artifacts from the
+   reviewed candidate with pinned toolchains/inputs, and include the observer in the release
+   reproducibility evidence; the generated release Compose pins the observer by its registry digest
+   instead of init's local image ID (SECURITY-DECISIONS 2026-10-02, T191).
    Pin and record the extension archive tool/build environment identified by T111; prove the
    delivered extension bytes reproducible. Record artifact hashes, source commit, build inputs,
    SBOMs and signature/provenance verification instructions. Verify output/source agreement.

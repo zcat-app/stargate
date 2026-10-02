@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Command profileprobe is the unprivileged, static test client for T162's
-// AppArmor AF_UNIX caller matrix and T170 signal-peer checks. It never sends destinations or credentials.
+// AppArmor AF_UNIX caller matrix, T170 signal-peer checks and T191 procfs reads. It never sends destinations or credentials.
 package main
 
 import (
@@ -18,7 +18,7 @@ import (
 
 func main() {
 	if len(os.Args) != 3 {
-		fmt.Fprintln(os.Stderr, "usage: profileprobe socks|dial|listen|serve|abstract-dial|abstract-serve|signal-exists <address-or-pid>")
+		fmt.Fprintln(os.Stderr, "usage: profileprobe socks|dial|listen|serve|abstract-dial|abstract-serve|signal-exists|read <address-pid-or-path>")
 		os.Exit(2)
 	}
 	var err error
@@ -62,6 +62,17 @@ func main() {
 					}
 				}
 			}
+		}
+	case "read":
+		// T191: whole-file read of a procfs path. Only the byte count is
+		// printed, never the content (host socket tables stay out of logs).
+		var data []byte
+		data, err = os.ReadFile(os.Args[2])
+		if err == nil && len(data) == 0 {
+			err = fmt.Errorf("empty read")
+		}
+		if err == nil {
+			fmt.Printf("READ %d bytes\n", len(data))
 		}
 	case "listen":
 		var ln net.Listener
