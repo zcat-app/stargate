@@ -76,6 +76,8 @@ recorded under the widened allowlist.
 | 2026-10-01 | T185 | 2 | REWORK (1 Major) | APPROVE (0) |
 | 2026-10-01 | T185 | 3 (refine re-review; counter reset to 1) | APPROVE (0) | APPROVE (0) |
 | 2026-10-01 | T195 | 1 | APPROVE (1 Minor) | APPROVE (0) |
+| 2026-10-02 | T196 | 1 | REWORK (1 Major, 1 Minor) | APPROVE (2 Minor) |
+| 2026-10-02 | T196 | 2 (second launch; the first failed on a GLM provider timeout and imported no verdicts) | APPROVE (0) | APPROVE (0) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -130,6 +132,9 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-10-01 | T185 | 1 | Minor | Static override tripwire misses `-s`/`--settings` (a settings file can carry resolver properties) | missed | found | fixed | glm marked it optional; fixed at the maintainer's request (also `-gs`/`--global-settings`) |
 | 2026-10-01 | T185 | 2 | Major | arm64 closure not build-confirmed, and the platform assertion caught a deleted but not a corrupted arm64 Brotli entry | found | dismissed | fixed | glm: arm64 gap "fail-closed, disclosed, and environment-blocked (→ follow-up)". Fix: `ARM64_ONLY` reviewed digests in the test (zeroed-digest probe fails). The maintainer-time-boxed real `--platform linux/arm64` build failed on emulation (TLS handshake under nested TCG), so maintainer refine: Acceptance 1 states arm64 is emulation-derived, not build-confirmed |
 | 2026-10-01 | T195 | 1 | Minor | `geckoNotificationSchemaMockRejectsRequireInteraction` exercises only the test mock, so no production mutation falsifies it | found | missed | dismissed | mock-calibration test, deliberately standalone so the schema gate is not vacuous; astra confirmed other tests (`failureNotificationIsDisplayableOnEveryFailureShape`, the strengthened notification tests, live `hardening-failure-notification-displayed`) catch a restored `requireInteraction`. Done at d79c885 |
+| 2026-10-02 | T196 | 1 | Major | Observer relay: the repeat-sample window was trusted as server-registered after `SUBSCRIBED` + 1 s with no received event, so a delayed registration could let a duplicate pass while the report claimed continuous overlapping windows | found | missed | fixed | glm accepted the continuity claim (its dropped items covered carry ordering and THREAT-MODEL wording, not registration). Maintainer decision 2026-10-02 (option A tightened): every silent window in an event phase must first receive the transition; no-event phases disclosed as resting on the 1 s allowance; continuity claim removed; delayed-registration falsifier added. Done at 6228d4a |
+| 2026-10-02 | T196 | 1 | Minor | `uds_dial` lost the old `timeout 2`; a wedged peer (full accept queue) blocks connect(2) and hangs the gate | found | found | fixed | `timeout 5` around the dialer; exit 124 fails the row and never counts as EACCES; fixtures S8/S9 saturate real Unix accept queues |
+| 2026-10-02 | T196 | 1 | Minor | Dialer comment mislabelled exit 3 as "no socket"; a missing path exits 1 (ENOENT), exit 3 is a socket(2) failure | missed | found | fixed | comment corrected in round 2 |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);

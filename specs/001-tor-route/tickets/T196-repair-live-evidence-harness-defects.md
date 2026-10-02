@@ -1,7 +1,7 @@
 ---
 id: T196
 title: 'Repair live-evidence harness defects found by the T155 pass'
-status: in-progress
+status: done
 created: 2026-10-01
 last_updated: 2026-10-02
 source: "T155 attempt 3 live pass and cumulative redteam (candidate 989b8f9); harness defects reproduced by the T155 developer, confirmed by both T155 reviewers"
@@ -26,7 +26,7 @@ spec_refs:
   - specs/001-tor-route/contracts/control-grpc.md
 decision_refs:
   - "T155 live-e2e README D-live-7: a harness defect is fixed by a ticket, not reported as a pass"
-reviews: {}
+reviews: { round: 2, date: 2026-10-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
