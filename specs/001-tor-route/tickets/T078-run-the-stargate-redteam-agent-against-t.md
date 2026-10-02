@@ -3,11 +3,11 @@ id: T078
 title: 'Run the `stargate-redteam` agent against the completed feature branch '
 status: pending
 created: 2026-07-04
-last_updated: 2026-10-01
+last_updated: 2026-10-02
 source: tasks.md#T078
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: ["T009", "T155", "T034a", "T034f", "T064", "T065", "T066", "T067", "T067a", "T067b", "T070", "T070a", "T070b", "T071", "T072", "T073", "T075", "T077", "T079a", "T080", "T081", "T109", "T110", "T111", "T112", "T114", "T117", "T119", "T120", "T121", "T123", "T124", "T126", "T132", "T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T157", "T158", "T159", "T161", "T189", "T190", "T191", "T196", "T197", "T198"]
+blocked_by: ["T009", "T155", "T034a", "T034f", "T064", "T065", "T066", "T067", "T067a", "T067b", "T070", "T070a", "T070b", "T071", "T072", "T073", "T075", "T077", "T079a", "T080", "T081", "T109", "T110", "T111", "T112", "T114", "T117", "T119", "T120", "T121", "T123", "T124", "T126", "T132", "T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T157", "T158", "T159", "T161", "T189", "T190", "T191", "T196", "T197", "T198", "T199"]
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: false

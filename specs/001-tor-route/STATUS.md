@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 32 |
+| pending | 33 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 193 |
 | deferred | 5 |
-| **total** | **230** |
+| **total** | **231** |
 
 ---
 
@@ -33,6 +33,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
 | T198 | Gate init on af_unix mediation; truthful init and quickstart | Foundation audit remediation | ✓ | ✓ |
+| T199 | Count continuation-line git pushes; record the bundle-ref re | Foundation audit remediation | ✓ | ✓ |
 
 ---
 
