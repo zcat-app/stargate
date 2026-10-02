@@ -4,8 +4,12 @@
 """T165 falsifiers for deployed observer-boundary verdicts."""
 
 import copy
+import heapq
+import json
+import socket
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
@@ -178,18 +182,99 @@ class ObserverBoundaryVerdictTest(unittest.TestCase):
         self.assertEqual(observation.events, [])
 
     def test_timeout_matrix_waits_for_cp_classification_before_asserting_silence(self):
-        clock = [0]
-        fake = Mock()
-        fake.snapshot.return_value = []
-        observation = Mock()
         # The fake sees GETINFO immediately; CP can only classify its timeout
         # four seconds later. A false lifecycle event at that point must fail.
-        observation.snapshot.side_effect = lambda: ([('CRASHED', 'container_exit')]
-                                                    if clock[0] >= 4 else [])
-        with patch.object(subject, 'await_control_sample', return_value=2), \
-                patch.object(subject.time, 'sleep', side_effect=lambda seconds: clock.__setitem__(0, clock[0]+seconds)):
-            with self.assertRaisesRegex(AssertionError, 'event sequence'):
-                subject.observe_phase(observation, fake, None, [], ['AUTHENTICATE', 'GETINFO'])
+        with self.assertRaisesRegex(AssertionError, 'event sequence'):
+            run_cp_events(bug=SimBug("CRASHED", lambda world, health: world.fake.reply is None))
+
+    def test_cp_event_windows_survive_emulated_slow_actions(self):
+        # T196: under QEMU TCG a Docker start/stop takes seconds and the old fixed
+        # 35 s windows overran the CP's 40 s max connection age (36 s with jitter).
+        world, report = run_cp_events(start=10.0, stop=10.0, connect=2.0)
+        self.assertEqual(len(report["phases"]), 8)
+        self.assertTrue(all(phase["exact_events"] for phase in report["phases"].values()))
+        self.assertFalse([w for w in world.windows if w.cut], "a window outlived the CP lifetime")
+        lifetimes = [w.closed - w.opened for w in world.windows]
+        self.assertLess(max(lifetimes), SimWorld.LIFETIME - 4, lifetimes)
+        self.assertLessEqual(max(phase["max_window_seconds"] for phase in report["phases"].values()),
+                             max(lifetimes) + 0.1)
+        # No continuity is claimed; each phase states what its silence rests on.
+        self.assertNotIn("continuous_overlapping_windows", report)
+        for name, phase in report["phases"].items():
+            want = ANCHOR_ALLOWANCE if name in ("malformed-and-repeat", "timeout-and-repeat") else ANCHOR_EVENT
+            self.assertEqual(phase["silence_anchor"], want, name)
+
+    def test_window_registered_after_the_transition_rejects_the_run(self):
+        # Astra round 1: a successor window whose server registration is delayed
+        # past the transition (and so past a duplicate published at the repeat
+        # sample) must not vouch for silence. Every silent window must first
+        # have received its phase's transition event.
+        with self.assertRaisesRegex(AssertionError, "event sequence"):
+            run_cp_events(start=10.0, stop=10.0, register_delays={2: 15.0},
+                          bug=SimBug("STARTED", lambda world, health: world.fake.reply == subject.NOT_READY,
+                                     repeat=True))
+
+    def test_cp_event_relay_observes_the_repeat_sample_and_its_call_budget(self):
+        # A duplicate published by the repeat sample, as late as the CP's
+        # six-second call cap allows, must still land in an open window.
+        for kind, when in (("STARTED", lambda world, health: world.fake.reply == subject.NOT_READY),
+                           ("UNHEALTHY", lambda world, health: not world.observer_up)):
+            with self.subTest(kind=kind), self.assertRaisesRegex(AssertionError, "event sequence"):
+                run_cp_events(start=10.0, stop=10.0, bug=SimBug(kind, when, repeat=True, late=5.5))
+
+    def test_cp_event_relay_requires_the_positive_transitions(self):
+        with self.assertRaisesRegex(AssertionError, "event sequence"):
+            run_cp_events(bug=SimBug(None, lambda world, health: True))
+
+    def test_reply_samples_count_only_samples_served_after_the_trigger(self):
+        query = ["AUTHENTICATE", "GETINFO", "QUIT"]
+        fake = Mock()
+        fake.snapshot.return_value = query * 3
+        # The first sample read the previous reply generation: it is not a
+        # sample of this phase even though it follows the phase's mark.
+        fake.served.return_value = [(1, 1, 10.0), (4, 2, 20.0), (7, 2, 30.0)]
+        self.assertEqual(subject.await_reply_samples(fake, 2, query, 2), [20.0, 30.0])
+        clock = SimClock()
+        fake.snapshot.return_value = query * 2 + ["AUTHENTICATE", "GETINFO"]
+        with patch.object(subject, "time", clock), \
+                self.assertRaisesRegex(AssertionError, "did not sample"):
+            subject.await_reply_samples(fake, 2, query, 2, timeout=5)
+        fake.snapshot.return_value = query + ["AUTHENTICATE", "GETINFO", "SETCONF"] + query
+        with patch.object(subject, "time", clock), \
+                self.assertRaisesRegex(AssertionError, "unexpected Tor commands"):
+            subject.await_reply_samples(fake, 2, query, 2, timeout=5)
+        # Nothing may come between the counted samples either.
+        fake.snapshot.return_value = query + ["SETCONF"] + query
+        fake.served.return_value = [(1, 2, 10.0), (5, 2, 20.0)]
+        with patch.object(subject, "time", clock), \
+                self.assertRaisesRegex(AssertionError, "unexpected Tor commands"):
+            subject.await_reply_samples(fake, 2, query, 2, timeout=5)
+
+    def test_fake_tor_records_the_reply_generation_of_each_bootstrap_query(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake = subject.FakeTor(Path(tmp) / "control.sock")
+            first = fake.set_reply(subject.NOT_READY)
+            second = fake.set_reply(subject.READY)
+            self.assertEqual(second, first + 1)
+            client, server = socket.socketpair()
+            with client:
+                client.sendall(b"AUTHENTICATE 00\r\nGETINFO status/bootstrap-phase\r\nQUIT\r\n")
+                fake.exchange(server)
+                received = b""
+                while chunk := client.recv(4096):
+                    received += chunk
+                self.assertIn(b"PROGRESS=100", received)
+            self.assertEqual(fake.snapshot(), ["AUTHENTICATE", "GETINFO", "QUIT"])
+            ((index, generation, _),) = fake.served()
+            self.assertEqual((index, generation), (1, second))
+
+    def test_ephemeral_subscriber_close_is_idempotent(self):
+        observation = subject.EventObservation("unused", "/unused", "/unused")
+        observation.argv = [sys.executable, "-u", "-c",
+                            "import time; print('SUBSCRIBED',flush=True); time.sleep(60)"]
+        with observation:
+            observation.close()
+            observation.close()
 
     def test_sample_cursor_does_not_skip_an_unexpected_following_command(self):
         commands = ["AUTHENTICATE", "GETINFO", "QUIT", "SETCONF"]
@@ -205,6 +290,258 @@ class ObserverBoundaryVerdictTest(unittest.TestCase):
             assert_safe_command_stream(["AUTHENTICATE", "GETINFO", "QUIT", "SETCONF"])
         with self.assertRaisesRegex(AssertionError, "unexpected Tor command"):
             assert_safe_command_stream(["GETINFO", "AUTHENTICATE"])
+
+
+class SimClock:
+    """Stand-in for observer.time: sleeping advances virtual time."""
+
+    def __init__(self, world=None):
+        self.world = world
+        self.now = 0.0
+
+    def monotonic(self):
+        return self.world.now if self.world else self.now
+
+    def sleep(self, seconds):
+        if self.world:
+            self.world.advance(seconds)
+        else:
+            self.now += max(0.0, seconds)
+
+
+class SimBug:
+    """A faulty CP publication: drop the transitions or add an event."""
+
+    def __init__(self, kind, when, repeat=False, late=0.0):
+        self.kind, self.when, self.repeat, self.late = kind, when, repeat, late
+        self.armed = not repeat
+
+
+class SimFake:
+    def __init__(self, world):
+        self.world = world
+        self.commands = []
+        self.log = []
+        self.reply = subject.NOT_READY
+        self.generation = 0
+
+    def record(self, name, served=False):
+        self.commands.append(name)
+        if served:
+            self.log.append((len(self.commands) - 1, self.generation, self.world.now))
+
+    def snapshot(self):
+        return list(self.commands)
+
+    def set_reply(self, reply):
+        self.reply = reply
+        self.generation += 1
+        return self.generation
+
+    def served(self):
+        return list(self.log)
+
+
+class SimWindow:
+    """Stand-in for EventObservation against the simulated CP event server."""
+
+    def __init__(self, world):
+        self.world = world
+        self.events = []
+        self.opened = self.attached = self.closed = None
+        self.cut = False
+
+    def __enter__(self):
+        world = self.world
+        self.opened = world.now
+        world.windows.append(self)
+        world.schedule(self.opened + world.LIFETIME, self.goaway)
+        world.advance(world.connect)              # TLS handshake until SUBSCRIBED
+        # Server registration lags the client; a test may delay a given window.
+        world.schedule(world.now + 0.5 + world.register_delays.get(len(world.windows), 0.0), self.attach)
+        world.advance(1.0)                        # EventObservation's attach allowance
+        return self
+
+    def attach(self):
+        if self.closed is None:
+            self.attached = self.world.now
+
+    def goaway(self):
+        if self.closed is None:
+            self.cut = True
+
+    def snapshot(self):
+        if self.cut:
+            raise AssertionError("event subscriber closed or violated the finite boundary")
+        return list(self.events)
+
+    def close(self):
+        if self.closed is None:
+            self.closed = self.world.now
+
+    def __exit__(self, *_):
+        self.close()
+
+
+class SimWorld:
+    """Discrete-time model of the deployed CP monitor, observer and fake Tor.
+
+    Mirrors SidecarMonitor: one sample, its transition events, then a ten-second
+    sleep; the CP's observer call is capped at six seconds and a timed-out Tor
+    query is classified after the observer's four-second budget. The CP's event
+    server closes a subscriber LIFETIME seconds after it connects: 40 s maximum
+    connection age less grpc-java's 10 % jitter (ControlGrpcService, T148).
+    """
+
+    POLL = 10.0
+    LIFETIME = 36.0
+
+    def __init__(self, tmp, *, start=1.0, stop=1.0, restart=20.0, connect=1.5,
+                 sample=0.6, delivery=0.2, bug=None, register_delays=None):
+        self.now = 0.0
+        self.queue = []
+        self.seq = 0
+        self.tmp = tmp
+        self.durations = {"start": start, "stop": stop, "restart": restart}
+        self.connect, self.sample, self.delivery = connect, sample, delivery
+        self.bug = bug
+        self.register_delays = register_delays or {}
+        self.observer_up = True
+        self.frozen = True      # validate() pauses the CP before the event phases
+        self.overdue = False
+        self.epoch = 0          # CP incarnation; a restart retires the old sampler
+        self.ever_valid, self.previous = True, "READY"
+        self.windows = []
+        self.fake = SimFake(self)
+        self.ipc = tmp / "ipc"
+        self.ipc.mkdir()
+        (tmp / "keys").mkdir()
+        self.recreate_socket()
+        self.schedule(0.0, self.tick, self.epoch)
+
+    def schedule(self, when, function, *args):
+        self.seq += 1
+        heapq.heappush(self.queue, (when, self.seq, function, args))
+
+    def advance(self, seconds):
+        target = self.now + max(0.0, seconds)
+        while self.queue and self.queue[0][0] <= target:
+            when, _, function, args = heapq.heappop(self.queue)
+            self.now = max(self.now, when)
+            function(*args)
+        self.now = target
+
+    def recreate_socket(self):
+        # Bind the replacement before retiring the old file: a distinct inode.
+        staged = self.ipc / "control.new"
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        listener.bind(str(staged))
+        listener.close()
+        staged.replace(self.ipc / "control.sock")
+
+    def set_observer(self, up):
+        self.observer_up = up
+
+    def tick(self, epoch):
+        if epoch != self.epoch:
+            return
+        if self.frozen:
+            self.overdue = True
+            return
+        if self.observer_up:
+            reply = self.fake.reply
+            self.fake.record("AUTHENTICATE")
+            self.fake.record("GETINFO", served=True)
+            if reply is None:
+                health, end = "UNAVAILABLE", self.now + 4.0
+            else:
+                self.fake.record("QUIT")
+                health = {subject.READY: "READY", subject.NOT_READY: "NOT_READY"}.get(reply, "UNAVAILABLE")
+                end = self.now + self.sample
+        else:
+            health, end = "UNAVAILABLE", self.now + 0.05
+        self.schedule(end, self.finish, epoch, health)
+
+    def finish(self, epoch, health):
+        if epoch != self.epoch:
+            return
+        events = []
+        if not self.ever_valid and health != "UNAVAILABLE":
+            self.ever_valid = True
+            events.append(("STARTED", "container_start"))
+        if health == "READY" and self.previous != "READY":
+            events.append(("HEALTHY", "healthcheck_pass"))
+        elif self.previous == "READY" and health != "READY":
+            events.append(("UNHEALTHY", "healthcheck_fail"))
+        late = 0.0
+        bug = self.bug
+        if bug is not None and bug.when(self, health):
+            if bug.kind is None:
+                events = []
+            elif bug.repeat and not bug.armed:
+                bug.armed = any(kind == bug.kind for kind, _ in events)
+            elif bug.armed:
+                events.append((bug.kind, "duplicate" if bug.repeat else "false"))
+                late, bug.armed = bug.late, False
+        self.previous = health
+        for event in events:
+            self.schedule(self.now + self.delivery + late, self.deliver, event)
+        self.schedule(self.now + self.POLL, self.tick, epoch)
+
+    def deliver(self, event):
+        for window in self.windows:
+            if window.attached is not None and window.closed is None and not window.cut:
+                window.events.append(event)
+
+    def checked(self, argv, timeout=60):
+        if argv[:3] == ["docker", "volume", "inspect"]:
+            return str(self.ipc if argv[-1].endswith("_stargate-ipc") else self.tmp / "keys")
+        if argv[:2] == ["docker", "kill"]:
+            if argv[2] == "--signal=STOP":
+                self.frozen = True
+            else:
+                self.frozen = False
+                if self.overdue:
+                    self.overdue = False
+                    self.schedule(self.now, self.tick, self.epoch)
+            self.advance(0.3)
+            return ""
+        if argv[-2:] == ["restart", "stargate-control"]:
+            self.epoch += 1
+            self.frozen = self.overdue = False
+            for window in self.windows:
+                window.cut = window.cut or window.closed is None
+            self.advance(self.durations["restart"])
+            self.recreate_socket()
+            self.ever_valid, self.previous = False, "UNAVAILABLE"
+            self.schedule(self.now + 5.0, self.tick, self.epoch)
+            return ""
+        if "stop" in argv and ("tor-observer" in argv or "observer-sim" in argv):
+            self.schedule(self.now + 1.0, self.set_observer, False)
+            self.advance(self.durations["stop"])
+            return ""
+        if argv[:2] == ["docker", "start"]:
+            self.schedule(self.now + self.durations["start"] / 2, self.set_observer, True)
+            self.advance(self.durations["start"])
+            return ""
+        raise AssertionError(f"unexpected harness command {argv}")
+
+
+ANCHOR_EVENT = "transition event received in this window before its repeat sample"
+ANCHOR_ALLOWANCE = "1 s post-SUBSCRIBED allowance only; no event anchors registration"
+
+
+def run_cp_events(**kwargs):
+    with tempfile.TemporaryDirectory() as tmp:
+        world = SimWorld(Path(tmp), **kwargs)
+        world.fake.set_reply(subject.READY)
+        with patch.object(subject, "time", SimClock(world)), \
+                patch.object(subject, "checked", world.checked), \
+                patch.object(subject, "EventObservation", lambda *_: SimWindow(world)):
+            subject.exercise_cp_events(Path(tmp), world.fake, ["docker", "compose", "-p", "sim"],
+                                       "sim", "cp-sim", "observer-sim", "probe")
+        report = json.loads((Path(tmp) / "T174-cp-events.json").read_text())
+    return world, report
 
 
 if __name__ == "__main__":

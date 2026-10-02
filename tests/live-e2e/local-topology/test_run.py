@@ -3,6 +3,7 @@
 
 """Falsifiers for T163's packet recorder and evidence decisions."""
 
+import json
 import tempfile
 import os
 import socket
@@ -499,6 +500,39 @@ class CaptureEvidenceTest(unittest.TestCase):
             finally:
                 release.set()
             worker.join(timeout=2)
+
+    def listener_fixture(self, inet6, admitted=()):
+        # T196: QEMU's user network advertises only the deprecated site-local
+        # fec0::/64 prefix, so the guest's routed IPv6 address has scope "site".
+        addresses = [{"ifname": "enp0s2", "addr_info": [
+            {"family": "inet", "local": "10.0.2.15", "scope": "global"}] + inet6}]
+
+        def command(*args, **kwargs):
+            return subprocess.CompletedProcess(args, 0, json.dumps(addresses), "")
+        calls = []
+
+        def probe(uid, kind, family, address, port, **kwargs):
+            calls.append((family, address, port))
+            return address in ("127.0.0.1",) + tuple(admitted)
+        with patch.object(run, "route_interface", return_value="enp0s2"), \
+                patch.object(run, "command", side_effect=command), \
+                patch.object(run, "probe", side_effect=probe):
+            run.assert_listener()
+        return calls
+
+    def test_site_local_ipv6_egress_address_is_refusal_probed(self):
+        site = {"family": "inet6", "local": "fec0::5054:ff:fe12:3456", "scope": "site"}
+        link = {"family": "inet6", "local": "fe80::5054:ff:fe12:3456", "scope": "link"}
+        calls = self.listener_fixture([site, link])
+        self.assertIn((6, "fec0::5054:ff:fe12:3456", run.SOCKS_PORT), calls)
+        self.assertIn((6, "::1", run.SOCKS_PORT), calls)
+        self.assertIn((4, "10.0.2.15", run.SOCKS_PORT), calls)
+        self.assertNotIn((6, "fe80::5054:ff:fe12:3456", run.SOCKS_PORT), calls)
+        with self.assertRaisesRegex(RuntimeError, "IPv6 non-loopback address admitted"):
+            self.listener_fixture([site, link], admitted=("fec0::5054:ff:fe12:3456",))
+        # A routed IPv6 interface with no probe-able address still refuses to run.
+        with self.assertRaisesRegex(RuntimeError, "no bind-probe address"):
+            self.listener_fixture([link])
 
 
 if __name__ == "__main__":

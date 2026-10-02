@@ -58,13 +58,24 @@ drives valid, malformed and timed-out samples plus observer loss and recovery.
 T174 observes the deployed CP publisher with a disposable host-side, mutually
 TLS-authenticated `WatchEvents` subscriber using that project's DP identity. It
 validates the current CP pin and certificate validity, discards event timestamps,
-and sends only validated finite tokens over an anonymous pipe. Each observation
-window lasts at most 35 seconds, does not reconnect, and checks two actual monitor
-samples; any early stream closure fails. Separate windows cover STARTED, readiness
-changes, malformed/timeout replies, duplicate suppression, and observer stop/start.
-The STARTED and HEALTHY controls must arrive. Window gaps are not claimed as continuous
-monitoring, and the subscriber is evidence of CP publication, not a production DP
-receipt journal. The existing DP consumer contract tests cover its advisory behavior.
+and sends only validated finite tokens over an anonymous pipe. Phases cover STARTED,
+readiness changes, malformed/timeout replies, duplicate suppression, and observer
+stop/start. T196: `SUBSCRIBED` proves only a sent request, not server registration,
+and the CP replays nothing, so a window asserts silence for a repeat sample only after
+it has itself received that phase's transition event. Phases expecting an event use one
+such window opened shortly before a monitor sample; the observer start phases hold the
+fake's reply malformed during `docker start` and add a second window, attached before
+the reply is changed, that receives the transition and then covers the repeat sample
+plus the CP's six-second call budget. The malformed and timeout phases expect no event,
+so nothing can prove their window registered: their silence rests only on the one-second
+allowance after `SUBSCRIBED`, as before T196, and the evidence records that per phase
+(`silence_anchor`). Windows of different phases do not overlap and no continuous
+monitoring is claimed. Every window stays below the CP event server's 40-second
+connection age (36 seconds after jitter, T148), never reconnects, and any early stream
+closure fails. Only samples answered by the phase's own reply count: the fake records
+which reply generation served each query. Waits are deadlines from observed samples,
+not fixed sleeps. The STARTED and HEALTHY controls must arrive.
+The subscriber is evidence of CP publication, not a production DP receipt journal. The existing DP consumer contract tests cover its advisory behavior.
 Only per-scenario verdicts/counts are saved; no event/detail/timestamp sequence is
 written to evidence, Docker logs, or application state. This helper is never part
 of a deployed image and only reads disposable test keys on the dedicated host.
@@ -102,7 +113,10 @@ claim process confinement. Exit 77 means an observed kernel permission denial;
 startup failure, crash, unknown errno and missing helper all fail the suite.
 The captures retain unrestricted positive controls; owner DROP counters are
 required only in the initial owner-rule phase. Loopback resolver denial is also
-checked for IPv6 even when no routed IPv6 capture is possible.
+checked for IPv6 even when no routed IPv6 capture is possible. On a QEMU
+user-network guest the only routed IPv6 address is the site-local `fec0::` SLAAC
+address; the non-loopback listener refusal probes it like a global address (T196),
+so guest IPv6 no longer needs to be disabled.
 
 Test-only Compose seccomp overrides separately make `landlock_create_ruleset`,
 `landlock_restrict_self` and `seccomp` unavailable. Each must cause the real DP

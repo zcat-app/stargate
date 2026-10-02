@@ -460,8 +460,12 @@ def assert_listener() -> None:
         if interface is None:
             continue
         addresses = json.loads(command("ip", "-j", "addr", "show", "dev", interface).stdout)[0]["addr_info"]
+        # QEMU's user network advertises only the deprecated site-local fec0::/64
+        # prefix (RFC 3879), so a guest's routed IPv6 address has scope "site".
+        # It is still a non-loopback address the DP must refuse (T196; D-live-2).
+        scopes = ("global", "site") if family == 6 else ("global",)
         scope = [a["local"] for a in addresses if a["family"] == ("inet6" if family == 6 else "inet")
-                 and a.get("scope") == "global"]
+                 and a.get("scope") in scopes]
         if not scope:
             raise RuntimeError(f"IPv{family} egress interface has no bind-probe address")
         if probe(CONTROL_UID, "socks", family, scope[0], SOCKS_PORT):

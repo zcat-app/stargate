@@ -28,6 +28,13 @@ SOURCE = ROOT / "tests/live-e2e/local-topology/observer_probe.go"
 READY = '250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=done SUMMARY="Done"\r\n250 OK\r\n'
 NOT_READY = '250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=42 TAG=loading SUMMARY="Loading"\r\n250 OK\r\n'
 RAW_MARKER = "T165_RAW_REPLY_MARKER"
+# CP monitor timing (SidecarMonitor): a sample, its transition events, then a
+# 10 s sleep; the CP's observer call is capped at 6 s. DELIVERY allows the
+# published event to reach the subscriber. The CP event server's 40 s maximum
+# connection age (36 s with grpc-java jitter; T148) bounds every window.
+POLL_SECONDS = 10
+CALL_BUDGET_SECONDS = 6
+DELIVERY_SECONDS = 1
 
 
 def checked(argv, *, timeout=60):
@@ -122,7 +129,9 @@ class FakeTor:
     def __init__(self, path):
         self.path = path
         self.reply = READY
+        self.generation = 0
         self.commands = []
+        self.served_log = []
         self.lock = threading.Lock()
         self.stop = threading.Event()
         self.listener = None
@@ -174,6 +183,11 @@ class FakeTor:
                 with self.lock:
                     self.commands.append(name)
                     reply = self.reply
+                    if name == "GETINFO":
+                        # Which reply generation answered this sample (T196):
+                        # only samples taken after a phase's trigger count.
+                        self.served_log.append((len(self.commands) - 1, self.generation,
+                                                time.monotonic()))
                 if name == "AUTHENTICATE":
                     conn.sendall(b"250 OK\r\n")
                 elif name == "GETINFO" and line == b"GETINFO status/bootstrap-phase\r\n":
@@ -197,6 +211,12 @@ class FakeTor:
     def set_reply(self, reply):
         with self.lock:
             self.reply = reply
+            self.generation += 1
+            return self.generation
+
+    def served(self):
+        with self.lock:
+            return list(self.served_log)
 
 
 def assert_fixed_queries(commands):
@@ -278,7 +298,14 @@ class EventObservation:
             return list(self.events)
 
     def __exit__(self, *_):
+        self.close()
+
+    def close(self):
+        # Idempotent: the relay closes a window as soon as its successor has
+        # attached, and its context exit then finds nothing left to do.
         with self.lock:
+            if self.closing:
+                return
             self.closing = True
         if self.process.poll() is None:
             self.process.terminate()
@@ -322,16 +349,16 @@ def dp_events(observation):
     return observation.snapshot()
 
 
-def await_event_sequence(dp_id, baseline, expected, timeout=90):
+def await_event_sequence(observation, baseline, expected, timeout=90):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        observed = dp_events(dp_id)[baseline:]
+        observed = dp_events(observation)[baseline:]
         if observed == expected:
             return
         if observed != expected[:len(observed)]:
             assert_event_sequence(observed, expected)
-        time.sleep(2)
-    assert_event_sequence(dp_events(dp_id)[baseline:], expected)
+        time.sleep(0.2)
+    assert_event_sequence(dp_events(observation)[baseline:], expected)
 
 
 def sample_cursor(commands, before, expected):
@@ -343,14 +370,36 @@ def sample_cursor(commands, before, expected):
     return None
 
 
-def await_control_sample(fake, before, expected, timeout=90):
+def await_reply_samples(fake, generation, expected, count, timeout=2 * POLL_SECONDS + CALL_BUDGET_SECONDS):
+    """Return the GETINFO times of the first `count` complete samples answered
+    by reply `generation`. A sample still reading an earlier reply when the
+    phase was triggered never counts (T196). Each counted sample must have
+    exactly the phase's command shape and follow the previous one directly."""
     deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        cursor = sample_cursor(fake.snapshot(), before, expected)
-        if cursor is not None:
-            return cursor
+    while True:
+        served = fake.served()  # before the command log, which then covers it
+        commands = fake.snapshot()
+        times, cursor = [], None
+        for index, generation_served, at in served:
+            if generation_served != generation:
+                continue
+            start = index - 1
+            if start < 0 or (cursor is not None and start != cursor):
+                raise AssertionError("production CP sent unexpected Tor commands: "
+                                     f"{commands[min(start, cursor or start):index + 1]}")
+            cursor = sample_cursor(commands, start, expected)
+            if cursor is None:
+                break
+            times.append(at)
+            if len(times) == count:
+                return times
+        if time.monotonic() >= deadline:
+            raise AssertionError("production CP did not sample fake Tor control")
         time.sleep(0.2)
-    raise AssertionError("production CP did not sample fake Tor control")
+
+
+def sleep_until(deadline):
+    time.sleep(max(0.0, deadline - time.monotonic()))
 
 
 def receive_exact(conn, count):
@@ -481,23 +530,115 @@ def cp_packet_capture(evidence, cp_pid, tor_address, cp_probe):
     evidence.joinpath("T165-cp-any.decoded.txt").write_text(decoded + "\n")
 
 
-def observe_phase(observation, fake, reply, expected, command_names, action=None):
-    before = len(fake.snapshot())
-    fake.set_reply(reply)
-    if action is not None:
-        action()
-    if command_names is None:
-        time.sleep(22)  # two real ten-second monitor polls with observer down
-    else:
-        for _ in range(2):
-            before = await_control_sample(fake, before, command_names, timeout=30)
-    # GETINFO is recorded before Tor replies (or times out). Let CP's full
-    # six-second call budget expire before asserting that the last sample
-    # produced no event; otherwise a false timeout event can escape the window.
-    time.sleep(6)
-    await_event_sequence(observation, 0, expected, timeout=3)
-    time.sleep(1)  # let the last completed sample reach the subscriber
-    assert_event_sequence(dp_events(observation), expected)
+# What each phase's asserted silence rests on (T196 round 2; recorded per phase).
+ANCHOR_EVENT = "transition event received in this window before its repeat sample"
+ANCHOR_ALLOWANCE = "1 s post-SUBSCRIBED allowance only; no event anchors registration"
+# The deprecated reply the fake serves while a Docker action runs, so that the
+# phase's transition can only happen after the anchored window has attached.
+HOLD = "551 " + RAW_MARKER + "\r\n"
+# Open an aligned window this long before the next expected monitor sample.
+LEAD_SECONDS = 7
+
+
+def await_fresh_sample(fake, timeout=2 * POLL_SECONDS + CALL_BUDGET_SECONDS):
+    """Return the time of the next bootstrap query the fake records."""
+    seen = len(fake.served())
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        served = fake.served()
+        if len(served) > seen:
+            return served[-1][2]
+        time.sleep(0.2)
+    raise AssertionError("production CP did not sample fake Tor control")
+
+
+def observe_phases(subscribe, fake, phases):
+    """Observe CP publication through bounded, anchored test-only windows.
+
+    T196: a subscriber's SUBSCRIBED line proves a sent request, not server
+    registration, and the CP replays nothing. So a window may assert silence
+    for a repeat sample only after it has itself received the phase's
+    transition event (ANCHOR_EVENT). Phases that expect no event (malformed,
+    timeout) have nothing to anchor them and keep one window resting on the
+    1 s attach allowance, as before T196 (ANCHOR_ALLOWANCE). Windows are
+    opened shortly before a monitor sample and waits are deadlines from
+    observed samples, so each stays well below the CP's 40 s connection age
+    (36 s with jitter; T148). Windows of different phases do not overlap and
+    no continuity between them is claimed. No window reconnects, and an early
+    closure fails the run.
+
+    Phase kinds: "reply" (the fake's reply is the trigger), "silent" (no event
+    expected), "start" (a Docker start; the fake holds HOLD during the action
+    and the trigger follows once a second, anchored window has attached) and
+    "down" (stopping the observer is the trigger, so its single window opens
+    right after a sample and receives the transition itself).
+    """
+    open_windows, results = {}, {}
+
+    def enter():
+        window = subscribe()
+        opened = time.monotonic()
+        window.__enter__()
+        open_windows[id(window)] = (window, opened)
+        return window
+
+    def retire(window, expected):
+        assert_event_sequence(dp_events(window), expected)
+        _, opened = open_windows.pop(id(window))
+        window.close()
+        return time.monotonic() - opened
+
+    def settle_repeat(window, generation, command_names, expected):
+        if expected:
+            transition_at, = await_reply_samples(fake, generation, command_names, 1)
+            await_event_sequence(window, 0, expected, timeout=max(
+                0.0, transition_at + CALL_BUDGET_SECONDS + DELIVERY_SECONDS - time.monotonic()))
+        _, repeat_at = await_reply_samples(fake, generation, command_names, 2)
+        sleep_until(repeat_at + CALL_BUDGET_SECONDS + DELIVERY_SECONDS)
+
+    try:
+        for name, kind, reply, expected, command_names, action in phases:
+            lifetimes = []
+            if kind in ("reply", "silent"):
+                sleep_until(await_fresh_sample(fake) + POLL_SECONDS - LEAD_SECONDS)
+                window = enter()
+                generation = fake.set_reply(reply)
+                settle_repeat(window, generation, command_names, expected)
+                lifetimes.append(retire(window, expected))
+            elif kind == "start":
+                first = enter()
+                fake.set_reply(HOLD)
+                action()
+                second = enter()
+                generation = fake.set_reply(reply)
+                transition_at, = await_reply_samples(fake, generation, command_names, 1)
+                await_event_sequence(second, 0, expected, timeout=max(
+                    0.0, transition_at + CALL_BUDGET_SECONDS + DELIVERY_SECONDS - time.monotonic()))
+                lifetimes.append(retire(first, expected))
+                settle_repeat(second, generation, command_names, [])
+                lifetimes.append(retire(second, expected))
+            elif kind == "down":
+                await_fresh_sample(fake)
+                window = enter()
+                fake.set_reply(reply)
+                action()
+                await_event_sequence(window, 0, expected,
+                                     timeout=2 * POLL_SECONDS + CALL_BUDGET_SECONDS + DELIVERY_SECONDS)
+                # No fake-visible sample with the observer down: the repeat sample
+                # starts one poll after the emitting one and ends within the budget.
+                sleep_until(time.monotonic() + POLL_SECONDS + CALL_BUDGET_SECONDS + DELIVERY_SECONDS)
+                lifetimes.append(retire(window, expected))
+            else:
+                raise ValueError(f"unknown phase kind {kind}")
+            results[name] = {"exact_events": True, "count": len(expected), "reconnects": 0,
+                             "windows": len(lifetimes), "max_window_seconds": round(max(lifetimes), 1),
+                             "silence_anchor": ANCHOR_EVENT if expected else ANCHOR_ALLOWANCE}
+            if kind == "start":
+                results[name]["hold_reply_during_action"] = True
+    finally:
+        for window, _ in list(open_windows.values()):
+            window.close()
+    return results
 
 
 def exercise_cp_events(evidence, fake, prefix, project, cp_id, observer_id, binary):
@@ -518,27 +659,26 @@ def exercise_cp_events(evidence, fake, prefix, project, cp_id, observer_id, bina
         time.sleep(2)
     else:
         raise AssertionError("production CP event server did not recreate its socket")
-    results = {}
-
-    def phase(name, reply, expected, command_names, action=None):
-        # Each fresh TLS connection gets one <35s window, below T148's
-        # channel lifetime. Any early EOF/rotation fails; no replay or gap is hidden.
-        with EventObservation(binary, ipc, keys) as observation:
-            observe_phase(observation, fake, reply, expected, command_names, action)
-            results[name] = {"exact_events": True, "count": len(expected), "reconnects": 0}
-
     query = ["AUTHENTICATE", "GETINFO", "QUIT"]
-    phase("initial-not-ready-and-repeat", NOT_READY, [("STARTED", "container_start")], query,
-          lambda: checked(["docker", "start", observer_id], timeout=90))
-    phase("ready-and-repeat", READY, [("HEALTHY", "healthcheck_pass")], query)
-    phase("not-ready-and-repeat", NOT_READY, [("UNHEALTHY", "healthcheck_fail")], query)
-    phase("malformed-and-repeat", "551 " + RAW_MARKER + "\r\n", [], query)
-    phase("timeout-and-repeat", None, [], ["AUTHENTICATE", "GETINFO"])
-    phase("ready-after-failures", READY, [("HEALTHY", "healthcheck_pass")], query)
-    phase("observer-down-and-repeat", READY, [("UNHEALTHY", "healthcheck_fail")], None,
-          lambda: checked(prefix + ["stop", "tor-observer"], timeout=90))
-    phase("observer-recovery-and-repeat", READY, [("HEALTHY", "healthcheck_pass")], query,
-          lambda: checked(["docker", "start", observer_id], timeout=90))
+
+    def start_observer():
+        checked(["docker", "start", observer_id], timeout=90)
+
+    # Each window stays well below T148's channel lifetime; an early EOF or
+    # rotation fails and nothing is replayed (see observe_phases).
+    results = observe_phases(lambda: EventObservation(binary, ipc, keys), fake, [
+        ("initial-not-ready-and-repeat", "start", NOT_READY, [("STARTED", "container_start")], query,
+         start_observer),
+        ("ready-and-repeat", "reply", READY, [("HEALTHY", "healthcheck_pass")], query, None),
+        ("not-ready-and-repeat", "reply", NOT_READY, [("UNHEALTHY", "healthcheck_fail")], query, None),
+        ("malformed-and-repeat", "silent", HOLD, [], query, None),
+        ("timeout-and-repeat", "silent", None, [], ["AUTHENTICATE", "GETINFO"], None),
+        ("ready-after-failures", "reply", READY, [("HEALTHY", "healthcheck_pass")], query, None),
+        ("observer-down-and-repeat", "down", READY, [("UNHEALTHY", "healthcheck_fail")], None,
+         lambda: checked(prefix + ["stop", "tor-observer"], timeout=90)),
+        ("observer-recovery-and-repeat", "start", READY, [("HEALTHY", "healthcheck_pass")], query,
+         start_observer),
+    ])
     checked(["docker", "kill", "--signal=STOP", cp_id])
     time.sleep(6)
     assert_safe_command_stream(fake.snapshot())

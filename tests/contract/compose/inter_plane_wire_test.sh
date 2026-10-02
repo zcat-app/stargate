@@ -426,6 +426,18 @@ else
   # until a `stargate init` compose stack is up, and FAILs (bail) when the
   # stack IS up and the property breaks. R8/R9 additionally require
   # STARGATE_WIRE_RUNTIME_MUTATE=1 — they restart/rotate a live stack.
+  # T196: a row prints PASS only when it recorded no finding (row_begin /
+  # row_end); the decision rules are pinned by inter_plane_wire_rows_test.sh,
+  # which runs this script against a stub Docker with negative controls.
+  row_begin() { ROW_ERRS="${#errs[@]}"; }
+  row_end() { # row_end <row> <what passed>
+    local found=$(( ${#errs[@]} - ROW_ERRS ))
+    if [ "$found" -eq 0 ]; then
+      echo "$1: PASS ($2)" >&2
+    else
+      echo "$1: FAIL ($found finding(s), listed below)" >&2
+    fi
+  }
 
   GOIMG="golang:1.26.3-bookworm@sha256:252599aeb51ad60b83e4d8821802068127c528c707cb7dd7afd93be057c6011c"
   IPC_VOL=""
@@ -436,13 +448,55 @@ else
   fi
 
   # svc_running <service>: true iff the compose service has a running container.
+  # T196: capture first. Under pipefail, `docker ... | grep -q` fails when grep
+  # exits on an early match and the writer then dies of SIGPIPE, which made a
+  # running stack SKIP rows at random.
   svc_running() {
-    docker compose -f "$COMPOSE" --env-file "$ENV_FILE" ps --status running --services 2>/dev/null | grep -qx "$1"
+    local services
+    services="$(docker compose -f "$COMPOSE" --env-file "$ENV_FILE" ps --status running --services 2>/dev/null)" || return 1
+    grep -qx "$1" <<< "$services"
   }
   # ipc_run <uid:gid> <cmd...>: cmd in the pinned golang image with the IPC
   # volume at /run/stargate, as the given uid:gid.
   ipc_run() {
     docker run --rm --user "$1" -v "$IPC_VOL:/run/stargate" "$GOIMG" "${@:2}"
+  }
+  # uds_dial <uid:gid> <socket>: a real connect(2) on a Unix stream socket as
+  # that identity (T196). bash `exec 3<>` cannot open a socket (ENXIO), so the
+  # rows use perl's socket API (perl-base ships in the pinned image). Exit 0 =
+  # connected, 13 = EACCES, 1 = any other connect error (a missing path is
+  # ENOENT and exits 1), 3 = socket(2) itself failed, 124 = the dial did not
+  # complete within UDS_DIAL_TIMEOUT seconds. A blocking connect(2) to a wedged
+  # peer (full accept queue) never returns, so every dial is bounded; a timeout
+  # fails the row and never counts as EACCES.
+  UDS_DIAL_PL='use Socket; socket(my $s, PF_UNIX, SOCK_STREAM, 0) or exit 3; connect($s, pack_sockaddr_un($ARGV[0])) and exit 0; exit($!{EACCES} ? 13 : 1);'
+  UDS_DIAL_TIMEOUT=5
+  uds_dial() {
+    ipc_run "$1" timeout "$UDS_DIAL_TIMEOUT" perl -e "$UDS_DIAL_PL" "$2"
+  }
+  # The proxy port R7 allows. Overridable only so the hermetic fixture can
+  # use a free ephemeral port; any other listener still fails the row.
+  PROXY_PORT="${STARGATE_WIRE_PROXY_PORT:-8881}"
+  # dp_listen_ports <pid>: decimal ports of TCP LISTEN sockets OWNED by that
+  # process (T196). The DP runs in the host network namespace, so
+  # /proc/<pid>/net/tcp{,6} lists every host listener; only rows whose socket
+  # inode appears among the process's own descriptors belong to the DP.
+  # Reading another UID's /proc/<pid>/fd needs root; failure returns 2.
+  # LISTEN state is 0A; the port is the hex field after the final ':' of
+  # local_address; field 10 is the socket inode. Hex→dec conversion is shell
+  # printf (POSIX), not awk strtonum — a gawk extension absent from
+  # mawk/busybox awk (T045 review round-1 follow-up).
+  dp_listen_ports() {
+    local pid="$1" fd target inodes=""
+    ls "/proc/$pid/fd" >/dev/null 2>&1 || return 2
+    for fd in "/proc/$pid/fd"/*; do
+      target="$(readlink "$fd" 2>/dev/null)" || continue
+      case "$target" in socket:\[*\]) inodes="$inodes ${target//[^0-9]/}" ;; esac
+    done
+    awk -v inodes="$inodes" 'BEGIN { n = split(inodes, list, " "); for (i = 1; i <= n; i++) own[list[i]] = 1 }
+      $4 == "0A" && ($10 in own) { split($2, a, ":"); print a[2] }' \
+      "/proc/$pid/net/tcp" "/proc/$pid/net/tcp6" 2>/dev/null |
+      while IFS= read -r hex; do printf '%d\n' "0x$hex"; done | sort -un
   }
   # need_stack <row>: SKIP-guard — both planes running and both sockets
   # present (the properties under test need the real UDS topology).
@@ -504,104 +558,110 @@ else
 
 # LIFT-MARKER: R1
   if need_stack "R1"; then # socket mode 0660, owner stargate-{cp,dp}:stargate-ipc (control-grpc.md §"Socket topology"; wire-auth.md §6.1)
+    row_begin
     dp_stat="$(ipc_run 0:0 stat -c '%a %u %g' /run/stargate/dp.sock)" || bail "R1: cannot stat dp.sock in the stargate-ipc volume"
     [ "$dp_stat" = "660 5102 5100" ] || bail "R1: dp.sock is '$dp_stat', want '660 5102 5100' (mode 0660, stargate-dp:stargate-ipc)"
     cp_stat="$(ipc_run 0:0 stat -c '%a %u %g' /run/stargate/control.sock)" || bail "R1: cannot stat control.sock in the stargate-ipc volume"
     [ "$cp_stat" = "660 5101 5100" ] || bail "R1: control.sock is '$cp_stat', want '660 5101 5100' (mode 0660, stargate-cp:stargate-ipc)"
-    echo "R1: PASS (sockets 0660, owned stargate-{dp,cp}:stargate-ipc)" >&2
+    row_end R1 "sockets 0660, owned stargate-{dp,cp}:stargate-ipc"
   fi
 
 # LIFT-MARKER: R2
   if need_stack "R2"; then # peer-plane UID connect(2) succeeds on its dial-direction socket (control-grpc.md invariant row 5)
-    if ! ipc_run 5102:5100 timeout 2 bash -c 'exec 3<>/run/stargate/control.sock' 2>/dev/null; then
-      bail "R2: DP uid (5102) cannot connect(2) control.sock — mode regressed below peer-dialable (0600-class), inter-plane comms silently broken"
-    fi
-    if ! ipc_run 5101:5100 timeout 2 bash -c 'exec 3<>/run/stargate/dp.sock' 2>/dev/null; then
-      bail "R2: CP uid (5101) cannot connect(2) dp.sock — mode regressed below peer-dialable (0600-class), inter-plane comms silently broken"
-    fi
-    echo "R2: PASS (peer-plane UIDs connect their dial-direction sockets)" >&2
+    row_begin
+    for dial in 5102:5100:control.sock 5101:5100:dp.sock; do
+      uds_dial "${dial%:*}" "/run/stargate/${dial##*:}"
+      rc=$?
+      [ "$rc" -eq 0 ] || bail "R2: uid ${dial%%:*} cannot connect(2) ${dial##*:} (dialer exit $rc; 13 = EACCES) — mode regressed below peer-dialable (0600-class), inter-plane comms silently broken"
+    done
+    row_end R2 "peer-plane UIDs connect their dial-direction sockets"
   fi
 
 # LIFT-MARKER: R3
   if need_stack "R3"; then # non-group UID connect(2) fails with EACCES on both sockets (control-grpc.md invariant row 6)
+    row_begin
     for sock in dp.sock control.sock; do
-      if ipc_run 1234:1234 timeout 2 bash -c "exec 3<>/run/stargate/$sock" 2>/dev/null; then
-        bail "R3: out-of-group uid 1234 connected $sock — the mode/group scheme must narrow the dial surface (not 0666-equivalent)"
-      fi
+      uds_dial 1234:1234 "/run/stargate/$sock"
+      rc=$?
+      case "$rc" in
+        13) ;;
+        0) bail "R3: out-of-group uid 1234 connected $sock — the mode/group scheme must narrow the dial surface (not 0666-equivalent)" ;;
+        *) bail "R3: out-of-group uid 1234 dialing $sock ended with exit $rc, not EACCES — a missing socket or launcher failure does not prove the permission refusal" ;;
+      esac
     done
-    echo "R3: PASS (out-of-group UID gets EACCES on both sockets)" >&2
+    row_end R3 "out-of-group UID gets EACCES on both sockets"
   fi
 
 # LIFT-MARKER: R4
   if need_stack "R4"; then # wrong-key peer rejected at the TLS handshake (wire-auth.md §3.3; read-only probe)
-    if probe_run wrongkey -socket /run/stargate/dp.sock; then
-      echo "R4: PASS (rogue client key rejected at the dp.sock TLS handshake)" >&2
-    else
-      bail "R4: the DP did NOT abort a handshake from a key it does not pin — wire-auth.md §3.3 violated (silent auth bypass class)"
-    fi
+    row_begin
+    probe_run wrongkey -socket /run/stargate/dp.sock \
+      || bail "R4: the DP did NOT abort a handshake from a key it does not pin — wire-auth.md §3.3 violated (silent auth bypass class)"
+    row_end R4 "rogue client key rejected at the dp.sock TLS handshake"
   fi
 
 # LIFT-MARKER: R5
   if need_stack "R5"; then # unknown x-stargate-proto-major rejected before app handler (wire-auth.md §5.2; arch §5.5 row 4)
+    row_begin
+    # wireprobe exits 0 iff the §5.2 rule held for the major it sent:
+    # FailedPrecondition for an unknown major, success for major 1 (T196:
+    # the rows had read exit 0 for a bad major as "accepted").
     for bad_major in 0 2 99; do
-      if probe_run major -socket /run/stargate/dp.sock -major "$bad_major"; then
-        bail "R5: proto major $bad_major was ACCEPTED by dp.sock — §5.2 unknown-major rejection broken"
-      fi
+      probe_run major -socket /run/stargate/dp.sock -major "$bad_major" \
+        || bail "R5: proto major $bad_major was not rejected with FailedPrecondition by dp.sock — §5.2 unknown-major rejection broken"
     done
-    if ! probe_run major -socket /run/stargate/dp.sock -major 1; then
-      bail "R5: proto major 1 (the compiled-in stargate.v1) was rejected — §5.2 equal-major accept broken"
-    fi
-    if ! probe_run nomajor -socket /run/stargate/dp.sock; then
-      bail "R5: GetStatus without x-stargate-proto-major did not fail with FailedPrecondition — §5.2 missing-metadata rule broken"
-    fi
-    echo "R5: PASS (major 1 accepted; 0/2/99 and metadata-less rejected with FailedPrecondition)" >&2
+    probe_run major -socket /run/stargate/dp.sock -major 1 \
+      || bail "R5: proto major 1 (the compiled-in stargate.v1) was rejected — §5.2 equal-major accept broken"
+    probe_run nomajor -socket /run/stargate/dp.sock \
+      || bail "R5: GetStatus without x-stargate-proto-major did not fail with FailedPrecondition — §5.2 missing-metadata rule broken"
+    row_end R5 "major 1 accepted; 0/2/99 and metadata-less rejected with FailedPrecondition"
   fi
 
 # LIFT-MARKER: R6
   if need_stack "R6"; then # additive minor accepted (minor compatibility; wire-auth.md §5.2; arch §5.3)
+    row_begin
     for good_minor in 0 1 7 999; do
-      if ! probe_run minor -socket /run/stargate/dp.sock -minor "$good_minor"; then
-        bail "R6: additive minor $good_minor rejected — equal major must accept any minor (§5.2)"
-      fi
+      probe_run minor -socket /run/stargate/dp.sock -minor "$good_minor" \
+        || bail "R6: additive minor $good_minor rejected — equal major must accept any minor (§5.2)"
     done
-    echo "R6: PASS (additive minors accepted at equal major)" >&2
+    row_end R6 "additive minors accepted at equal major"
   fi
 
 # LIFT-MARKER: R7
   if need_stack "R7"; then # no TCP LISTEN beyond the proxy port (control-grpc.md invariant row 1; wire-auth.md §4)
+    row_begin
     dp_cid="$(docker compose -f "$COMPOSE" --env-file "$ENV_FILE" ps -q stargate-dp)"
     dp_pid="$(docker inspect -f '{{.State.Pid}}' "$dp_cid" 2>/dev/null)"
-    [ -n "$dp_pid" ] && [ "$dp_pid" != "0" ] || bail "R7: cannot resolve the stargate-dp container PID"
-    # /proc/<pid>/net/tcp{,6} of the containerized process reflects the
-    # container netns (the host-side view transport_test.go's row 1 uses
-    # for the local-process tier). LISTEN state is 0A; the port is the hex
-    # field after the final ':' of local_address. Hex→dec conversion is
-    # shell printf (POSIX), not awk strtonum — a gawk extension absent
-    # from mawk/busybox awk (T045 review round-1 follow-up).
-    ports_hex="$(awk '$4=="0A" { split($2, a, ":"); print a[2] }' "/proc/$dp_pid/net/tcp" "/proc/$dp_pid/net/tcp6" 2>/dev/null)"
-    [ -n "$ports_hex" ] || bail "R7: no TCP LISTEN entries visible — sanity failure (proxy listener on 8881 must be present)"
-    ports="$(printf '%s\n' $ports_hex | while IFS= read -r hex; do printf '%d\n' "0x$hex"; done | sort -u)"
-    [ -n "$ports" ] || bail "R7: no TCP LISTEN entries visible — sanity failure (proxy listener on 8881 must be present)"
-    bad_ports="$(printf '%s\n' "$ports" | grep -vx 8881 || true)"
-    [ -z "$bad_ports" ] || bail "R7: DP listens on non-proxy TCP port(s): $(printf '%s ' $bad_ports)— no TCP gRPC transport permitted (wire-auth.md §4)"
-    printf '%s\n' "$ports" | grep -qx 8881 || bail "R7: proxy port 8881 not among the DP's TCP LISTEN entries — sanity failure"
-    echo "R7: PASS (only TCP LISTEN is the proxy port 8881; gRPC is UDS-only)" >&2
+    if [ -z "$dp_pid" ] || [ "$dp_pid" = "0" ]; then
+      bail "R7: cannot resolve the stargate-dp container PID"
+    elif ! ports="$(dp_listen_ports "$dp_pid")"; then
+      bail "R7: cannot read /proc/$dp_pid/fd to attribute listeners to the DP process (run as root); the host-network namespace lists every host listener, so no verdict without attribution"
+    elif [ -z "$ports" ]; then
+      bail "R7: the DP process owns no TCP LISTEN socket — sanity failure (proxy listener on $PROXY_PORT must be present)"
+    else
+      bad_ports="$(printf '%s\n' "$ports" | grep -vx "$PROXY_PORT" || true)"
+      [ -z "$bad_ports" ] || bail "R7: the DP process listens on non-proxy TCP port(s): $(printf '%s ' $bad_ports)— no TCP gRPC transport permitted (wire-auth.md §4)"
+      grep -qx "$PROXY_PORT" <<< "$ports" || bail "R7: proxy port $PROXY_PORT not among the DP process's TCP LISTEN sockets — sanity failure"
+    fi
+    row_end R7 "the DP process's only TCP LISTEN is the proxy port $PROXY_PORT; gRPC is UDS-only"
   fi
 
 # LIFT-MARKER: R8
   if need_stack "R8" && need_mutate "R8"; then # DP keeps routing port 8881 across a CP restart (control-grpc.md invariant row 9; arch §5.5; Principle II)
+    row_begin
     if ! probe_run proxy; then
       bail "R8: pre-restart proxy probe failed — the 8881 listener/auth surface is not answering; nothing to survive with"
-    fi
-    compose_restart_wait stargate-control || bail "R8: stargate-control did not come back up within 60s of restart"
-    if ! probe_run proxy; then
+    elif ! compose_restart_wait stargate-control; then
+      bail "R8: stargate-control did not come back up within 60s of restart"
+    elif ! probe_run proxy; then
       bail "R8: proxy probe failed after the CP restart — the DP gated forwarding on the control plane (Principle II violation)"
     fi
-    echo "R8: PASS (port 8881 answered before and after a CP restart)" >&2
+    row_end R8 "port 8881 answered before and after a CP restart"
   fi
 
 # LIFT-MARKER: R9
   if need_stack "R9" && need_mutate "R9"; then # per-handshake pin re-read: rotate cp.* + restart CP; the running DP accepts the new identity on its next dial (wire-auth.md §3.1 step 3; §6.2)
+    row_begin
     probe_run status -socket /run/stargate/dp.sock || bail "R9: pre-rotation status probe failed — fix that before testing rotation"
     # §6.2 rotation order: the rotated plane (CP) must be DOWN during the
     # keyfile rename.
@@ -614,11 +674,9 @@ else
       'chown 5101:5100 /etc/stargate/keys/cp.priv /etc/stargate/keys/cp.pub && chmod 600 /etc/stargate/keys/cp.priv && chmod 644 /etc/stargate/keys/cp.pub' \
       || bail "R9: could not enforce §6.1 ownership/mode on the rotated keyfiles"
     compose_restart_wait stargate-control || bail "R9: stargate-control did not come back after the rotation"
-    if probe_run status -socket /run/stargate/dp.sock; then
-      echo "R9: PASS (running DP accepted the rotated CP identity on the next dial — pin re-read per handshake)" >&2
-    else
-      bail "R9: DP still pins the OLD cp.pub after rotation — §3.1 step 3 (fresh per-handshake re-read) violated; rotation would need a peer restart"
-    fi
+    probe_run status -socket /run/stargate/dp.sock \
+      || bail "R9: DP still pins the OLD cp.pub after rotation — §3.1 step 3 (fresh per-handshake re-read) violated; rotation would need a peer restart"
+    row_end R9 "running DP accepted the rotated CP identity on the next dial — pin re-read per handshake"
   fi
 fi
 
