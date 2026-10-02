@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 32 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 192 |
+| done | 193 |
 | deferred | 5 |
 | **total** | **230** |
 
@@ -38,9 +38,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T191 | Resolve surviving deployment-area redteam minors and audit g | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -58,7 +56,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_192 ticket(s) done._
+_193 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -247,6 +245,7 @@ _192 ticket(s) done._
 - T186 — Fail closed in proxy.onRequest for blocked protected requests
 - T187 — Report pending or stale revocation; count only after DP ack
 - T188 — Detect and require private-window access for the extension
+- T191 — Resolve surviving deployment-area redteam minors and audit gaps
 - T192 — Allow a per-ticket developer subagent under an orchestrator
 - T193 — Gate scripts/subcommands/status in verify and bound its docker read
 - T194 — Keep review rejections and red evidence when the candidate changes

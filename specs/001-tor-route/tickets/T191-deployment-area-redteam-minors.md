@@ -1,7 +1,7 @@
 ---
 id: T191
 title: 'Resolve surviving deployment-area redteam minors and audit gaps'
-status: in-progress
+status: done
 created: 2026-09-29
 last_updated: 2026-10-02
 source: "reviews/redteam-20260929-694dbd8.md (area 3 minors and T155 reconciliation gaps that survived falsification)"
@@ -26,7 +26,7 @@ spec_refs:
 decision_refs:
   - "foundation-boundaries.md:87-90 (T164): verified local build plus local image ID for the observer"
   - "Maintainer approval 2026-10-02 (T191 orchestrated session): SECURITY-DECISIONS entries A (observer image identity) and B (Tor repository erratum) and the T081 Acceptance 3 wording, as independently evaluated in .scratch/tmp/T191/sd-eval.md; F1 folded into T191; files_budget 34 confirmed"
-reviews: {}
+reviews: { round: 2, date: 2026-10-02, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
