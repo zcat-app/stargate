@@ -82,7 +82,6 @@ recorded under the widened allowlist.
 | 2026-10-02 | T191 | 2 | APPROVE (0) | APPROVE (2 Minor) |
 | 2026-10-02 | T198 | 1 | REWORK (1 Major) | APPROVE (1 Minor) |
 | 2026-10-03 | T198 | 2 | APPROVE (0) | APPROVE (0) |
-
 | 2026-10-03 | T203 | 1 | REWORK (2 Minor) | APPROVE-WITH-FIXES (1 Minor) |
 | 2026-10-03 | T203 | 2 | APPROVE (0) | APPROVE (0) |
 | 2026-10-03 | T203 | 2 (post-hook metadata and FR-012 correction refresh) | APPROVE (0) | APPROVE (0) |
