@@ -3,11 +3,11 @@ id: T197
 title: 'Reset the route indicator on no-request commits; fix prose'
 status: pending
 created: 2026-10-01
-last_updated: 2026-10-03
+last_updated: "2026-10-03"
 source: "T155 attempt 3 cumulative redteam (candidate 989b8f9): A2-M3 (reproduced live), A2-M5 prose, A2-m8; all survived falsification as Minor. Items 3-5 additions from the T155 attempt-4 redteam (area 3 m8, area 2 M4 residue and i1(b), the 989b8f9 Tor-reach residue), maintainer approved 2026-10-03"
 phase: "Foundation audit remediation"
 story: ''
-blocked_by: []
+blocked_by: ["T205"]
 parallel: true
 files_budget: 8   # ticket + STATUS.md + router.js + router.test.js + THREAT-MODEL.md + architecture spec + hardening README + probe.py (live Back step);
                   # the T155 attempt-4 additions (items 3-5) touch only THREAT-MODEL.md, already counted
@@ -94,3 +94,7 @@ drafts before writing it.
 T190 items (including the unused `management` permission and the WebRTC re-audit decision),
 any routing behaviour change; any change to the Tor sidecar's network boundary (T078 decides
 whether one is required); the DoH/HTTP-3 profile precondition (T200).
+
+## Approved dependency reconciliation — 2026-10-03
+
+The approved T205 hardening-record/schema repair precedes this ticket's dependent hardening claims. T203 has already repaired the observer boundary. Other accepted T197 scope remains unchanged.

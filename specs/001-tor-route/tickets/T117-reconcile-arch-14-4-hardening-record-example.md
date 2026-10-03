@@ -1,17 +1,20 @@
 ---
 id: T117
 title: 'Reconcile arch §14.4 hardening-record example with T091'
-status: pending
+status: deferred
 created: 2026-09-06
-last_updated: "2026-09-12"
+last_updated: "2026-10-03"
 source: target/runs/T055-r1.verdict RECOMMENDED-FOLLOW-UP (T055 round-1 APPROVE, 0 findings)
 phase: "3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP"
 story: '-'
-blocked_by: ["T155", "T151", "T156"]
+blocked_by: ["T205"]
+deferred_on: "T205"
+deferred_reason: blocked-on-new-ticket
+replaced_by: "T205"
 parallel: true
 files_budget: 4   # specs/000-architecture/spec.md + this ticket + STATUS.md
-privacy_critical: false   # doc-only reconciliation; the authoritative §14.5
-                          # boundary is already correct and untouched
+privacy_critical: false   # Historical doc-only classification; this ticket is inactive.
+                          # T205 owns the privacy-critical replacement and schema repair.
 complexity: low
 risk: low
 round_cap: 2
@@ -32,6 +35,15 @@ clarity_check: {}
 ---
 
 # T117: Reconcile arch §14.4 storage-layout example with the T091-amended hardening record
+
+## Superseded scope — maintainer decision 2026-10-03
+
+The maintainer approved absorbing this pending ticket into T205. Its former acceptance
+requires the persistent event/hour/raw-error shape that conflicts with current Constitution
+III. T205 owns the complete production, legacy-state and §14.4/§14.5 schema reconciliation.
+T078 and T079 now depend on T205 instead. No implementation or finding closure is claimed
+by this metadata change. Do not resume this superseded ticket after T205; retain the
+original scope below as historical lineage, not active instructions or a policy exception.
 
 ## Context
 

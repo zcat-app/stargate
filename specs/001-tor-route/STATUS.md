@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 33 |
+| pending | 35 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 195 |
-| deferred | 6 |
-| **total** | **234** |
+| deferred | 7 |
+| **total** | **237** |
 
 ---
 
@@ -30,11 +30,11 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
-| T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
-| T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
 | T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | Foundation audit remediation | ✓ | ✓ |
-| T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
+| T204 | Enforce control-plane HTTP listener boundary at startup | Foundation audit remediation | ✓ |  |
+| T205 | Remove persistent hardening failure events and reconcile the | Foundation audit remediation | ✓ |  |
+| T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 
 ---
 
@@ -51,9 +51,10 @@ _(nothing in flight)_
 | T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | spec-amend | T089 |
 | T068 | Contract test `tests/contract/error-template/body_byte_match | decomposed | T071 |
 | T069 | Contract tests `tests/contract/error-template/reference_id_u | decomposed | T071 |
+| T117 | Reconcile arch §14.4 hardening-record example with T091 | blocked-on-new-ticket | T205 |
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
-| T155 | Validate repaired foundation before feature work | blocked-on-new-ticket | T203 |
+| T155 | Validate repaired foundation before feature work | blocked-on-new-ticket | T205 |
 
 ---
 

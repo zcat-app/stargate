@@ -3,11 +3,11 @@ id: T081
 title: 'Prepare immutable reviewed release artifacts and workflow'
 status: pending
 created: 2026-07-04
-last_updated: "2026-10-02"
+last_updated: "2026-10-03"
 source: review/sol-review.md#M7
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: ["T002a", "T003a", "T014", "T017", "T076", "T098", "T099", "T155", "T075", "T109", "T110", "T111", "T112", "T156"]
+blocked_by: ["T002a", "T003a", "T014", "T017", "T076", "T098", "T099", "T155", "T075", "T109", "T110", "T111", "T112", "T156", "T206"]
 parallel: false
 files_budget: 12
 privacy_critical: true
@@ -101,3 +101,7 @@ be weakened; new release fixtures must test the generated artifact and the selec
 
 This pending-ticket refinement replaces the earlier quoted tasks.md workflow instructions.
 The generated artifact and its source identity are distinct; both must remain auditable.
+
+## Approved dependency reconciliation — 2026-10-03
+
+The approved T206 owner must repair the DNS capture-integrity gate before this release-evidence consumer can complete. CP and hardening repair prerequisites remain carried through T155.

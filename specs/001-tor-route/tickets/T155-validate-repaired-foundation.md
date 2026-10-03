@@ -3,11 +3,11 @@ id: "T155"
 title: "Validate repaired foundation before feature work"
 status: deferred
 created: "2026-09-12"
-last_updated: 2026-10-03
+last_updated: "2026-10-03"
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
-blocked_by: ["T203", "T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T120", "T114", "T121", "T123", "T124", "T126", "T132", "T157", "T158", "T159", "T161", "T162", "T163", "T164", "T165", "T167", "T168", "T172", "T173", "T174", "T176", "T183", "T184", "T185", "T186", "T187", "T188", "T193", "T194", "T195", "T196", "T198"]
+blocked_by: ["T203", "T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T120", "T114", "T121", "T123", "T124", "T126", "T132", "T157", "T158", "T159", "T161", "T162", "T163", "T164", "T165", "T167", "T168", "T172", "T173", "T174", "T176", "T183", "T184", "T185", "T186", "T187", "T188", "T193", "T194", "T195", "T196", "T198", "T204", "T205"]
 parallel: false
 files_budget: 17   # raised 8 -> 14 in attempt 3 and 14 -> 17 in attempt 4, both pre-granted (rule 2026-10-01); attempt 4's raise adds the
                    # Acceptance 6 filings the maintainer directed into this candidate on 2026-10-03 (new T200, T201; additions to T189, T197, T199; T078 blocked_by).
@@ -24,9 +24,9 @@ complexity: "high"
 risk: "high"
 round_cap: 3
 spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md"]
-decision_refs: ["Maintainer 2026-10-03: refine A6 verbatim; require authenticated live GetStatus red/green publication probe (Attempt 4 resumed below)"]
+decision_refs: ["2026-10-03 maintainer: approve full next scope after T203; T204 and T205 repairs, T117 absorption, T206 release-only filing, then T155 TLS-probe repair and full validation", "Maintainer 2026-10-03: refine A6 verbatim; require authenticated live GetStatus red/green publication probe (Attempt 4 resumed below)"]
 remediates: "T125"
-deferred_on: "T203"
+deferred_on: "T205"
 deferred_reason: blocked-on-new-ticket
 tests_first: []
 reviews: {}
@@ -39,7 +39,27 @@ clarity_check: {}
 
 # T155: Validate the repaired foundation before feature work
 
-## Deferred for observer repair — 2026-10-03
+## Current approved continuation — 2026-10-03
+
+T203 is done. The maintainer approved T204 (CP listener boundary), then T205
+(persistent hardening-record/schema repair, absorbing T117), followed by resuming T155.
+Both new Major owners are prerequisites; T155 remains deferred until both are done.
+T206 files the DNS capture-integrity Minor as a T078/T081 release/consumer blocker;
+it does not block T155 under acceptance 6, and its execution is not pulled into this sequence.
+
+On resume, reconcile the preserved candidate against the actual new baseline without
+reapplying already-filed metadata or relabelling old evidence. Repair T155's owned TLS
+negative-resumption probe using the retained early-abort falsifier and independently
+establish the attempted resumed path. Keep safe/unsafe/no-ticket/declined-ticket controls,
+recapture RED/GREEN, and complete the approved authenticated real-hour GetStatus and
+integrated live validation. The production TLS implementation is not shown bypassed by
+this evidence defect. Prior reports remain historical; required skipped evidence cannot
+close acceptance. Exact reserved wording and genuinely new Majors retain their stop rules.
+
+After T155 completes, return to T202's reserved exact-ticket/cadence decision, then the
+approved T202, T200, T201 sequence. This does not authorize running unrelated plan steps.
+
+## Historical observer-only deferral — 2026-10-03
 
 T203 is the only newly authorized repair from the resumed cumulative findings. The user
 authorized independent observer design verification and proceeding if it passed; verification

@@ -3,11 +3,11 @@ id: T200
 title: 'Ship DoH-off and HTTP/3-off in the browser profile; truthful claims'
 status: pending
 created: 2026-10-03
-last_updated: 2026-10-03
+last_updated: "2026-10-03"
 source: "T155 attempt 4 cumulative redteam (index tree 6e70e622): area 2 M1, narrowed to Minor by falsification (E1, E2 and live experiment X1); maintainer approved filing 2026-10-03"
 phase: "Foundation audit remediation"
 story: ''
-blocked_by: []
+blocked_by: ["T205"]
 parallel: true
 files_budget: 11  # ticket + STATUS.md + evidence/T200-tests-first.json (overhead); browser-profile/user.js;
                   # tests/live-e2e/mullvad-browser-hardening/{run.sh,probe.py,README.md};
@@ -83,3 +83,7 @@ supported profile, sets neither pref. Falsification of the T155 attempt-4 redtea
 
 The WebRTC re-audit decision (T190 item 1); onion-page clearnet subresources (T190 item 7);
 the foreign-extension inventory and DoH-blocklist prose (T197 item 3).
+
+## Approved dependency reconciliation — 2026-10-03
+
+The approved T205 hardening-record repair precedes this ticket because acceptance 4 consumes the same notification behavior and hardening contract. Existing profile requirements and exact-wording approval remain in force.

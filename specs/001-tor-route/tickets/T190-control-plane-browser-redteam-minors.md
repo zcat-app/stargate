@@ -3,11 +3,11 @@ id: T190
 title: 'Resolve surviving control-plane and browser redteam minors'
 status: pending
 created: 2026-09-29
-last_updated: 2026-09-29
+last_updated: "2026-10-03"
 source: "reviews/redteam-20260929-694dbd8.md (area 2 minors that survived falsification)"
 phase: "Foundation audit remediation"
 story: ''
-blocked_by: ["T192"]
+blocked_by: ["T192", "T204", "T205"]
 parallel: true
 files_budget: 17   # raised 12 -> 17 for T155 attempt-2 additions (maintainer-approved 2026-10-01): TokenLoader.java, TokenLoaderTest.java, data-model.md, quickstart.md, THREAT-MODEL.md
 privacy_critical: true
@@ -98,3 +98,7 @@ maintainer-approved:
 ## Out-of-scope
 
 Blocked-result semantics (T186); revocation status (T187); private-window access (T188).
+
+## Approved dependency reconciliation — 2026-10-03
+
+The approved T204 CP listener repair and T205 hardening-record/schema repair precede this ticket because its HealthEndpoint and hardening comments/tests consume those mechanisms. Their direct own-change orphan corrections belong to those owners; this ticket retains its remaining acceptance and does not duplicate completed repairs.
