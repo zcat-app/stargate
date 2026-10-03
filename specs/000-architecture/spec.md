@@ -205,7 +205,7 @@ port; visually distinct from route ports.
 | Sidecar       | Service                | Port  | Bound on              |
 |---------------|------------------------|-------|-----------------------|
 | Tor           | SOCKS5 (stream-iso)    | UDS   | `/run/tor-fabric/private/tor-socks.sock` in Tor; hardlinked as `/run/stargate-tor/tor-socks.sock` in the DP-only fabric |
-| Tor           | Control socket (cookie) | UDS  | `/var/lib/tor/control/tor-control.sock`, private to Tor; observer-only mount follows in T164 |
+| Tor           | Control socket (cookie) | UDS  | `/var/lib/tor/control/tor-control.sock`, private to Tor and its fixed internal publisher; no observer mount (T203) |
 | i2pd          | HTTP proxy             | 4444  | `0.0.0.0` in container |
 | i2pd          | SOCKS proxy            | 4447  | `0.0.0.0` in container |
 | i2pd          | SAM bridge (reserved)  | 7656  | `0.0.0.0` in container |
@@ -1215,15 +1215,19 @@ observability hooks, etc.). Each must be declared here so that any
 future profile (LAN, VPS) inherits a complete picture of the trusted
 component set.
 
-**Current state (T162; T164 observer pending):** the local profile runs **no auxiliary
-containers**. The `docker-socket-proxy` auxiliary container that
+**Current state (T162; T203 observer authority repair):** the local profile runs one auxiliary
+container, `tor-observer`, which serves authenticated finite health to the control plane.
+The publisher runs as a process inside the Tor container. The `docker-socket-proxy` auxiliary container that
 previously lived in this section — a digest-pinned
 `tecnativa/docker-socket-proxy` that bridged `/var/run/docker.sock` to a
 filtered HTTP API so the control plane could observe sidecar lifecycle
 (`EVENTS=1`, `CONTAINERS=1`, `POST=0`) — was **removed by T094a**. The
 former control-plane direct cookie/ControlPort path is withdrawn. Tor's
-`ControlSocket` and cookie remain inside the Tor container; T164 must add a
-separate sanitized observer before CP health observation resumes. No service in
+`ControlSocket` and cookie remain inside the Tor container. T164 introduced the
+separate `tor-observer` container. T203 removes its raw Tor authority: a fixed Tor-internal
+publisher writes one bounded boot-time-leased sample on shared tmpfs, mounted read-only
+by the observer. The publisher accepts no observer/CP input; its compromise is a Tor-TCB
+compromise. See foundation-boundaries.md for exact freshness and failure semantics. No service in
 `compose/docker-compose.local.yml` mounts `/var/run/docker.sock`
 (gated by `tests/contract/compose/local_compose_test.sh` M4). The raw
 control socket is neither host-published nor mounted into either plane

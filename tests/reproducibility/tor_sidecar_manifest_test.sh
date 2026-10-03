@@ -36,8 +36,8 @@ set -uo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
 
-CONTEXT="sidecars/tor"
-LOCK="$CONTEXT/package-closure.lock"
+CONTEXT="."
+LOCK="sidecars/tor/package-closure.lock"
 PINNED_RUN="20260714T082229Z"
 ROLLBACK_RUN="20251201T030959Z"   # bookworm 12.12, genuinely signed, libssl3 3.0.17
 WORK="$(mktemp -d)"
@@ -74,13 +74,16 @@ awk -v a="$ARCH" '$1 == a { print $1, $2, $3, $4 }' "$LOCK" | LC_ALL=C sort > "$
 build() { # build <tag> <context> <log> [extra docker build args...]
   local tag=$1 ctx=$2 log=$3
   shift 3
-  docker build --no-cache --progress=plain "$@" -t "$tag" "$ctx" > "$log" 2>&1
+  docker build -f "$ctx/sidecars/tor/Dockerfile" --no-cache --progress=plain "$@" -t "$tag" "$ctx" > "$log" 2>&1
 }
 
 # --- honest cold builds vs the committed lock ------------------------------
 for b in a b; do
   echo ">>> cold build $b (stargate/tor:repro-$b)"
   if build "stargate/tor:repro-$b" "$CONTEXT" "$WORK/build-$b.log"; then
+    helper_id="$(docker create "stargate/tor:repro-$b")"
+    docker cp "$helper_id:/usr/local/bin/tor-health-publisher" "$WORK/publisher-$b"
+    docker rm "$helper_id" >/dev/null
     installed "stargate/tor:repro-$b" > "$WORK/manifest-$b.txt"
     diff -u "$WORK/expected.txt" "$WORK/manifest-$b.txt" > "$WORK/diff-$b.txt" \
       || { fail "build $b differs from $LOCK:"; cat "$WORK/diff-$b.txt" >&2; }
@@ -92,13 +95,24 @@ if [ -f "$WORK/manifest-a.txt" ] && [ -f "$WORK/manifest-b.txt" ]; then
   cmp -s "$WORK/manifest-a.txt" "$WORK/manifest-b.txt" || fail "package set drifted between cold rebuilds"
 fi
 
+if [ -f "$WORK/publisher-a" ] && [ -f "$WORK/publisher-b" ]; then
+  cmp -s "$WORK/publisher-a" "$WORK/publisher-b" || fail "Tor publisher bytes drifted between cold rebuilds"
+else
+  fail "publisher comparison inputs missing"
+fi
+
 # --- control 1: a tampered lock must fail the build ------------------------
 echo ">>> control: tampered lock"
 mkdir "$WORK/tampered"
-cp -a "$CONTEXT/." "$WORK/tampered/"
+mkdir -p "$WORK/tampered/sidecars" "$WORK/tampered/data-plane/cmd" "$WORK/tampered/data-plane/internal" "$WORK/tampered/proto"
+cp -a sidecars/tor "$WORK/tampered/sidecars/"
+cp data-plane/go.mod data-plane/go.sum "$WORK/tampered/data-plane/"
+cp proto/go.mod proto/go.sum "$WORK/tampered/proto/"
+cp -a data-plane/cmd/tor-health-publisher "$WORK/tampered/data-plane/cmd/"
+cp -a data-plane/internal/torhealth "$WORK/tampered/data-plane/internal/"
 awk -v a="$ARCH" '$1 == a && $2 == "libssl3" { $3 = "3.0.17-1~deb12u2" } { print }' \
-  "$LOCK" > "$WORK/tampered/package-closure.lock"
-if cmp -s "$LOCK" "$WORK/tampered/package-closure.lock"; then
+  "$LOCK" > "$WORK/tampered/sidecars/tor/package-closure.lock"
+if cmp -s "$LOCK" "$WORK/tampered/sidecars/tor/package-closure.lock"; then
   fail "tamper control did not change the lock"
 elif build stargate/tor:repro-tampered "$WORK/tampered" "$WORK/build-tampered.log"; then
   fail "build accepted a lock that does not match the installed closure"

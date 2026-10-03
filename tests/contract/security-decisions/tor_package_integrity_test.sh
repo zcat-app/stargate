@@ -41,7 +41,7 @@ assert {row[1] for row in rows} == {
     f"tor_{version}_amd64.deb", f"tor_{version}_arm64.deb"
 }, "package filenames do not match the promoted version/architectures"
 assert all(re.fullmatch(r"[0-9a-f]{64}", row[0]) for row in rows)
-assert "COPY install-tor.sh tor-packages.sha256 /tmp/" in dockerfile
+assert "COPY sidecars/tor/install-tor.sh sidecars/tor/tor-packages.sha256 /tmp/" in dockerfile
 assert "rm -f /tmp/install-tor.sh /tmp/tor-packages.sha256" in commands
 assert "--no-download" in installer.read_text(), "install phase can fetch a replacement after the hash check"
 

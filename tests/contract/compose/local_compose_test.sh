@@ -66,9 +66,12 @@ check "$(mounts tor stargate-tor-cp-fabric)" "" "Tor has no CP observer fabric"
 check "$(mounts stargate-control stargate-tor-state)" "" "CP has no cookie or guard-state mount"
 check "$(mounts stargate-dp stargate-tor-state)" "" "DP has no control mount"
 check "$(mounts tor stargate-tor-state)" /var/lib/tor "Tor private state"
-check "$(mounts tor-observer stargate-tor-state)" /run/tor-control "observer narrow Tor control mount"
-check "$(q '[.services["tor-observer"].volumes[] | select(.source == "stargate-tor-state") | .volume.subpath] | join(",")')" \
-    control "observer sees only control subpath"
+check "$(mounts tor-observer stargate-tor-state)" "" "observer has no Tor state authority at any target"
+check "$(mounts tor-observer stargate-tor-health)" /run/tor-health "observer finite handoff"
+check "$(mounts tor stargate-tor-health)" /run/tor-health "Tor finite publisher output"
+check "$(q '[.services["tor-observer"].volumes[] | select(.source == "stargate-tor-health") | .read_only] | join(",")')" true "observer cannot write publisher output"
+check "$(q '.volumes["stargate-tor-health"].driver_opts.type')" tmpfs "health is memory backed"
+check "$(q '.volumes["stargate-tor-health"].driver_opts.o')" 'size=64k,uid=5103,gid=5103,mode=0700,noexec,nosuid,nodev' "bounded boot-scoped health ownership"
 check "$(mounts tor-observer stargate-tor-cp-fabric)" /run/stargate-tor-observer "observer CP health socket"
 check "$(mounts tor-observer stargate-tor-dp-fabric)" "" "observer lacks SOCKS fabric"
 check "$(mounts stargate-control stargate-observer-keys)" "" "CP lacks observer private key"
@@ -90,7 +93,7 @@ check "$(q '.services["tor-observer"] | has("build")')" false "observer deploys 
 check "$(q '.services["tor-observer"].image | test("^sha256:[a-f0-9]{64}$")')" \
     true "observer image uses immutable local ID"
 check "$(q '.volumes | keys | sort | join(",")')" \
-    "stargate-control-config,stargate-control-state,stargate-dp-state,stargate-ipc,stargate-keys,stargate-observer-keys,stargate-tor-cp-fabric,stargate-tor-dp-fabric,stargate-tor-state" \
+    "stargate-control-config,stargate-control-state,stargate-dp-state,stargate-ipc,stargate-keys,stargate-observer-keys,stargate-tor-cp-fabric,stargate-tor-dp-fabric,stargate-tor-health,stargate-tor-state" \
     "named volume set"
 # T198 (A3-m5): the quickstart's install facts must match what this file and
 # the installer define: the volume count its teardown names, the key and

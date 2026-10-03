@@ -156,6 +156,20 @@ or backdoored binary.
   by Docker's mount namespaces and per-volume mounts (architecture spec
   §4.3).
 
+T203's required design includes a fixed health publisher in the Tor image and Tor's
+per-route TCB. It holds Tor's native cookie/control authority and autonomously reads
+only bootstrap status in normal operation. It accepts no observer/CP requests,
+configuration, paths, keys or writable shared input. Its fixed command sequence does
+not restrict an attacker executing code as the publisher: that attacker retains Tor's
+full native control authority. Publisher compromise is therefore a Tor-TCB compromise.
+The publisher joins the Tor launcher in the executable/build closure that must be reviewed.
+
+The mechanisms below describe T203's required repair. T203 must record implementation
+and validation status; any verified result must identify the exact candidate and tested
+environment. This description does not itself establish a verified result. T155 owns
+integrated foundation closure. Historical T164/T165 results do not validate the
+replacement boundary.
+
 Each sidecar is in the **per-route privacy TCB**. Pinned-digest selection
 and the contract-test gate (Principle IV; architecture spec §7) are the
 mitigations, but neither eliminates the risk. For the Tor sidecar
@@ -457,7 +471,7 @@ controls/denial passed. Routed IPv6, arm64, newer Landlock ABIs, physical NICs,
 hypervisor isolation, LAN/VPS, browser fallback and release conformance remain
 unmeasured here. T155 retains the integrated foundation closure obligation.
 
-The [T165 observer evidence](specs/001-tor-route/analysis/T165-observer-evidence.md)
+The historical [T165 observer evidence](specs/001-tor-route/analysis/T165-observer-evidence.md)
 adds a clean-volume Local deployment under QEMU 11.1.1. From the running CP
 identity, the cookie, Tor-cookie group, SOCKS fabric and raw control socket
 were absent; the observer's image digest and source label matched the tested
@@ -485,13 +499,16 @@ LAN/VPS or hypervisor-isolation claims.
 - Required target: constrain a compromised application plane to its authorized
   adapter/IPC capabilities. T162 gives the DP a group-gated SOCKS hardlink on a
   DP-only volume while Tor's native SOCKS directory and raw control socket remain
-  private. T164's separate Go observer sees only Tor's control subpath and its
-  own Ed25519 key volume, has no IP network, and serves one authenticated
-  finite health query on the CP-only Unix fabric. CP has that fabric read-only,
+  private. T203 removes the observer's Tor-state/control-subpath mount and the
+  legacy cookie hardlink. The separate observer reads only a bounded finite-health
+  publication from a read-only shared tmpfs and its own Ed25519 key volume. It has
+  no IP network and serves one authenticated finite health query on the CP-only Unix fabric. CP has that fabric read-only,
   no Tor cookie/group, observer private key, SOCKS or raw-control route.
-  T164's fake-boundary tests cover the protocol and event mapping; T165's
-  Local production-namespace caller and packet evidence covers the deployed
-  boundary above. T155 consumes that scoped evidence.
+  T164/T165's results remain historical evidence for their candidates. They do
+  not prove removal of the observer's raw Tor authority. T203 owns the replacement
+  authority, freshness and lifecycle evidence and must identify the exact tested
+  candidate, environment and unexecuted checks. T155 still owns integrated
+  foundation closure.
 
 **Does NOT protect against**:
 
@@ -1731,12 +1748,18 @@ continued SOCKS5 admission. T168 implements mandatory process confinement;
 its measured scope and T163's complete VM packet result are recorded in §3.1.
 The maintainer-approved VM evidence closes the measured Local embedded-resolver
 channel; it makes no physical-NIC or untested-environment claim. T164 adds a
-sanitized observer with a signed CP/observer challenge, finite tokens and a
-narrow Tor control subpath. It reuses Tor's UID in a separate network-less
-container; the shared UID is safe only while CP lacks Tor's state subpath,
-observer key and namespace. T165 measured the deployed Local caller matrix,
-socket recreation and CP packet boundary as described in §3.1; T155 still
-owns feature-wide compliance. A bridge-visible packet alone does not prove
+sanitized CP protocol with a signed challenge and finite tokens, but its
+observer retained the unrestricted Tor cookie and control socket. A read-only
+Unix-socket mount and the shared Tor UID did not constrain that authority to
+health operations. T203 removes those observer grants. Mount, PID and network
+namespace separation, dropped capabilities, a read-only root and a read-only
+finite-health volume enforce the observer boundary outside its application code.
+Tor's fixed publisher has no observer/CP input channel, and cannot read their
+health fabric or key volumes. The observer cannot write the publication volume.
+The publisher's full Tor authority remains a Tor-TCB risk under §2.6.
+T165's measured caller matrix and CP packet results are historical. T203 must
+record replacement evidence for its exact tested candidate and environment,
+including unexecuted checks. T155 still owns feature-wide compliance. A bridge-visible packet alone does not prove
 internet exfiltration.
 
 **Residual risks after a compliant repair:** Tor remains trusted for the anonymity protocol,
@@ -2239,13 +2262,35 @@ Executed commands/results and remaining release-cadence checks belong to reviews
 
 The installer invokes the observer inside its existing container/authority with
 `--check-ready`. It obtains only exit 0 (READY), 1 (NOT_READY), or 2 (UNAVAILABLE/invalid mode),
-never cookie bytes or Tor text. The query has a four-second whole-process bound, including
-cookie I/O; the installer retries within one post-Compose readiness window, default
+never cookie bytes or Tor text. T203 makes each decision a fresh bounded read of the
+latest finite publication, with a four-second whole-process bound; the installer retries within one post-Compose readiness window, default
 300 seconds with an operator override (T124). This increases cold-start tolerance but
 does not guarantee bootstrap on the public Tor network. A sample already in progress
 can finish up to four seconds after the window, plus the existing two-second retry interval.
 A running DP listener is checked separately and cannot substitute for Tor bootstrap readiness.
-The observer's authenticated CP protocol and its authority/mounts are unchanged.
+T203 preserves the authenticated CP protocol and changes the observer's authority/mounts
+as described in §3.1. The Tor-internal publisher starts at most one query at a time,
+with a four-second query budget followed by a one-second pause. It timestamps the
+attempt start with Linux CLOCK_BOOTTIME. Every consumer decision verifies the
+same time-namespace clock domain and accepts only an original age from zero to
+strictly less than four seconds; wall-clock and mtime changes or consumer restart
+cannot renew READY. Clock/backing uncertainty, malformed or nonregular records,
+future/stale samples and late query completion become UNAVAILABLE. The handoff
+is a bounded tmpfs with one latest record and at most one replacement file; its
+private freshness metadata never enters CP replies or operational records.
+The launcher invalidates before Tor startup and stops/reaps the publisher before
+final invalidation. Publisher failure cannot stall the SOCKS-link supervision loop
+or gate forwarding. Hard death can leave the last sample usable for its original
+remaining lease; immediate death detection is not promised. Scheduling delays or
+suspend can extend unavailability, never that lease.
+
+This repair is intended to remove an unintended observer capability and adds a named
+internal component to Tor's executable TCB. Its code and candidate evidence require the
+ordinary independent review gate. The final change also requires the impact assessment
+specified by Constitution VIII; this classification does not waive external human review
+for a release that adds or materially changes a trust boundary. External human review
+remains required before v1.0.0. Ticket completion does not satisfy those release gates
+or establish compliance for untested environments.
 
 **T174 live evidence boundary.** The disposable Local test harness uses the same
 bounded authenticated readiness query while CP is stopped, then requires actual DP

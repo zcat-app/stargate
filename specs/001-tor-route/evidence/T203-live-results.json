@@ -1,0 +1,442 @@
+{
+  "ticket": "T203",
+  "date": "2026-10-03",
+  "result": "PASS",
+  "baseline": "65d204088a57fddbe64ed44ddc2114a50dea7c71",
+  "scope": "Focused Local amd64 production-container evidence in a fresh copied disposable QEMU guest. No host-direct live tier, broad T155 rerun, release approval or SETCONF destination exploit claim.",
+  "guest": "target/t203-vm/guest-T203.qcow2 copied from the retained T182 base; source base never mutated",
+  "project": "t203-live1",
+  "executable_identity": {
+    "source_inputs_sha256": {
+      "data-plane/go.mod": "337273804a13c626aa771ac9f5b7109abcf4b7331c6a02e245d7f35fb74922e3",
+      "data-plane/go.sum": "7e722510ed61309d3b1ff1406360d36a59946511302369ae2dcb0a54b840f7b6",
+      "proto/go.mod": "f26082ffac33dda2f697d427a95158badc42f993734163161e3d721a6d23ce94",
+      "proto/go.sum": "6495263da3b90ba578d32e0f74a85ff3871df0129b9f2214fd7c2934309d324f",
+      "data-plane/cmd/tor-health-publisher/main.go": "1a04a63c7586968fa83fc62d159ccf514afccf013a1b44bad5e4616c2e3c82fb",
+      "data-plane/cmd/tor-observer/main.go": "974da460e39a8270b303bb2c72d6a9b515b85ee36653310704aea49bc1c347e2",
+      "data-plane/internal/torhealth/health.go": "0e16036faec319776473041d4b579c16b22212aa8cf3c4b6d708f17d6ae26744",
+      "sidecars/tor/Dockerfile": "2965509db8108cfcc5c2f5088983268a8fe9bf9f756a5d5756d1c1c7123c9f48",
+      "sidecars/tor/entrypoint.sh": "da980dd833926ed26ca30a37c791b295e6086d9f4c1bcb9ac3fcb97884fe2e65",
+      "sidecars/tor/torrc": "9f127c2c51019b10a7272ea8cb3a389ef55eab057c4ca1bed5b2b02f8ab51924",
+      "sidecars/tor/install-tor.sh": "e39be643d26c70b15b076a8ce9ed57cc378b75df03261edc251c1dadecfc9805",
+      "sidecars/tor/tor-packages.sha256": "a3392b58ebe5f6382c3b27a32d97edacd8c16abef83932d84f4e2946b19de582",
+      "sidecars/tor/verify-closure.sh": "c645a4a06a6216f3082ff1bf16aca0fa9eb8c0ea5b2fcecbc9bb2d0fdf8de312",
+      "sidecars/tor/package-closure.lock": "0637b70e45ee1a08d68958b9698ffa316c888ace7a5ae20b972be7e0300c0b5e",
+      "sidecars/tor/apt-key.fingerprint": {
+        "sha256": "d0bb6e7a6bc0d3bf61aa62d087e6dadb22146b6814d12002e217ff89a3a60d96"
+      },
+      "sidecars/tor-observer/Dockerfile": "867d0ad1fd2de5140c91431dd6aae132e51d52acf0d9f4e92313df09ae1c95dd",
+      "compose/docker-compose.local.yml": "398262e1b23a96c9fcbcdb95e5c6a59c762f89e9726d991a47ad8b38596db697",
+      "scripts/subcommands/init": "45acf6c088b75d71262be01bcc5761a54f5fec65e9b27269e4a86b4d8476a1ee"
+    },
+    "images": {
+      "tor": {
+        "id": "sha256:17439eb460ef25cbf61b1be4313ad4f29adaf4cba9e4825d8d45d0544c69ef04",
+        "architecture": "amd64",
+        "os": "linux",
+        "user": "tor",
+        "entrypoint": [
+          "/usr/local/bin/stargate-tor-entrypoint"
+        ],
+        "binary_sha256": "d809bc9570bfc713fa4a2b9a0de89c74bc2e3d1fe103f27851fc0387f81001ba"
+      },
+      "tor-observer": {
+        "id": "sha256:01ca622e14b5aa9ec3e5313dffa8ccf938c3c65dbe3df3f68b167a16a635ee7c",
+        "architecture": "amd64",
+        "os": "linux",
+        "user": "5103:5100",
+        "entrypoint": [
+          "/opt/stargate/tor-observer"
+        ],
+        "binary_sha256": "632c2f6dafe34d3e9360626c0dbbc59f831bda108dd4f6071178f4f06954ae04"
+      }
+    }
+  },
+  "harness_sha256": {
+    "observer.py": "d3d4d20246e7bcb6fe3e8dd7364685a2ee4659c353d14708c4c94eeb7f8095e4",
+    "observer_probe.go": "4808efbc2084f26ed175289f71fc392ac33f654db8103695b3e41e18e2cebbbc",
+    "run.py": "463402279c1a2d0e9c0e6680f54b177440714344f64f838d15bcaa074dfb893d"
+  },
+  "guest_snapshot_commit": "7ad65f8e04e201d3d2de427b1e1493152a072dc0",
+  "identities": {
+    "stargate-control": {
+      "image": "sha256:e43a18e9f06350f1ed06031027b57392926a197f307c9062dd2748a9c02b7add",
+      "user": "5101:5100",
+      "status": [
+        "Uid:\t5101\t5101\t5101\t5101",
+        "Gid:\t5100\t5100\t5100\t5100",
+        "Groups:\t5100 ",
+        "CapEff:\t0000000000000000",
+        "NoNewPrivs:\t1"
+      ],
+      "namespaces": {
+        "mnt": "mnt:[4026532251]",
+        "net": "net:[4026532256]",
+        "pid": "pid:[4026532254]",
+        "time": "time:[4026531834]"
+      },
+      "security": [
+        "no-new-privileges:true"
+      ],
+      "apparmor": "docker-default"
+    },
+    "tor-observer": {
+      "image": "sha256:01ca622e14b5aa9ec3e5313dffa8ccf938c3c65dbe3df3f68b167a16a635ee7c",
+      "user": "5103:5100",
+      "status": [
+        "Uid:\t5103\t5103\t5103\t5103",
+        "Gid:\t5100\t5100\t5100\t5100",
+        "Groups:\t5100 ",
+        "CapEff:\t0000000000000000",
+        "NoNewPrivs:\t1"
+      ],
+      "namespaces": {
+        "mnt": "mnt:[4026532375]",
+        "net": "net:[4026532380]",
+        "pid": "pid:[4026532378]",
+        "time": "time:[4026531834]"
+      },
+      "security": [
+        "no-new-privileges:true"
+      ],
+      "apparmor": "docker-default"
+    },
+    "tor": {
+      "image": "sha256:17439eb460ef25cbf61b1be4313ad4f29adaf4cba9e4825d8d45d0544c69ef04",
+      "user": "tor",
+      "status": [
+        "Uid:\t5103\t5103\t5103\t5103",
+        "Gid:\t5103\t5103\t5103\t5103",
+        "Groups:\t5103 5200 ",
+        "CapEff:\t0000000000000000",
+        "NoNewPrivs:\t1"
+      ],
+      "namespaces": {
+        "mnt": "mnt:[4026532313]",
+        "net": "net:[4026532318]",
+        "pid": "pid:[4026532316]",
+        "time": "time:[4026531834]"
+      },
+      "security": [
+        "no-new-privileges:true"
+      ],
+      "apparmor": "docker-default"
+    },
+    "stargate-dp": {
+      "image": "sha256:48573c62183e39c6ebd3d871e66723ab8bd8f6a9cb023b434113cc2b45eee92a",
+      "user": "5102:5100",
+      "status": [
+        "Uid:\t5102\t5102\t5102\t5102",
+        "Gid:\t5100\t5100\t5100\t5100",
+        "Groups:\t5100 5200 ",
+        "CapEff:\t0000000000000000",
+        "NoNewPrivs:\t1"
+      ],
+      "namespaces": {
+        "mnt": "mnt:[4026532243]",
+        "net": "net:[4026531840]",
+        "pid": "pid:[4026532249]",
+        "time": "time:[4026531834]"
+      },
+      "security": [
+        "no-new-privileges:true",
+        "apparmor=stargate-dp"
+      ],
+      "apparmor": "stargate-dp"
+    }
+  },
+  "authority": {
+    "default_production_exec_identity": true,
+    "cp_cookie_control_socks_denied": true,
+    "observer_cookie_control_socks_denied": true,
+    "observer_publication_write_denied_EROFS_and_tmpfs_verified": true,
+    "native_Tor_cookie_auth_control_positive": true,
+    "real_Tor_SOCKS_positive": "authenticated DP forwarding returned destination bytes",
+    "authenticated_finite_CP_health_positive": "READY/1",
+    "effective_mount_context_artifact": "T203-production-context.json"
+  },
+  "controlled_publisher": {
+    "forbidden_inputs": [
+      "GETINFO",
+      "GETINFO",
+      "GETCONF",
+      "SETCONF",
+      "SETEVENTS",
+      "ATTACHSTREAM",
+      "ADD_ONION",
+      "SIGNAL",
+      "COMMAND",
+      "HEALTH/2",
+      "HEALTH/1",
+      "HEALTH/1\nX",
+      "HEALTH/1"
+    ],
+    "real_health": "READY/1",
+    "invalid_auth_and_eof_refused": true,
+    "autonomous_fixed_sampling": true,
+    "fresh_ready_not_ready_malformed_timeout": true,
+    "publisher_stop_expiry_observer_restart_mtime": true,
+    "invalid_file_shape_future_domain_symlink_fifo": true,
+    "dead_publisher_expiry_and_recovery": true,
+    "controlled_publisher_image": "sha256:17439eb460ef25cbf61b1be4313ad4f29adaf4cba9e4825d8d45d0544c69ef04"
+  },
+  "cp_event_windows": {
+    "observation": "ephemeral authenticated test subscriber; production CP publisher",
+    "phases": {
+      "initial-not-ready-and-repeat": {
+        "exact_events": true,
+        "count": 1,
+        "reconnects": 0,
+        "windows": 1,
+        "max_window_seconds": 31.1,
+        "silence_anchor": "transition event received in this window before its repeat sample",
+        "hold_reply_during_action": true
+      },
+      "ready-and-repeat": {
+        "exact_events": true,
+        "count": 1,
+        "reconnects": 0,
+        "windows": 1,
+        "max_window_seconds": 29.1,
+        "silence_anchor": "transition event received in this window before its repeat sample"
+      },
+      "not-ready-and-repeat": {
+        "exact_events": true,
+        "count": 1,
+        "reconnects": 0,
+        "windows": 1,
+        "max_window_seconds": 28.9,
+        "silence_anchor": "transition event received in this window before its repeat sample"
+      },
+      "malformed-and-repeat": {
+        "exact_events": true,
+        "count": 0,
+        "reconnects": 0,
+        "windows": 1,
+        "max_window_seconds": 28.9,
+        "silence_anchor": "1 s post-SUBSCRIBED allowance only; no event anchors registration"
+      },
+      "timeout-and-repeat": {
+        "exact_events": true,
+        "count": 0,
+        "reconnects": 0,
+        "windows": 1,
+        "max_window_seconds": 28.7,
+        "silence_anchor": "1 s post-SUBSCRIBED allowance only; no event anchors registration"
+      },
+      "ready-after-failures": {
+        "exact_events": true,
+        "count": 1,
+        "reconnects": 0,
+        "windows": 1,
+        "max_window_seconds": 28.9,
+        "silence_anchor": "transition event received in this window before its repeat sample"
+      },
+      "observer-down-and-repeat": {
+        "exact_events": true,
+        "count": 1,
+        "reconnects": 0,
+        "windows": 1,
+        "max_window_seconds": 23.2,
+        "silence_anchor": "transition event received in this window before its repeat sample"
+      },
+      "observer-recovery-and-repeat": {
+        "exact_events": true,
+        "count": 1,
+        "reconnects": 0,
+        "windows": 1,
+        "max_window_seconds": 29.0,
+        "silence_anchor": "transition event received in this window before its repeat sample",
+        "hold_reply_during_action": true
+      }
+    },
+    "no_duplicate_or_false_lifecycle_events": true,
+    "tor_command_allowlist": true
+  },
+  "routing_independence": "CP and observer stopped; Tor-internal publisher SIGSTOPed beyond its original lease. DP authenticated from retained state and Tor returned destination response bytes.",
+  "token_reload": "CP startup delivered the disposable verifier to DP on attempt 1.",
+  "tests_first": {
+    "primary": "T203-tests-first.json",
+    "namespace_red": "target/runs/T203/namespace-red-attempt2.log",
+    "namespace_green": "target/runs/T203/namespace-green.log",
+    "same_retained_probe_executable": true,
+    "baseline_result": "authenticated READY; CP denied; observer exposed cookie and socket; observer probe exit1",
+    "final_result": "authenticated finite health; CP and observer denied; observer probe exit0",
+    "cookie_io_red": "target/runs/T203/cookie-budget-red.log",
+    "cookie_io_green": "target/runs/T203/cookie-budget-green.log"
+  },
+  "attempts": {
+    "baseline_namespace": [
+      {
+        "attempt": 1,
+        "result": "prerequisite failure reading root-owned environment after successful init"
+      },
+      {
+        "attempt": 2,
+        "result": "expected RED: observer authority exposed"
+      }
+    ],
+    "implementation_live": [
+      {
+        "attempt": 1,
+        "result": "SSH prerequisite failure before test"
+      },
+      {
+        "attempt": 2,
+        "result": "production controls passed; controlled fixture lacked synthetic native cookie after clean Tor shutdown; final matrix incomplete"
+      },
+      {
+        "attempt": 3,
+        "result": "PASS with corrected fixture and expanded final harness"
+      }
+    ],
+    "diagnostics": "Two controlled publisher diagnostic invocations retained; fresh UNAVAILABLE records and no fake commands isolated missing fixture cookie. No production-source correction after the repaired image build."
+  },
+  "limitations": [
+    "One Linux amd64 guest; ARM64 not executed here.",
+    "Cold rebuild reproducibility release cadence not run; modified default build-input contract runs in normal verify.",
+    "Host reboot/suspend not physically induced; tmpfs backing and matching time namespace are runtime-verified, strict age/domain/future/mtime behavior covered by tests.",
+    "External human release review and cumulative milestone security/privacy/performance reviews remain required under Constitution VIII.",
+    "T155 and unrelated surviving findings remain open."
+  ],
+  "supplemental_outputs": {
+    "cookie-budget-red.log": "--- FAIL: TestDelayedRegularCookieIOBudget (5.00s)\n    main_test.go:211: regular cookie I/O escaped total attempt budget\nFAIL\nFAIL\tgithub.com/zcat-app/stargate/data-plane/cmd/tor-health-publisher\t5.008s\nFAIL\n",
+    "cookie-budget-green.log": "ok  \tgithub.com/zcat-app/stargate/data-plane/cmd/tor-health-publisher\t4.008s\n",
+    "namespace-red-attempt2.log": "READY/1RAW_AUTHORITY_DENIED\nRAW_AUTHORITY_EXPOSED cookie=true socket=true\nobserver probe: refused or invalid result\nobserver-denial-probe-exit=1\n",
+    "namespace-green.log": " Container t203-live1-stargate-control-1  Starting\n Container t203-live1-stargate-control-1  Started\na72a88968b4372c0d650f3f5ec0f49438b7766004040265943d0ae6c376e024e  /home/ubuntu/t203-red/target/t203/probe\nREADY/1\nRAW_AUTHORITY_DENIED\nRAW_AUTHORITY_DENIED\nobserver-denial-probe-exit=0\n",
+    "live-attempt3.log": "PASS: deployed CP finite event windows and observer-down recovery\nPASS: CP\u2192DP authenticated token reload (attempt 1)\nPASS: deployed observer boundary and CP/observer/publisher-down authenticated forwarding\n"
+  },
+  "artifact_directory": "target/runs/T203/live-attempt3-artifacts",
+  "artifact_sha256": {
+    "T165-cp-any.decoded.txt": "fed57fedc1761a88e4ba9ffc197ed31ad44388cbc797380fb8983b23bdb3c0eb",
+    "T165-cp-any.pcap": "21f623a4fc715bf0b612dc879455f761f57ac433c93f172cbd924a45c7aea0b1",
+    "T165-cp-down.txt": "e3e832e4a55ddcc577a80e8a3cafa0771240774397543c9e7b1f0abb88df4c6f",
+    "T165-observer-identity.json": "47287a21bf12bf0f64a0ced8b386d94db1ee7c21c7e8539cf638347daad7a8fd",
+    "T165-token-reload.txt": {
+      "sha256": "c55b2a45f98be83bb81e563efd942c9e5e90ecaa6b255cf9f120c2d124de3d48"
+    },
+    "T174-cp-events.json": "29002623015c96414b3f953d3b27f6b5dbefa1070df819d47d57fa8237f1ce88",
+    "T203-executable-identities.json": "604329ef06d497c20cf0ecf511452238dfd9a43ba0a33d960eb1074a45225299",
+    "T203-health-down-forwarding.txt": "2ead4425527cf1e14b4b25802ddd13cfe0883d7a4a84343e51f4aeb182f358df",
+    "T203-probe-matrix.json": "2883e5efc28c93c218603400fec6993e5f98d73e3c43dd0f3601f8dc301b2d9f",
+    "T203-production-context.json": "73842e5dcc7f8123fa14af27d7b490c3b46743aa60e2147be6638a0ffac6873a",
+    "observer-probe": "2ce52ba3b6d8f525ec110e8d09eb66cf2a09f9741878ebae2f63de359115fae6",
+    "tor-binary": "d809bc9570bfc713fa4a2b9a0de89c74bc2e3d1fe103f27851fc0387f81001ba",
+    "tor-observer-binary": "632c2f6dafe34d3e9360626c0dbbc59f831bda108dd4f6071178f4f06954ae04"
+  },
+  "identity_scope": "executable_identity preserves full live attempt3 source/images; final_identity_refresh preserves the later guest-tested image/source identities after two analysis-only signed-wire annotations. review_round2_equivalence separately binds subsequent test/documentation changes and an identical rendered Compose configuration; no original hash or tested image is relabeled.",
+  "final_identity_refresh": {
+    "result": "PASS",
+    "attempts": 2,
+    "attempt1": "First decode annotation only; successful intermediate proof retained at guest target/t203-final-identity-attempt1 and host final-identity-refresh-attempt1.log.",
+    "attempt2": "Both final decode/encode annotations; supported init, final source label, production namespace controls and binary comparisons PASS.",
+    "production_source_delta": "Only two same-line G115 rationales plus gofmt whitespace in internal/torhealth/health.go. Executable statements unchanged.",
+    "executable_identity": {
+      "source_inputs_sha256": {
+        "data-plane/go.mod": "337273804a13c626aa771ac9f5b7109abcf4b7331c6a02e245d7f35fb74922e3",
+        "data-plane/go.sum": "7e722510ed61309d3b1ff1406360d36a59946511302369ae2dcb0a54b840f7b6",
+        "proto/go.mod": "f26082ffac33dda2f697d427a95158badc42f993734163161e3d721a6d23ce94",
+        "proto/go.sum": "6495263da3b90ba578d32e0f74a85ff3871df0129b9f2214fd7c2934309d324f",
+        "data-plane/cmd/tor-health-publisher/main.go": "1a04a63c7586968fa83fc62d159ccf514afccf013a1b44bad5e4616c2e3c82fb",
+        "data-plane/cmd/tor-observer/main.go": "974da460e39a8270b303bb2c72d6a9b515b85ee36653310704aea49bc1c347e2",
+        "data-plane/internal/torhealth/health.go": "560acaa326329bdf34c0b3e7623055528324bda87e07870d10e7197d094352e9",
+        "sidecars/tor/Dockerfile": "2965509db8108cfcc5c2f5088983268a8fe9bf9f756a5d5756d1c1c7123c9f48",
+        "sidecars/tor/entrypoint.sh": "da980dd833926ed26ca30a37c791b295e6086d9f4c1bcb9ac3fcb97884fe2e65",
+        "sidecars/tor/torrc": "9f127c2c51019b10a7272ea8cb3a389ef55eab057c4ca1bed5b2b02f8ab51924",
+        "sidecars/tor/install-tor.sh": "e39be643d26c70b15b076a8ce9ed57cc378b75df03261edc251c1dadecfc9805",
+        "sidecars/tor/tor-packages.sha256": "a3392b58ebe5f6382c3b27a32d97edacd8c16abef83932d84f4e2946b19de582",
+        "sidecars/tor/verify-closure.sh": "c645a4a06a6216f3082ff1bf16aca0fa9eb8c0ea5b2fcecbc9bb2d0fdf8de312",
+        "sidecars/tor/package-closure.lock": "0637b70e45ee1a08d68958b9698ffa316c888ace7a5ae20b972be7e0300c0b5e",
+        "sidecars/tor/apt-key.fingerprint": {
+          "sha256": "d0bb6e7a6bc0d3bf61aa62d087e6dadb22146b6814d12002e217ff89a3a60d96"
+        },
+        "sidecars/tor-observer/Dockerfile": "867d0ad1fd2de5140c91431dd6aae132e51d52acf0d9f4e92313df09ae1c95dd",
+        "compose/docker-compose.local.yml": "398262e1b23a96c9fcbcdb95e5c6a59c762f89e9726d991a47ad8b38596db697",
+        "scripts/subcommands/init": "45acf6c088b75d71262be01bcc5761a54f5fec65e9b27269e4a86b4d8476a1ee"
+      },
+      "images": {
+        "tor": {
+          "id": "sha256:17439eb460ef25cbf61b1be4313ad4f29adaf4cba9e4825d8d45d0544c69ef04",
+          "architecture": "amd64",
+          "os": "linux",
+          "user": "tor",
+          "entrypoint": [
+            "/usr/local/bin/stargate-tor-entrypoint"
+          ],
+          "binary_sha256": "d809bc9570bfc713fa4a2b9a0de89c74bc2e3d1fe103f27851fc0387f81001ba"
+        },
+        "tor-observer": {
+          "id": "sha256:7ef981c9145ce40d76e55798a0236bea1a993811e55da9aafec72049be7913c3",
+          "architecture": "amd64",
+          "os": "linux",
+          "user": "5103:5100",
+          "entrypoint": [
+            "/opt/stargate/tor-observer"
+          ],
+          "binary_sha256": "632c2f6dafe34d3e9360626c0dbbc59f831bda108dd4f6071178f4f06954ae04"
+        }
+      }
+    },
+    "observer_source_sha256": "95f39c207fca773b08e2d1a26a5f44ee7acd44201e6e617312673d3e29444e8e",
+    "guest_snapshot_commit": "7c3e3760c5a8f2dba62551e0ca659b9c3e696c5c",
+    "initial_production_controls": "Unchanged validate harness prefix through effective identity/mount/policy checks, CP/observer raw-authority denial, tmpfs/EROFS positive boundary, native cookie auth positive, CP namespace TCP controls, signed finite health and invalid-auth/EOF refusal.",
+    "full_live_evidence_reuse": "Both final image executables compared byte-for-byte against full attempt3 artifacts (and independently rebuilt locally with pinned toolchain/flags). The original lifecycle/event/forwarding matrix is retained on that demonstrated binary equivalence; it was not repeated.",
+    "artifact_directory": "target/runs/T203/final-identity-artifacts",
+    "artifact_sha256": {
+      "T165-cp-any.decoded.txt": "44c6feda2d430d1c808f8760de379b4f94eefc7962ad8476584e068a38cd5974",
+      "T165-cp-any.pcap": "d94aee5a018e7f8c05f43adae41c9ec9e10f28a53750075f64dd6e115e19d34a",
+      "T165-observer-identity.json": "493713bfb6822675aa0f45e5b0b31df2454018cf9c5216e7ce61679a20929332",
+      "T203-executable-identities.json": "419b06e89d59cff435426d10b70a748cebad029e51e3e9cf37fb8180cadbcb09",
+      "T203-production-context.json": "7b4dc1e751dd20ad00a85f923c4ef2faf89ce38b08a7db0236305a828309fd51",
+      "init.log": "89a3ebb3dd0f34dce6fdb9a245829cbe33464159e19ce43fbfdfb6ea4201e927",
+      "observer-probe": "2ce52ba3b6d8f525ec110e8d09eb66cf2a09f9741878ebae2f63de359115fae6",
+      "tor-binary": "d809bc9570bfc713fa4a2b9a0de89c74bc2e3d1fe103f27851fc0387f81001ba",
+      "tor-observer-binary": "632c2f6dafe34d3e9360626c0dbbc59f831bda108dd4f6071178f4f06954ae04"
+    },
+    "log": "PASS: final image/source label, effective boundary, raw denials and positive controls\nPASS: both final image executables byte-identical to full live attempt3\n"
+  },
+  "review_round2_equivalence": {
+    "scope": "Three Minor review corrections only: independent complete wire-format test vector; Compose header comment; architecture auxiliary-container inventory. Production Go, image build inputs and live harness unchanged. No additional live invocation.",
+    "compose_before_sha256": "398262e1b23a96c9fcbcdb95e5c6a59c762f89e9726d991a47ad8b38596db697",
+    "compose_after_sha256": "85b7b597413a27b478bcc08511c638a8c0153b7b6d234621c8a439e254b1a20f",
+    "compose_render_command": "docker compose -f compose/docker-compose.local.yml --env-file compose/env/local.env.example config --format json",
+    "compose_render_comparison": "byte-identical before/after",
+    "compose_render_sha256": "f598c07d1d5d5e3d6e2d7dcb72b51b688aac0561bfcd35d79ca2ad37f3b1d05e",
+    "unchanged_source_inputs_sha256": {
+      "data-plane/go.mod": "337273804a13c626aa771ac9f5b7109abcf4b7331c6a02e245d7f35fb74922e3",
+      "data-plane/go.sum": "7e722510ed61309d3b1ff1406360d36a59946511302369ae2dcb0a54b840f7b6",
+      "proto/go.mod": "f26082ffac33dda2f697d427a95158badc42f993734163161e3d721a6d23ce94",
+      "proto/go.sum": "6495263da3b90ba578d32e0f74a85ff3871df0129b9f2214fd7c2934309d324f",
+      "data-plane/cmd/tor-health-publisher/main.go": "1a04a63c7586968fa83fc62d159ccf514afccf013a1b44bad5e4616c2e3c82fb",
+      "data-plane/cmd/tor-observer/main.go": "974da460e39a8270b303bb2c72d6a9b515b85ee36653310704aea49bc1c347e2",
+      "data-plane/internal/torhealth/health.go": "560acaa326329bdf34c0b3e7623055528324bda87e07870d10e7197d094352e9",
+      "sidecars/tor/Dockerfile": "2965509db8108cfcc5c2f5088983268a8fe9bf9f756a5d5756d1c1c7123c9f48",
+      "sidecars/tor/entrypoint.sh": "da980dd833926ed26ca30a37c791b295e6086d9f4c1bcb9ac3fcb97884fe2e65",
+      "sidecars/tor/torrc": "9f127c2c51019b10a7272ea8cb3a389ef55eab057c4ca1bed5b2b02f8ab51924",
+      "sidecars/tor/install-tor.sh": "e39be643d26c70b15b076a8ce9ed57cc378b75df03261edc251c1dadecfc9805",
+      "sidecars/tor/tor-packages.sha256": "a3392b58ebe5f6382c3b27a32d97edacd8c16abef83932d84f4e2946b19de582",
+      "sidecars/tor/verify-closure.sh": "c645a4a06a6216f3082ff1bf16aca0fa9eb8c0ea5b2fcecbc9bb2d0fdf8de312",
+      "sidecars/tor/package-closure.lock": "0637b70e45ee1a08d68958b9698ffa316c888ace7a5ae20b972be7e0300c0b5e",
+      "sidecars/tor/apt-key.fingerprint": {
+        "sha256": "d0bb6e7a6bc0d3bf61aa62d087e6dadb22146b6814d12002e217ff89a3a60d96"
+      },
+      "sidecars/tor-observer/Dockerfile": "867d0ad1fd2de5140c91431dd6aae132e51d52acf0d9f4e92313df09ae1c95dd",
+      "scripts/subcommands/init": "45acf6c088b75d71262be01bcc5761a54f5fec65e9b27269e4a86b4d8476a1ee"
+    },
+    "test_source_sha256": {
+      "data-plane/internal/torhealth/health_test.go": "7b401ae60ef945fe5987c5fcdb9e6b23f1eeac2d7fdbe53b9dbb93ef3780b3c0"
+    },
+    "calibration": "Literal contract vector independently validates encoder and decoder. Full torhealth package passes; an isolated Go overlay changing both domain encoding and decoding to big-endian fails both vector subtests. This is a discrimination check for a test gap, not a pre-fix production defect.",
+    "artifact_sha256": {
+      "target/runs/T203/round1-compose-before.yml": "398262e1b23a96c9fcbcdb95e5c6a59c762f89e9726d991a47ad8b38596db697",
+      "target/runs/T203/round1-compose-before.json": "f598c07d1d5d5e3d6e2d7dcb72b51b688aac0561bfcd35d79ca2ad37f3b1d05e",
+      "target/runs/T203/round2-compose-after.json": "f598c07d1d5d5e3d6e2d7dcb72b51b688aac0561bfcd35d79ca2ad37f3b1d05e",
+      "target/runs/T203/round2-compose-contract.log": "18add1296756c64981c1a286ba787e9df39688870565c552100ee073451feeee",
+      "target/runs/T203/contract-vector-green.log": "f68ef1dd4d2e169baeea26721bca0584857a9e94652d2a2ae035dd6c0e9287b6",
+      "target/runs/T203/contract-vector-mutant-red.log": "a2f9719b1ebbc6564bf5a4e0e525c6ecb28890a5bdddb75b815b7e8d36e33b0c",
+      "target/runs/T203/domain-big-endian-overlay.json": "6ecb2adb880f4d3fa9c4ec4af1f22fa4560cf7061941bec5418c9187ada4eca0",
+      "target/runs/T203/domain-big-endian-mutant.go": "87d1a30ac9a6b43bf7c5d1fc93080a5f9db2278feb53dffee1bb6a627f4d1fb7"
+    }
+  },
+  "digest_representation": "Four artifact path entries whose names contain key/token use an explicit {sha256: hex} object to distinguish file digests from credential values. Their exact SHA-256 values and path associations are unchanged; all other digest entries retain their existing representation."
+}

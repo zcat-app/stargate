@@ -53,16 +53,50 @@ enforcing-profile signal/lifecycle checks remain mandatory. The maintainer
 approved this evidence-scope refinement on 2026-09-21; T163 records the decision
 and measured environment. No application-plane permission changes.
 
-**T138/T164 observer boundary:** the CP MUST NOT hold the
-Tor control cookie, the Tor-cookie supplementary group, or a network path to raw Tor control.
-A separate observer owns the Tor-facing credential and raw control session. Its CP-facing
-endpoint accepts one bounded health operation with no arguments and returns only the finite
-tokens `READY`, `NOT_READY` or `UNAVAILABLE`; it MUST reject arbitrary command text and MUST
-not return raw Tor replies. The observer's Tor-facing sequence is fixed to cookie
-authentication, `GETINFO status/bootstrap-phase`, and `QUIT`; this application allowlist is
-defense-in-depth, while the process/socket/credential separation is the enforcement boundary.
-T138's decision record fixes the CP-facing `HEALTH/1` framing and byte/deadline limits,
-Tor-reply bounds, exact token meanings and event mapping. The observer and CP use a
+**T203 observer boundary (replaces T164's raw-authority grant):** neither CP nor
+observer may mount Tor's state, cookie or raw control/SOCKS endpoints. The observer's
+CP-facing endpoint accepts one bounded health operation without arguments and returns only
+`READY`, `NOT_READY` or `UNAVAILABLE`. External mount/PID/network namespaces, read-only
+root/publication mounts and dropped capabilities enforce that authority boundary; Tor's shared
+numeric UID alone does not separate the observer from a mounted Tor socket.
+
+A fixed publisher belongs to the Tor image and route TCB. It autonomously performs cookie
+authentication, `GETINFO status/bootstrap-phase` and best-effort `QUIT`. It accepts no
+observer/CP input, requests, paths, configuration, keys, acknowledgements or writable shared
+channel and cannot mount their health fabric or keys. Its native Tor authority is unrestricted
+if compromised: the fixed normal command sequence is not a sandbox for the publisher.
+Its code, shared finite-record code, module locks and pinned Go builder are reviewed Tor-image
+inputs. It performs no probes, subscriptions or traffic observations.
+
+The publisher runs at most one attempt, with a four-second total query budget and one-second
+pause after completion. The attempt coordinator includes cookie I/O in that budget.
+At expiry it returns unavailable and cancels the socket context. A noncancelable kernel
+file operation retains the single worker slot until it returns; no replacement worker
+starts and its late result is discarded. This bounds the health decision and resources,
+not kernel scheduling or immediate termination of an uninterruptible task. It timestamps query start with CLOCK_BOOTTIME, then publishes one
+24-byte record: ASCII `SGH1`, one state byte (0 unavailable, 1 not ready, 2 ready), three zero
+reserved bytes, little-endian uint64 Linux time-namespace inode and little-endian int64
+boot-time nanoseconds. The observer checks the matching namespace identity and the kernel's
+tmpfs filesystem type on every fresh bounded read. A record is usable only for
+`0 <= current_boottime - sample_start < 4 seconds`, measured after reading; delayed completion
+is unavailable. Wall-clock or mtime changes and observer restart cannot extend the lease.
+CLOCK_BOOTTIME ages through suspend. Incompatible/unknown clocks, absent/malformed/oversized/
+nonregular/symlink records, or future/stale timestamps return unavailable.
+
+The shared `stargate-tor-health` volume uses local-driver tmpfs with
+`size=64k,uid=5103,gid=5103,mode=0700,noexec,nosuid,nodev`. Only Tor mounts it writable;
+observer mounts it read-only and CP/DP do not mount it. Init creates or validates these exact
+options, refusing a pre-existing incompatible volume. Memory backing prevents sample reuse
+across host reboot. It contains only `latest` and at most one bounded `pending` replacement;
+atomic rename publishes the record. Internal freshness metadata never crosses CP IPC or logs.
+The launcher removes the old cookie hardlink and invalidates before Tor startup. The publisher
+starts unavailable and runs separately from the SOCKS-link loop. Shutdown/Tor death stops and
+reaps it before final invalidation. A failed/stopped publisher cannot block forwarding; recovery
+uses a fresh publisher/Tor lifecycle. Hard death may leave only the original remaining lease.
+Scheduling delays can lengthen unavailability, never READY. No immediate death detection claim.
+
+T138 fixes the CP-facing framing, finite meanings and event mapping, preserved by T203.
+The observer and CP use a
 versioned Ed25519 challenge before the health request: observer sends ASCII `OBS/1\n`
 plus 32 random bytes; CP sends `CP/1\n`, its 32 random bytes, and a 64-byte signature
 over `stargate-observer/1 client\n` plus both nonces in server/client order; observer
@@ -74,26 +108,24 @@ the kernel's endpoint/namespace boundary; the challenge authenticates the
 speaking endpoints and rejects replay. No token is sent before caller auth.
 The post-auth request is exactly `HEALTH/1\n` (9 bytes) and write-EOF; replies
 are exactly `READY/1\n`, `NOT_READY/1\n` or `UNAVAILABLE/1\n`, then close.
-The request/EOF deadline is 1 second; one Tor query has a 4-second budget,
-one active query and no waiting queue; CP's whole call has a 6-second cap.
+The request/EOF deadline is 1 second; CP's whole call has a 6-second cap.
+That RPC cap is separate from the cached sample's original four-second freshness horizon.
 Tor reply lines are capped at 8 KiB and replies at 64 lines/8 KiB.
 The bootstrap reply must have Tor's `NOTICE BOOTSTRAP` or `WARN BOOTSTRAP`
 status with numeric `PROGRESS`, a keyword `TAG`, and a nonempty `SUMMARY`;
 unrecognized well-formed fields remain allowed. Malformed status text that
 merely contains `PROGRESS=100` is `UNAVAILABLE`, never `READY`.
-The separate observer container has no Docker network. It sees only Tor's
-same-volume `control/` subpath read-only (native control socket and refreshed
-cookie hardlink), its own key volume read-only, and the writable CP health
-fabric. CP sees only the health fabric read-only. Init builds the observer
-from a digest-pinned Go toolchain, verifies a source-hash label on the built
-image and deploys its immutable local sha256 image ID; the evidence identifies
-the local build, not an independently published binary provenance claim.
+The separate observer container has no Docker network. It sees the finite publication and
+its own keys read-only, and writes only its CP health fabric. CP sees that fabric read-only.
+Init builds the observer with a digest-pinned Go toolchain and verifies a label hashing all
+production observer/shared sources before deploying the immutable local image ID. This identifies
+a local build, not independently published provenance. The Tor image includes the publisher
+under the same pinned deterministic Go build controls; package manifests alone do not identify it.
 An unavailable observer cannot justify a Tor exit or restart claim.
 The observer MUST NOT expose stream/circuit status, configuration, event subscriptions,
 stream attachment, onion-service creation, signals or a generic command proxy. CP health is
-advisory and cannot gate DP admission or select a fallback route. T164 owns the
-source-level implementation and fake-boundary tests; T165 owns integrated
-production-namespace caller and packet evidence. T162 removed the former CP
+advisory and cannot gate DP admission or select a fallback route. T164/T165 results are historical; T203 owns replacement authority, freshness and lifecycle
+implementation/evidence. Required guest evidence binds exact executable/image inputs. T162 removed the former CP
 cookie and raw-control path; T164 populates the reserved CP-only fabric.
 
 Native Tor protocol maintenance belongs to Tor's egress TCB. DP/CP cannot originate public

@@ -442,13 +442,17 @@ tests-first suite (Principle VII) before implementation lands.
   the image-owned hook hardlinks that inode at mode 0660 into a DP-only
   volume. The DP may dial only that fixed path. The raw cookie-authenticated
   ControlSocket is in Tor's private state and is reachable inside Tor,
-  through the observer's narrow Tor-facing mount, and by the test harness
-  via `docker compose exec`. Tor's Docker healthcheck is disabled.
+  including by its native publisher, and by the test harness via
+  `docker compose exec`. Tor's Docker healthcheck is disabled.
   CP holds no Tor cookie, Tor-cookie group, raw control mount or Docker network
-  path. T164 implements the isolated observer's authenticated finite-health
-  endpoint on a CP-only fabric; T165 validates its deployed caller matrix.
+  path. T164 introduced the isolated observer's authenticated finite-health
+  endpoint on a CP-only fabric. T203 preserves that endpoint and removes the
+  observer's raw Tor authority: the observer reads only a finite boot-time-leased
+  publication from the Tor-internal publisher on read-only shared tmpfs, under
+  `contracts/foundation-boundaries.md`. Historical T165 evidence does not validate
+  this replacement boundary; T203 records the current validation evidence.
   CP health remains advisory, with no raw-control fallback (architecture
-  spec §4.2). The installer requires a current authenticated READY sample
+  spec §4.2). The installer requires a current authenticated cached READY sample
   within one bounded post-Compose window, default 300 seconds (T124).
 
 #### Inter-plane integration

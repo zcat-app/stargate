@@ -238,7 +238,11 @@ enum EventKind {
   `{"healthcheck_pass", "healthcheck_fail", "container_exit",
   "container_start", "config_render"}`. The data plane and the
   contract test treat unknown `detail` values as a contract violation.
-  T138/T164's sanitized health channel emits only
+  T203 preserves T138's authenticated finite health protocol. Its observer reads
+  an autonomously published cached state whose original CLOCK_BOOTTIME age must be
+  less than four seconds; the six-second RPC cap does not renew that lease.
+  Publisher failure, stale state and observer loss are UNAVAILABLE and cannot gate
+  DP routing. The sanitized health channel emits only
   `STARTED → container_start`, `HEALTHY → healthcheck_pass`, and
   `UNHEALTHY → healthcheck_fail`. The first authenticated READY or NOT_READY
   sample emits STARTED once. Entry into READY emits HEALTHY; READY to

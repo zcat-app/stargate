@@ -289,7 +289,8 @@ socket. CP and the observer have no IP network; Tor alone has bridge egress.
 | `stargate-dp` | Listens on `127.0.0.1:8881`, uses its DP-only Tor SOCKS fabric, and retains authenticated admission during CP outage. |
 | `stargate-control` | Loads current auth state and receives only authenticated finite observer health over its CP-only Unix fabric. It holds no Tor cookie or raw control path. |
 | `tor` | Loads the image-baked `torrc`, serves private SOCKS/control Unix sockets, and performs Tor-native bootstrap. |
-| `tor-observer` | Alone mounts Tor's narrow control subpath, authenticates to Tor, and reduces one fixed bootstrap query to READY/NOT_READY/UNAVAILABLE. |
+| `tor-observer` | Reads only the latest bounded tmpfs health record, verifies its original boot-time lease, and serves authenticated finite health; no raw Tor mount. |
+| Tor-internal publisher | Part of Tor's image/route TCB; autonomously performs a fixed bounded bootstrap query and publishes finite state, with no observer/CP input channel. |
 
 Docker healthchecks and raw container diagnostics are disabled under
 Constitution III (T152). The installer waits for the observer's current

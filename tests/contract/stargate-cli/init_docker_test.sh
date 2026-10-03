@@ -219,6 +219,19 @@ read -r puid pgid pmode psize <<<"$(vol_stat "$keys_a" pepper.key)"
 [ "$puid" = "5101" ] || bail "A: pepper.key uid '$puid' (expected 5101 stargate-cp)"
 [ "$psize" = "32" ] || bail "A: pepper.key size '$psize' bytes (expected 32)"
 
+# T203: exact tmpfs options survive remount and repeated init; ordinary local
+# volume creation is not a volatile health boundary.
+health_a="$(phys_of "$PROJ_A" stargate-tor-health)"
+[ -n "$health_a" ] || bail "A: volatile health volume missing"
+if [ -n "$health_a" ]; then
+  docker volume inspect "$health_a" | python3 -c '
+import json,sys
+v=json.load(sys.stdin)[0]
+assert v["Driver"]=="local"
+assert v["Options"]=={"type":"tmpfs","device":"tmpfs","o":"size=64k,uid=5103,gid=5103,mode=0700,noexec,nosuid,nodev"}
+' || bail "A: health backing is not constrained tmpfs"
+fi
+
 # writable volume roots initialised (B1): ipc/control-state/dp-state roots
 # owned by the service UID + group stargate-ipc, mode 750.
 declare -A ROOT_SPEC=(

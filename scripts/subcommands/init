@@ -360,8 +360,24 @@ supply_chain_guard() {
 # files there. stargate-keys root is chowned before the key+pepper install
 # step; the three state volumes to their owning plane. T167 also prepares
 # the config volume's child mountpoint before Compose mounts it read-only.
+# T203: mount options, not an init-only chown, establish ownership after
+# tmpfs remount/reboot. Never reuse an ordinary persistent volume as health.
+ensure_health_volume() {
+  local phys options
+  options='size=64k,uid=5103,gid=5103,mode=0700,noexec,nosuid,nodev'
+  phys="$(resolve_physical_volume stargate-tor-health)"
+  if [ -z "$phys" ]; then
+    phys="${STARGATE_PROJECT}_stargate-tor-health"
+    docker volume create --driver local --opt type=tmpfs --opt device=tmpfs --opt "o=$options" \
+      --label "com.docker.compose.project=$STARGATE_PROJECT" \
+      --label com.docker.compose.volume=stargate-tor-health "$phys" >/dev/null 2>&1 || return 1
+  fi
+  [ "$(docker volume inspect --format '{{.Driver}}|{{index .Options "type"}}|{{index .Options "device"}}|{{index .Options "o"}}' "$phys" 2>/dev/null)" = "local|tmpfs|tmpfs|$options" ]
+}
+
 ensure_volumes() {
   local vol phys
+  ensure_health_volume || return "$EXIT_KEYGEN"
   for vol in "$KEYS_VOLUME" "$OBSERVER_KEYS_VOLUME" "$OBSERVER_FABRIC_VOLUME" \
              "$IPC_VOLUME" "$CONTROL_STATE_VOLUME" "$CONTROL_CONFIG_VOLUME" \
              "$DP_STATE_VOLUME"; do
@@ -574,7 +590,8 @@ observer_source_hash() {
   local source part
   {
     for source in data-plane/go.mod data-plane/go.sum proto/go.mod proto/go.sum \
-                  data-plane/cmd/tor-observer/main.go sidecars/tor-observer/Dockerfile; do
+                  data-plane/cmd/tor-observer/main.go data-plane/internal/torhealth/health.go \
+                  sidecars/tor-observer/Dockerfile; do
       part="$(openssl dgst -sha256 "$_SG_REPO_ROOT/$source" | awk '{print $NF}')" || return 1
       printf '%s %s\n' "$source" "$part"
     done
@@ -769,7 +786,7 @@ print_status() {
   printf '  %-18s %-10s %-12s %s\n' "data plane"   "RUNNING" "127.0.0.1" "TCP connect to 127.0.0.1:$VERIFIED_TOR_PORT accepted"
   printf '  %-18s %-10s %-12s %s\n' "control plane" "RUNNING" "${cp_net:-unknown}" "container running; gRPC over control.sock"
   printf '  %-18s %-10s %-12s %s\n' "Tor sidecar"  "RUNNING" "internal"  "container running"
-  printf '  %-18s %-10s %-12s %s\n' "Tor observer" "READY" "internal" "authenticated current Tor bootstrap"
+  printf '  %-18s %-10s %-12s %s\n' "Tor observer" "READY" "internal" "authenticated cached Tor health"
   printf '\n'
   printf 'Admin enrollment: not yet implemented (deferred to the admin-UI feature).\n'
 }

@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 34 |
-| in-progress | 0 |
+| pending | 33 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 194 |
@@ -35,13 +35,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | Foundation audit remediation | ✓ | ✓ |
 | T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
-| T203 | Remove observer raw Tor authority with finite health publica | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T203 | Remove observer raw Tor authority with finite health publica | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

@@ -4,7 +4,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"crypto/ed25519"
@@ -12,92 +11,20 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
-	"golang.org/x/sys/unix"
+	"github.com/zcat-app/stargate/data-plane/internal/torhealth"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
-
-type fakeTor struct {
-	listener   net.Listener
-	mu         sync.Mutex
-	commands   []string
-	reply      string
-	stalled    bool
-	rejectAuth bool
-}
-
-func startFakeTor(t *testing.T, path, reply string) *fakeTor {
-	t.Helper()
-	l, err := net.Listen("unix", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	f := &fakeTor{listener: l, reply: reply}
-	go func() {
-		for {
-			c, err := l.Accept()
-			if err != nil {
-				return
-			}
-			go f.handle(c)
-		}
-	}()
-	t.Cleanup(func() { _ = l.Close() })
-	return f
-}
-
-func (f *fakeTor) handle(c net.Conn) {
-	defer c.Close()
-	r := bufio.NewReader(c)
-	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			return
-		}
-		line = strings.TrimSuffix(strings.TrimSuffix(line, "\n"), "\r")
-		f.mu.Lock()
-		f.commands = append(f.commands, line)
-		reply, stalled, rejectAuth := f.reply, f.stalled, f.rejectAuth
-		f.mu.Unlock()
-		switch {
-		case strings.HasPrefix(line, "AUTHENTICATE "):
-			if rejectAuth {
-				_, _ = io.WriteString(c, "515 Authentication failed\r\n")
-			} else {
-				_, _ = io.WriteString(c, "250 OK\r\n")
-			}
-		case line == "GETINFO status/bootstrap-phase":
-			if stalled {
-				_, _ = io.Copy(io.Discard, c)
-				return
-			}
-			_, _ = io.WriteString(c, reply)
-		case line == "QUIT":
-			_, _ = io.WriteString(c, "250 closing connection\r\n")
-			return
-		default:
-			_, _ = io.WriteString(c, "510 rejected\r\n")
-		}
-	}
-}
-
-func (f *fakeTor) snapshot() []string {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return append([]string(nil), f.commands...)
-}
 
 type fixture struct {
 	config      config
 	cpPriv      ed25519.PrivateKey
 	observerPub ed25519.PublicKey
-	fake        *fakeTor
 }
 
 func writeKeyPair(t *testing.T, dir, name string) (ed25519.PublicKey, ed25519.PrivateKey) {
@@ -129,16 +56,11 @@ func newFixture(t *testing.T, reply string) fixture {
 	cpPub, cpPriv := writeKeyPair(t, dir, "cp")
 	_ = cpPub
 	observerPub, _ := writeKeyPair(t, dir, "observer")
-	cookie := filepath.Join(dir, "control_auth_cookie")
-	if err := os.WriteFile(cookie, []byte("0123456789abcdefghijklmnopqrstuv"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	torPath := filepath.Join(dir, "tor.sock")
-	f := startFakeTor(t, torPath, reply)
+	sampleDir := newSampleDir(t)
+	publishFixture(t, sampleDir, torhealth.Ready)
 	c := config{
 		healthSocket: filepath.Join(dir, "health.sock"),
-		torSocket:    torPath,
-		cookiePath:   cookie,
+		sampleDir:    sampleDir,
 		privateKey:   filepath.Join(dir, "observer.priv"),
 		peerKey:      filepath.Join(dir, "cp.pub"),
 	}
@@ -151,7 +73,7 @@ func newFixture(t *testing.T, reply string) fixture {
 		t.Fatal("observer did not bind")
 	}
 	t.Cleanup(cancel)
-	return fixture{config: c, cpPriv: cpPriv, observerPub: observerPub, fake: f}
+	return fixture{config: c, cpPriv: cpPriv, observerPub: observerPub}
 }
 
 func clientCall(t *testing.T, f fixture, req []byte, closeWrite bool, clientKey ed25519.PrivateKey) ([]byte, error) {
@@ -200,39 +122,37 @@ func clientCall(t *testing.T, f fixture, req []byte, closeWrite bool, clientKey 
 
 const readyTor = "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=done SUMMARY=\"Done\"\r\n250 OK\r\n"
 
+func newSampleDir(t *testing.T) string {
+	t.Helper()
+	d, err := os.MkdirTemp("/dev/shm", "stargate-observer-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(d) })
+	return d
+}
+func publishFixture(t *testing.T, dir string, state torhealth.State) {
+	t.Helper()
+	stamp, err := torhealth.Now()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := torhealth.Write(dir, state, stamp); err != nil {
+		t.Fatal(err)
+	}
+}
 func TestSanitizedHealthAndRecovery(t *testing.T) {
 	f := newFixture(t, readyTor)
-	call := func(want string) {
-		t.Helper()
-		got, err := clientCall(t, f, []byte("HEALTH/1\n"), true, f.cpPriv)
-		if err != nil || string(got) != want {
-			t.Fatalf("health: got %q, %v; want %q", got, err, want)
+	for _, tc := range []struct {
+		state torhealth.State
+		reply string
+	}{{torhealth.Ready, readyReply}, {torhealth.NotReady, notReadyReply}, {torhealth.Unavailable, unavailable}, {torhealth.Ready, readyReply}} {
+		publishFixture(t, f.config.sampleDir, tc.state)
+		got, err := clientCall(t, f, []byte(healthRequest), true, f.cpPriv)
+		if err != nil || string(got) != tc.reply {
+			t.Fatalf("got %q %v", got, err)
 		}
 	}
-	call("READY/1\n")
-	var got []string
-	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
-		got = f.fake.snapshot()
-		if len(got) == 3 {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if len(got) != 3 || !strings.HasPrefix(got[0], "AUTHENTICATE ") || got[1] != "GETINFO status/bootstrap-phase" || got[2] != "QUIT" {
-		t.Fatalf("Tor command sequence: %q", got)
-	}
-	f.fake.mu.Lock()
-	f.fake.reply = "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=42 TAG=loading SUMMARY=\"Loading networkstatus consensus\"\r\n250 OK\r\n"
-	f.fake.mu.Unlock()
-	call("NOT_READY/1\n")
-	f.fake.mu.Lock()
-	f.fake.reply = "250-status/bootstrap-phase=WARN BOOTSTRAP SUMMARY=\"Retrying directory mirror\" TAG=loading PROGRESS=42 WARNING=\"timeout\"\r\n250 OK\r\n"
-	f.fake.mu.Unlock()
-	call("NOT_READY/1\n")
-	_ = f.fake.listener.Close()
-	call("UNAVAILABLE/1\n")
-	f.fake = startFakeTor(t, f.config.torSocket, readyTor)
-	call("READY/1\n")
 }
 
 func TestCommandAndAuthenticationInputsNeverReachTor(t *testing.T) {
@@ -258,9 +178,6 @@ func TestCommandAndAuthenticationInputsNeverReachTor(t *testing.T) {
 	if err == nil {
 		t.Error("wrong caller was authenticated")
 	}
-	if got := f.fake.snapshot(); len(got) != 0 {
-		t.Fatalf("invalid inputs reached Tor: %q", got)
-	}
 }
 
 func TestAbsentAuthenticationAndMissingEOFReceiveNoToken(t *testing.T) {
@@ -280,66 +197,6 @@ func TestAbsentAuthenticationAndMissingEOFReceiveNoToken(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatalf("missing request EOF got token: %q", got)
 	}
-	if commands := f.fake.snapshot(); len(commands) != 0 {
-		t.Fatalf("invalid callers caused Tor query: %q", commands)
-	}
-}
-
-func TestTorTimeoutAndConcurrentQueryLimit(t *testing.T) {
-	f := newFixture(t, readyTor)
-	f.fake.mu.Lock()
-	f.fake.stalled = true
-	f.fake.mu.Unlock()
-	first := make(chan []byte, 1)
-	go func() {
-		got, _ := clientCall(t, f, []byte("HEALTH/1\n"), true, f.cpPriv)
-		first <- got
-	}()
-	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
-		if len(f.fake.snapshot()) >= 2 {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	start := time.Now()
-	got, err := clientCall(t, f, []byte("HEALTH/1\n"), true, f.cpPriv)
-	if err != nil || string(got) != "UNAVAILABLE/1\n" {
-		t.Fatalf("excess query got %q, %v", got, err)
-	}
-	if time.Since(start) > time.Second {
-		t.Fatal("excess query waited behind active Tor query")
-	}
-	select {
-	case got = <-first:
-		if string(got) != "UNAVAILABLE/1\n" {
-			t.Fatalf("Tor timeout leaked non-finite reply %q", got)
-		}
-	case <-time.After(6 * time.Second):
-		t.Fatal("Tor query exceeded four-second budget")
-	}
-}
-
-func TestTorReplyBoundsAndMalformedResult(t *testing.T) {
-	for name, reply := range map[string]string{
-		"malformed":       "250-status/bootstrap-phase=garbage\r\n250 OK\r\n",
-		"garbage ready":   "250-status/bootstrap-phase=garbage PROGRESS=100\r\n250 OK\r\n",
-		"missing tag":     "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 SUMMARY=\"Done\"\r\n250 OK\r\n",
-		"missing summary": "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=done\r\n250 OK\r\n",
-		"quoted progress": "250-status/bootstrap-phase=NOTICE BOOTSTRAP TAG=done SUMMARY=\"PROGRESS=100\"\r\n250 OK\r\n",
-		"progress type":   "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=\"100\" TAG=done SUMMARY=\"Done\"\r\n250 OK\r\n",
-		"bad tag":         "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=bad! SUMMARY=\"Done\"\r\n250 OK\r\n",
-		"oversized line":  "250-" + strings.Repeat("X", 8192) + "\r\n250 OK\r\n",
-		"too many lines":  strings.Repeat("250-irrelevant\r\n", 65) + "250 OK\r\n",
-		"raw error":       "551 sensitive destination\r\n",
-	} {
-		t.Run(name, func(t *testing.T) {
-			f := newFixture(t, reply)
-			got, err := clientCall(t, f, []byte("HEALTH/1\n"), true, f.cpPriv)
-			if err != nil || string(got) != "UNAVAILABLE/1\n" {
-				t.Fatalf("got %q, %v", got, err)
-			}
-		})
-	}
 }
 
 // The Java core suite launches this fixture to exercise the actual Java
@@ -350,16 +207,11 @@ func TestJavaClientInteropFixture(t *testing.T) {
 	if dir == "" {
 		t.Skip("launched by the Java observer client contract test")
 	}
-	cookie := filepath.Join(dir, "control_auth_cookie")
-	if err := os.WriteFile(cookie, []byte("0123456789abcdefghijklmnopqrstuv"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	torPath := filepath.Join(dir, "tor.sock")
-	startFakeTor(t, torPath, readyTor)
+	sampleDir := newSampleDir(t)
+	publishFixture(t, sampleDir, torhealth.Ready)
 	c := config{
 		healthSocket: filepath.Join(dir, "health.sock"),
-		torSocket:    torPath,
-		cookiePath:   cookie,
+		sampleDir:    sampleDir,
 		privateKey:   filepath.Join(dir, "observer.priv"),
 		peerKey:      filepath.Join(dir, "cp.pub"),
 	}
@@ -379,7 +231,8 @@ func TestJavaClientInteropFixture(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, "stop")); err == nil {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		publishFixture(t, sampleDir, torhealth.Ready)
+		time.Sleep(100 * time.Millisecond)
 	}
 	cancel()
 	if err := <-done; err != nil {
@@ -387,106 +240,35 @@ func TestJavaClientInteropFixture(t *testing.T) {
 	}
 }
 
-// The operator's one-shot mode reuses the authenticated, bounded native query.
-func TestInstallerReadinessExitCodes(t *testing.T) {
-	for _, tc := range []struct {
-		name, reply string
-		want        int
-	}{
-		{"ready", "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=100 TAG=done SUMMARY=\"Done\"\r\n250 OK\r\n", 0},
-		{"not-ready", "250-status/bootstrap-phase=NOTICE BOOTSTRAP PROGRESS=25 TAG=loading SUMMARY=\"Loading\"\r\n250 OK\r\n", 1},
-		{"unavailable", "551 unavailable\r\n", 2},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newFixture(t, tc.reply)
-			if got := run(f.config, []string{"--check-ready"}); got != tc.want {
-				t.Fatalf("current readiness exit = %d, want %d", got, tc.want)
-			}
-			commands := f.fake.snapshot()
-			if len(commands) < 2 || !strings.HasPrefix(commands[0], "AUTHENTICATE ") || commands[1] != "GETINFO status/bootstrap-phase" {
-				t.Fatal("readiness bypassed authenticated fixed bootstrap query")
-			}
-		})
-	}
-	f := newFixture(t, "551 unavailable\r\n")
-	if got := run(f.config, []string{"--arbitrary-command"}); got != 2 {
-		t.Fatal("unknown mode was accepted")
-	}
-	if len(f.fake.snapshot()) != 0 {
-		t.Fatal("unknown mode touched Tor")
-	}
-}
-
-func TestInstallerReadinessMissingCookie(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		cookie []byte
-	}{
-		{"missing", nil},
-		{"malformed", []byte("short cookie")},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newFixture(t, readyTor)
-			var err error
-			if tc.cookie == nil {
-				err = os.Remove(f.config.cookiePath)
-			} else {
-				err = os.WriteFile(f.config.cookiePath, tc.cookie, 0600)
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := run(f.config, []string{"--check-ready"}); got != 2 {
-				t.Fatalf("cookie %s yielded readiness exit %d, want unavailable", tc.name, got)
-			}
-			if commands := f.fake.snapshot(); len(commands) != 0 {
-				t.Fatalf("cookie %s reached Tor: %q", tc.name, commands)
-			}
-		})
-	}
-}
-
-func TestInstallerReadinessRejectedCookie(t *testing.T) {
+func TestInstallerReadinessExitCodesAndExpiry(t *testing.T) {
 	f := newFixture(t, readyTor)
-	f.fake.mu.Lock()
-	f.fake.rejectAuth = true
-	f.fake.mu.Unlock()
-	if got := run(f.config, []string{"--check-ready"}); got != 2 {
-		t.Fatalf("rejected 32-byte cookie yielded readiness exit %d, want unavailable", got)
-	}
-	var commands []string
-	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
-		commands = f.fake.snapshot()
-		if len(commands) >= 2 {
-			break
+	for _, tc := range []struct {
+		state torhealth.State
+		exit  int
+	}{{torhealth.Ready, 0}, {torhealth.NotReady, 1}, {torhealth.Unavailable, 2}} {
+		publishFixture(t, f.config.sampleDir, tc.state)
+		if got := run(f.config, []string{"--check-ready"}); got != tc.exit {
+			t.Fatalf("exit=%d want=%d", got, tc.exit)
 		}
-		time.Sleep(time.Millisecond)
 	}
-	if len(commands) != 2 || !strings.HasPrefix(commands[0], "AUTHENTICATE ") || commands[1] != "QUIT" {
-		t.Fatalf("rejected cookie sent unexpected Tor commands: %q", commands)
+	if run(f.config, []string{"--arbitrary-command"}) != 2 {
+		t.Fatal("unknown mode accepted")
 	}
-}
-
-func TestInstallerReadinessDeadlineIncludesCookieIO(t *testing.T) {
-	fifo := filepath.Join(t.TempDir(), "cookie")
-	if err := unix.Mkfifo(fifo, 0600); err != nil {
+	publishFixture(t, f.config.sampleDir, torhealth.Ready)
+	stamp, err := torhealth.Now()
+	if err != nil {
 		t.Fatal(err)
 	}
-	// Release a blocked reader after the assertion, including on the pre-fix path.
-	defer func() {
-		f, err := os.OpenFile(fifo, os.O_RDWR, 0600)
-		if err == nil {
-			f.Close()
-		}
-	}()
-	done := make(chan int, 1)
-	go func() { done <- run(config{cookiePath: fifo}, []string{"--check-ready"}) }()
-	select {
-	case got := <-done:
-		if got != 2 {
-			t.Fatalf("blocked cookie exit = %d, want unavailable", got)
-		}
-	case <-time.After(torWindow + time.Second):
-		t.Fatal("installer readiness deadline did not bound cookie I/O")
+	stamp.Boot -= int64(5 * time.Second)
+	if err := torhealth.Write(f.config.sampleDir, torhealth.Ready, stamp); err != nil {
+		t.Fatal(err)
+	}
+	// Both a newly launched check and an existing authenticated server reject it.
+	if run(f.config, []string{"--check-ready"}) != 2 {
+		t.Fatal("consumer restart renewed lease")
+	}
+	got, err := clientCall(t, f, []byte(healthRequest), true, f.cpPriv)
+	if err != nil || string(got) != unavailable {
+		t.Fatal("server retained stale READY")
 	}
 }

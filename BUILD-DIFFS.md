@@ -52,6 +52,15 @@ release cadence that cold rebuilds equal that lock and that a tampered lock
 or replayed older index fails the build; this is the load-bearing
 reproducibility guarantee (Constitution Principle IV).
 
+**Tor-internal health publisher (T203).** This static Go executable is an additional
+reviewed Tor-image input outside the Debian package manifest. The image uses the same
+digest-pinned Go builder as the observer, locked modules, `CGO_ENABLED=0`, `-trimpath`,
+`-buildvcs=false` and an empty build ID. The release-cadence Tor harness compares the
+publisher bytes from both cold builds separately from package manifests. Matching Debian
+manifests alone cannot establish publisher identity; a skipped release job makes no measured
+byte-equality claim. Publisher and shared finite-record source, module locks, Dockerfile
+and launcher belong to the candidate's executable closure.
+
 **Tor package content — independently checked (T160/T177).** A package-name/version
 manifest alone cannot detect same-version replacement. The upgraded Tor
 `0.4.9.13-1~d12.bookworm+1` also has reviewed amd64/arm64 `.deb` hashes in

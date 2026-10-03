@@ -68,12 +68,20 @@ def assert_boundary(cp, observer, tor):
         raise AssertionError("CP lacks read-only health fabric")
     if "/run/stargate-tor-observer" not in om or not om["/run/stargate-tor-observer"]["RW"]:
         raise AssertionError("observer cannot own health fabric")
-    if "/run/tor-control" not in om or om["/run/tor-control"]["RW"]:
-        raise AssertionError("observer lacks read-only Tor control subpath")
-    state_mounts = [entry for entry in observer["HostConfig"]["Mounts"]
-                    if entry.get("Target") == "/run/tor-control"]
-    if len(state_mounts) != 1 or state_mounts[0].get("VolumeOptions", {}).get("Subpath") != "control":
-        raise AssertionError("observer Tor control subpath is not constrained")
+    if "/run/tor-health" not in om or om["/run/tor-health"]["RW"]:
+        raise AssertionError("observer lacks read-only finite health publication")
+    if "/run/tor-health" not in tm or not tm["/run/tor-health"]["RW"]:
+        raise AssertionError("Tor cannot publish finite health")
+    raw = [entry for entry in tor["Mounts"] if entry["Destination"] in ("/var/lib/tor", "/run/tor-fabric")]
+    for consumer in (cp, observer):
+        for entry in consumer["Mounts"]:
+            for private in raw:
+                source, forbidden = entry.get("Source", ""), private.get("Source", "")
+                if ((private.get("Name") and entry.get("Name") == private["Name"]) or
+                        (forbidden and (source == forbidden or source.startswith(forbidden + "/")))):
+                    raise AssertionError("consumer has Tor authority through a source mount")
+    if om["/run/tor-health"].get("Name") != tm["/run/tor-health"].get("Name"):
+        raise AssertionError("publication is not the same output volume")
     if "/run/stargate-tor" in om or "/run/stargate-tor-observer" in tm:
         raise AssertionError("sidecar fabrics crossed")
     for service in (cp, observer, tor):
@@ -119,7 +127,8 @@ def await_tor_ready(observer_id, timeout=300):
 
 def source_hash():
     sources = ("data-plane/go.mod", "data-plane/go.sum", "proto/go.mod", "proto/go.sum",
-               "data-plane/cmd/tor-observer/main.go", "sidecars/tor-observer/Dockerfile")
+               "data-plane/cmd/tor-observer/main.go", "data-plane/internal/torhealth/health.go",
+               "sidecars/tor-observer/Dockerfile")
     manifest = "".join(f"{source} {hashlib.sha256((ROOT / source).read_bytes()).hexdigest()}\n"
                        for source in sources)
     return hashlib.sha256(manifest.encode("ascii")).hexdigest()
@@ -421,7 +430,7 @@ def socks_auth(conn, token):
     return receive_exact(conn, 2)
 
 
-def assert_cp_down_forwarding(evidence, prefix, project, cp_id, observer_id):
+def assert_cp_down_forwarding(evidence, prefix, project, cp_id, observer_id, quiesce=None):
     # A disposable test credential is installed after the clean-host operator
     # startup. CP pushes its verifier through the real authenticated reload.
     token = secrets.token_hex(16).encode("ascii")
@@ -459,6 +468,8 @@ def assert_cp_down_forwarding(evidence, prefix, project, cp_id, observer_id):
     if checked(["docker", "inspect", "--format", "{{.State.Running}}", cp_id]) != "false":
         raise AssertionError("CP container remained running")
     await_tor_ready(observer_id)
+    if quiesce is not None:
+        quiesce()
     with socket.create_connection(("127.0.0.1", 8881), timeout=3) as conn:
         conn.settimeout(40)
         if socks_auth(conn, token) != b"\x01\x00":
@@ -589,34 +600,38 @@ def observe_phases(subscribe, fake, phases):
         return time.monotonic() - opened
 
     def settle_repeat(window, generation, command_names, expected):
+        # T203: Tor samples are autonomous and no longer reveal CP's poll times.
+        # Require a post-trigger publisher sample, then observe two entire CP
+        # poll intervals and its separate call/delivery budget in this window.
+        transition_at, = await_reply_samples(fake, generation, command_names, 1)
         if expected:
-            transition_at, = await_reply_samples(fake, generation, command_names, 1)
             await_event_sequence(window, 0, expected, timeout=max(
-                0.0, transition_at + CALL_BUDGET_SECONDS + DELIVERY_SECONDS - time.monotonic()))
-        _, repeat_at = await_reply_samples(fake, generation, command_names, 2)
-        sleep_until(repeat_at + CALL_BUDGET_SECONDS + DELIVERY_SECONDS)
+                0.0, transition_at + POLL_SECONDS + CALL_BUDGET_SECONDS + DELIVERY_SECONDS - time.monotonic()))
+        sleep_until(transition_at + 2 * POLL_SECONDS + CALL_BUDGET_SECONDS + DELIVERY_SECONDS)
 
     try:
         for name, kind, reply, expected, command_names, action in phases:
             lifetimes = []
             if kind in ("reply", "silent"):
-                sleep_until(await_fresh_sample(fake) + POLL_SECONDS - LEAD_SECONDS)
+                if reply == READY:
+                    # Drain a preceding four-second failed attempt before the
+                    # bounded subscription. Previous phases are already non-READY;
+                    # HOLD cannot hide their later transition into READY.
+                    hold = fake.set_reply(HOLD)
+                    await_reply_samples(fake, hold, ["AUTHENTICATE", "GETINFO", "QUIT"], 1)
                 window = enter()
                 generation = fake.set_reply(reply)
                 settle_repeat(window, generation, command_names, expected)
                 lifetimes.append(retire(window, expected))
             elif kind == "start":
-                first = enter()
                 fake.set_reply(HOLD)
+                # Expire the last cached READY before the slow Docker action.
+                time.sleep(4.1)
                 action()
-                second = enter()
+                window = enter()
                 generation = fake.set_reply(reply)
-                transition_at, = await_reply_samples(fake, generation, command_names, 1)
-                await_event_sequence(second, 0, expected, timeout=max(
-                    0.0, transition_at + CALL_BUDGET_SECONDS + DELIVERY_SECONDS - time.monotonic()))
-                lifetimes.append(retire(first, expected))
-                settle_repeat(second, generation, command_names, [])
-                lifetimes.append(retire(second, expected))
+                settle_repeat(window, generation, command_names, expected)
+                lifetimes.append(retire(window, expected))
             elif kind == "down":
                 await_fresh_sample(fake)
                 window = enter()
@@ -734,10 +749,40 @@ def validate(evidence, env):
 
     def cp_probe(*args):
         try:
-            return checked(["docker", "exec", "--user", "5101:5100", ids["stargate-control"],
+            return checked(["docker", "exec", ids["stargate-control"],
                             "/etc/stargate/t165-observer-probe", *args], timeout=10)
         except RuntimeError as failure:
             raise RuntimeError(f"CP probe mode {args[0]} failed: {failure}") from failure
+
+    observer_keys = Path(checked(["docker", "volume", "inspect", "--format", "{{.Mountpoint}}",
+                                  project + "_stargate-observer-keys"])) / "t203-probe"
+    shutil.copyfile(binary, observer_keys)
+    os.chmod(observer_keys, 0o555)
+    tor_state = Path(checked(["docker", "volume", "inspect", "--format", "{{.Mountpoint}}",
+                              project + "_stargate-tor-state"])) / "t203-probe"
+    shutil.copyfile(binary, tor_state)
+    os.chmod(tor_state, 0o555)
+    # Default Docker exec identities preserve each production caller's exact
+    # uid/groups/caps/namespaces; no privilege-elevated observer surrogate.
+    for service, path in (("stargate-control", "/etc/stargate/t165-observer-probe"),
+                          ("tor-observer", "/etc/stargate/observer-keys/t203-probe")):
+        if checked(["docker", "exec", ids[service], path, "raw-authority"]) != "RAW_AUTHORITY_DENIED":
+            raise AssertionError("application raw authority denial failed")
+    if checked(["docker", "exec", ids["tor-observer"], "/etc/stargate/observer-keys/t203-probe",
+                "publication-boundary"]) != "PUBLICATION_READONLY_TMPFS":
+        raise AssertionError("observer output-only backing failed")
+    if checked(["docker", "exec", ids["tor"], "/var/lib/tor/t203-probe", "raw-positive"]) != "RAW_AUTHORITY_POSITIVE":
+        raise AssertionError("Tor raw authority positive control failed")
+    context = {}
+    for service, item in inspected.items():
+        pid = item["State"]["Pid"]
+        status = Path(f"/proc/{pid}/status").read_text().splitlines()
+        context[service] = {"image": item["Image"], "user": item["Config"]["User"],
+            "status": [line for line in status if line.split(":",1)[0] in ("Uid","Gid","Groups","CapEff","NoNewPrivs")],
+            "namespaces": {name: os.readlink(f"/proc/{pid}/ns/{name}") for name in ("mnt","net","pid","time")},
+            "mounts": item["Mounts"], "security": item["HostConfig"].get("SecurityOpt"),
+            "apparmor": item.get("AppArmorProfile")}
+    evidence.joinpath("T203-production-context.json").write_text(json.dumps(context,indent=2)+"\n")
 
     if cp_probe("identity") != "IDENTITY_OK":
         raise AssertionError("CP production identity/filesystem probe failed")
@@ -758,57 +803,127 @@ def validate(evidence, env):
     state = checked(["docker", "volume", "inspect", "--format", "{{.Mountpoint}}", state_name])
     socket_path = Path(state) / "control/tor-control.sock"
     matrix = []
+    health_name = project + "_stargate-tor-health"
+    health_dir = Path(checked(["docker", "volume", "inspect", "--format", "{{.Mountpoint}}", health_name]))
+    publisher_id = None
     try:
         with FakeTor(socket_path) as fake:
-            # Drain any query started before the CP was stopped. The fake's
-            # log starts after the real Tor listener has been removed.
-            time.sleep(0.2)
+            # Tor removes its native cookie on clean shutdown. Seed a synthetic
+            # fixture cookie for this disposable listener; never copy the real
+            # credential into harness output or another authority boundary.
+            fixture_cookie = Path(state) / "control_auth_cookie"
+            fixture_cookie.write_bytes(bytes([0x51]) * 32)
+            os.chown(fixture_cookie, 5103, 5103)
+            os.chmod(fixture_cookie, 0o640)
+            publisher_id = checked(["docker", "run", "-d", "--name", project + "-publisher-fixture-" + secrets.token_hex(4),
+                "--network", "none", "--read-only", "--cap-drop", "ALL",
+                "--security-opt", "no-new-privileges:true", "--log-driver", "none",
+                "--user", "5103:5103", "--mount", f"type=volume,source={state_name},target=/var/lib/tor",
+                "--mount", f"type=volume,source={health_name},target=/run/tor-health",
+                "--entrypoint", "/usr/local/bin/tor-health-publisher", tor["Image"]])
+
+            def await_health(reply, expected):
+                import struct
+                trigger = time.clock_gettime_ns(time.CLOCK_BOOTTIME)
+                fake.set_reply(reply)
+                limit = time.monotonic() + 15
+                while time.monotonic() < limit:
+                    try:
+                        sample = (health_dir / "latest").read_bytes()
+                        began = struct.unpack_from("<q", sample, 16)[0] if len(sample) == 24 else -1
+                        if began >= trigger and cp_probe("health") == expected:
+                            return
+                    except (OSError, RuntimeError):
+                        pass
+                    time.sleep(0.2)
+                raise AssertionError("post-trigger finite publisher sample absent")
+
+            await_health(READY, "READY/1")
             bad = [b"GETINFO stream-status\n", b"GETINFO circuit-status\n",
                    b"GETCONF SocksPort\n", b"SETCONF SocksPort=9050\n",
                    b"SETEVENTS STREAM\n", b"ATTACHSTREAM 1 1\n",
                    b"ADD_ONION NEW:BEST\n", b"SIGNAL NEWNYM\n",
                    b"COMMAND arbitrary\n", b"HEALTH/2\n", b"HEALTH/1 extra\n",
                    b"HEALTH/1\nX", b"HEALTH/1\r\n"]
-            baseline = fake.snapshot()
             for mode in ("wrong-auth", "absent-auth", "no-eof"):
                 if cp_probe(mode) != "REFUSED":
                     raise AssertionError("invalid caller/request received a token")
-                assert_no_commands(baseline, fake.snapshot())
             for request in bad:
                 if cp_probe("request", request.hex()) != "REFUSED":
                     raise AssertionError("forbidden CP input received a token")
                 matrix.append(request.split(b" ", 1)[0].decode("ascii", "replace").strip())
-                assert_no_commands(baseline, fake.snapshot())
+            # Autonomous sampling continues; fixed stream validation and the
+            # absence of consumer inputs replace the old global no-query claim.
+            assert_safe_command_stream(fake.snapshot())
+            await_health(NOT_READY, "NOT_READY/1")
+            await_health("551 " + RAW_MARKER + "\r\n", "UNAVAILABLE/1")
+            await_health(None, "UNAVAILABLE/1")
+            await_health(READY, "READY/1")
+            checked(["docker", "kill", "--signal=STOP", publisher_id])
+            import struct
+            latest = health_dir / "latest"
+            saved = latest.read_bytes()
+            valid = bytearray(saved)
+            struct.pack_into("<q", valid, 16, time.clock_gettime_ns(time.CLOCK_BOOTTIME))
+
+            def record_bytes(data):
+                latest.unlink(missing_ok=True)
+                latest.write_bytes(data)
+                os.chown(latest, 5103, 5103)
+                os.chmod(latest, 0o600)
+
+            record_bytes(valid)
             if cp_probe("health") != "READY/1":
-                raise AssertionError("fake positive READY control failed")
-            assert_fixed_queries(await_commands(fake, len(baseline) + 3)[len(baseline):])
-            baseline = fake.snapshot()
-            fake.reply = NOT_READY
-            if cp_probe("health") != "NOT_READY/1":
-                raise AssertionError("fake NOT_READY control failed")
-            assert_fixed_queries(await_commands(fake, len(baseline) + 3)[len(baseline):])
-            baseline = fake.snapshot()
-            fake.reply = "551 " + RAW_MARKER + "\r\n"
+                raise AssertionError("finite-file parser positive control failed")
+            future = bytearray(valid)
+            struct.pack_into("<q", future, 16, time.clock_gettime_ns(time.CLOCK_BOOTTIME) + 3600_000_000_000)
+            domain = bytearray(valid)
+            domain[8] ^= 1
+            for bad_record in (bytes(valid[:5]), bytes(valid) + b"extra", b"X" * 8192,
+                               b"BAD1" + bytes(valid[4:]), bytes(future), bytes(domain)):
+                record_bytes(bad_record)
+                if cp_probe("health") != "UNAVAILABLE/1":
+                    raise AssertionError("invalid finite record accepted")
+            latest.unlink()
+            latest.symlink_to("/dev/zero")
             if cp_probe("health") != "UNAVAILABLE/1":
-                raise AssertionError("malformed Tor reply did not become UNAVAILABLE")
-            if await_commands(fake, len(baseline) + 3)[len(baseline):] != ["AUTHENTICATE", "GETINFO", "QUIT"]:
-                raise AssertionError("malformed reply produced unexpected Tor command")
-            baseline = fake.snapshot()
-            fake.reply = None
+                raise AssertionError("symlink record accepted")
+            latest.unlink()
+            os.mkfifo(latest, 0o600)
+            os.chown(latest, 5103, 5103)
             if cp_probe("health") != "UNAVAILABLE/1":
-                raise AssertionError("Tor timeout did not become UNAVAILABLE")
-            if await_commands(fake, len(baseline) + 2)[len(baseline):] != ["AUTHENTICATE", "GETINFO"]:
-                raise AssertionError("timeout produced unexpected Tor command")
-            evidence.joinpath("T165-probe-matrix.json").write_text(json.dumps({
+                raise AssertionError("FIFO record accepted")
+            record_bytes(saved)
+            time.sleep(4.1)
+            if cp_probe("health") != "UNAVAILABLE/1":
+                raise AssertionError("stopped publisher renewed READY")
+            os.utime(health_dir / "latest", None)
+            checked(prefix + ["restart", "tor-observer"], timeout=90)
+            if cp_probe("health") != "UNAVAILABLE/1":
+                raise AssertionError("mtime or observer restart renewed READY")
+            checked(["docker", "kill", "--signal=CONT", publisher_id])
+            await_health(READY, "READY/1")
+            checked(["docker", "kill", publisher_id])
+            time.sleep(4.1)
+            if cp_probe("health") != "UNAVAILABLE/1":
+                raise AssertionError("dead publisher retained READY")
+            checked(["docker", "start", publisher_id])
+            await_health(READY, "READY/1")
+            evidence.joinpath("T203-probe-matrix.json").write_text(json.dumps({
                 "forbidden_inputs": matrix, "real_health": initial,
-                "invalid_auth_and_eof_non_arrival": True,
-                "fake_ready": "READY/1", "fake_not_ready": "NOT_READY/1",
-                "fake_malformed": "UNAVAILABLE/1", "fake_timeout": "UNAVAILABLE/1",
-                "tor_command_allowlist": True,
+                "invalid_auth_and_eof_refused": True, "autonomous_fixed_sampling": True,
+                "fresh_ready_not_ready_malformed_timeout": True,
+                "publisher_stop_expiry_observer_restart_mtime": True,
+                "invalid_file_shape_future_domain_symlink_fifo": True,
+                "dead_publisher_expiry_and_recovery": True,
+                "controlled_publisher_image": tor["Image"],
             }, indent=2) + "\n")
             exercise_cp_events(evidence, fake, prefix, project, ids["stargate-control"],
                                ids["tor-observer"], binary)
     finally:
+        if publisher_id:
+            subprocess.run(["docker", "kill", "--signal=CONT", publisher_id],capture_output=True)
+            checked(["docker", "stop", "-t", "2", publisher_id], timeout=30)
         checked(["docker", "kill", "--signal=CONT", ids["stargate-control"]])
         checked(prefix + ["start", "tor"], timeout=90)
     deadline = time.monotonic() + 30
@@ -860,5 +975,25 @@ def validate(evidence, env):
     for path in state.rglob("*"):
         if path.is_file() and RAW_MARKER.encode("ascii") in path.read_bytes():
             raise AssertionError("raw Tor reply reached CP state or audit rows")
-    assert_cp_down_forwarding(evidence, prefix, project, ids["stargate-control"], ids["tor-observer"])
-    print("PASS: T165 deployed observer boundary and CP-down authenticated Tor forwarding")
+    def signal_publisher(sig):
+        script = ('found=0; for proc in /proc/[0-9]*; do '
+                  'if [ "$(readlink "$proc/exe")" = /usr/local/bin/tor-health-publisher ]; then '
+                  'kill -' + sig + ' "${proc##*/}"; found=$((found+1)); fi; done; '
+                  '[ "$found" = 1 ]')
+        checked(["docker", "exec", ids["tor"], "sh", "-c", script])
+
+    def quiesce_health():
+        checked(prefix + ["stop", "tor-observer"], timeout=90)
+        signal_publisher("STOP")
+        time.sleep(4.1)
+
+    try:
+        assert_cp_down_forwarding(evidence, prefix, project, ids["stargate-control"],
+                                  ids["tor-observer"], quiesce_health)
+        evidence.joinpath("T203-health-down-forwarding.txt").write_text(
+            "CP and observer stopped; Tor-internal publisher SIGSTOPed beyond its original lease. "
+            "DP authenticated from retained state and Tor returned destination response bytes.\n")
+    finally:
+        signal_publisher("CONT")
+        checked(prefix + ["start", "tor-observer"], timeout=90)
+    print("PASS: deployed observer boundary and CP/observer/publisher-down authenticated forwarding")

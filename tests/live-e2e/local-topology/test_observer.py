@@ -29,19 +29,17 @@ def fixture():
     }
     observer = {
         "Config": {"User": "5103:5100", "Image": "sha256:" + "a" * 64},
-        "HostConfig": {"NetworkMode": "none", "Mounts": [
-            {"Target": "/run/tor-control", "VolumeOptions": {"Subpath": "control"}},
-        ]},
+        "HostConfig": {"NetworkMode": "none", "Mounts": []},
         "Mounts": [
             {"Destination": "/etc/stargate/observer-keys", "RW": False},
             {"Destination": "/run/stargate-tor-observer", "RW": True},
-            {"Destination": "/run/tor-control", "RW": False},
+            {"Destination": "/run/tor-health", "RW": False,"Name":"health","Source":"/vol/health"},
         ],
     }
     tor = {
         "Config": {"Healthcheck": {"Test": ["NONE"]}},
         "HostConfig": {},
-        "Mounts": [{"Destination": "/var/lib/tor", "RW": True}],
+        "Mounts": [{"Destination": "/var/lib/tor", "RW": True,"Name":"state","Source":"/vol/state"},{"Destination":"/run/tor-health","RW":True,"Name":"health","Source":"/vol/health"}],
     }
     for service in (cp, observer, tor):
         service["Config"]["Healthcheck"] = {"Test": ["NONE"]}
@@ -63,8 +61,8 @@ class ObserverBoundaryVerdictTest(unittest.TestCase):
 
     def test_full_tor_state_mount_is_rejected(self):
         cp, observer, tor = copy.deepcopy(fixture())
-        observer["HostConfig"]["Mounts"][0]["VolumeOptions"]["Subpath"] = ""
-        with self.assertRaisesRegex(AssertionError, "subpath"):
+        observer["Mounts"].append({"Destination":"/alternate","RW":False,"Name":"state","Source":"/vol/state/control"})
+        with self.assertRaisesRegex(AssertionError, "Tor authority"):
             assert_boundary(cp, observer, tor)
 
     def test_docker_socket_mount_is_rejected(self):
@@ -195,7 +193,7 @@ class ObserverBoundaryVerdictTest(unittest.TestCase):
         self.assertTrue(all(phase["exact_events"] for phase in report["phases"].values()))
         self.assertFalse([w for w in world.windows if w.cut], "a window outlived the CP lifetime")
         lifetimes = [w.closed - w.opened for w in world.windows]
-        self.assertLess(max(lifetimes), SimWorld.LIFETIME - 4, lifetimes)
+        self.assertLess(max(lifetimes), SimWorld.LIFETIME - 1, lifetimes)
         self.assertLessEqual(max(phase["max_window_seconds"] for phase in report["phases"].values()),
                              max(lifetimes) + 0.1)
         # No continuity is claimed; each phase states what its silence rests on.
@@ -417,6 +415,8 @@ class SimWorld:
         self.ipc.mkdir()
         (tmp / "keys").mkdir()
         self.recreate_socket()
+        self.cached_health, self.sample_start = "UNAVAILABLE", -10.0
+        self.schedule(0.0, self.publisher_tick)
         self.schedule(0.0, self.tick, self.epoch)
 
     def schedule(self, when, function, *args):
@@ -442,25 +442,26 @@ class SimWorld:
     def set_observer(self, up):
         self.observer_up = up
 
+    def publisher_tick(self):
+        reply, start = self.fake.reply, self.now
+        self.fake.record("AUTHENTICATE")
+        self.fake.record("GETINFO", served=True)
+        delay = 4.0 if reply is None else 0.05
+        health = {subject.READY: "READY", subject.NOT_READY: "NOT_READY"}.get(reply, "UNAVAILABLE")
+        def complete():
+            self.cached_health, self.sample_start = health, start
+            self.fake.record("QUIT")
+            self.schedule(self.now + 1.0, self.publisher_tick)
+        self.schedule(self.now + delay, complete)
+
     def tick(self, epoch):
         if epoch != self.epoch:
             return
         if self.frozen:
             self.overdue = True
             return
-        if self.observer_up:
-            reply = self.fake.reply
-            self.fake.record("AUTHENTICATE")
-            self.fake.record("GETINFO", served=True)
-            if reply is None:
-                health, end = "UNAVAILABLE", self.now + 4.0
-            else:
-                self.fake.record("QUIT")
-                health = {subject.READY: "READY", subject.NOT_READY: "NOT_READY"}.get(reply, "UNAVAILABLE")
-                end = self.now + self.sample
-        else:
-            health, end = "UNAVAILABLE", self.now + 0.05
-        self.schedule(end, self.finish, epoch, health)
+        health = self.cached_health if self.observer_up and self.now - self.sample_start < 4 else "UNAVAILABLE"
+        self.schedule(self.now + self.sample, self.finish, epoch, health)
 
     def finish(self, epoch, health):
         if epoch != self.epoch:

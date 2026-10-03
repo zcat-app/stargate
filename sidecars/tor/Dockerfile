@@ -80,6 +80,16 @@
 # manual, review-driven PR (Principle IV): bump the snapshot run, every =version
 # pin, the InRelease hash and the lock rows together.
 
+# T203: the fixed publisher is part of Tor's reviewed executable closure.
+FROM golang:1.26.3-bookworm@sha256:252599aeb51ad60b83e4d8821802068127c528c707cb7dd7afd93be057c6011c AS publisher
+WORKDIR /src
+COPY data-plane/go.mod data-plane/go.sum ./
+COPY proto/go.mod proto/go.sum /proto/
+COPY data-plane/cmd/tor-health-publisher/ ./cmd/tor-health-publisher/
+COPY data-plane/internal/torhealth/ ./internal/torhealth/
+ENV CGO_ENABLED=0
+RUN go build -trimpath -buildvcs=false -ldflags=-buildid= -o /out/tor-health-publisher ./cmd/tor-health-publisher
+
 # ---------- Stage 1: keyring builder ----------
 FROM debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS keyring
 
@@ -97,7 +107,7 @@ FROM debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90
 # package-closure.lock refuses that before this stage installs anything; stage 1
 # tooling (curl, gnupg) verifies the Tor signing key, so it gets the same pin.
 # No Check-Valid-Until defeat is applied.
-COPY verify-closure.sh package-closure.lock /tmp/
+COPY sidecars/tor/verify-closure.sh sidecars/tor/package-closure.lock /tmp/
 RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources \
  && echo "deb http://snapshot.debian.org/archive/debian/20260714T082229Z/ bookworm main" \
         > /etc/apt/sources.list.d/snapshot.list \
@@ -109,7 +119,7 @@ RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources \
         gnupg=2.2.40-1.1+deb12u2 \
  && rm -rf /var/lib/apt/lists/*
 
-COPY apt-key.fingerprint /tmp/apt-key.fingerprint
+COPY sidecars/tor/apt-key.fingerprint /tmp/apt-key.fingerprint
 
 # Fetch + verify + dearmor. Both checks must pass; either failure exits
 # the RUN non-zero and fails the build. See header comment for why the
@@ -135,8 +145,8 @@ FROM debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90
 # The verified keyring is the ONLY artefact that crosses from stage 1.
 # curl and gnupg never ship in the runtime image.
 COPY --from=keyring /tmp/torproject-archive-keyring.gpg /usr/share/keyrings/
-COPY install-tor.sh tor-packages.sha256 /tmp/
-COPY verify-closure.sh package-closure.lock /tmp/
+COPY sidecars/tor/install-tor.sh sidecars/tor/tor-packages.sha256 /tmp/
+COPY sidecars/tor/verify-closure.sh sidecars/tor/package-closure.lock /tmp/
 
 # Add the Tor Project apt repo for the bookworm suite (matches the
 # Debian 12 base). signed-by= binds the repo to the verified key ONLY;
@@ -190,8 +200,8 @@ RUN rm -f /etc/apt/sources.list /etc/apt/sources.list.d/debian.sources \
 #
 # UID/GID 5103 (T039): numeric pin following the 5100–5102 plane scheme.
 # CookieAuthFileGroupReadable 1 (torrc invariant #4) creates the cookie
-# 0640 tor:tor. CP has neither the mount nor GID 5103; T164's future
-# isolated observer must hold any necessary Tor-facing authority.
+# 0640 tor:tor. CP and observer have no Tor-state mount. Only the Tor-internal
+# publisher holds native control authority (T203).
 RUN groupadd --system --gid 5103 tor \
  && groupadd --system --gid 5200 stargate-tor-dp \
  && useradd --system --uid 5103 --gid 5103 --home /var/lib/tor --shell /usr/sbin/nologin tor \
@@ -208,9 +218,11 @@ RUN groupadd --system --gid 5103 tor \
 # cold-volume regression test verifies image /etc/tor/torrc == wantTorrc
 # without harness-seeded config. Explicit chmod 0644 so USER tor can read
 # it regardless of the source checkout's file mode (redteam m1).
-COPY torrc /etc/tor/torrc
-COPY entrypoint.sh /usr/local/bin/stargate-tor-entrypoint
+COPY sidecars/tor/torrc /etc/tor/torrc
+COPY sidecars/tor/entrypoint.sh /usr/local/bin/stargate-tor-entrypoint
 RUN chmod 0644 /etc/tor/torrc && chmod 0755 /usr/local/bin/stargate-tor-entrypoint
+
+COPY --from=publisher /out/tor-health-publisher /usr/local/bin/tor-health-publisher
 
 USER tor
 

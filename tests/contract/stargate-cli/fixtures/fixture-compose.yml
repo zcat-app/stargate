@@ -57,6 +57,7 @@ services:
     command: ["sleep", "3600"]
     volumes:
       - stargate-tor-state:/var/lib/tor
+      - stargate-tor-health:/run/tor-health
     restart: "no"
 
   # Controlled current-readiness fixture for the real installer's exec call.
@@ -79,5 +80,11 @@ volumes:
   stargate-control-state: {}
   stargate-dp-state: {}
   stargate-tor-state: {}
+  stargate-tor-health:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=64k,uid=5103,gid=5103,mode=0700,noexec,nosuid,nodev
   stargate-observer-keys: {}
   stargate-tor-cp-fabric: {}

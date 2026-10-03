@@ -63,7 +63,9 @@ COMPOSE="docker compose -p stargate -f compose/docker-compose.local.yml --env-fi
 4. Brings up the stack via `compose/docker-compose.local.yml`
    (data plane, control plane, Tor sidecar, Tor observer).
 5. Confirms the services are running and waits for the observer's authenticated
-   current READY result. The default is one 300-second window after Compose
+   cached READY result. Each decision reads a finite Tor bootstrap sample whose
+   age must be less than four seconds from the publisher's query start; it does
+   not start a new Tor query. The default is one 300-second window after Compose
    startup; `STARGATE_HEALTHCHECK_TIMEOUT` overrides it.
 6. Runs a bounded TCP-connect check on `127.0.0.1:8881`.
 7. Prints a status table. CP receives only the observer's finite health
@@ -86,7 +88,7 @@ Tor result. The control plane has no network (`network_mode: none`).
 data plane         RUNNING    127.0.0.1    TCP connect to 127.0.0.1:8881 accepted
 control plane      RUNNING    none         container running; gRPC over control.sock
 Tor sidecar        RUNNING    internal     container running
-Tor observer       READY      internal     authenticated current Tor bootstrap
+Tor observer       READY      internal     authenticated cached Tor health
 ```
 
 If `init` exits non-zero, see arch §9.1 step 7 for the error-code
@@ -406,14 +408,15 @@ $COMPOSE start tor
 $COMPOSE down
 ```
 
-This stops the stack but leaves all named volumes (and therefore the
-Tor entry-guard state, the audit log, and the inter-plane keys + pepper)
-intact.
+This stops the stack but leaves the named volumes. Persistent Tor entry-guard
+state, control-plane state, and inter-plane keys + pepper remain. The Tor health
+handoff is volatile tmpfs; its contents are not durable across unmount or host
+reboot and are invalidated before Tor starts.
 
 To remove all state, the future `scripts/stargate wipe` subcommand will
 be the documented path. In v1 of this feature, project-scoped volume
 removal is the operator's responsibility — `$COMPOSE down -v` removes
-the nine named volumes Compose created for the `stargate` project (no
+the ten named volumes Compose created for the `stargate` project (no
 literal volume names to keep in sync; the project identity `init`
 established does the work):
 

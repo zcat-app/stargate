@@ -7,8 +7,9 @@
 # scripts/stargate init and THREAT-MODEL.md §3.1. Tor alone has bridge egress.
 # T168 also requires Landlock ABI >= 4 and seccomp TSYNC in the static Go DP.
 # It installs process confinement before serving; owner rules are defense in depth.
-# T164: CP sees only the observer's authenticated health socket. The observer
-# alone mounts Tor's control/ subpath; neither application plane sees it.
+# T203: CP sees only the observer's authenticated health socket. The observer
+# holds no Tor-state mount and reads only the read-only finite-health tmpfs.
+# Native control authority stays inside the Tor container with its fixed publisher.
 
 services:
   stargate-dp:
@@ -96,8 +97,8 @@ services:
     healthcheck:
       disable: true
     build:
-      context: ../sidecars/tor
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: sidecars/tor/Dockerfile
     image: stargate/tor:local
     # T191 item 11: build locally, never pull (see stargate-dp).
     pull_policy: build
@@ -105,6 +106,7 @@ services:
       - "5200"
     volumes:
       - stargate-tor-state:/var/lib/tor
+      - stargate-tor-health:/run/tor-health
       - stargate-tor-dp-fabric:/run/tor-fabric
     networks:
       - stargate-egress
@@ -138,12 +140,7 @@ services:
     volumes:
       - stargate-observer-keys:/etc/stargate/observer-keys:ro
       - stargate-tor-cp-fabric:/run/stargate-tor-observer
-      - type: volume
-        source: stargate-tor-state
-        target: /run/tor-control
-        read_only: true
-        volume:
-          subpath: control
+      - stargate-tor-health:/run/tor-health:ro
     read_only: true
     cap_drop:
       - ALL
@@ -164,6 +161,12 @@ volumes:
   stargate-control-state:
   stargate-dp-state:
   stargate-tor-state:
+  stargate-tor-health:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=64k,uid=5103,gid=5103,mode=0700,noexec,nosuid,nodev
   stargate-tor-dp-fabric:
   stargate-tor-cp-fabric:
   stargate-observer-keys:

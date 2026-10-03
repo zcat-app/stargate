@@ -1,10 +1,8 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// The observer is the only Stargate process with Tor control authority.
-// Constitution II/III and foundation-boundaries.md permit this process to
-// reduce one fixed Tor bootstrap query to a finite health token; it has no
-// command-bearing CP input and no IP network namespace in production.
+// The observer authenticates CP health requests and reads only a finite volatile
+// Tor-side publication. It has no raw Tor mounts or control client (II/III).
 package main
 
 import (
@@ -12,17 +10,14 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"crypto/subtle"
 	"crypto/x509"
-	"encoding/hex"
 	"encoding/pem"
 	"errors"
+	"github.com/zcat-app/stargate/data-plane/internal/torhealth"
 	"golang.org/x/sys/unix"
 	"io"
 	"net"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -34,16 +29,12 @@ const (
 	authWindow    = time.Second
 	requestWindow = time.Second
 	torWindow     = 4 * time.Second
-	maxReplyBytes = 8 * 1024
-	maxReplyLines = 64
-	maxLineBytes  = 8 * 1024
 	maxHandshakes = 16
 )
 
 type config struct {
 	healthSocket string
-	torSocket    string
-	cookiePath   string
+	sampleDir    string
 	privateKey   string
 	peerKey      string
 }
@@ -65,8 +56,7 @@ func main() {
 
 	c := config{
 		healthSocket: "/run/stargate-tor-observer/health.sock",
-		torSocket:    "/run/tor-control/tor-control.sock",
-		cookiePath:   "/run/tor-control/control_auth_cookie",
+		sampleDir:    torhealth.Directory,
 		privateKey:   "/etc/stargate/observer-keys/observer.priv",
 		peerKey:      "/etc/stargate/observer-keys/cp.pub",
 	}
@@ -75,7 +65,7 @@ func main() {
 
 // Only the invoking operator can select the fixed one-shot readiness mode.
 // It executes inside the observer's existing authority, exposes no raw reply,
-// and inherits torHealth's four-second deadline (Constitution III / T152).
+// and bounds the fresh finite-file read to four seconds (Constitution III).
 func run(c config, args []string) int {
 	if len(args) == 1 && args[0] == "--check-ready" {
 		// File I/O can block independently of the socket deadline. A one-shot
@@ -169,7 +159,7 @@ func serve(ctx context.Context, c config, ready chan<- struct{}) error {
 func handle(conn net.Conn, c config, priv ed25519.PrivateKey, queries chan struct{}) {
 	defer conn.Close()
 	if err := authenticate(conn, c.peerKey, priv); err != nil {
-		return // invalid callers receive no token and cause no Tor query
+		return // invalid callers receive no token and receive no health sample
 	}
 	_ = conn.SetDeadline(time.Now().Add(requestWindow))
 	var req [len(healthRequest)]byte
@@ -187,8 +177,8 @@ func handle(conn net.Conn, c config, priv ed25519.PrivateKey, queries chan struc
 		_, _ = io.WriteString(conn, unavailable)
 		return
 	}
-	// The Tor budget starts after validated request EOF; no unauthenticated
-	// input is permitted to hold a query slot or reach the control socket.
+	// Read the producer lease after validated EOF; CP input cannot trigger
+	// a Tor query or renew the original sample timestamp.
 	result := torHealth(c)
 	_ = conn.SetWriteDeadline(time.Now().Add(time.Second))
 	_, _ = io.WriteString(conn, result)
@@ -262,179 +252,12 @@ func readPublicKey(path string) (ed25519.PublicKey, error) {
 }
 
 func torHealth(c config) string {
-	ctx, cancel := context.WithTimeout(context.Background(), torWindow)
-	defer cancel()
-	cookie, err := os.ReadFile(c.cookiePath)
-	if err != nil || len(cookie) != 32 {
-		return unavailable
-	}
-	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", c.torSocket)
-	if err != nil {
-		return unavailable
-	}
-	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(time.Until(deadline(ctx))))
-	defer func() { _, _ = io.WriteString(conn, "QUIT\r\n") }()
-	if _, err := io.WriteString(conn, "AUTHENTICATE "+hex.EncodeToString(cookie)+"\r\n"); err != nil {
-		return unavailable
-	}
-	budget := &replyBudget{}
-	auth, err := readTorLine(conn, budget)
-	if err != nil || auth != "250 OK" {
-		return unavailable
-	}
-	if _, err := io.WriteString(conn, "GETINFO status/bootstrap-phase\r\n"); err != nil {
-		return unavailable
-	}
-	progress, err := readBootstrap(conn, budget)
-	if err != nil {
-		return unavailable
-	}
-	if progress == 100 {
+	switch torhealth.Read(c.sampleDir) {
+	case torhealth.Ready:
 		return readyReply
+	case torhealth.NotReady:
+		return notReadyReply
+	default:
+		return unavailable
 	}
-	return notReadyReply
-}
-
-func deadline(ctx context.Context) time.Time {
-	d, _ := ctx.Deadline()
-	return d
-}
-
-type replyBudget struct {
-	bytes int
-	lines int
-}
-
-func readTorLine(r io.Reader, budget *replyBudget) (string, error) {
-	var line []byte
-	var one [1]byte
-	for {
-		if _, err := io.ReadFull(r, one[:]); err != nil {
-			return "", err
-		}
-		budget.bytes++
-		if budget.bytes > maxReplyBytes {
-			return "", errors.New("tor reply too large")
-		}
-		line = append(line, one[0])
-		if len(line) > maxLineBytes {
-			return "", errors.New("tor line too large")
-		}
-		if one[0] == '\n' {
-			budget.lines++
-			if budget.lines > maxReplyLines || len(line) < 2 || line[len(line)-2] != '\r' {
-				return "", errors.New("invalid Tor line")
-			}
-			return string(line[:len(line)-2]), nil
-		}
-	}
-}
-
-func readBootstrap(conn net.Conn, budget *replyBudget) (int, error) {
-	line, err := readTorLine(conn, budget)
-	if err != nil || !strings.HasPrefix(line, "250-status/bootstrap-phase=") {
-		return 0, errors.New("invalid Tor bootstrap reply")
-	}
-	phase := strings.TrimPrefix(line, "250-status/bootstrap-phase=")
-	// Tor's GETINFO value is a STATUS_CLIENT bootstrap event without its
-	// "650 STATUS_CLIENT" envelope. Require its mandatory structure before
-	// reducing PROGRESS, so arbitrary text containing PROGRESS=100 cannot
-	// produce READY. Unknown fields remain permitted by the control spec.
-	// https://spec.torproject.org/control-spec/commands.html#GETINFO
-	// https://spec.torproject.org/control-spec/replies.html#status-events
-	var arguments string
-	if strings.HasPrefix(phase, "NOTICE BOOTSTRAP ") {
-		arguments = strings.TrimPrefix(phase, "NOTICE BOOTSTRAP ")
-	} else if strings.HasPrefix(phase, "WARN BOOTSTRAP ") {
-		arguments = strings.TrimPrefix(phase, "WARN BOOTSTRAP ")
-	} else {
-		return 0, errors.New("invalid Tor bootstrap event")
-	}
-	fields, err := parseBootstrapFields(arguments)
-	if err != nil || fields["TAG"] == "" || fields["SUMMARY"] == "" {
-		return 0, errors.New("invalid Tor bootstrap fields")
-	}
-	progress, err := strconv.Atoi(fields["PROGRESS"])
-	if err != nil || progress < 0 || progress > 100 {
-		return 0, errors.New("invalid progress")
-	}
-	end, err := readTorLine(conn, budget)
-	if err != nil || subtle.ConstantTimeCompare([]byte(end), []byte("250 OK")) != 1 {
-		return 0, errors.New("invalid Tor completion")
-	}
-	return progress, nil
-}
-
-func parseBootstrapFields(input string) (map[string]string, error) {
-	fields := make(map[string]string)
-	for len(input) > 0 {
-		equal := strings.IndexByte(input, '=')
-		if equal <= 0 || strings.IndexByte(input[:equal], ' ') >= 0 {
-			return nil, errors.New("invalid Tor field")
-		}
-		key := input[:equal]
-		if !torKeyword(key) {
-			return nil, errors.New("invalid Tor field name")
-		}
-		input = input[equal+1:]
-		if input == "" {
-			return nil, errors.New("empty Tor field")
-		}
-		if input[0] == '"' && (key == "PROGRESS" || key == "TAG") {
-			return nil, errors.New("invalid Tor bootstrap field type")
-		}
-		var value string
-		if input[0] == '"' {
-			closing := -1
-			for i := 1; i < len(input); i++ {
-				if input[i] == '\\' && i+1 < len(input) {
-					i++
-				} else if input[i] == '"' {
-					closing = i
-					break
-				}
-			}
-			if closing < 0 {
-				return nil, errors.New("unterminated Tor field")
-			}
-			value, input = input[1:closing], input[closing+1:]
-		} else {
-			end := strings.IndexByte(input, ' ')
-			if end < 0 {
-				end = len(input)
-			}
-			value, input = input[:end], input[end:]
-			if !torKeyword(value) {
-				return nil, errors.New("invalid Tor field value")
-			}
-		}
-		if value == "" {
-			return nil, errors.New("empty Tor field value")
-		}
-		if _, duplicate := fields[key]; duplicate {
-			return nil, errors.New("duplicate Tor field")
-		}
-		fields[key] = value
-		if input != "" {
-			if input[0] != ' ' || len(input) == 1 || input[1] == ' ' {
-				return nil, errors.New("invalid Tor field separator")
-			}
-			input = input[1:]
-		}
-	}
-	return fields, nil
-}
-
-func torKeyword(value string) bool {
-	if value == "" {
-		return false
-	}
-	for i := 0; i < len(value); i++ {
-		b := value[i]
-		if !(b >= 'A' && b <= 'Z' || b >= 'a' && b <= 'z' || b >= '0' && b <= '9' || b == '_') {
-			return false
-		}
-	}
-	return true
 }

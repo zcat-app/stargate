@@ -1,9 +1,9 @@
 ---
 id: "T203"
 title: "Remove observer raw Tor authority with finite health publication"
-status: pending
+status: in-progress
 created: "2026-10-03"
-last_updated: "2026-10-03"
+last_updated: 2026-10-03
 source: "T155 resumed cumulative deployment M1; independent falsify-3-deployment.md; independent observer design-verification.md (2026-10-03 PASS WITH REQUIRED DESIGN CORRECTIONS)"
 phase: "Foundation audit remediation"
 story: "-"
@@ -27,7 +27,9 @@ constitution_refs:
   - "V: honest boundary and TCB statements"
   - "VII/VIII: tests-first and independent evidence"
 decision_refs:
+  - "2026-10-03 user: approved one-time in-review to in-progress recovery retaining round2, baseline and review history so normal driver owns fresh verification; no driver code repair or hook bypass"
   - "2026-10-03 user: verify observer recommendation and proceed if it passes; observer-only scope"
+  - "2026-10-03 user: approve both and apply wording; repair both advisory Majors within existing total-budget contract and apply exact12 reserved replacements SHA25660d17324e7bb236548e2a3e1cb24b58f36ec1fd2c2b2b413d243a6793f467e08"
   - "2026-10-03 independent design verification PASS WITH REQUIRED DESIGN CORRECTIONS; root read/accepted under the conditional observer-only go-ahead"
 tests_first: []
 reviews: {}
@@ -42,7 +44,8 @@ clarity_check: {}
 
 Final independent design verification passed with required corrections on 2026-10-03;
 those corrections are incorporated below. No other new T155 finding is included. T202 remains
-reserved. Exact reserved wording still requires evaluation and maintainer approval before writing.
+reserved. The exact12 reserved wording replacements were independently evaluated and approved by the
+maintainer on2026-10-03 (see decision_refs), then applied verbatim.
 
 ## Context
 
@@ -58,8 +61,7 @@ command/configuration channel from the observer. The observer receives only fini
 health through a volatile bounded handoff and keeps its existing authenticated CP protocol.
 Container placement alone is not the justification: the publisher is explicitly part of the
 Tor artifact/route TCB, with fixed code and no management-input surface. The independent design review established this classification without a constitutional
-amendment, conditional on retaining the strict no-input boundary. Exact boundary wording
-remains subject to the reserved-wording approval procedure.
+amendment, conditional on retaining the strict no-input boundary. Exact boundary wording passed the reserved-wording evaluation/approval procedure recorded above.
 
 ## Analysis
 
@@ -205,3 +207,76 @@ absence of a causal input path instead. Fake-Tor phases must run the actual publ
 its intended Tor-side boundary and require a sample begun after each phase trigger; cached
 READY from an earlier phase cannot satisfy a later one. Keep no false lifecycle events and
 no raw diagnostic marker. Historical T165 evidence stays unchanged and historical.
+
+## Constitution VIII impact assessment
+
+T203 materially changes the Tor/observer trust boundary: raw cookie/control access is
+removed from the observer; a fixed autonomous publisher inside the Tor artifact/route
+TCB sends finite health through a volatile read-only handoff. The publisher retains
+Tor's native authority under compromise. Its fixed source commands do not constrain
+arbitrary code execution in that component. CP cryptographic identity and authenticated
+wire framing, protected routes and deployment listener exposure are unchanged.
+
+This trust-boundary change meets Principle VIII's external-human-review trigger for a
+release containing it, regardless of release version. T203's ordinary independent ticket
+review and focused live evidence do not satisfy that release obligation or the cumulative
+milestone security/privacy and performance/resource reviews. External human review by an
+anonymity-systems reviewer must bind the release candidate and this boundary, with material
+later changes requiring follow-up. T155 and unrelated surviving findings remain open;
+T203 does not authorize publication or claim release readiness.
+
+## Focused implementation evidence
+
+`evidence/T203-tests-first.json` retains the baseline rendered-authority RED and
+identical-command GREEN. `evidence/T203-live-results.json` binds the focused guest
+results to exact executable/image inputs and harness hashes, with attempt history and
+limitations. Baseline production observer probes exposed cookie/socket authority; the
+same retained probe executable denies both CP and observer after repair. The final guest
+matrix covers finite freshness/file failures, publisher death/stop, observer/Tor recreation,
+authenticated CP event mapping and DP forwarding with all health components unavailable.
+The two2026-10-03 advisory Majors were repaired under the explicit continuation approval:
+actual supported Tor-image build/runtime closes the Dockerfile defect; delayed regular
+cookie-I/O RED/GREEN plus one-worker recovery tests close the total-attempt-budget defect.
+
+This refreshes only T155's observer-authority evidence. Historical T164/T165 evidence
+remains historical; no other T155 finding or deferred ticket is closed by this result.
+
+Own-change orphans, pre-granted (rule2026-10-01):
+`tests/contract/stargate-cli/init_t198_test.sh` supplies the new finite tmpfs inspection
+response so its existing key-generation checks are reached;
+`tests/contract/security-decisions/tor_package_integrity_test.sh` follows the root-context
+COPY paths while preserving all package-integrity rejection controls. Final inventory34
+paths remains within36; no budget increase or unrelated scope is included.
+
+The signed-record conversion deliberately interprets an int64 wire field, then rejects
+negative/high-bit timestamps. A narrow G115 annotation documents that existing check;
+explicit high-bit records test it. Original runtime manifests are preserved separately
+from any final source/image identity refresh and binary-equivalence proof in the result.
+
+## Ordinary round 1 disposition
+
+Codex0.160.0 / `gpt-6-astra` high returned REWORK with two Minor findings;
+OpenCode1.18.33 / `zai-coding-plan/glm-5.3-flash` xhigh returned
+APPROVE-WITH-FIXES with one Minor. The independent complete record vector now
+checks both encoder and decoder against contract-pinned bytes; simultaneously
+mutating both domain fields to big-endian fails both subtests. The stale Compose
+header and architecture auxiliary-container inventory are corrected under
+acceptance9's existing internal-document reconciliation scope. This is no new
+user approval; the original12 approved reserved replacements remain unchanged.
+
+The round2 evidence section preserves tested source/image identities and records
+byte-identical rendered Compose before/after its comment correction. Production
+Go/image inputs and the live harness remain unchanged; the test calibration and
+internal documentation changes do not claim another live run. Ordinary findings
+and actual reviewer identities remain separately recorded from the earlier
+user-requested advisory review and its authorized repairs.
+
+The first round2 pair approved all three prior findings. Before commit, the
+remaining FR-012 observer raw-mount claim was corrected as a direct own-change
+orphan, pre-granted (rule2026-10-01), under acceptance9. This adds
+`specs/001-tor-route/spec.md` to the actual inventory:35 paths within36. No
+follow-up ticket defers this contradiction. The commit hook also rejected four
+file-digest metadata entries as generic credentials; explicit SHA-256 objects
+preserve their exact digest values and path associations. No hook was bypassed;
+the changed snapshot requires fresh same-round review. No production code,
+deployment configuration or live harness changed after the prior approvals.

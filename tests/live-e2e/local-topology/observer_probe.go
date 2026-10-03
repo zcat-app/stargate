@@ -52,6 +52,78 @@ func probe(args []string) error {
 		return errors.New("missing mode")
 	}
 	switch args[0] {
+	case "publication-boundary":
+		if len(args) != 1 || os.Getuid() != 5103 || os.Getgid() != 5100 {
+			return errors.New("wrong observer identity")
+		}
+		var fs syscall.Statfs_t
+		if syscall.Statfs("/run/tor-health", &fs) != nil || fs.Type != 0x01021994 {
+			return errors.New("not tmpfs")
+		}
+		file, err := os.OpenFile("/run/tor-health/probe-write", os.O_CREATE|os.O_WRONLY, 0600)
+		if err == nil {
+			file.Close()
+			return errors.New("observer can write publication")
+		}
+		if !errors.Is(err, syscall.EROFS) {
+			return errors.New("write not denied by read-only mount")
+		}
+		fmt.Println("PUBLICATION_READONLY_TMPFS")
+		return nil
+	case "raw-positive":
+		if len(args) != 1 || os.Getuid() != 5103 {
+			return errors.New("wrong Tor identity")
+		}
+		cookie, err := os.ReadFile("/var/lib/tor/control_auth_cookie")
+		if err != nil || len(cookie) != 32 {
+			return errors.New("cookie control failed")
+		}
+		conn, err := net.DialTimeout("unix", "/var/lib/tor/control/tor-control.sock", time.Second)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		_ = conn.SetDeadline(time.Now().Add(time.Second))
+		_, err = io.WriteString(conn, "AUTHENTICATE "+hex.EncodeToString(cookie)+"\r\n")
+		if err != nil {
+			return err
+		}
+		var reply [8]byte
+		if _, err = io.ReadFull(conn, reply[:]); err != nil || string(reply[:]) != "250 OK\r\n" {
+			return errors.New("Tor auth control failed")
+		}
+		_, _ = io.WriteString(conn, "QUIT\r\n")
+		fmt.Println("RAW_AUTHORITY_POSITIVE")
+		return nil
+	case "raw-authority":
+		if len(args) != 1 || (os.Getuid() != 5101 && os.Getuid() != 5103) {
+			return errors.New("wrong authority probe identity")
+		}
+		// Probe the actual operations, with no permission-elevating user override.
+		// Emit finite capability results only: cookie/reply bytes never leave here.
+		readable, connected := false, false
+		for _, path := range []string{"/run/tor-control/control_auth_cookie", "/var/lib/tor/control_auth_cookie"} {
+			file, err := os.Open(path)
+			if err == nil {
+				var cookie [32]byte
+				_, err = io.ReadFull(file, cookie[:])
+				readable = readable || err == nil
+				_ = file.Close()
+			}
+		}
+		for _, path := range []string{"/run/tor-control/tor-control.sock", "/var/lib/tor/control/tor-control.sock", "/run/stargate-tor/tor-socks.sock", "/run/tor-fabric/private/tor-socks.sock"} {
+			conn, err := net.DialTimeout("unix", path, time.Second)
+			if err == nil {
+				connected = true
+				_ = conn.Close()
+			}
+		}
+		if readable || connected {
+			fmt.Printf("RAW_AUTHORITY_EXPOSED cookie=%t socket=%t\n", readable, connected)
+			return errors.New("raw authority exposed")
+		}
+		fmt.Println("RAW_AUTHORITY_DENIED")
+		return nil
 	case "events":
 		// Host-only disposable test subscriber. Nothing is installed in DP/CP;
 		// the parent consumes finite tokens through a private anonymous pipe.

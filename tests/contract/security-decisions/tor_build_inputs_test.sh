@@ -132,7 +132,7 @@ else
   fi
   printf '%s\n' "$flat" | grep -qE 'install-tor\.sh [^&]*&&[[:space:]]+sh /tmp/verify-closure\.sh closure /tmp/package-closure\.lock[^;]*rm -rf /var/lib/apt/lists' \
     || bail "B7: the closure check must follow install-tor.sh and precede removal of the apt lists"
-  [ "$(grep -c '^COPY verify-closure.sh package-closure.lock /tmp/$' "$TOR_DOCKERFILE")" -eq 2 ] \
+  [ "$(grep -c '^COPY sidecars/tor/verify-closure.sh sidecars/tor/package-closure.lock /tmp/$' "$TOR_DOCKERFILE")" -eq 2 ] \
     || bail "B7: both stages must COPY verify-closure.sh and package-closure.lock"
   bad=$(awk '!/^#/ && NF && !($1 == "inrelease" && NF == 3 && $2 ~ /^[0-9a-f]{64}$/) &&
              !(($1 == "amd64" || $1 == "arm64") && NF == 5 && ($5 == "base" || $5 ~ /^[0-9a-f]{64}$/))' "$LOCK")
