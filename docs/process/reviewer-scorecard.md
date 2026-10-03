@@ -83,6 +83,10 @@ recorded under the widened allowlist.
 | 2026-10-02 | T198 | 1 | REWORK (1 Major) | APPROVE (1 Minor) |
 | 2026-10-03 | T198 | 2 | APPROVE (0) | APPROVE (0) |
 
+| 2026-10-03 | T203 | 1 | REWORK (2 Minor) | APPROVE-WITH-FIXES (1 Minor) |
+| 2026-10-03 | T203 | 2 | APPROVE (0) | APPROVE (0) |
+| 2026-10-03 | T203 | 2 (post-hook metadata and FR-012 correction refresh) | APPROVE (0) | APPROVE (0) |
+
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
 ### Findings
@@ -147,6 +151,9 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-10-02 | T191 | 2 | Minor | The bundle regression's red on the round-1 workflow is quoted in the ticket but not captured in `T191-tests-first.json` (ci_inputs_test.sh stops at its first failing assertion) | missed | found | open | the red exists only as a scratch log (`.scratch/tmp/T191/bundle-regression-red.log`) and the ticket quote; red is deterministic by construction. Draft follow-up returned to the maintainer |
 | 2026-10-02 | T198 | 1 | Major | init's deny-drop check (`! cmp -s`) accepted every non-zero cmp status, so a comparison error (2) or a missing cmp (127) passed and the downgraded profile would load | found | missed | fixed | glm traced compile/load parity and the deny-strip but not the cmp status. Reachability on the supported host is negligible (diffutils is Essential on Ubuntu); the fail-open shape was real. Maintainer decision 2026-10-03: accept only cmp exit 1; cmp exit-2/127 fixtures, red on the round-1 init (both passed the boundary, exit 20). Done at 75fa66b |
 | 2026-10-02 | T198 | 1 | Minor | A failed privileged read of the af_unix feature file (e.g. uncached sudo) was reported as "is not 'yes'", diagnosing a capable host as unsupported | missed | found | fixed | refusal was already fail-closed; the read failure now prints its own "cannot read … unverified" reason, asserted by the absent-feature fixture. Done at 75fa66b |
+| 2026-10-03 | T203 | 1 | Minor | Positive finite-record fixtures used the production encoder, so matching domain-endianness errors in encoder and decoder could escape calibration | found | missed | fixed | independent literal 24-byte contract vector tests encoder and decoder separately; simultaneous big-endian domain mutation fails both subtests. Done at d8aa28c |
+| 2026-10-03 | T203 | 1 | Minor | Current architecture inventory still claimed zero auxiliary containers and a pending T164 observer | found | missed | fixed | inventory now identifies tor-observer and the separate publisher process inside Tor. Done at d8aa28c |
+| 2026-10-03 | T203 | 1 | Minor | Compose header retained the observer raw-control mount grant removed by the implementation | missed | found | fixed | header states the finite read-only tmpfs boundary; rendered Compose is byte-identical before and after. Done at d8aa28c |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -247,6 +254,38 @@ developer's own pre-review findings (init's false fresh-install key note, folded
 the Compose `subpath` floor, F2 Info) and the independent wording evaluation's items are
 not reviewer rows. glm's round-2 recommended follow-up (re-record the docker-tier T162
 leg against the strict round-2 gate on the next guest session) is not a row.
+
+T203: round 1 Astra REWORK (2 Minor), GLM APPROVE-WITH-FIXES (1 Minor);
+round 2 both APPROVE, followed by a same-round refresh with both APPROVE.
+All three rounds/sets used actual Codex CLI **0.160.0**, model `gpt-6-astra`,
+effort `high`, and OpenCode **1.18.33**, model `zai-coding-plan/glm-5.3-flash`,
+effort `xhigh` (native `max`). Per-reviewer durations were not measured. Native
+sets, verdicts and append-only history are retained in gitignored
+`target/runs/T203/ordinary-round1/`, `ordinary-round2/`,
+`ordinary-round2-refresh/` and `target/runs/T203.review-history`.
+
+The first round-2 commit attempt failed the secret-scanning hook because four
+file SHA-256 metadata values were misclassified from their artifact path names.
+Explicit SHA-256 objects preserved every exact digest and path association;
+the hook then passed without a bypass or scanner exception. Astra's round-2
+nonfinding follow-up recommendation about FR-012's old observer mount claim
+was corrected before commit as a T203-created documentation orphan; no follow-up
+ticket deferred it, and it is not a finding row. These changes required fresh
+same-round review. The driver could not run fresh pre-review verification from
+`in-review`; the user approved a one-time recovery to `in-progress`, preserving
+the original baseline, round 2 and all review history. Normal driver verification
+and fresh native reviews then passed; no driver code, round reset, fabricated
+verification cache or stale approval was used. Final implementation: d8aa28c.
+
+Separately, the user-requested pre-gate advisory review was a fresh **Codex child
+(backend model not exposed)**. It identified two Majors in the unfinished candidate:
+a malformed Dockerfile instruction and cookie I/O outside the promised total
+attempt budget. Work stopped; the user authorized both repairs and exact reserved
+wording. Both were fixed and evidenced before ordinary round 1. They are retained
+in the ticket and `target/runs/T203/independent-change-review.md`, excluded from
+the ordinary-review denominator and never counted as ordinary reviewers' misses.
+T203 does not close T155 or the cumulative milestone and external human release
+review obligations.
 
 ## Baseline (before Period 1 — not counted in the evaluation)
 

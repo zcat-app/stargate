@@ -1,7 +1,7 @@
 ---
 id: "T203"
 title: "Remove observer raw Tor authority with finite health publication"
-status: in-progress
+status: done
 created: "2026-10-03"
 last_updated: 2026-10-03
 source: "T155 resumed cumulative deployment M1; independent falsify-3-deployment.md; independent observer design-verification.md (2026-10-03 PASS WITH REQUIRED DESIGN CORRECTIONS)"
@@ -32,7 +32,7 @@ decision_refs:
   - "2026-10-03 user: approve both and apply wording; repair both advisory Majors within existing total-budget contract and apply exact12 reserved replacements SHA25660d17324e7bb236548e2a3e1cb24b58f36ec1fd2c2b2b413d243a6793f467e08"
   - "2026-10-03 independent design verification PASS WITH REQUIRED DESIGN CORRECTIONS; root read/accepted under the conditional observer-only go-ahead"
 tests_first: []
-reviews: {}
+reviews: { round: 2, date: 2026-10-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

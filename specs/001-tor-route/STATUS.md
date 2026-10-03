@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 33 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 194 |
+| done | 195 |
 | deferred | 6 |
 | **total** | **234** |
 
@@ -40,9 +40,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T203 | Remove observer raw Tor authority with finite health publica | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -61,7 +59,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_194 ticket(s) done._
+_195 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -257,3 +255,4 @@ _194 ticket(s) done._
 - T195 — Ship WebRTC off and make the hardening failure visible and truthful
 - T196 — Repair live-evidence harness defects found by the T155 pass
 - T198 — Gate init on af_unix mediation; truthful init and quickstart
+- T203 — Remove observer raw Tor authority with finite health publication
