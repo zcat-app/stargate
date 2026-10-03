@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 32 |
+| pending | 34 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 194 |
-| deferred | 5 |
-| **total** | **231** |
+| deferred | 6 |
+| **total** | **234** |
 
 ---
 
@@ -29,11 +29,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T155 | Validate repaired foundation before feature work | Foundation audit remediation | ✓ |  |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
-| T199 | Count continuation-line git pushes; record the bundle-ref re | Foundation audit remediation | ✓ | ✓ |
+| T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | Foundation audit remediation | ✓ | ✓ |
+| T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | Foundation audit remediation | ✓ | ✓ |
+| T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
+| T203 | Remove observer raw Tor authority with finite health publica | Foundation audit remediation | ✓ |  |
 
 ---
 
@@ -52,6 +54,7 @@ _(nothing in flight)_
 | T069 | Contract tests `tests/contract/error-template/reference_id_u | decomposed | T071 |
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
+| T155 | Validate repaired foundation before feature work | blocked-on-new-ticket | T203 |
 
 ---
 

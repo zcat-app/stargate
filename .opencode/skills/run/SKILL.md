@@ -47,10 +47,13 @@ its reviewer. If a reviewer cannot write its file, surface that failure.
 
 ## Tool bindings
 
-Exactly one developer owns a ticket: the root session, or one fresh subagent
-an orchestrating root session dispatches for that ticket. A delegated developer
-runs every driver phase (START through the `docs: mark <id> done` follow-up)
-itself and never spawns another developer. The orchestrator sequences tickets
+The main thread orchestrates and dispatches exactly one fresh developer subagent
+per ticket, using the same harness, model and reasoning settings. The developer
+has its own context, grounded from the ticket and explicit handoff. It reports
+progress, questions and results to the orchestrator; both retain their journal
+and handoff duties. The developer runs every driver phase (START through the
+`docs: mark <id> done` follow-up) itself and never spawns another developer.
+The orchestrator sequences tickets
 and checks reports only: it does not edit the ticket's files, stage paths,
 invoke review CLIs, transcribe verdicts or bypass gates, and runs one ticket at
 a time. Whether a subagent can load this skill or spawn read-only agents

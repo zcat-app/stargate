@@ -128,12 +128,14 @@ editing any `.claude/agents/*.md`.
 
 - **Long-context / planning / threat-modelling / adversarial review**:
   Opus-class (the `stargate-redteam` and `stargate-perf` subagents default here).
-- **Ticket implementation** (the `/run` developer: the root, or the one
-  subagent an orchestrating root delegates the ticket to): Claude Code,
-  Opus-class. The implementer never reviews its own ticket.
+- **Ticket implementation**: the main thread orchestrates and dispatches one
+  fresh developer subagent per ticket. The developer uses the same harness,
+  model and reasoning settings as the orchestrator, with its own context.
+  They communicate through explicit handoffs and reports and retain their
+  journal duties. The implementer never reviews its own ticket.
 - **Per-ticket single review gate** (`stargate-review`): the models in
-  `scripts/review-matrix.json` (below), not the implementer's model; fresh
-  context, blind to the implementer's rationale, covering correctness AND
+  `scripts/review-matrix.json` (below); fresh reviewer sessions independent of
+  the implementing session, blind to its rationale, covering correctness AND
   adversarial security in one pass.
 
 Ticket review uses `scripts/review-matrix.json`: exactly one OpenCode full

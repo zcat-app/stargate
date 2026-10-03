@@ -1,21 +1,23 @@
 ---
 id: T199
-title: 'Count continuation-line git pushes; record the bundle-ref red'
+title: 'Count continuation pushes; bundle-ref red; verify CI toolchains'
 status: pending
 created: 2026-10-02
-last_updated: 2026-10-02
-source: "T191 round-2 review (GLM, two Minors), confirmed by the T191 developer's falsification; maintainer approved filing 2026-10-02"
+last_updated: 2026-10-03
+source: "T191 round-2 review (GLM, two Minors), confirmed by the T191 developer's falsification; maintainer approved filing 2026-10-02. Item 3 from the T155 attempt-4 redteam (area 3 m7, survived falsification), maintainer approved 2026-10-03"
 phase: "Foundation audit remediation"
 story: ''
 remediates: T191
 blocked_by: []
 parallel: true
-files_budget: 4   # ticket + STATUS.md + tests/contract/workflow/ci_inputs_test.sh + evidence/T199-tests-first.json
+files_budget: 5   # ticket + STATUS.md + tests/contract/workflow/ci_inputs_test.sh + evidence/T199-tests-first.json;
+                  # + .github/actions/setup-toolchain/action.yml (item 3, T155 attempt 4)
 privacy_critical: true
 tests_first: []
 test_for: []
 constitution_refs:
   - "III: Privacy-Preserving by Construction"
+  - "IV: Pinned, Tested, Manually Promoted Updates"
   - "VII: Tests-First for Privacy-Critical and Contract Code"
 complexity: low
 risk: low
@@ -32,7 +34,7 @@ redteam_findings: []
 clarity_check: {}
 ---
 
-# T199: Count continuation-line git pushes; record the bundle-ref red
+# T199: Count continuation pushes; bundle-ref red; verify CI toolchains
 
 ## Context
 
@@ -64,8 +66,16 @@ the T191 ticket and a scratch log.
    `agent/$TICKET` is moved; never committed), so the durable red shows the bundle-ref
    assertion failing alongside the Acceptance 1 fixtures. Revert the mutation and capture
    green with the identical command.
+3. (T155 attempt 4, area 3 m7; Constitution IV "a version string ... is not verification")
+   `.github/actions/setup-toolchain/action.yml` pins Go, JDK, Python and Node by version string
+   only. Verify each toolchain download against a pinned checksum (or digest) before use, and
+   make `ci_inputs_test.sh` fail on a toolchain pinned by version only (red on the current
+   action, green after). Whether a setup action verifies checksums internally must be shown
+   from its pinned source, not assumed.
 
 ## Out-of-scope
 
 Any change to `.github/workflows/agent-task.yml` behaviour or to token separation; the
-`repo_url_test.sh` look-alike-name idea (maintainer: Info).
+`repo_url_test.sh` look-alike-name idea (maintainer: Info). Item 3 changes only how
+`setup-toolchain` obtains and verifies the same toolchain versions, not which versions or
+which workflows use it.

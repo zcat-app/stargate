@@ -1,37 +1,78 @@
 ---
 id: "T155"
 title: "Validate repaired foundation before feature work"
-status: "pending"
+status: deferred
 created: "2026-09-12"
-last_updated: 2026-10-02
+last_updated: 2026-10-03
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
-blocked_by: ["T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T120", "T114", "T121", "T123", "T124", "T126", "T132", "T157", "T158", "T159", "T161", "T162", "T163", "T164", "T165", "T167", "T168", "T172", "T173", "T174", "T176", "T183", "T184", "T185", "T186", "T187", "T188", "T193", "T194", "T195", "T196", "T198"]
+blocked_by: ["T203", "T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T120", "T114", "T121", "T123", "T124", "T126", "T132", "T157", "T158", "T159", "T161", "T162", "T163", "T164", "T165", "T167", "T168", "T172", "T173", "T174", "T176", "T183", "T184", "T185", "T186", "T187", "T188", "T193", "T194", "T195", "T196", "T198"]
 parallel: false
-files_budget: 14   # raised 8 -> 14, pre-granted (rule 2026-10-01), each added path named in Acceptance or directly implementing/testing an acceptance item:
+files_budget: 17   # raised 8 -> 14 in attempt 3 and 14 -> 17 in attempt 4, both pre-granted (rule 2026-10-01); attempt 4's raise adds the
+                   # Acceptance 6 filings the maintainer directed into this candidate on 2026-10-03 (new T200, T201; additions to T189, T197, T199; T078 blocked_by).
+                   # Attempt 4 touches 17 paths, each named in Acceptance or directly implementing/testing an acceptance item:
                    # ticket, STATUS.md, evidence/T155-tests-first.json (fixed overhead); live-e2e/README.md (A4);
                    # tests/contract/workflow/live_e2e_tracker_test.sh (tests-first for A4);
-                   # tests/live-e2e/local-topology/t155_stack.py + evidence/T155-live-results.json (A2/A3/A7 harness and sanitized results, preserved after round-1 review);
-                   # tests/integration/partition_axes_test.go + stream_isolation_dp_uname_test.go (A2/A7 device/site isolation axes, round-1 review finding);
-                   # tickets T196, T197, T198 and T078 blocked_by (A6: new findings filed as focused tickets and blocking the milestone redteam)
+                   # tests/live-e2e/local-topology/t155_stack.py + evidence/T155-live-results.json (A2/A3/A7 harness and sanitized results);
+                   # tests/integration/partition_axes_test.go + stream_isolation_dp_uname_test.go (A2/A7 device/site isolation axes);
+                   # tests/contract/compose/wireprobe/wireprobe.go + wireprobe_test.go (A2 "peer-pin rotation/resumption": live resumption probe and its hermetic discrimination test)
+                   # tickets T200 and T201 (new), T189, T197, T199 (items added) and T078 (blocked_by + one decision line) (A6)
+                   # (attempt 3's ticket filings and its T078 blocked_by edit landed separately and are not in this candidate)
 privacy_critical: true
 complexity: "high"
 risk: "high"
 round_cap: 3
 spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md"]
-decision_refs: []
+decision_refs: ["Maintainer 2026-10-03: refine A6 verbatim; require authenticated live GetStatus red/green publication probe (Attempt 4 resumed below)"]
 remediates: "T125"
+deferred_on: "T203"
+deferred_reason: blocked-on-new-ticket
 tests_first: []
 reviews: {}
 overrides: []
-aborted_attempts: [{ date: 2026-10-02, round: 3, reason: "run-task --reset", history: target/runs/T155.review-history }]
+aborted_attempts: [{ date: 2026-10-02, round: 3, reason: "run-task --reset", history: target/runs/T155.review-history }, { date: 2026-10-03, round: 1, reason: "run-task --reset", history: target/runs/T155.review-history }]
 reopens: []
 redteam_findings: []
 clarity_check: {}
 ---
 
 # T155: Validate the repaired foundation before feature work
+
+## Deferred for observer repair — 2026-10-03
+
+T203 is the only newly authorized repair from the resumed cumulative findings. The user
+authorized independent observer design verification and proceeding if it passed; verification
+returned PASS WITH REQUIRED DESIGN CORRECTIONS, accepted by the orchestrator. T155 execution
+is parked before T203 starts. This deferral does not authorize the separate hardening-record,
+CP-listener or DNS-capture findings; surviving Majors still prevent T155 completion even after
+T203. The resumption-probe early-abort false pass remains T155-owned work on future resume.
+
+The original 17-path candidate and README unstaged correction are preserved, uncommitted,
+at HEAD `10a9323bd3bfcedcbb3394ee994a276f75bacf9a` in the detached original checkout.
+Verified archive: `/home/claudia/stargate/.scratch/tmp/T155/park/20261003-observer-handoff/`.
+Its index SHA256 is `165ef229fdb84d6f126cf0417c5077a14cfa09dada628017cb023e69a63ea21b`;
+staged diff SHA256 `b04b917d77cfcfa2499aef17220537b06cd2f58e1e87e1b6d999afd30807b123`;
+unstaged diff SHA256 `8bea5fd628c39078a5dfcd330405e521085637f3c529177b1e9272a8867d8466`.
+The archive contains index/working snapshots, separate patches, tests-first records and
+superseded history, review history, reports, raw outputs and handoffs; reconstruction checks
+passed. The original start-sha and wip/T155-attempt3 branch are retained.
+
+All attempt narratives below are historical. This bookkeeping checkout imports no T155
+executable changes or evidence JSON/README as current evidence. The new active-hour-export
+mutant RED is valid only against its original baseline; GREEN was not run. Full fresh guest
+O1 and browser private-access were interrupted after the new Major stop; S/I/T and browser
+full were not run. Descriptor-matrix and blocked-proxy finished GREEN with zero failures.
+No resumed ordinary review or verify completed. Every owned live process was stopped.
+
+Previously approved candidate-only metadata is materialized explicitly with this filing:
+T200/T201, the approved additions to T189/T197/T199 and their T078 blockers. These are earlier
+approvals, not authorization for any of the newly discovered non-observer repairs. Their
+exact archived metadata must not be reapplied blindly when the remaining T155 patch resumes.
+After prerequisite commits, reopen via the prescribed lifecycle, establish the actual new
+HEAD/start-sha and recapture RED/GREEN; keep old records superseded, never relabel hashes.
+Current other findings/reports: original `.scratch/tmp/T155/redteam-a4r/`; observer design
+report: `.scratch/tmp/T155/glm-repair-advice/design-verification.md`.
 
 ## Context
 
@@ -216,6 +257,178 @@ results bind the source snapshot; the integration binary was rebuilt for the new
   launch/session-restore (including cache-served protected subresources) and host-NIC packet
   attribution, routed IPv6, LAN/VPS, physical NIC, stable-channel browser.
 
+## Attempt 4 (2026-10-03)
+
+Baseline `10a9323` (after T196 `6228d4a`, T191 `a046386`, T198 `75fa66b`; T199 blocks T078 only).
+
+### Grounding
+
+- The attempt-3 README, tracker test, `t155_stack.py`, `partition_axes_test.go` and the
+  `stream_isolation_dp_uname_test.go` edit were brought back from `wip/T155-attempt3`
+  (`5368691`) as file contents, not by merging; the branch stays for the maintainer. Attempt 3's
+  evidence JSONs bind `989b8f9` and were not reused.
+- Superseded by T196: `t155_stack.py`'s supplementary wireprobe-sequence and `ss`-by-pid checks
+  (R2/R3/R5/R7 are repaired and a row prints PASS only without a finding, so the gate's own rows
+  and exit code decide); the README's D-live-2 (guest IPv6 now stays enabled, `run.py` probes the
+  `fec0::` address) and the harness-defect notes in the Evidence index.
+- A-1 design: the Go DP keeps TLS 1.3 resumption and re-checks the current `cp.pub` in
+  `VerifyConnection` (T135; wire-auth.md §2.4 "Revocation/rotation", §4). `wireprobe resume`
+  (CP identity, CP stopped per §6.2) takes a ticket, resumes it (positive control: the live DP
+  issues and accepts tickets), rotates `cp.*`, offers the old ticket (must get no RPC answered),
+  repeats the old identity in a full handshake (refused) and presents the rotated identity
+  (answered, so the refusals are not an outage). The negative control is a DP that pins only full
+  handshakes (`VerifyPeerCertificate`, the T135 defect): the hermetic stand-in in
+  `wireprobe_test.go` and the live mutant DP used for the red record must both make step 4 fail.
+  The Java CP disables session reuse in both roles (wire-auth.md §2.4), so the DP's `dp.sock` is
+  the resumption surface.
+- Initial exported-counter disposition treated CP persistence as coverage; round-1 review
+  falsified that equivalence. The resumed attempt below replaces it with authenticated DP RPC evidence.
+
+### Property map (attempt 4)
+
+| Must hold (Acceptance) | Gated by | Residue (live, this ticket) |
+|---|---|---|
+| Resumption cannot bypass the current pin; old identity refused after rotation (A2) | `controlclient` T135 unit tests; `wireprobe_test.go` stand-ins | `t155_stack.py` resumption phase on a real `init` stack; mutant-DP red |
+| Clean-volume real init, topology, observer, egress, prohibited commands, CP-down bytes (A2, A3) | contract suites (assumed sidecar behaviour) | `run.py` on a fresh guest |
+| Reloads, idle reload, DP restart, rollback, revocation, retention, completed hours, journal policy, CONNECT (A2, A3, A7) | unit/contract tests | `t155_stack.py` full run incl. `connect_refusal.py` and the repaired wire gate R1-R9 |
+| Authenticated GetStatus excludes the active hour and publishes immutable nonzero completed traffic (A7) | T158 counter and RPC tests | real UTC rollover on unchanged deployed DP; active-hour-export mutant red |
+| Profile/device/site partitions never share a circuit (A2, A7) | hermetic derivation vectors | T126 stack with the device/site axes; T182 suite |
+| No Direct fallback in the real browser (A7) | extension unit tests | four host probes, pinned Mullvad Browser 153.3.0esr |
+| Installer confinement after T198's init gate (A3) | `init_t198_test.sh` | `t162_enforcement_test.sh` docker tier on the guest |
+
+### Progress (2026-10-03, stopped for the maintainer before driver review)
+
+- **Tests first** (`specs/001-tor-route/evidence/T155-tests-first.json`, one probe command
+  `bash target/runs/T155a4/tf.sh`: tracker check, hermetic `wireprobe resume` discrimination,
+  live `t155_stack.py --only resumption`, live T126 stack with the device/site axes). Red against
+  a staged mutant (README absent; DP `ClientTLSConfig` pinning via `VerifyPeerCertificate` only;
+  constant upstream username): README missing; step 4 "the DP answered the OLD CP identity on a
+  resumed session after rotation" with the step-2 positive control passing; profile, device and
+  site pairs on one circuit while calibration passed. The current red was captured after the
+  final test files (post-redteam tightening and the tracker residue fold-in); the two earlier
+  reds are kept under `superseded`. A dry run of the same command on the unmutated candidate
+  passed (all parts). **Green** on the final candidate (fresh guest): tracker OK, hermetic resume
+  test 4/4, `--only resumption` 10 PASS 0 FAIL, T126 stack with the device/site axes PASS. The
+  first green attempt failed only in the T126 calibration pair (both parallel CONNECTs to the
+  reference onion timed out after 3 minutes through real Tor; the profile, device and site pairs
+  passed in that run); the tool records no failed green, so this is disclosed here: 1 rerun,
+  identical command, raw output `target/runs/T155a4/green-attempt1-fail.out`.
+- **Host browser probes** (pinned Mullvad Browser 153.3.0esr from `target/t157-tools`, geckodriver
+  0.37.0, disposable profiles; extension package SHA-256 `9813e2e8…`): `descriptor-matrix`,
+  `blocked-proxy`, `private-access`, `full` all exit 0 (`target/runs/T155a4/browser/`). Not yet
+  bound into the evidence JSON; the final candidate decides whether they are reused.
+- **Cumulative redteam** on index tree `6e70e622` (= `10a9323` + this diff), blind export: three
+  `stargate-redteam` reviewers and three `general-purpose` falsifiers, all Claude (self-reported
+  Opus 5.5), model not independently verified, independence limited to fresh context. Reports
+  under `.scratch/tmp/T155/redteam-a4/`. No Blocker or Major survived falsification. Area 2 M1's
+  leak sub-claim was falsified by a live run (X1, pinned browser after the host probes finished:
+  no onion name reached the resolver, DoH or HTTP/3; M1 stays Minor). Post-redteam delta
+  (T155's own files only): `wireprobe resume` step 4 now rejects a declined ticket as vacuous
+  (new `declined` stand-in), `t155_stack.py` checks the DP process is unchanged across the probe,
+  requires a GetStatus refusal (not any non-zero exit) for the old identity, computes details
+  once and requires non-empty aggregate rows; the tracker rejects any upper-case PASS/GREEN in a
+  check row except "never recorded as PASS"; the README states what F1 versus F2/F4 leave on the
+  host and no longer describes a foreign-extension inventory in R-6.
+- **Stop and resume.** Surviving Minor/Info findings were returned to the maintainer as drafts
+  (nothing filed). The maintainer's decisions (below) resumed the attempt.
+
+### Final live pass (2026-10-03, final candidate)
+
+Shipped candidate: the staged tree of this ticket's final executable content (tar SHA-256
+`f57ff765…`, staged diff `b3046713…`, per-file hashes in
+`specs/001-tor-route/evidence/T155-live-results.json`), on a fresh copy of the saved QEMU TCG
+guest (Ubuntu 24.04.5, kernel 6.8.0-142, Docker 29.1.3, Compose 2.40.3), guest IPv6 left enabled.
+Only non-executable files (this ticket, STATUS.md, the README evidence index and the evidence
+JSONs) changed afterwards.
+
+- `run.py` (A2/A3: clean-volume real init, topology, IPv4/IPv6 egress matrix with positive
+  controls, bind refusal, observer boundary, prohibited Tor commands, CP-down Tor bytes): **PASS on
+  attempt 3** (52 PASS lines). Attempt 1: observer-probe `go build` exceeded the 120 s bound on the
+  fresh guest's cold Go cache (the root cache was then warmed by building the same packages; bound
+  unchanged). Attempt 2: `scripts/stargate init` exit 40, observer READY not confirmed within
+  300 s. Both are loud failures before the CP-event windows; T196's CP-restart and
+  first-subscription failure classes did not recur (0 of 3). Attempt 2's raw run.py log was
+  overwritten by attempt 3's (same log name); its evidence directory is kept.
+- `t155_stack.py` full (A2/A3/A7): **56 PASS, 0 FAIL**: authenticated, post-rotation and 180 s
+  idle reloads (`ACKNOWLEDGED(n)`), unknown token denied, Tor bytes with CP up, completed-hour-only
+  aggregates and retention (non-empty rows), label-only predecessor DP with `connect_refusal.py`
+  PASS (A3 CONNECT contract), the repaired wire gate R1-R9 PASS with exit 0, old CP identity
+  refused with a GetStatus refusal, the **TLS resumption phase** (resumed before rotation; old
+  ticket refused with the handshake aborted; old identity refused; rotated identity answered; DP
+  process unchanged), revocation, DP restart with CP down (snapshot restored and unchanged,
+  CP-down Tor bytes), `STALE_CONFLICT` rollback refusal with revocation surviving and recovery,
+  logging driver `none`, allowlisted state files only.
+- T126 suite with the T155 device and site axes and calibration, `TestT126*`, `TestT155*`: PASS.
+  T182 suite (`TestOnionLoad`, `TestT126PartitionUsernameReferenceVector`,
+  `TestStreamIsolationPerFirstPartyDomain`): PASS. No reruns.
+- `STARGATE_TEST_TAGS=docker tests/contract/stargate-cli/t162_enforcement_test.sh`: exit 0 (after
+  T198's round-2 init change).
+- Host browser probes on this candidate (pinned Mullvad Browser 153.3.0esr from `target/t157-tools`,
+  geckodriver 0.37.0, disposable profiles; the host's 140.16.0esr is refused by the extension):
+  `descriptor-matrix`, `blocked-proxy`, `private-access`, `full` all GREEN.
+- This pass had no separate live `GetStatus` assertion. Its operational persistence checks
+  do not establish DP traffic publication; round-1 review invalidated that earlier coverage claim.
+- One tool-limit event: a host-side wait loop polling the guest was moved to the background by
+  the tool limit once; no test or live command was cut short.
+
+### Redteam survivors and dispositions (maintainer decisions, 2026-10-03)
+
+Filing plan R was approved, written inside this candidate because Acceptance 6 requires the
+filing before closure and a HEAD move would invalidate the tests-first baseline:
+
+| Survivor (falsified claim) | Severity | Disposition |
+|---|---|---|
+| A2 M1: `browser-profile/user.js` lacks DoH-off/HTTP-3-off; `run.sh` Part 1 RED on a template-only profile; probes inject `trr.mode=5`; docs call it release-verified; no onion leak (X1 RAN) | Minor | new **T200** (blocks T078) |
+| A2 m3: changed `tokens.yaml` loads after `STALE_CONFLICT` overtake the DP generation and re-authorize a revoked token (E4 RAN) | Minor | new **T201**, durable marker chosen over disclosure (blocks T078) |
+| A3 m1: `connect_refusal.py` verdicts are bare `assert`s, removed by `-O` (RAN) | Minor | **T189** item 6 |
+| A3 m7: CI toolchains pinned by version string only (Constitution IV) | Minor | **T199** item 3 |
+| A3 m8 + A2 M4 residue: THREAT-MODEL presents unimplemented supply-chain mechanisms and §7.3 "encodes mitigations in code" | Minor | **T197** item 3 extension |
+| A1 note: `unknown ca` vs `bad_certificate` (RAN) | Info | **T189** item 4 |
+| A1 m4 evidence: `data-model.md:167` / `token.go` describe `loadedAt` inaccurately (RAN) | Info | **T189** item 7 |
+| A2 i1(b): THREAT-MODEL `:1291` "never displayed" (fixed by T195) | Info | **T197** item 4 |
+| A3 M1 (narrowed): Tor sidecar LAN/host reach, 989b8f9 residue | Info | **T197** item 5 disclosure; **T078** decides whether Tor counts as a "compromised application process" |
+| A2 m4 New Identity, A2 m5 `readError` enum, A3 m11 quickstart teardown note, A3 i2-i6, A1 survivors-as-Info | Info | no ticket (recorded in the redteam summary) |
+| T155's own files: A1 i1 (declined ticket), A2 M4 R-6 row, A3 m2/m3/m4 and the falsifier-3 F7 nit, tracker residue (lower-case "passed", nonexistent `tests/contract` paths, any 40-hex snapshot) | – | fixed in this candidate |
+
+T078's `blocked_by` gains T200 and T201 (T189, T197, T199 already block it). The budget raise to
+17 paths is labelled pre-granted (rule 2026-10-01) because Acceptance 6 names the filing; the
+maintainer directed these six ticket paths into the candidate. Note: 17 exceeds twice the
+pre-attempt-3 budget of 8; the maintainer's direction, not the rule, authorizes that part.
+Draft redteam summary for `reviews/` (uncommitted): `.scratch/tmp/T155/redteam-a4/summary-draft.md`.
+
+### Attempt 4 resumed after round-1 escalation (2026-10-03)
+
+The maintainer selected **refine**, approving the exact Acceptance 6 replacement below and
+requiring the F1 authenticated live `GetStatus` probe: generated traffic; repeated absence of
+an active-hour row; a real UTC hour boundary on one running DP; a nonzero completed traffic
+row; further traffic with the published row unchanged. The earlier claim that CP operational
+persistence covered DP traffic publication is withdrawn. No override or Acceptance 7 narrowing
+is authorized. `run-task.sh T155 --reset` archived the round-1 verdicts and recorded the abort.
+GLM's Minor requires independently reproducible provenance for the three partition vectors.
+The original baseline and staged candidate are retained; previous red/greens stay superseded.
+The developer is a fresh Codex subagent inheriting its orchestrator's configuration, not Claude.
+The installed Codex CLI is used for the ordinary review gate, with actual version recorded
+before each round (0.160.0 observed at resume; no version pin).
+
+The fresh independent plan outline was read before implementation. On 2026-10-03 the
+maintainer approved one-time status recovery from `pending` to `in-progress`: START's
+unconditional dirty-tree guard conflicts with retaining this already-started candidate.
+HEAD, `start-sha`, staged contents and history remain intact. This resumes IMPLEMENT and
+all normal downstream verification/review/commit gates; it authorizes no general bypass.
+
+The existing maintainer-approved `Info — no ticket (recorded in redteam summary)` dispositions
+remain informational observations already dispositioned, not open corrective-action findings
+or claims that mechanisms were implemented. New/open actionable survivors follow Acceptance 6.
+The new Python HMAC transcript in `evidence/T155-live-results.json` independently reproduces
+all four partition vectors from the contract, addressing GLM's provenance Minor.
+
+The added traffic probe's first live red passed clean init, authenticated reload and Tor-byte
+positive controls, then failed on the first authenticated `GetStatus`: active Unix hour
+497511 was exported. The only production mutation was Snapshot's `<` changed to `<=`.
+It was restored exactly from HEAD after capture; earlier red/green pairs remain under
+`superseded`. Command: `bash target/runs/T155a4r/traffic-tf.sh`. No red rerun was needed.
+
+
 ## Acceptance
 
 1. Reconcile every September audit finding and the July finding ownership table against
@@ -238,8 +451,7 @@ results bind the source snapshot; the integration binary was rebuilt for the new
    workflow. No unresolved Blocker/Major may pass without explicit maintainer disposition;
    constitutional conflicts require the governance path and cannot be accepted by this plan.
    Record the reviewed snapshot and invalidate affected evidence after further changes.
-6. Leave T078/T079 pending for the completed milestone. File new findings as focused
-   remediation tickets, add blockers here and to affected consumers, and reverify closure.
+6. Leave T078/T079 pending for the completed milestone. File new findings as focused remediation tickets. Surviving Blocker/Major findings block this ticket; surviving Minor/Info findings block T078 and their affected consumers, and T078 cannot complete while any remains open. Reverify closure.
 
 7. Verify T156 policy end-to-end: device/profile/site partitioning, no Direct fallback,
    complete-hour-only metric publication, operational-writer/retention cleanup, and acknowledged

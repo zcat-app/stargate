@@ -122,10 +122,13 @@ feature branch squash-merges to `main` at milestone close.**
      plan-writer drafts an outline sidecar at `specs/.handoffs/T-NNN-OUTLINE.md`
      (gitignored) before any code. `OUTLINE FAILED` → refine the ticket.
 3. **Implement** (the run-task `in-progress` phase) — exactly one developer
-   owns the ticket: the main conversation, or one fresh subagent that an
-   orchestrating root dispatches for this ticket's whole lifecycle (START
-   through the done follow-up). A delegated developer never spawns another
-   developer. The orchestrator only sequences tickets and checks reports; it
+   owns the ticket: one fresh subagent dispatched by the main thread, which
+   remains the orchestrator. The developer inherits the orchestrator's harness,
+   model and reasoning settings and owns this ticket's whole lifecycle (START
+   through the done follow-up). It has its own context, grounded from the ticket
+   and explicit handoff, and never spawns another developer. It reports progress,
+   questions and results to the orchestrator; both retain their journal and
+   handoff duties. The orchestrator sequences tickets and checks reports; it
    never edits the ticket's files, stages paths, invokes review CLIs,
    transcribes verdicts, bypasses gates or runs two tickets at once. Reviewer
    dispatch and gates are unchanged. Surgical changes only,

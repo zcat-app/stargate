@@ -265,8 +265,10 @@ the human pair or the AI agent is doing the typing.
   exception either.
 - **Suggested model usage.** Long-context planning, spec authoring, threat
   modelling, and adversarial review benefit from an Opus-class model.
-  Routine implementation, refactoring, and test-writing once the spec is
-  stable are well-served by a Sonnet-class model.
+  The main thread orchestrates ticket implementation, dispatching one fresh
+  developer subagent per ticket with the same harness, model and reasoning
+  settings. The developer has its own context and reports to the orchestrator;
+  both retain their journal and handoff duties.
 - **Do not paste secrets into prompts.** No bearer tokens, no admin
   enrollment codes, no private keys, no production database dumps.
 - **Cite the principle when constraining the assistant.** "Principle I
