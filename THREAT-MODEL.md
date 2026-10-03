@@ -284,9 +284,27 @@ has bridge egress. The installer stops a previously running DP before replacing
 host rules, loads an enforcing DP AppArmor profile, installs IPv4 and IPv6
 OUTPUT owner-match rules for UID 5102, and verifies their placement before
 Compose startup. Only ESTABLISHED/RELATED replies on `lo` are accepted;
-all other DP-owned IP packets hit a silent DROP, with no LOG target. The
-profile mediates AF_UNIX and denies abstract socket peers, closing the
-host abstract-forwarder channel shown in T134 A.12. An install/load/verify
+all other DP-owned IP packets hit a silent DROP, with no LOG target.
+The profile mediates AF_UNIX and denies abstract socket peers, closing the host
+abstract-forwarder channel shown in T134 A.12. AppArmor is the only control on
+that channel: the DP's Landlock ruleset (ABI 4 TCP rights only, also on kernels
+offering ABI 6 abstract-socket scoping) and its seccomp filter do not restrict
+AF_UNIX connect. The denies require kernel AppArmor af_unix mediation. Compiled
+for a kernel without it, the parser accepts the profile without error but
+downgrades the unix allow to a generic network rule and drops both denies (shown
+with copied kernel feature sets, which show both effects, and with a 5.4
+policy-ABI pin, which drops both denies; no kernel lacking the mediation was
+available). The installer therefore refuses DP startup (exit 60), before loading
+the profile, unless `/sys/kernel/security/apparmor/features/network/af_unix`
+reads `yes` and the profile, compiled as the load compiles it, differs from the
+same profile without its unix denies (T198). That path is the Ubuntu kernel's;
+mainline Linux reports af_unix mediation (6.17+) under `features/network_v9/`
+and is refused. The closure is measured only on Ubuntu 24.04 with Linux 6.8
+(amd64): on 6.8.0-142 the profile as the installer loads it denied an
+abstract-socket stream connect that an unconfined control completed (T198,
+2026-10-02). Other kernels and distributions are unmeasured. The refusal was
+exercised on that host with the feature file masked or set to `no` and with the
+parser pinned to the 5.4 policy ABI. An install/load/verify
 failure refuses DP startup; the DP has no automatic restart policy. The
 host administrator and Docker daemon are trusted to retain the profile and
 Unix fabric policy. T168 adds the process boundary below; owner rules remain

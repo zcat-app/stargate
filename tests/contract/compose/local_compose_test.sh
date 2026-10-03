@@ -92,6 +92,27 @@ check "$(q '.services["tor-observer"].image | test("^sha256:[a-f0-9]{64}$")')" \
 check "$(q '.volumes | keys | sort | join(",")')" \
     "stargate-control-config,stargate-control-state,stargate-dp-state,stargate-ipc,stargate-keys,stargate-observer-keys,stargate-tor-cp-fabric,stargate-tor-dp-fabric,stargate-tor-state" \
     "named volume set"
+# T198 (A3-m5): the quickstart's install facts must match what this file and
+# the installer define: the volume count its teardown names, the key and
+# pepper modes init installs, and the Docker Engine floor for subpath mounts.
+qs=specs/001-tor-route/quickstart.md
+qs_text="$(tr '\n' ' ' < "$qs" | tr -s ' ')"
+count_words=(zero one two three four five six seven eight nine ten eleven twelve)
+volume_word="${count_words[$(q '.volumes | length')]:-}"
+count_re="($(IFS='|'; echo "${count_words[*]}")|[0-9]+) named volumes"
+check "$(grep -oE "$count_re" <<< "$qs_text" | sort -u | tr '\n' ',')" \
+    "$volume_word named volumes," "quickstart named volume count"
+mode_of() { sed -n "s/^$1=\\([0-7]\\{4\\}\\).*/\\1/p" scripts/lib/compose.sh; }
+key_step="$(sed -n '/^3\. Generates/,/^4\. /p' "$qs" | sed '$d')"
+check "$(grep -oE '\b0[0-7]{3}\b' <<< "$key_step" | sort -u | tr '\n' ',')" \
+    "$(printf '%s\n' "$(mode_of KEY_PRIVATE_MODE)" "$(mode_of KEY_PUBLIC_MODE)" "$(mode_of PEPPER_MODE)" | sort -u | tr '\n' ',')" \
+    "quickstart key and pepper modes"
+if [ "$(q '[.services[].volumes[]? | select(.volume.subpath? != null)] | length')" -gt 0 ]; then
+    engine="$(grep -m1 -oE 'Docker Engine[^0-9]*[0-9]+' "$qs" | grep -oE '[0-9]+$')"
+    check "$([ "${engine:-0}" -ge 26 ] && echo ok || echo "Engine ${engine:-unstated}")" ok \
+        "quickstart Engine floor for volume subpath (Engine 26)"
+fi
+
 # T191 item 7: Tor's torrc is baked into its image (T089); the CP has no
 # writable Tor configuration mount.
 check "$(q '[.services["stargate-control"].volumes[] | select(.target == "/etc/tor")] | length')" \

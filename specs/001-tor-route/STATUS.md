@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-10-02
+**Last updated:** 2026-10-03
 
 ---
 
@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 33 |
-| in-progress | 0 |
+| pending | 32 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 193 |
@@ -32,14 +32,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
-| T198 | Gate init on af_unix mediation; truthful init and quickstart | Foundation audit remediation | ✓ | ✓ |
 | T199 | Count continuation-line git pushes; record the bundle-ref re | Foundation audit remediation | ✓ | ✓ |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T198 | Gate init on af_unix mediation; truthful init and quickstart | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

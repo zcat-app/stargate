@@ -68,10 +68,14 @@ fi
 # A host tool that acknowledges every write but reports an ineffective
 # wrong-owner OUTPUT jump must also be rejected before Compose admission.
 # The real-socket wrong-owner leg below proves why this shape is ineffective.
+# AppArmor af_unix mediation is present and the stub compile keeps the unix
+# denies, so the T198 gate passes and the owner-rule check is what refuses.
 # shellcheck disable=SC2016
 printf '%s\n' '#!/bin/sh' \
   '[ "$1" = -n ] && shift' \
   '[ "$1" = -- ] && shift' \
+  '[ "$1" = cat ] && { echo yes; exit 0; }' \
+  '[ "$1 $2" = "apparmor_parser -Q" ] && { for arg; do file="$arg"; done; cksum < "$file"; exit 0; }' \
   'case "$1:$2 $3 $4" in' \
   '  "iptables:-w -S OUTPUT"|"ip6tables:-w -S OUTPUT")' \
   '    printf "%s\n" "-P OUTPUT ACCEPT" "-A OUTPUT -m owner --uid-owner 9999 -j STARGATE_DP_OUT"; exit 0 ;;' \
@@ -85,12 +89,15 @@ chmod +x "$hermetic_tmp/bin/sudo"
 if STARGATE_PROJECT="t162-hermetic-$$" \
   STARGATE_COMPOSE_FILE="$PWD/compose/docker-compose.local.yml" \
   STARGATE_ENV_DIR="$hermetic_tmp" STARGATE_ENV_FILE="$hermetic_tmp/local.env" \
-  PATH="$hermetic_tmp/bin:$PATH" bash "$init" >/dev/null 2>&1; then
+  PATH="$hermetic_tmp/bin:$PATH" bash "$init" >"$hermetic_tmp/owner.out" 2>&1; then
   hermetic_rc=0
 else
   hermetic_rc=$?
 fi
 [ "$hermetic_rc" -eq 60 ] || { echo "FAIL: ineffective host policy returned $hermetic_rc, want 60" >&2; exit 1; }
+grep -q 'host boundary missing or ineffective' "$hermetic_tmp/owner.out" || {
+  echo 'FAIL: wrong-owner leg was refused before the owner-rule check' >&2; exit 1;
+}
 grep -q ' stop stargate-dp' "$T162_FAKE_DOCKER_LOG" || {
   echo 'FAIL: init did not stop DP before checking ineffective host policy' >&2; exit 1;
 }
@@ -211,12 +218,21 @@ docker exec "$hostsim" iptables -D OUTPUT -m owner --uid-owner 9999 -j STARGATE_
 # or real Compose up. Exit 20 (not 60) proves that boundary phase passed.
 mkdir -p "$tmpdir/bin"
 printf '#!/bin/sh\nexit 0\n' > "$tmpdir/bin/docker"
-printf '#!/bin/sh\nexit 0\n' > "$tmpdir/bin/apparmor_parser"
+# T198: the compile stub keeps the unix denies observable (content-dependent
+# output) and the feature read reports af_unix mediation; the real parser and
+# feature file are exercised by init_t198_test.sh and the live run.
+# shellcheck disable=SC2016
+printf '%s\n' '#!/bin/sh' 'case "$1" in -Q) for arg; do file="$arg"; done; cksum < "$file" ;; esac' \
+  'exit 0' > "$tmpdir/bin/apparmor_parser"
 # shellcheck disable=SC2016
 printf '%s\n' '#!/bin/sh' \
   'if [ "$1" = -Fxq ] && [ "$2" = "stargate-dp (enforce)" ]; then exit 0; fi' \
   'exec /usr/bin/grep "$@"' > "$tmpdir/bin/grep"
-chmod +x "$tmpdir/bin/docker" "$tmpdir/bin/apparmor_parser" "$tmpdir/bin/grep"
+# shellcheck disable=SC2016
+printf '%s\n' '#!/bin/sh' \
+  'if [ "$1" = /sys/kernel/security/apparmor/features/network/af_unix ]; then echo yes; exit 0; fi' \
+  'exec /usr/bin/cat "$@"' > "$tmpdir/bin/cat"
+chmod +x "$tmpdir/bin/docker" "$tmpdir/bin/apparmor_parser" "$tmpdir/bin/grep" "$tmpdir/bin/cat"
 if docker exec \
   -e PATH=/tmp/t162-fixtures/bin:/usr/sbin:/usr/bin:/sbin:/bin \
   -e STARGATE_COMPOSE_FILE=/repo/compose/docker-compose.local.yml \

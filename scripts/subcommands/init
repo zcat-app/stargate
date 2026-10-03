@@ -173,6 +173,46 @@ verify_host_boundary() {
   done
 }
 
+# T198 / Constitution III: in the host network namespace AppArmor is the only
+# control on a host abstract-socket relay: the profile's `deny unix` rules
+# (Landlock ABI 4 and the DP's seccomp filter do not cover AF_UNIX connect).
+# Without kernel af_unix mediation the parser accepts the profile without
+# error but drops the denies. Read the feature through the same privileged
+# reader as the other host-policy checks. Returns 0 for `yes`, 1 for any other
+# content and 2 when the file could not be read; both failures refuse.
+AA_UNIX_FEATURE=/sys/kernel/security/apparmor/features/network/af_unix
+unix_mediation_available() {
+  local feature
+  feature="$(host_root cat "$AA_UNIX_FEATURE" 2>/dev/null)" || return 2
+  [ "$feature" = yes ]
+}
+
+# The compile-only form, run as the same user as the load, reproduces the
+# policy the load sends (measured: equal to the kernel's raw_data on the Ubuntu
+# 6.8 guest, with and without af_unix in the features). If removing the denies
+# leaves that policy unchanged, the parser dropped them (a features or
+# policy-ABI downgrade), so refuse before loading. The parser's own downgrade
+# warnings are no gate: `--Werror` does not fail on them, and their warning
+# class differs between messages. Accept only a completed comparison that
+# found a difference (cmp exit 1): 0 returns 1 (denies dropped); a failed
+# compile or comparison (cmp 2, a missing cmp) returns 2. Both refuse.
+unix_denies_compiled() {
+  local profile="$1" dir rc=2 cmp_rc
+  dir="$(mktemp -d)" || return 2
+  if grep -v '^[[:space:]]*deny unix ' "$profile" > "$dir/without-denies" &&
+     host_root apparmor_parser -Q -T -K -S "$profile" > "$dir/with" 2>/dev/null &&
+     host_root apparmor_parser -Q -T -K -S "$dir/without-denies" > "$dir/without" 2>/dev/null; then
+    cmp -s "$dir/with" "$dir/without"
+    cmp_rc=$?
+    case "$cmp_rc" in
+      1) rc=0 ;;
+      0) rc=1 ;;
+    esac
+  fi
+  rm -rf -- "$dir"
+  return "$rc"
+}
+
 install_host_boundary() {
   host_boundary_required
   case "$?" in
@@ -194,6 +234,22 @@ install_host_boundary() {
     if [ "$tool" = sudo ] && [ "$(id -u)" -eq 0 ]; then continue; fi
     command -v "$tool" >/dev/null 2>&1 || { note "$tool missing; refusing DP startup"; return "$EXIT_HOST_BOUNDARY"; }
   done
+  unix_mediation_available
+  case "$?" in
+    0) : ;;
+    2) note "cannot read $AA_UNIX_FEATURE (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup"
+       return "$EXIT_HOST_BOUNDARY" ;;
+    *) note "kernel lacks AppArmor af_unix mediation ($AA_UNIX_FEATURE is not 'yes'); the DP profile's abstract-socket denies cannot be enforced; refusing DP startup"
+       return "$EXIT_HOST_BOUNDARY" ;;
+  esac
+  unix_denies_compiled "$_SG_REPO_ROOT/compose/apparmor/stargate-dp"
+  case "$?" in
+    0) : ;;
+    1) note "AppArmor parser drops the DP profile's af_unix deny rules (unix rules downgraded); refusing DP startup"
+       return "$EXIT_HOST_BOUNDARY" ;;
+    *) note "cannot compile and compare the DP profile to check its af_unix deny rules; refusing DP startup"
+       return "$EXIT_HOST_BOUNDARY" ;;
+  esac
   if ! host_root apparmor_parser -T -r "$_SG_REPO_ROOT/compose/apparmor/stargate-dp"; then
     note "cannot load DP AppArmor profile; refusing DP startup"
     return "$EXIT_HOST_BOUNDARY"
@@ -499,7 +555,12 @@ generate_keys() {
   refresh_observer_cp_pub "$keys_phys" "$observer_phys" \
     || { note "installing the observer's CP public key failed"; return "$EXIT_KEYGEN"; }
 
-  note "provisioned observer identity without replacing existing CP/DP keys or pepper."
+  # T198 / Constitution V: report what this mode actually did.
+  if [ "$mode" = fresh ]; then
+    note "generated new CP/DP keys, pepper and observer identity."
+  else
+    note "provisioned observer identity without replacing existing CP/DP keys or pepper."
+  fi
   return 0
 }
 
@@ -678,6 +739,7 @@ verify_tor() {
   case "$rc" in
     0)
       note "Tor route reachable on 127.0.0.1:$port."
+      VERIFIED_TOR_PORT="$port"
       return 0
       ;;
     124)
@@ -692,15 +754,21 @@ verify_tor() {
 
 # ---- 7. STATUS TABLE (arch §9.1 step 6) ------------------------------------
 print_status() {
-# Only the components present in the local profile (research §8). No
+  # Only the components present in the local profile (research §8). No
   # placeholder rows for absent sidecars (i2pd/nym not in this feature).
+  # T198 / Constitution V: every state is one this run observed. wait_healthy
+  # saw each container running and the observer's authenticated READY;
+  # verify_tor's TCP connect reached the DP's loopback listener. init checks
+  # no CP or Tor health, so no HEALTHY is claimed; the CP has no network bind.
+  local cp_net
+  cp_net="$(docker inspect -f '{{.HostConfig.NetworkMode}}' \
+    "$(compose_health_ids stargate-control | head -n1)" 2>/dev/null)" || cp_net=unknown
   printf '\n'
   printf 'Stargate status (local profile, project %s):\n' "$STARGATE_PROJECT"
-  printf '  %-18s %-10s %-12s %s\n' "Component" "Status" "Bind" "Notes"
-  printf '  %-18s %-10s %-12s %s\n' "data plane"   "HEALTHY" "127.0.0.1" "proxy 8881 (Tor route)"
-  printf '  %-18s %-10s %-12s %s\n' "control plane" "HEALTHY" "127.0.0.1" "gRPC control.sock"
-  printf '  %-18s %-10s %-12s %s\n' "Tor sidecar"  "HEALTHY" "internal"  "SOCKS5 over DP-only UDS"
-  # The bounded wait above required an authenticated current Tor sample.
+  printf '  %-18s %-10s %-12s %s\n' "Component" "State" "Bind" "Observed"
+  printf '  %-18s %-10s %-12s %s\n' "data plane"   "RUNNING" "127.0.0.1" "TCP connect to 127.0.0.1:$VERIFIED_TOR_PORT accepted"
+  printf '  %-18s %-10s %-12s %s\n' "control plane" "RUNNING" "${cp_net:-unknown}" "container running; gRPC over control.sock"
+  printf '  %-18s %-10s %-12s %s\n' "Tor sidecar"  "RUNNING" "internal"  "container running"
   printf '  %-18s %-10s %-12s %s\n' "Tor observer" "READY" "internal" "authenticated current Tor bootstrap"
   printf '\n'
   printf 'Admin enrollment: not yet implemented (deferred to the admin-UI feature).\n'

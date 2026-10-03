@@ -11,9 +11,15 @@ in **under 5 minutes**.
 
 ## Prerequisites
 
-- Linux x86_64 with AppArmor and Landlock ABI 4 or newer (upstream Linux 6.7+;
-  the distribution must enable Landlock), plus seccomp thread synchronization.
-- Docker Engine ≥ 25 with `docker compose v2`.
+- Linux x86_64 with AppArmor, including the Ubuntu kernel's af_unix mediation
+  (`/sys/kernel/security/apparmor/features/network/af_unix` reads `yes`), and
+  Landlock ABI 4 or newer (upstream Linux 6.7+; the distribution must enable
+  Landlock), plus seccomp thread synchronization. `init` refuses a host without
+  that file, including mainline kernels, which report af_unix mediation (6.17+)
+  elsewhere. Only Ubuntu 24.04 with Linux 6.8 has been measured.
+- Docker Engine ≥ 26 and Docker Compose ≥ 2.26.0 (the Compose file mounts a
+  volume `subpath`; Compose 2.25 accepts but ignores it). Measured with Engine
+  29.1.3 and Compose 2.40.3.
 - Mullvad Browser installed (https://mullvad.net/en/browser).
 - About 1 GB free disk (Tor image + state + control DB).
 
@@ -47,9 +53,13 @@ COMPOSE="docker compose -p stargate -f compose/docker-compose.local.yml --env-fi
    IPv4/IPv6 UID-specific firewall rules, and verifies both before starting
    it. This needs host administration rights (`sudo -v` before `init`, or a
    suitable passwordless sudo policy). A failure exits 60 with the DP stopped;
-   do not bypass the gate with a direct `docker compose up`.
-3. Generates ed25519 inter-plane keys, writes them to the
-   `stargate-keys` volume with mode 0600.
+   do not bypass the gate with a direct `docker compose up`. It also exits 60 if
+   the kernel lacks AppArmor af_unix mediation or the AppArmor parser would drop
+   the profile's Unix-socket denies.
+3. Generates the ed25519 inter-plane and observer keys and the bearer-token
+   pepper. In the `stargate-keys` volume the private keys are mode 0600, the
+   public keys 0644 and the pepper 0640 (group-readable by both planes); the
+   observer's private key is 0600 in `stargate-observer-keys`.
 4. Brings up the stack via `compose/docker-compose.local.yml`
    (data plane, control plane, Tor sidecar, Tor observer).
 5. Confirms the services are running and waits for the observer's authenticated
@@ -68,13 +78,15 @@ After successful installation, `$COMPOSE restart stargate-dp` reapplies it on
 every start. A firewall flush does not remove it from an existing process;
 rerunning `init` also restores the additional owner rules.
 
-Expected output (truncated):
+Expected output (truncated). Each state is one `init` observed: `RUNNING`
+means the container was running, and `READY` is the observer's authenticated
+Tor result. The control plane has no network (`network_mode: none`).
 
 ```
-data plane         HEALTHY
-control plane      HEALTHY
-Tor sidecar        HEALTHY
-Tor observer       READY
+data plane         RUNNING    127.0.0.1    TCP connect to 127.0.0.1:8881 accepted
+control plane      RUNNING    none         container running; gRPC over control.sock
+Tor sidecar        RUNNING    internal     container running
+Tor observer       READY      internal     authenticated current Tor bootstrap
 ```
 
 If `init` exits non-zero, see arch §9.1 step 7 for the error-code
@@ -401,7 +413,7 @@ intact.
 To remove all state, the future `scripts/stargate wipe` subcommand will
 be the documented path. In v1 of this feature, project-scoped volume
 removal is the operator's responsibility — `$COMPOSE down -v` removes
-the seven named volumes Compose created for the `stargate` project (no
+the nine named volumes Compose created for the `stargate` project (no
 literal volume names to keep in sync; the project identity `init`
 established does the work):
 
