@@ -80,6 +80,8 @@ recorded under the widened allowlist.
 | 2026-10-02 | T196 | 2 (second launch; the first failed on a GLM provider timeout and imported no verdicts) | APPROVE (0) | APPROVE (0) |
 | 2026-10-02 | T191 | 1 | REWORK (1 Major) | APPROVE-WITH-FIXES (1 Minor) |
 | 2026-10-02 | T191 | 2 | APPROVE (0) | APPROVE (2 Minor) |
+| 2026-10-02 | T198 | 1 | REWORK (1 Major) | APPROVE (1 Minor) |
+| 2026-10-03 | T198 | 2 | APPROVE (0) | APPROVE (0) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -143,6 +145,8 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-10-02 | T191 | 1 | Minor | `ci_inputs_test.sh` "exactly one git push" rule matches per physical line; the real push spans continuation lines, so the count is satisfied by `git init --quiet "$RUNNER_TEMP/push"` and a relocated continuation-style push would pass | missed | missed | open | raised in round 2 (row below); present unchanged in round 1. No runtime consequence: the agent job holds a read-only, unpersisted token. Draft follow-up returned to the maintainer |
 | 2026-10-02 | T191 | 2 | Minor | same push-count precision gap as the round-1 row above | missed | found | open | confirmed: the only regex hit in code lines is `agent-task.yml:359` (`git init`). Draft follow-up returned to the maintainer |
 | 2026-10-02 | T191 | 2 | Minor | The bundle regression's red on the round-1 workflow is quoted in the ticket but not captured in `T191-tests-first.json` (ci_inputs_test.sh stops at its first failing assertion) | missed | found | open | the red exists only as a scratch log (`.scratch/tmp/T191/bundle-regression-red.log`) and the ticket quote; red is deterministic by construction. Draft follow-up returned to the maintainer |
+| 2026-10-02 | T198 | 1 | Major | init's deny-drop check (`! cmp -s`) accepted every non-zero cmp status, so a comparison error (2) or a missing cmp (127) passed and the downgraded profile would load | found | missed | fixed | glm traced compile/load parity and the deny-strip but not the cmp status. Reachability on the supported host is negligible (diffutils is Essential on Ubuntu); the fail-open shape was real. Maintainer decision 2026-10-03: accept only cmp exit 1; cmp exit-2/127 fixtures, red on the round-1 init (both passed the boundary, exit 20). Done at 75fa66b |
+| 2026-10-02 | T198 | 1 | Minor | A failed privileged read of the af_unix feature file (e.g. uncached sudo) was reported as "is not 'yes'", diagnosing a capable host as unsupported | missed | found | fixed | refusal was already fail-closed; the read failure now prints its own "cannot read … unverified" reason, asserted by the absent-feature fixture. Done at 75fa66b |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -236,6 +240,13 @@ T176: first ticket under the widened GLM allowlist. GLM's verdicts record
 effort `xhigh` (the period header says `max`); Astra `high`. Both still report
 shell execution beyond the allowlist as denied, so their test/verify evidence
 came from the mechanical report. Per-reviewer durations were not measured.
+
+T198: round 1 astra REWORK / glm APPROVE, round 2 both APPROVE. Durations were not
+measured; round verdicts are archived in gitignored `target/runs/T198-r1.verdict` and `T198-r2.verdict`. The
+developer's own pre-review findings (init's false fresh-install key note, folded as F1;
+the Compose `subpath` floor, F2 Info) and the independent wording evaluation's items are
+not reviewer rows. glm's round-2 recommended follow-up (re-record the docker-tier T162
+leg against the strict round-2 gate on the next guest session) is not a row.
 
 ## Baseline (before Period 1 — not counted in the evaluation)
 

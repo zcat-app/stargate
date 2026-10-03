@@ -1,7 +1,7 @@
 ---
 id: T198
 title: 'Gate init on af_unix mediation; truthful init and quickstart'
-status: in-progress
+status: done
 created: 2026-10-01
 last_updated: 2026-10-03
 source: "T155 attempt 3 cumulative redteam (candidate 989b8f9): A1-M2 (narrowed Minor), A3-m1, A3-m5; all survived falsification"
@@ -29,7 +29,7 @@ decision_refs:
   - "SECURITY-DECISIONS 2026-09-20 (T162): direct compose starts are unsupported; init verifies the host boundary"
   - "Maintainer approval (2026-10-02, T198 orchestrated session): THREAT-MODEL §3.1 DRAFT A and quickstart prerequisite DRAFT B verbatim from the independent wording evaluation, plus the init step-2 sentence; no SECURITY-DECISIONS note; F1 folded into T198; F2 recorded as Info, covered by the Compose >= 2.26.0 floor"
   - "Maintainer decision (2026-10-03, T198 round 2): fix the cmp fail-open and the read-failure message; init comment aligned to §3.1; DRAFT A parenthetical replaced with the approved text naming what each method shows"
-reviews: {}
+reviews: { round: 2, date: 2026-10-03, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
