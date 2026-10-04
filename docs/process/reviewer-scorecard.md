@@ -156,6 +156,10 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-10-03 | T203 | 1 | Minor | Positive finite-record fixtures used the production encoder, so matching domain-endianness errors in encoder and decoder could escape calibration | found | missed | fixed | independent literal 24-byte contract vector tests encoder and decoder separately; simultaneous big-endian domain mutation fails both subtests. Done at d8aa28c |
 | 2026-10-03 | T203 | 1 | Minor | Current architecture inventory still claimed zero auxiliary containers and a pending T164 observer | found | missed | fixed | inventory now identifies tor-observer and the separate publisher process inside Tor. Done at d8aa28c |
 | 2026-10-03 | T203 | 1 | Minor | Compose header retained the observer raw-control mount grant removed by the implementation | missed | found | fixed | header states the finite read-only tmpfs boundary; rendered Compose is byte-identical before and after. Done at d8aa28c |
+| 2026-10-04 | T204 | 1 | Minor | Listener probe Docker commands can outlive its deadline | missed | found | fixed | Real six-second child discriminates missing timeout; helper defaults to5s and cleanup calls to15s. |
+| 2026-10-04 | T204 | 1 | Minor | Positive HTTP probe can accept an extra loopback listener | missed | missed | fixed | Raised on refresh; original reusable verdict path lacked exact inventory, although the actual evidence assembler checked all retained rows. |
+| 2026-10-04 | T204 | 1 (post-timeout-fix refresh) | Minor | Positive HTTP probe can accept an extra loopback listener | missed | found | fixed | Synthetic extra9000 RED; final host8/guest8 PASS; one fresh management-runtime case has exactly HTTP8080 plus Narayana. Final correction was human-authorized, not re-reviewed. |
+| 2026-10-04 | T204 | 1 (post-timeout-fix refresh) | Major | Repeated full verification omitted after the probe-only fix | dismissed | found | overridden | Astra explicitly accepted the recorded user direction; GLM requested an explicit orchestrator waiver or full GREEN. User then directed commit and local merge, relying on T078/T079 cumulative gates. Historical37PASS/4SKIP/0FAIL remains pre-fix; interrupted full run is not GREEN. Procedural override, not a security-risk acceptance. |
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -289,10 +293,6 @@ the ordinary-review denominator and never counted as ordinary reviewers' misses.
 T203 does not close T155 or the cumulative milestone and external human release
 review obligations.
 
-| 2026-10-04 | T204 | 1 | Minor | Listener probe Docker commands can outlive its deadline | missed | found | fixed | Real six-second child discriminates missing timeout; helper defaults to5s and cleanup calls to15s. |
-| 2026-10-04 | T204 | 1 | Minor | Positive HTTP probe can accept an extra loopback listener | missed | missed | fixed | Raised on refresh; original reusable verdict path lacked exact inventory, although the actual evidence assembler checked all retained rows. |
-| 2026-10-04 | T204 | 1 (post-timeout-fix refresh) | Minor | Positive HTTP probe can accept an extra loopback listener | missed | found | fixed | Synthetic extra9000 RED; final host8/guest8 PASS; one fresh management-runtime case has exactly HTTP8080 plus Narayana. Final correction was human-authorized, not re-reviewed. |
-| 2026-10-04 | T204 | 1 (post-timeout-fix refresh) | Major | Repeated full verification omitted after the probe-only fix | dismissed | found | overridden | Astra explicitly accepted the recorded user direction; GLM requested an explicit orchestrator waiver or full GREEN. User then directed commit and local merge, relying on T078/T079 cumulative gates. Historical37PASS/4SKIP/0FAIL remains pre-fix; interrupted full run is not GREEN. Procedural override, not a security-risk acceptance. |
 
 T204: driver consumed the refreshed REWORK into round2. No round2 reviewer was
 launched: the user explicitly instructed “fuck it commit and merge” and confirmed
