@@ -289,6 +289,20 @@ the ordinary-review denominator and never counted as ordinary reviewers' misses.
 T203 does not close T155 or the cumulative milestone and external human release
 review obligations.
 
+| 2026-10-04 | T204 | 1 | Minor | Listener probe Docker commands can outlive its deadline | missed | found | fixed | Real six-second child discriminates missing timeout; helper defaults to5s and cleanup calls to15s. |
+| 2026-10-04 | T204 | 1 | Minor | Positive HTTP probe can accept an extra loopback listener | missed | missed | fixed | Raised on refresh; original reusable verdict path lacked exact inventory, although the actual evidence assembler checked all retained rows. |
+| 2026-10-04 | T204 | 1 (post-timeout-fix refresh) | Minor | Positive HTTP probe can accept an extra loopback listener | missed | found | fixed | Synthetic extra9000 RED; final host8/guest8 PASS; one fresh management-runtime case has exactly HTTP8080 plus Narayana. Final correction was human-authorized, not re-reviewed. |
+| 2026-10-04 | T204 | 1 (post-timeout-fix refresh) | Major | Repeated full verification omitted after the probe-only fix | dismissed | found | overridden | Astra explicitly accepted the recorded user direction; GLM requested an explicit orchestrator waiver or full GREEN. User then directed commit and local merge, relying on T078/T079 cumulative gates. Historical37PASS/4SKIP/0FAIL remains pre-fix; interrupted full run is not GREEN. Procedural override, not a security-risk acceptance. |
+
+T204: driver consumed the refreshed REWORK into round2. No round2 reviewer was
+launched: the user explicitly instructed “fuck it commit and merge” and confirmed
+“ok if focused check passed commit the test too”. The final test-only correction,
+focused evidence and lossless SHA256 metadata formatting were committed through a
+human override with actual archived GLM REWORK/Astra APPROVE trailers and normal
+hooks. No fresh pair approval or full gate was fabricated. Actual native CLI
+versions for both launches: Codex0.160.0/OpenCode1.18.33; matrix models/efforts
+unchanged. T155, T078/T079 and release gates remain separate.
+
 ## Baseline (before Period 1 — not counted in the evaluation)
 
 Matrix at the time: `astra` at `low`; `glm` = full `zai-coding-plan/glm-5.3`
@@ -318,17 +332,3 @@ two runs each. Verdicts, handoff, candidate patch and launcher:
 Signal from the replay (one ticket, n=2 per model — suggestive only):
 Flash matched or beat full GLM-5.3 on the test-integrity defect, and no GLM
 run caught the blocking-call deadline defect that Astra caught at `low`.
-
-| 2026-10-04 | T204 | 1 | Minor | Listener probe Docker commands can outlive its deadline | missed | found | fixed | Real six-second child discriminates missing timeout; helper defaults to5s and cleanup calls to15s. |
-| 2026-10-04 | T204 | 1 | Minor | Positive HTTP probe can accept an extra loopback listener | missed | missed | fixed | Raised on refresh; original reusable verdict path lacked exact inventory, although the actual evidence assembler checked all retained rows. |
-| 2026-10-04 | T204 | 1 (post-timeout-fix refresh) | Minor | Positive HTTP probe can accept an extra loopback listener | missed | found | fixed | Synthetic extra9000 RED; final host8/guest8 PASS; one fresh management-runtime case has exactly HTTP8080 plus Narayana. Final correction was human-authorized, not re-reviewed. |
-| 2026-10-04 | T204 | 1 (post-timeout-fix refresh) | Major | Repeated full verification omitted after the probe-only fix | dismissed | found | overridden | Astra explicitly accepted the recorded user direction; GLM requested an explicit orchestrator waiver or full GREEN. User then directed commit and local merge, relying on T078/T079 cumulative gates. Historical37PASS/4SKIP/0FAIL remains pre-fix; interrupted full run is not GREEN. Procedural override, not a security-risk acceptance. |
-
-T204: driver consumed the refreshed REWORK into round2. No round2 reviewer was
-launched: the user explicitly instructed “fuck it commit and merge” and confirmed
-“ok if focused check passed commit the test too”. The final test-only correction,
-focused evidence and lossless SHA256 metadata formatting were committed through a
-human override with actual archived GLM REWORK/Astra APPROVE trailers and normal
-hooks. No fresh pair approval or full gate was fabricated. Actual native CLI
-versions for both launches: Codex0.160.0/OpenCode1.18.33; matrix models/efforts
-unchanged. T155, T078/T079 and release gates remain separate.

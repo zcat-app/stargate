@@ -33,7 +33,7 @@ decision_refs:
   - "CPB-M2: falsify-2-cp-browser.md in .scratch/tmp/T155/redteam-a4r; pinned Quarkus 3.33.1 production-default bytecode corroborates wildcard host, actual packaged namespace observation remains required"
 tests_first: []
 reviews: { round: 2, date: 2026-10-04, verdict: OVERRIDE-APPROVE }
-overrides: []
+overrides: [{"date": "2026-10-04", "by": "maintainer", "decision": "fuck it commit and merge", "confirmation": "ok if focused check passed commit the test too", "reason": "T204-only procedural override of repeated full verification and additional review; final harness correction passed focused host/guest and live checks; actual GLM REWORK/Astra APPROVE retained; local checkpoint only, T155/T078/T079/release gates remain separate."}]
 aborted_attempts: []
 reopens: []
 redteam_findings: []
