@@ -1,7 +1,7 @@
 ---
 id: "T155"
 title: "Validate repaired foundation before feature work"
-status: deferred
+status: pending
 created: "2026-09-12"
 last_updated: "2026-10-03"
 source: "reviews/redteam-20260912-677960b.md"
@@ -26,12 +26,10 @@ round_cap: 3
 spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md"]
 decision_refs: ["2026-10-03 maintainer: approve full next scope after T203; T204 and T205 repairs, T117 absorption, T206 release-only filing, then T155 TLS-probe repair and full validation", "Maintainer 2026-10-03: refine A6 verbatim; require authenticated live GetStatus red/green publication probe (Attempt 4 resumed below)"]
 remediates: "T125"
-deferred_on: "T205"
-deferred_reason: blocked-on-new-ticket
 tests_first: []
 reviews: {}
 overrides: []
-aborted_attempts: [{ date: 2026-10-02, round: 3, reason: "run-task --reset", history: target/runs/T155.review-history }, { date: 2026-10-03, round: 1, reason: "run-task --reset", history: target/runs/T155.review-history }]
+aborted_attempts: [{ date: 2026-10-02, round: 3, reason: "run-task --reset", history: target/runs/T155.review-history }, { date: 2026-10-03, round: 1, reason: "run-task --reset", history: target/runs/T155.review-history }, { date: 2026-10-04, round: 1, reason: "run-task --reset", history: target/runs/T155.review-history }]
 reopens: []
 redteam_findings: []
 clarity_check: {}
