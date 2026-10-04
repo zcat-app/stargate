@@ -15,9 +15,9 @@
 |---|---|
 | pending | 33 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 196 |
+| done | 197 |
 | deferred | 7 |
 | **total** | **237** |
 
@@ -30,7 +30,10 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
+| T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
+| T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
 | T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | Foundation audit remediation | ✓ | ✓ |
+| T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 
@@ -38,9 +41,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T205 | Remove persistent hardening failure events and reconcile the | in-review | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -60,7 +61,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_196 ticket(s) done._
+_197 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -258,3 +259,4 @@ _196 ticket(s) done._
 - T198 — Gate init on af_unix mediation; truthful init and quickstart
 - T203 — Remove observer raw Tor authority with finite health publication
 - T204 — Enforce control-plane HTTP listener boundary at startup
+- T205 — Remove persistent hardening failure events and reconcile the schema

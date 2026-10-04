@@ -89,6 +89,13 @@ recorded under the widened allowlist.
 | 2026-10-04 | T204 | 1 | APPROVE (0) | APPROVE (1 Minor) |
 | 2026-10-04 | T204 | 1 (post-timeout-fix refresh) | APPROVE (0) | REWORK (1 procedural Major, 1 Minor) |
 
+| Date | Ticket | Round | astra | glm |
+|---|---|---|---|---|
+| 2026-10-04 | T205 | 1 | APPROVE (0) | APPROVE-WITH-FIXES (1 Minor) |
+| 2026-10-04 | T205 | 1 (post-doc-fix and own-orphan refresh) | APPROVE (0) | APPROVE (0) |
+| 2026-10-04 | T205 | 1 (caller-environment disclosure refresh) | REWORK (1 procedural Major, 1 Minor) | APPROVE (0) |
+| 2026-10-04 | T205 | 2 | APPROVE (0) | APPROVE (0) |
+
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
 ### Findings
@@ -160,6 +167,12 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-10-04 | T204 | 1 | Minor | Positive HTTP probe can accept an extra loopback listener | missed | missed | fixed | Raised on refresh; original reusable verdict path lacked exact inventory, although the actual evidence assembler checked all retained rows. |
 | 2026-10-04 | T204 | 1 (post-timeout-fix refresh) | Minor | Positive HTTP probe can accept an extra loopback listener | missed | found | fixed | Synthetic extra9000 RED; final host8/guest8 PASS; one fresh management-runtime case has exactly HTTP8080 plus Narayana. Final correction was human-authorized, not re-reviewed. |
 | 2026-10-04 | T204 | 1 (post-timeout-fix refresh) | Major | Repeated full verification omitted after the probe-only fix | dismissed | found | overridden | Astra explicitly accepted the recorded user direction; GLM requested an explicit orchestrator waiver or full GREEN. User then directed commit and local merge, relying on T078/T079 cumulative gates. Historical37PASS/4SKIP/0FAIL remains pre-fix; interrupted full run is not GREEN. Procedural override, not a security-risk acceptance. |
+| 2026-10-04 | T205 | 1 | Minor | Harness oracle suite lacks documented or gated invocation | missed | found | fixed | README now documents the must-pass manual preflight; three oracle tests passed. No new verify.sh discovery gate claimed. |
+| 2026-10-04 | T205 | 1 | Minor | Popup-delivery regression bypasses the real status handler | missed | missed | fixed | Raised in the later caller-environment refresh; original test did not kill the bad-handler mutation. |
+| 2026-10-04 | T205 | 1 (post-doc-fix and own-orphan refresh) | Minor | Popup-delivery regression bypasses the real status handler | missed | missed | fixed | The same coverage gap remained in this candidate. |
+| 2026-10-04 | T205 | 1 (caller-environment disclosure refresh) | Minor | Popup-delivery regression bypasses the real status handler | found | missed | fixed | Real-handler bridge passes; assigning hardeningOk=false in the opt-in branch fails the repaired test. Mutation confined to scratch. |
+| 2026-10-04 | T205 | 1 (caller-environment disclosure refresh) | Major | Complete final verification under corrected caller environment outstanding | found | dismissed | fixed | Procedural closure satisfied by actual full5 GREEN37/4/0. Severity and review-stage timing narrowed/disputed; GLM's unchanged-source full3 validity argument is supported. No production defect demonstrated. |
+
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
 guards for the shared partition helper (a swapped argument would still pass);
@@ -302,6 +315,62 @@ human override with actual archived GLM REWORK/Astra APPROVE trailers and normal
 hooks. No fresh pair approval or full gate was fabricated. Actual native CLI
 versions for both launches: Codex0.160.0/OpenCode1.18.33; matrix models/efforts
 unchanged. T155, T078/T079 and release gates remain separate.
+
+T205: all three round-1 sets and round 2 are recorded above. Actual tools for
+all four launches were Codex **0.160.0** (`gpt-6-astra`, `high`) and OpenCode
+**1.18.33** (`zai-coding-plan/glm-5.3-flash`, `xhigh`, native `max`). Durations
+were not measured. Complete imported sets/verdicts/prompts are retained in
+`target/runs/T205/ordinary-round-1/`, `ordinary-round-1-refresh/`,
+`ordinary-round-1-refresh2/`, `ordinary-round-2/` and the append-only
+`target/runs/T205.review-history`. Native log copies are explicitly partial.
+
+The first full driver verification was RED36PASS/4SKIP/1FAIL: workflow S8b
+exit141/tree mismatch; exact failing child location was not retained. One
+unchanged focused workflow rerun passed all16 scenarios. Full2 and documented
+AWF full3 passed37/4/0. Full4 failed36/4/1 in the unchanged scanner fixture:
+an exported caller signoff function changed `command -v git` into a
+self-referential controlled-path link. The exact exported-function control
+reproduced all7 failures; no-function and nonexported-loader controls passed.
+The first workflow failure remains unattributed; its rerun is not root-cause
+proof. All full and focused attempts remain retained/disclosed.
+
+A fresh user-requested advisory falsification found that the original
+popup-delivery test passed both correct and bad-handler source. The bounded
+bridge passed correct source and failed the mutation. That advisory used
+Node18, one selected test and47 exclusions; it is separate from ordinary
+review. The developer independently executed the repaired test and retained
+correct/mutant scratch runs. Final identical-command tests-first GREEN passed
+85/85; full5 was an actual normal round-2 driver GREEN37/4/0 under the corrected
+caller setup, including scanner and workflow gates. Both round-2 reviewers
+marked both prior items SATISFIED. The final APPROVE freshness check reused
+that actual GREEN because executable content was unchanged; no optional full6,
+manual status recovery, manual verification-cache write, gate suppression or override.
+The signed implementation is `fb8ae64` with actual round-2 APPROVE trailers.
+
+Astra's procedural Major is retained as an unfinished closing requirement that
+was subsequently fulfilled, with severity/timing disputed and no demonstrated
+production defect. GLM's full3-validity argument was supported, while its
+zero-finding test-integrity conclusion was narrowed by the executed mutant.
+The `dismissed` column records GLM's explicit review-stage argument; it does
+not dismiss the closing obligation or the finding as a whole. The user
+conditionally authorized surviving bounded rework after objective falsification.
+
+GLM's original nonfinding legacy-key-reader comment recommendation was a direct
+own-change orphan and was corrected under the existing pregrant, not deferred
+through a new ticket. Its broader run.sh stdout recommendation concerns
+baseline-identical T197 inventory/automation wording. Scanner hardening and the
+qualified SIGPIPE hypothesis remain outside this change; no follow-up was filed.
+
+The focused browser run passed19/19 with all10 actual processes exited; its
+preliminary Direct-fixture RED18/19 remains separately disclosed. The measured
+zip is the historical executed package: it contains the previous, unused
+`background/router.test.js` member. All eight execution-bound source hashes
+remain identical, but the package is not an all-member match to finalized test
+source. No unaffected browser run was repeated. API-visible cleanup and the
+development pin do not establish forensic erasure or stable/full-profile release
+certification. Constitution VIII impact remains a repair inside existing
+runtime/storage/request boundaries; T155, T190, T197, T200, T206, cumulative
+milestone and external human release obligations remain separately owned.
 
 ## Baseline (before Period 1 — not counted in the evaluation)
 

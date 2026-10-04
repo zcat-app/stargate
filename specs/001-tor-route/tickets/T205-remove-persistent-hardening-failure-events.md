@@ -1,7 +1,7 @@
 ---
 id: T205
 title: 'Remove persistent hardening failure events and reconcile the schema'
-status: in-review
+status: done
 created: 2026-10-03
 last_updated: 2026-10-04
 source: 'T155 resumed cumulative CP/browser falsification CPB-M1; full next repair scope approved 2026-10-03'
@@ -31,7 +31,7 @@ decision_refs:
   - '2026-10-03 maintainer approved full next scope after T203: conforming HardeningRecord repair, absorb T117 and redirect named consumers; reserved exact wording remains separately evaluated and approved'
 remediates: T055
 replaces: T117
-reviews: {}
+reviews: { round: 2, date: 2026-10-04, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
