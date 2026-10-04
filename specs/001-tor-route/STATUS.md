@@ -13,9 +13,9 @@
 
 | Status | Count |
 |---|---|
-| pending | 34 |
+| pending | 33 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
 | done | 196 |
 | deferred | 7 |
@@ -32,14 +32,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
-| T205 | Remove persistent hardening failure events and reconcile the | Foundation audit remediation | ✓ |  |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T205 | Remove persistent hardening failure events and reconcile the | in-review | ✓ | Foundation audit remediation |
 
 ---
 

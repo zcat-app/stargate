@@ -1,15 +1,15 @@
 ---
 id: T205
 title: 'Remove persistent hardening failure events and reconcile the schema'
-status: pending
+status: in-review
 created: 2026-10-03
-last_updated: 2026-10-03
+last_updated: 2026-10-04
 source: 'T155 resumed cumulative CP/browser falsification CPB-M1; full next repair scope approved 2026-10-03'
 phase: 'Foundation audit remediation'
 story: ''
 blocked_by: ["T034b", "T055", "T091", "T151", "T156", "T157", "T188", "T195"]
 parallel: false
-files_budget: 20
+files_budget: 21
 privacy_critical: true
 tests_first: []
 test_for: []
@@ -164,7 +164,7 @@ prerequisite edge. All listed prerequisites were done at filing.
     assessment and every actual reviewer/round in the usual completion follow-up. T205 closure
     does not close T155, T200, milestone reviews or external human release review.
 
-## Grounded files budget: 20 paths
+## Grounded files budget: 21 paths (initial budget 20)
 
 This is an upper bound, not a requirement to touch each path. The final fresh-context outline
 must choose the smallest adequate implementation. Consumer bookkeeping is handled by the orchestrator in the preceding approved filing batch
@@ -187,8 +187,17 @@ consumer implementation is included. All changed paths, including overhead and n
 17–19. `tests/live-e2e/mullvad-browser-hardening/{probe.py,README.md,test_probe.py}` — focused
        browser closure, direct storage-oracle orphan and discriminating harness tests if needed;
        `test_probe.py` is a proposed new file, not existing evidence.
-20. `specs/001-tor-route/quickstart.md` — only if migration/current-status instructions need
-    operator-visible change, with exact wording approval; no profile-precondition repair.
+20. `specs/001-tor-route/spec.md` — FR-004's persistent-write mandate is a direct
+    schema orphan in spec_refs; pre-granted accepted reconciliation substitutes for
+    the unused optional quickstart path.
+21. `tests/live-e2e/mullvad-browser-hardening/run.sh` — pre-granted (rule 2026-10-01)
+    direct own-change orphan: its source comment still directs reading the removed
+    persistent hardening key. Replace only that comment; preserve executable lines.
+
+The initial budget was 20 paths. Round-1 review identified the additional
+`run.sh` storage-reader comment orphan. The existing own-orphan pre-grant permits
+this required correction and records the driver budget as 21; no new subsystem,
+acceptance change or fresh scope permission is inferred.
 
 No new runtime dependency or extension permission is anticipated. Extra direct acceptance or
 own-change orphan paths use the existing budget pre-grant with precise reasons; unrelated

@@ -11,8 +11,8 @@
 // options.js (T056) writing the validated one. Deliberately NOT here:
 // token-format validation (data-model.md §5 puts `^[0-9a-f]{32}$` "in the
 // options page") and every non-device storage.local field (arch §14.4 —
-// hardening.js owns its own record). A wrapper that grows policy or shape
-// enforcement is the defect this suite exists to catch.
+// hardening.js removes its obsolete legacy key under T205). A wrapper
+// that grows policy or shape enforcement is the defect this suite catches.
 //
 // Surface exclusivity (T034g, firstparty.test.js precedent): MV2 lib
 // scripts load as classic scripts into ONE background-page global scope,

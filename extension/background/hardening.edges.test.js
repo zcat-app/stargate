@@ -30,10 +30,12 @@ function loadHardening(options) {
   const {
     setting, // resolved by get(): raw value, {value,...}, or a thrower
     createImpl, // optional (payload) => promise for notifications.create
-    setImpl, // optional (items) => promise for storage.local.set
+    setImpl, // optional forbidden-write oracle
+    removeImpl, // optional (key) => promise for targeted cleanup
+    store = {},
     browserOverride, // replaces the whole browser global when defined
   } = options || {};
-  const recorded = { notifications: [], storageSets: [] };
+  const recorded = { notifications: [], storageSets: [], storageRemoves: [], consoleCalls: [] };
 
   const browser = browserOverride !== undefined ? browserOverride : {
     privacy: {
@@ -57,7 +59,13 @@ function loadHardening(options) {
     storage: {
       local: {
         get() {
-          return Promise.resolve({});
+          return Promise.resolve(store);
+        },
+        remove(key) {
+          recorded.storageRemoves.push(key);
+          if (removeImpl) return removeImpl(key);
+          delete store[key];
+          return Promise.resolve();
         },
         set(items) {
           recorded.storageSets.push(items);
@@ -67,7 +75,7 @@ function loadHardening(options) {
     },
   };
 
-  const sandbox = { console, setTimeout, clearTimeout };
+  const sandbox = { console: Object.fromEntries(['warn', 'error', 'log'].map(level => [level, (...args) => recorded.consoleCalls.push([level, ...args.map(String)])])), setTimeout, clearTimeout };
   if (browserOverride !== undefined) {
     sandbox.browser = browserOverride;
   } else {
@@ -112,33 +120,26 @@ test('realApiSettingsShapeResolvesValueAndFlagFollows', async () => {
   assert.strictEqual(sandbox.hardeningOk, true, 'flag follows the read back to hardened');
 });
 
-test('sideEffectRejectionStillResolvesFailClosed', async () => {
-  // The audit must never reject even when its own failure side effects
-  // misbehave — a rejected notification must not swallow the operator
-  // record, and a rejected record write must not swallow the dialog.
-  const failingCreate = () => Promise.reject(new Error('mock: notifications unavailable'));
-  const first = loadHardening({
-    setting: true,
-    createImpl: failingCreate,
-  });
+test('T205_sideEffectErrorsNeverEmitRawDetailOrChangeAuthorization', async () => {
+  const first = loadHardening({ setting: true, createImpl: () => Promise.reject(new Error('T205_NOTIFICATION_RAW')) });
+  await drain();
   await first.sandbox.auditHardening();
-  await drain();
-  assert.strictEqual(first.sandbox.hardeningOk, false, 'fails closed');
-  assert.ok(
-    first.recorded.storageSets.length >= 2,
-    'the operator record is still written when the dialog rejects ' +
-      '(load-time audit + explicit audit)'
-  );
+  assert.strictEqual(first.sandbox.hardeningOk, false);
+  assert.deepStrictEqual(first.recorded.storageSets, []);
+  assert.deepStrictEqual(first.recorded.consoleCalls, []);
 
-  const failingSet = () => Promise.reject(new Error('mock: storage quota'));
-  const second = loadHardening({ setting: true, setImpl: failingSet });
-  await second.sandbox.auditHardening();
+  const store = { hardening: { lastAuditedAt: 497000, readError: 'T205_LEGACY' }, device: 'preserve' };
+  const second = loadHardening({ setting: false, store, removeImpl: () => Promise.reject(new Error('T205_REMOVE_RAW')) });
   await drain();
-  assert.strictEqual(second.sandbox.hardeningOk, false, 'fails closed');
-  assert.ok(
-    second.recorded.notifications.length >= 2,
-    'the dialog still fires when the record write rejects'
-  );
+  await second.sandbox.auditHardening();
+  assert.strictEqual(second.sandbox.hardeningOk, false, 'failed cleanup cannot claim initialization success');
+  assert.strictEqual(second.sandbox.auditHardening.status, 'unknown');
+  assert.ok('hardening' in store, 'failed removal remains observable');
+  assert.deepStrictEqual(second.recorded.storageSets, []);
+  assert.deepStrictEqual(second.recorded.consoleCalls, []);
+  assert.doesNotMatch(JSON.stringify(second.recorded.notifications), /T205_REMOVE_RAW/);
+  assert.strictEqual(second.recorded.notifications[0].message,
+    'Stargate could not complete its runtime hardening initialization, so all non-Direct routes remain blocked. Restart the browser to retry. WebRTC is the only hardening surface this extension can verify at runtime; this notification does not verify the rest of the browser profile.');
 });
 
 test('loadTimeAuditSurvivesHostileBrowserWithoutUnhandledRejection', async () => {
@@ -171,4 +172,58 @@ test('moduleExposesExactlyThePinnedTwoGlobals', async () => {
     'hardening.js must expose exactly the pinned surface ' +
       '(auditHardening + hardeningOk) on the shared background scope'
   );
+});
+
+
+test('T205_absentAndMalformedLegacyStateUseOnlyTargetedIdempotentRemoval', async () => {
+  for (const value of [undefined, null, 'malformed', ['legacy'], { lastAuditedAt: 497000 }]) {
+    const store = { unrelated: 'preserved' };
+    if (value !== undefined) store.hardening = value;
+    const { sandbox, recorded } = loadHardening({ setting: false, store });
+    await drain();
+    await sandbox.auditHardening();
+    assert.deepStrictEqual(store, { unrelated: 'preserved' });
+    assert.deepStrictEqual(recorded.storageRemoves, ['hardening', 'hardening']);
+    assert.deepStrictEqual(recorded.storageSets, []);
+    assert.strictEqual(sandbox.hardeningOk, true);
+  }
+});
+
+test('T205_unavailableRemovalFailsClosedWithoutUnhandledStartupRejection', async () => {
+  const { sandbox } = loadHardening({ browserOverride: {
+    privacy: { network: { peerConnectionEnabled: { get: () => Promise.resolve({ value: false }) } } },
+    storage: { local: {} }, notifications: { create: () => Promise.resolve() },
+  } });
+  await drain();
+  assert.strictEqual(sandbox.hardeningOk, false);
+  assert.strictEqual(sandbox.auditHardening.status, 'unknown');
+});
+
+test('T205_currentFailureClosesGateBeforeNotificationCompletes', async () => {
+  let setting = false;
+  let release;
+  const notification = new Promise(resolve => { release = resolve; });
+  const { sandbox } = loadHardening({ setting: () => Promise.resolve({ value: setting }), createImpl: () => notification });
+  await drain();
+  assert.strictEqual(sandbox.hardeningOk, true);
+  setting = true;
+  const pending = sandbox.auditHardening();
+  await drain();
+  assert.strictEqual(sandbox.hardeningOk, false);
+  assert.strictEqual(sandbox.auditHardening.status, 'enabled');
+  release();
+  await pending;
+});
+
+test('T205_olderSuccessfulReadCannotOverwriteNewerFailure', async () => {
+  let release;
+  let calls = 0;
+  const held = new Promise(resolve => { release = resolve; });
+  const { sandbox } = loadHardening({ setting: () => ++calls === 1 ? held : Promise.resolve({ value: true }) });
+  await sandbox.auditHardening();
+  assert.strictEqual(sandbox.hardeningOk, false);
+  release({ value: false });
+  await drain();
+  assert.strictEqual(sandbox.hardeningOk, false, 'stale initial success cannot authorize current failure');
+  assert.strictEqual(sandbox.auditHardening.status, 'enabled');
 });

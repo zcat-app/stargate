@@ -1609,10 +1609,11 @@ the other hardening prefs (DoH/DoT/HTTP-3) are not extension-readable and
 are enforced as an externally verified profile precondition (§5.4, §5.5).
 The setting and its values are documented at
 [https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/privacy/network].
-The hardening audit raises a transient notification if WebRTC is enabled
-(Gecko rejects `requireInteraction`, so it is not modal; T195), the routing
-block itself is what is enforced, and the Stargate popup shows the blocked
-state persistently. Mullvad Browser's own default is WebRTC **enabled**:
+The hardening audit attempts a transient notification if WebRTC is enabled or its check is unavailable
+(Gecko rejects `requireInteraction`, so it is not modal; T195). The routing block is enforced by the
+protected-request gate. T205 requires a separate popup paragraph for the volatile result of the latest
+runtime hardening check. The existing route paragraph reports a main-navigation decision; neither
+paragraph is a history, proof of connection success or verification of the complete browser profile. Mullvad Browser's own default is WebRTC **enabled**:
 without the shipped `browser-profile/user.js` (which sets
 `media.peerconnection.enabled=false`) every `.onion` request is blocked, so
 the failure is fail-closed, not a leak. The live probe starts hardened
@@ -1621,6 +1622,29 @@ itself. The externally verified profile (release-cadence live-e2e test
 `tests/live-e2e/mullvad-browser-hardening/`) additionally confirms
 `peerConnectionEnabled = false` in a test profile that models the target
 browser's hardened defaults.
+
+**T205 required current-state and legacy-storage boundary.** At each background startup, the extension
+must remove only the obsolete `storage.local.hardening` key and perform a fresh WebRTC check. Protected
+routing must remain closed while initialization is pending or cleanup fails; only successful cleanup
+and a measured disabled WebRTC value may open this runtime gate. Cleanup must preserve unrelated
+device credentials, profile isolation identity, route settings and other valid client configuration.
+The finite enabled, disabled and unknown results must remain in memory; the extension must create no
+replacement failure event, event-hour timestamp, raw API-error record or diagnostic error detail.
+A later startup must reconstruct its state rather than treating stored success or failure as authority.
+Notifications explain failure and do not determine routing authorization. The displayed result describes
+the latest check, not continuous monitoring; T205 does not add a per-request re-audit policy. T190
+retains that decision and the associated mid-session drift assessment.
+
+Cleanup concerns the key visible through the extension storage API. It does not establish physical disk
+erasure or removal from browser journals, backups, OS logs or external copies. T205's focused evidence
+must identify the actual package, source, profile and browser processes, demonstrate successful
+API-visible removal, preserve unrelated storage through a real browser process restart, and retain
+calibrated routing controls. These properties remain required targets until candidate-bound evidence
+records their measured outcomes. Mullvad Browser 153.3.0esr development evidence does not certify a
+stable release or resolve T200's broader effective-profile and release-verification obligations.
+T197 retains the broader inventory/profile/indicator claim reconciliation. T155 retains integrated
+foundation closure, and Constitution VIII's ticket, cumulative milestone and external human release
+reviews remain required.
 
 **Residual risk**: if the user grants WebRTC permission to a specific
 origin, or runs Firefox with a profile that overrides this preference

@@ -198,14 +198,15 @@ function assertGetRouteMessage(payload, tabId, what) {
     what + ': the getRoute message must be the pinned object shape'
   );
   assert.deepStrictEqual(
-    Object.keys(payload).sort(), ['tabId', 'type'],
-    what + ': the getRoute message carries exactly {type, tabId} — an ' +
+    Object.keys(payload).sort(), ['includeHardening', 'tabId', 'type'],
+    what + ': the getRoute message carries exactly {type, tabId, includeHardening} (T205) — an ' +
       'extra field is protocol drift (T034c §Analysis finding 1)'
   );
   assert.strictEqual(
     payload.type, GET_ROUTE,
     what + ': the getRoute message type is the pinned "' + GET_ROUTE + '"'
   );
+  assert.strictEqual(payload.includeHardening, true, 'T205 explicitly requests finite current state');
   assert.strictEqual(
     payload.tabId, tabId,
     what + ': the getRoute message names the active tab\'s id'
@@ -453,15 +454,15 @@ test('popupTouchesOnlyPinnedBrowserSurfaces', { skip: skip() }, async () => {
     );
   }
   for (const id of h.recorded.domLookups) {
-    assert.strictEqual(
-      id, 'route-indicator',
+    assert.ok(
+      ['route-indicator', 'hardening-status'].includes(id),
       'DOM lookups must target only the pinned indicator element; got "' +
         id + '" (T034c §Analysis "Pinned surface")'
     );
   }
   for (const w of h.recorded.elementWrites) {
-    assert.strictEqual(
-      w.id, 'route-indicator',
+    assert.ok(
+      ['route-indicator', 'hardening-status'].includes(w.id),
       'element writes must target only the pinned indicator element; got "' +
         w.id + '"'
     );
@@ -492,6 +493,7 @@ test('popupTouchesOnlyPinnedBrowserSurfaces', { skip: skip() }, async () => {
 
 test('popupHtmlProvidesPinnedIndicatorElement', { skip: !htmlPresent() && HTML_ABSENT }, () => {
   const html = fs.readFileSync(POPUP_HTML_PATH, 'utf8');
+  assert.match(html, /<p id="hardening-status"><\/p>/, 'T205 current state has a separate empty paragraph');
   assert.match(
     html, /id="route-indicator"/,
     'popup.html must provide the pinned indicator element ' +
@@ -582,4 +584,30 @@ test('baselineDriftPrefixesTheWarningToEveryLabel', async () => {
   const intact = loadPopup({ activeTab: { id: 7 }, reply: () => Promise.resolve({ route: 'tor' }) });
   await drain();
   assert.strictEqual(renderedLabel(intact), LABEL_TOR, 'an intact baseline adds nothing');
+});
+
+
+// T205: separate latest runtime-check presentation must not replace the
+// main-navigation label or infer whole-profile/connection protection.
+test('T205_popupShowsFiniteCurrentCheckSeparatelyAndClearsFailure', async () => {
+  const state = { activeTab: { id: 7 }, reply: () => Promise.resolve({ route: 'tor', hardening: 'enabled' }) };
+  const h = loadPopup(state);
+  await drain();
+  const indicator = () => h.sandbox.document.getElementById('hardening-status').textContent;
+  assert.strictEqual(indicator(), 'Runtime hardening: WebRTC enabled at last check; non-Direct routing blocked.');
+  assert.strictEqual(renderedLabel(h), LABEL_TOR);
+  state.reply = () => Promise.resolve({ route: 'tor', hardening: 'disabled' });
+  await fireOnUpdated(h, 7, {}, state.activeTab);
+  assert.strictEqual(indicator(), 'Runtime hardening: WebRTC disabled at last check.');
+  assert.doesNotMatch(indicator(), /enabled|blocked/);
+  for (const reply of [undefined, {}, { hardening: 'T205_RAW_UNRECOGNIZED' }]) {
+    state.reply = () => Promise.resolve(reply);
+    await fireOnUpdated(h, 7, {}, state.activeTab);
+    assert.strictEqual(indicator(), 'Runtime hardening: Unknown; non-Direct routing readiness is not confirmed.');
+    assert.doesNotMatch(indicator(), /T205_RAW/);
+  }
+  state.reply = () => Promise.reject(new Error('T205_RAW_STATUS'));
+  await fireOnUpdated(h, 7, {}, state.activeTab);
+  assert.strictEqual(indicator(), 'Runtime hardening: Unknown; non-Direct routing readiness is not confirmed.');
+  assert.doesNotMatch(indicator(), /T205_RAW/);
 });

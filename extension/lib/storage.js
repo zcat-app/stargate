@@ -10,9 +10,9 @@
 // Deliberately NOT here, per the trust-boundary doctrine (internal
 // callers are trusted; validation lives at edges): token-format
 // validation — data-model.md §5 puts `^[0-9a-f]{32}$` "in the options
-// page" — and any non-device storage.local field (arch §14.4; T055's
-// hardening record owns its own key). The wrapper carries no shape
-// policy: setDevice stores what it is given, verbatim.
+// page" — and any non-device storage.local field (arch §14.4;
+// hardening.js removes its obsolete legacy key under T205). The wrapper
+// carries no shape policy: setDevice stores what it is given, verbatim.
 //
 // Surface (T034g — MV2 lib scripts share one background-page global
 // scope): exactly one new global, `StargateStorage`, declared with `var`

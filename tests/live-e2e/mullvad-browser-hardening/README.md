@@ -69,7 +69,7 @@ hermetic test can inspect).
 | 2 | DoT off: no `network.dns.over_tls.*` family, or all-false | arch §14.5 Part 1; FR-004 | read `prefs.js` |
 | 3 | HTTP/3 off: `network.http.http3.enable == false` | arch §14.5 Part 1; FR-004 | read `prefs.js` |
 | 4 | WebRTC off: `media.peerconnection.enabled == false` (the Firefox `prefs.js` pref; the extension's runtime gate reads the same state via the stable `privacy.network.peerConnectionEnabled` API, which wraps it — the API path is NOT itself a `prefs.js` key) | arch §14.5 Part 1/Part 2; FR-004 | read `prefs.js` (automated in `run.sh`) AND assert the extension's runtime gate agrees (manual Part 2) |
-| 5 | Foreign-extension inventory: allowlisted present, disallowed flagged | arch §14.5 Part 3; THREAT-MODEL §2.7 | load the extension, read `storage.local.hardening.lastAuditResult` |
+| 5 | Foreign-extension inventory: allowlisted present, disallowed flagged | arch §14.5 Part 3; THREAT-MODEL §2.7 | Exercise the inventory separately; T197 owns its implementation/status reconciliation. Do not use the obsolete storage.local.hardening key as an inventory oracle. |
 | 6 | Fail-closed routing: with WebRTC forcibly enabled, `proxy.onRequest` returns no routable Tor descriptor for a `.onion` request — only the T186 unreachable sink `[{socks, file:///dev/null/stargate-blocked, proxyDNS}, null]`, never `null` (which Gecko treats as Direct) | FR-004/FR-004a; Constitution III | flip `peerConnectionEnabled` true, assert the extension's `hardeningOk` flag is false and the result is the sink; `probe.py --only blocked-proxy` proves the network outcome |
 
 `probe.py` (T195) never injects `media.peerconnection.enabled` into a hardened
@@ -82,10 +82,11 @@ Properties 1–4 (the `prefs.js` reads) are **automated in `run.sh` (Part 1)**
 — these are the load-bearing checks, because the WebExtensions API does
 not expose prefs 1–3 and the `prefs.js` read is the ONLY verification for
 them. Property 4 is double-checked (profile pref + extension runtime
-gate). Properties 4-runtime/5/6 are **manual Part 2** (the extension code
-T055 does not exist yet, so runtime behaviour cannot be automated until
-Phase 5+). A release-runner must complete both parts before tagging;
-`run.sh`'s GREEN covers only Part 1.
+gate). Property 4-runtime and property 6 require real-browser observations; the connection-level probes below
+cover their named scenarios. Observe the current runtime result and routing behavior, rather than
+reading an audit result from the obsolete `storage.local.hardening` key. Property 5's implementation
+and claim reconciliation remains T197's responsibility. A release-runner must account for the required
+coverage and its actual outcomes before tagging; `run.sh`'s GREEN covers only Part 1.
 
 Properties 1–3 have **no hermetic substitute** (the WebExtensions API does
 not expose them); they are the load-bearing reason this live-e2e test
@@ -128,6 +129,20 @@ python3 tests/live-e2e/mullvad-browser-hardening/probe.py \
 
 The extension requires Gecko 153 or later; `descriptor-matrix` also runs
 on older browsers because it installs only its own test extension.
+
+### Focused hardening-state scenario (T205; required coverage)
+
+T205 requires `probe.py --only hardening-state` to check the latest volatile hardening result and
+targeted legacy-key cleanup with the reproducibly packaged candidate. The scenario must preserve a
+disposable profile and installed add-on through full browser process restarts, verify that unrelated
+synthetic credentials/configuration survive unchanged, and use a separately identified no-cleanup
+control to rule out empty-profile false passes. Enabled, unknown and pending hardening must retain
+calibrated protected-route negative controls, with protected and explicit Direct positive controls.
+Fault packages must be identified separately from the unchanged candidate. Raw output must be retained
+under the selected run directory, and the evidence must record observed outcomes and limitations;
+this coverage description is not a passing result. API-visible cleanup is not forensic erasure.
+The supported development pin is Mullvad Browser 153.3.0esr; these checks do not certify a stable
+release or complete T200's effective-profile and release-verification obligations.
 
 ## Private-window access and the profile baseline (`probe.py`; T188)
 
@@ -175,13 +190,24 @@ python3 tests/live-e2e/mullvad-browser-hardening/probe.py \
 - **Preserve** (carry across runs): the test profile's hardened pref
   state (`network.trr.mode = 5`, etc.). The whole point is that this
   state is verified, then trusted until the next release-cadence run.
-- **Reset** (re-create each run): `storage.local.hardening.lastAuditResult`
-  in the test profile — the extension writes the latest audit result
-  there; the test reads it fresh. Use a clean profile or clear the key
-  before each run so a stale "ok" from a prior run cannot mask a
-  regression.
+- **Hardening initialization** (reconstruct at background startup): T205 requires a fresh WebRTC check
+  and targeted removal of the obsolete `storage.local.hardening` key. Current hardening results must
+  remain volatile. For the focused migration scenario, seed synthetic legacy state in a disposable
+  profile and preserve that profile and installed add-on through the required full browser process
+  restarts. Do not clear the key or substitute a fresh profile before observing the candidate's cleanup:
+  doing so would bypass the migration being tested. Check complete API-visible extension storage for
+  removal of the synthetic legacy markers and unchanged unrelated sentinels. A successful removal is
+  required; an attempted call or unavailable storage API is not a passing migration result.
 
 ## How to run
+
+Before running the focused T205 hardening-state scenario, run its migration,
+restart and status oracle tests. The tests must pass before recording focused
+browser evidence.
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 tests/live-e2e/mullvad-browser-hardening/test_probe.py
+```
 
 ```sh
 # Opt in (release-cadence; not on the hermetic PR path):

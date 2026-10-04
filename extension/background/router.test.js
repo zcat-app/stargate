@@ -78,7 +78,7 @@ const GET_ROUTE = 'stargate:getRoute';
 // `firstPartyDomain`, storage.js adds `StargateStorage`; router.js must
 // add NOTHING beyond these (§Surface pin).
 const SEEDED = [
-  'TextEncoder', 'URL', 'browser', 'console', 'crypto', 'hardeningOk',
+  'TextEncoder', 'URL', 'browser', 'console', 'crypto', 'hardeningOk', 'auditHardening',
 ];
 const LIB_GLOBALS = [
   'StargateStorage', 'firstPartyDomain',
@@ -293,6 +293,7 @@ function loadRouter(options) {
     crypto: cryptoImpl,
     browser: makeBrowser(state, recorded),
     hardeningOk: state.hardeningOk,
+    auditHardening: { status: state.hardeningOk ? 'disabled' : 'unknown' },
   };
   vm.runInNewContext(fs.readFileSync(FIRSTPARTY_PATH, 'utf8'), sandbox, {
     filename: 'lib/firstparty.js',
@@ -1138,7 +1139,7 @@ test('closedHardeningGateCancelsAndRecordsBlocked', async () => {
   );
   const indicator = {};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../popup/popup.js'), 'utf8'), {
-    document: { getElementById: () => indicator },
+    document: { getElementById: (id) => id === 'route-indicator' ? indicator : {} },
     browser: {
       tabs: { query: async () => [{ id: 7 }], onUpdated: { addListener() {} } },
       runtime: { sendMessage: onMessage },
@@ -1518,7 +1519,7 @@ for (const mainTor of [false, true]) {
       { route: expectedRoute });
     const indicator = {};
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../popup/popup.js'), 'utf8'), {
-      document: { getElementById: () => indicator },
+      document: { getElementById: (id) => id === 'route-indicator' ? indicator : {} },
       browser: {
         tabs: { query: async () => [{ id: 7 }], onUpdated: { addListener() {} } },
         runtime: { sendMessage: loaded.onMessage },
@@ -1640,7 +1641,7 @@ const LABEL_NO_PRIVATE_ACCESS =
 async function renderPopup(onMessage) {
   const indicator = {};
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../popup/popup.js'), 'utf8'), {
-    document: { getElementById: () => indicator },
+    document: { getElementById: (id) => id === 'route-indicator' ? indicator : {} },
     browser: {
       tabs: { query: async () => [{ id: 7 }], onUpdated: { addListener() {} } },
       runtime: { sendMessage: onMessage },
@@ -1955,4 +1956,47 @@ test('warningsNeverHoldRoutingOrPopupAnswers', async () => {
   await drain();
   assert.deepStrictEqual(plain(await drifted.recorded.message[0]({ type: GET_ROUTE, tabId: 7 })),
     { baseline: 'mismatch' }, 'nor the popup answer');
+});
+
+
+// T205: opt-in finite current-state field uses the existing route reply,
+// independent of a prior navigation decision. No persistent reads/history.
+test('T205_statusReplyReportsOnlyFiniteLatestHardeningCheck', async () => {
+  const loaded = loadRouter({ hardeningOk: false });
+  loaded.sandbox.auditHardening = { status: 'unknown' };
+  await drain();
+  for (const status of ['unknown', 'enabled', 'disabled']) {
+    loaded.sandbox.auditHardening.status = status;
+    const reply = await loaded.recorded.message[0]({ type: GET_ROUTE, tabId: 7, includeHardening: true });
+    assert.deepStrictEqual(plain(reply), { hardening: status });
+  }
+  // Existing route-only callers retain their current wire contract.
+  assert.strictEqual(await loaded.recorded.message[0]({ type: GET_ROUTE, tabId: 7 }), undefined);
+});
+
+// A popup cannot close or authorize a route: its missing reply conveys no
+// readiness evidence, while the healthy background keeps its own authority.
+test('T205_popupDeliveryFailureDoesNotCloseHealthyProtectedGate', async () => {
+  const loaded = loadRouter({ hardeningOk: true });
+  loaded.sandbox.auditHardening = { status: 'disabled' };
+  await drain();
+  const messages = [];
+  let backgroundReplyCompleted = false;
+  await renderPopup(async (message) => {
+    messages.push(plain(message));
+    const reply = await loaded.recorded.message[0](message);
+    assert.deepStrictEqual(plain(reply), { hardening: 'disabled' });
+    backgroundReplyCompleted = true;
+    throw new Error('T205_SYNTHETIC_POPUP_DELIVERY');
+  });
+  assert.deepStrictEqual(messages, [{ type: GET_ROUTE, tabId: 7, includeHardening: true }]);
+  assert.strictEqual(backgroundReplyCompleted, true,
+    'the real background status reply completed before delivery was lost');
+  const details = mainFrame(`https://${ONION_A}/t205-status-delivery`);
+  const descriptor = await loaded.recorded.proxy[0](details);
+  assert.strictEqual(descriptor[0].type, 'socks');
+  assert.strictEqual(descriptor[0].port, 8881);
+  assert.strictEqual(descriptor[1], null);
+  assert.deepStrictEqual(plain(await loaded.recorded.webRequest[0](details)), {});
+  assert.strictEqual(loaded.sandbox.hardeningOk, true);
 });

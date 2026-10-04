@@ -1,0 +1,1923 @@
+{
+  "T205Evidence": {
+    "T155Handoff": "Refresh CPB-M1 with T205 source-bound no-persistence/targeted migration, volatile current state, actual popup/notification and calibrated routing evidence. T155 broader integration, TLS/GetStatus/full-stack and historical captures are not refreshed by T205. T190 cadence, T197 inventory/claims, T200 effective profile/release verification remain pending.",
+    "actualBrowserSessions": 10,
+    "assetsRetained": [
+      "target/runs/T205/",
+      "extension/dist/stargate-extension.zip",
+      "/home/claudia/stargate/.scratch/tmp/T205/"
+    ],
+    "baseline": "07c40ac3184a4ef59997d2a5652b9c371e63d395",
+    "historicalAttempts": [
+      {
+        "failedScenario": "t205-explicit-direct-positive",
+        "passedScenarios": 18,
+        "path": "target/runs/T205/attempt-1.json",
+        "reason": "Preliminary fixture expected direct destination under configured ordinary proxy type 1; retained trace shows Direct marker at ordinary proxy. This is not an aggregate GREEN.",
+        "result": "RED",
+        "sha256": "21ed38c592020dce2121a5e3920759e89e21776b3544557cc992c2c013f27e4a",
+        "totalScenarios": 19
+      },
+      {
+        "path": "target/runs/T205/direct-fixture-2.json",
+        "role": "Separate calibration of explicit Direct under proxy type 0, destination marker and Direct popup with empty proxy/SOCKS catchers.",
+        "sha256": "af2af4f97ee1eb1146e957bb981cec99312b7fbd0ebbbd6d361a0602d757ea40"
+      },
+      {
+        "path": "target/runs/T205/profile-fixture-1.stdout",
+        "role": "Preliminary actual retained-profile permanent-addon full-process-restart calibration; not final candidate evidence.",
+        "sha256": "9b8bf7cafc76a48c9aba3b02f45b1cd26222f5048cd4902a8dc047fabb3de7e0"
+      }
+    ],
+    "impactAssessment": "Constitution VIII: conforming implementation repair within existing extension runtime/storage and protected-request boundary. No new trust boundary, cryptographic identity/authentication, protected route or deployment exposure. Ordinary fresh correctness/security pair required. No separate external-review trigger introduced; cumulative milestone and external human release reviews remain required.",
+    "passedScenarios": 19,
+    "rawReport": {
+      "path": "target/runs/T205/attempt-2.json",
+      "sha256": "385be43dd1a95deab3912c6ed907fc507ca1beb39b848ddd3a17e325f6bb7ed8"
+    },
+    "rerunChange": "Approved popup/new cleanup notification implemented. Final Direct positive explicitly records calibrated browser proxy type 0; protected controls retain original proxy/catchers. No production routing-policy change.",
+    "schema": 1,
+    "sourceFiles": [
+      {
+        "path": "extension/background/hardening.js",
+        "sha256": "47c0b5bdd8244fd188949372e0043f52e35f59626cb868a812cc60a69a6fffb7"
+      },
+      {
+        "path": "extension/background/router.js",
+        "sha256": "fdd8a9ea0e1413f15e4c15a7394369315785073bd306e74280ae1a1037f1fe1f"
+      },
+      {
+        "path": "extension/popup/popup.js",
+        "sha256": "9853c8e18db2e0d458343a235801dbb8cf7dbc845c8f9feb3376490954319456"
+      },
+      {
+        "path": "extension/popup/popup.html",
+        "sha256": "f79f59767767dd63997d8722be5c187601eddfb1f7323a84c47e98f9f9271b6f"
+      },
+      {
+        "path": "extension/lib/storage.js",
+        "sha256": "1343706edd87268a6f552b6b599ba8ad5159192daeb3ac77dad232724347a232"
+      },
+      {
+        "path": "tests/live-e2e/mullvad-browser-hardening/probe.py",
+        "sha256": "4204cb03e9aea0cdf2a664048f1ac474009e57e207b0d859582fb06cdd671199"
+      },
+      {
+        "path": "tests/live-e2e/mullvad-browser-hardening/test_probe.py",
+        "sha256": "d1192aba5dda2e6443bc37d1a6bc157e0d17ad59dba8acabda7923de4bb5b0a0"
+      },
+      {
+        "path": "browser-profile/user.js",
+        "sha256": "e8455e40ce2db470229da48cbc8570bbabc4d5af0a1df0810474bfaef9392491"
+      }
+    ],
+    "testsFirstReplayRestoration": {
+      "candidateIndexSha256": "47c0b5bdd8244fd188949372e0043f52e35f59626cb868a812cc60a69a6fffb7",
+      "candidateWorktreeSha256": "47c0b5bdd8244fd188949372e0043f52e35f59626cb868a812cc60a69a6fffb7",
+      "label": "retrospective baseline-writer replay after implementation; original pre-implementation RED remains preserved",
+      "restoredIndexSha256": "47c0b5bdd8244fd188949372e0043f52e35f59626cb868a812cc60a69a6fffb7",
+      "restoredWorktreeSha256": "47c0b5bdd8244fd188949372e0043f52e35f59626cb868a812cc60a69a6fffb7",
+      "sourceAfterSha256": "e7384a181398d9addf41f51e2af9cf5e965c020caadff8ce70e763f94c8e331a",
+      "sourceBeforeSha256": "e7384a181398d9addf41f51e2af9cf5e965c020caadff8ce70e763f94c8e331a",
+      "substitutionPath": "extension/background/hardening.js",
+      "toolExitCode": 0
+    },
+    "testsFirstSequence": "Original pre-implementation two-file behavioral RED retained; supplemental four-file RED retained. Active four-file RED is a labelled retrospective baseline-writer replay, hardening.js-only substitution with exact try/finally worktree/index/full source diff restoration; final identical-command GREEN captured after this evidence is staged.",
+    "ticket": "T205",
+    "totalScenarios": 19,
+    "wordingApproval": {
+      "decision": "Maintainer explicitly approved after two independent evaluations; root relayed so yeah approve and continue.",
+      "path": "/home/claudia/stargate/.scratch/tmp/T205/wording-approval-packet-v2.md",
+      "sha256": "ef44050755de3c91c45c1d5239cbecb9fddc343854f67031e52a46d97d652263"
+    }
+  },
+  "artifactSha256": "9039e153d19c8ec734c985ff3b6f42050edd48b65099dd58d251044c35d183ab",
+  "browserVersion": "[693360] Sandbox: CanCreateUserNamespace() unshare(CLONE_NEWPID): EPERM\nMullvad MullvadBrowser 153.3.0esr",
+  "command": [
+    "tests/live-e2e/mullvad-browser-hardening/probe.py",
+    "--browser",
+    "/home/claudia/stargate/target/t157-tools/mullvad-browser/Browser/mullvadbrowser",
+    "--driver",
+    "/home/claudia/stargate/target/t157-tools/geckodriver",
+    "--extension",
+    "extension/dist/stargate-extension.zip",
+    "--artifact",
+    "/home/claudia/stargate/target/t157-tools/mullvad-browser-linux-x86_64-16.0a12.tar.xz",
+    "--only",
+    "hardening-state",
+    "--report-out",
+    "target/runs/T205/attempt-2.json"
+  ],
+  "driverVersion": "geckodriver 0.37.0",
+  "executedExtensionSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+  "extensionSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+  "failures": [],
+  "hardeningStateScope": {
+    "browserBinarySha256": "00162321fe062e0ff0fb4160c530e728e1d80a830cd0f1783f754081715dde7f",
+    "driverBinarySha256": "23c877d64e37e1558ae41fffa1f629a7f937dac45c5accb59e5d2f9c6a9af0e5",
+    "faultPackages": {
+      "t205-cleanup-error": {
+        "changedMembers": {
+          "background/t205-fault.js": {
+            "afterSha256": "297985ed8bc73d50ab6cd1f8a4f0a1518b55bc56e5ef14b4c36a71306d6e1e30",
+            "beforeSha256": null
+          },
+          "manifest.json": {
+            "afterSha256": "a44c11e00878be66344ab9e79842030d6df8e5caaaf652f6d70d0598c9206c63",
+            "beforeSha256": "6d6d89a5a0e6844094dd861d208e6182fd172e2ea63207533e44c6c08c92e114"
+          }
+        },
+        "packageSha256": "411edfc1cda501d570360ac908669d76bdecaf05733d9b756b4e8af416a2406d",
+        "sourceSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "variant": "t205-cleanup-error"
+      },
+      "t205-no-cleanup": {
+        "changedMembers": {
+          "background/hardening.js": {
+            "afterSha256": "05778813038336b6fe1ff1a2058c6c84de0e97b32882050c848c05ed11a53f60",
+            "beforeSha256": "47c0b5bdd8244fd188949372e0043f52e35f59626cb868a812cc60a69a6fffb7"
+          }
+        },
+        "packageSha256": "28e3173139f9d41dbeb8a8301cea8c1affe43614c2606049a724f1338ca3c01a",
+        "sourceSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "variant": "t205-no-cleanup"
+      },
+      "t205-notification-error": {
+        "changedMembers": {
+          "background/t205-fault.js": {
+            "afterSha256": "cc2c0ed8f6ae192d7ae41a535452e4637d919055fc38cbb8af27272428fa7d30",
+            "beforeSha256": null
+          },
+          "manifest.json": {
+            "afterSha256": "a44c11e00878be66344ab9e79842030d6df8e5caaaf652f6d70d0598c9206c63",
+            "beforeSha256": "6d6d89a5a0e6844094dd861d208e6182fd172e2ea63207533e44c6c08c92e114"
+          }
+        },
+        "packageSha256": "70d53e71460fd5e34841e2e0e53326f089395d554e54a578192700e4385fabb5",
+        "sourceSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "variant": "t205-notification-error"
+      },
+      "t205-pending": {
+        "changedMembers": {
+          "background/t205-fault.js": {
+            "afterSha256": "8baba260233002f46aa499c0446d67834134a8238e60e0d9821bab72c69f0f81",
+            "beforeSha256": null
+          },
+          "manifest.json": {
+            "afterSha256": "a44c11e00878be66344ab9e79842030d6df8e5caaaf652f6d70d0598c9206c63",
+            "beforeSha256": "6d6d89a5a0e6844094dd861d208e6182fd172e2ea63207533e44c6c08c92e114"
+          }
+        },
+        "packageSha256": "c60da851f017408c3dfba86a958bf0cdd1303c08bb3b82c0f3b3b407a57cd43a",
+        "sourceSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "variant": "t205-pending"
+      },
+      "t205-read-error": {
+        "changedMembers": {
+          "background/t205-fault.js": {
+            "afterSha256": "841b66420546535e4d98795c43447fb82a6079522abab3c4c23d95a2963a11a0",
+            "beforeSha256": null
+          },
+          "manifest.json": {
+            "afterSha256": "a44c11e00878be66344ab9e79842030d6df8e5caaaf652f6d70d0598c9206c63",
+            "beforeSha256": "6d6d89a5a0e6844094dd861d208e6182fd172e2ea63207533e44c6c08c92e114"
+          }
+        },
+        "packageSha256": "0ea231f60d861071f1ff9a4687868723efa45b94dc9e823be83845fac2a0b822",
+        "sourceSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "variant": "t205-read-error"
+      }
+    },
+    "harnessSha256": "4204cb03e9aea0cdf2a664048f1ac474009e57e207b0d859582fb06cdd671199",
+    "limits": [
+      "API-visible cleanup only, no forensic disk erasure",
+      "Mullvad Browser 153.3.0esr development pin, no stable-release certification",
+      "T200 profile/verification obligations remain pending; native-DNS harness preferences are injected, not shipped",
+      "No per-request audit policy added; T190 owns mid-session drift"
+    ],
+    "logging": "geckodriver/browser stdout+stderr; Services.console messages; strace DNS sockets; MOZ_LOG nsHostResolver; alerts.useSystemBackend=false",
+    "packageMembers": {
+      "README.md": "f935f379003e6435a068a38b61ef20f8ffb54458970a8b406a7ac9958575ebe4",
+      "background/hardening.edges.test.js": "6a38acc678f9a4684155617b23c4af35d5e116266c32776b63c454ad02038453",
+      "background/hardening.js": "47c0b5bdd8244fd188949372e0043f52e35f59626cb868a812cc60a69a6fffb7",
+      "background/hardening.test.js": "33deab96de2bcc7d4e7c58a90ac80735051397799af685c5d18e32f7888c1abb",
+      "background/router.js": "fdd8a9ea0e1413f15e4c15a7394369315785073bd306e74280ae1a1037f1fe1f",
+      "background/router.test.js": "b6b1c44211264c6685e5e9bb3a02fc34d30ff0d08dc7af1fe9734fb5d0f259c8",
+      "lib/firstparty.edges.test.js": "69c8b3b607db165b7bfa00825bd5d2f5c8653acc4cd765c2a7e96a739daa7893",
+      "lib/firstparty.js": "5466d0a6bb165d5eef68dfd8fe754dd8765f7a6d35712c43d121c0d0f6e58d69",
+      "lib/firstparty.test.js": "1b8ffbde11a69e2d86796384c46cf76cd119a9b30cea7efc8428831dbd66affb",
+      "lib/storage.js": "1343706edd87268a6f552b6b599ba8ad5159192daeb3ac77dad232724347a232",
+      "lib/storage.test.js": "de96204589ec66142619461362ba7a7c2272debebb7a469866febd4dbc0d3b3f",
+      "manifest.json": "6d6d89a5a0e6844094dd861d208e6182fd172e2ea63207533e44c6c08c92e114",
+      "manifest.test.js": "095b59c80cc072f76672e7ec65a31d6f0197bc7f8de1d28f8f56b33467a7db15",
+      "options/options.html": "d8f6039b74fe660371582381422a063d36f1cc8a2bf7020af0aa813eabb16227",
+      "options/options.js": "d17289914c39125abbf63d21d17e9fa162e4ad95dc49ef1f889c90947e0cd466",
+      "options/options.save.test.js": "db79357fbb63e83bb18ccd389670e9b7306b21500f5a4e6b4100e10828059db1",
+      "options/options.test.js": "b416632bb21a833aaf25c1e1b4bd755e1e82e52f6c15ec1429bc32001bfb1abe",
+      "popup/popup.html": "f79f59767767dd63997d8722be5c187601eddfb1f7323a84c47e98f9f9271b6f",
+      "popup/popup.js": "9853c8e18db2e0d458343a235801dbb8cf7dbc845c8f9feb3376490954319456",
+      "popup/popup.test.js": "5f6b900d44fdb9acc4b91bf823b31b0b2a047be54af066843cf4e1a7544774a4",
+      "run-tests.sh": "f12efeea3091ffda283e10c71e767ec1451f4d926453c24440b6e0f2e5ebfa21"
+    },
+    "profileTemplateSha256": "e8455e40ce2db470229da48cbc8570bbabc4d5af0a1df0810474bfaef9392491",
+    "sessions": [
+      {
+        "browserProcessExited": true,
+        "capabilities": {
+          "acceptInsecureCerts": true,
+          "browserName": "firefox",
+          "browserVersion": "153.3.0",
+          "moz:accessibilityChecks": false,
+          "moz:buildID": "20260921103000",
+          "moz:geckodriverVersion": "0.37.0",
+          "moz:headless": true,
+          "moz:platformVersion": "6.8.0-146-generic",
+          "moz:processID": 693372,
+          "moz:profile": "/tmp/T205/rust_mozprofilegNh0t2",
+          "moz:shutdownTimeout": 60000,
+          "moz:webdriverClick": true,
+          "moz:windowless": false,
+          "pageLoadStrategy": "none",
+          "platformName": "linux",
+          "proxy": {},
+          "setWindowRect": true,
+          "strictFileInteractability": false,
+          "timeouts": {
+            "implicit": 0,
+            "pageLoad": 300000,
+            "script": 30000
+          },
+          "unhandledPromptBehavior": "dismiss and notify",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0"
+        },
+        "driverProcessID": 693366,
+        "installedThisLaunch": false,
+        "name": "capture-calibration",
+        "packageSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "permanentAddon": true,
+        "prefs": {
+          "alerts.useSystemBackend": false,
+          "browser.privatebrowsing.autostart": true,
+          "dom.security.https_only_mode": false,
+          "dom.security.https_only_mode_pbm": false,
+          "extensions.autoDisableScopes": 0,
+          "extensions.install.requireBuiltInCerts": false,
+          "extensions.webextensions.uuids": "{\"stargate@stargate.local\": \"stargate-test\"}",
+          "media.peerconnection.enabled": false,
+          "network.dns.disablePrefetch": true,
+          "network.dns.localDomains": "bvud7zz4rrxj7wt66ui6zkip25pcmukpd3ypmcvkietiwvcviopx7isx.test,bvud7zz4rrxj7wt66ui6zkip25pcmukpd3ypmcvkietiwvcviopx7isx.test.,e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test,e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test.",
+          "network.http.speculative-parallel-limit": 0,
+          "network.proxy.allow_hijacking_localhost": true,
+          "network.proxy.http": "127.0.0.1",
+          "network.proxy.http_port": 44099,
+          "network.proxy.no_proxies_on": "",
+          "network.proxy.ssl": "127.0.0.1",
+          "network.proxy.ssl_port": 44099,
+          "network.proxy.type": 1,
+          "network.trr.mode": 5,
+          "xpinstall.signatures.required": false
+        },
+        "privateWindowGrant": true
+      },
+      {
+        "browserProcessExited": true,
+        "capabilities": {
+          "acceptInsecureCerts": true,
+          "browserName": "firefox",
+          "browserVersion": "153.3.0",
+          "moz:accessibilityChecks": false,
+          "moz:buildID": "20260921103000",
+          "moz:geckodriverVersion": "0.37.0",
+          "moz:headless": true,
+          "moz:platformVersion": "6.8.0-146-generic",
+          "moz:processID": 693756,
+          "moz:profile": "/home/claudia/stargate-observer-repair/target/runs/T205/attempt-2.t205/no-cleanup-profile",
+          "moz:shutdownTimeout": 60000,
+          "moz:webdriverClick": true,
+          "moz:windowless": false,
+          "pageLoadStrategy": "none",
+          "platformName": "linux",
+          "proxy": {},
+          "setWindowRect": true,
+          "strictFileInteractability": false,
+          "timeouts": {
+            "implicit": 0,
+            "pageLoad": 300000,
+            "script": 30000
+          },
+          "unhandledPromptBehavior": "dismiss and notify",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0"
+        },
+        "driverProcessID": 693750,
+        "installedThisLaunch": true,
+        "name": "no-cleanup-seed",
+        "packageSha256": "28e3173139f9d41dbeb8a8301cea8c1affe43614c2606049a724f1338ca3c01a",
+        "permanentAddon": true,
+        "prefs": {
+          "alerts.useSystemBackend": false,
+          "browser.privatebrowsing.autostart": true,
+          "dom.security.https_only_mode": false,
+          "dom.security.https_only_mode_pbm": false,
+          "extensions.autoDisableScopes": 0,
+          "extensions.install.requireBuiltInCerts": false,
+          "extensions.webextensions.uuids": "{\"stargate@stargate.local\": \"stargate-test\"}",
+          "media.peerconnection.enabled": false,
+          "network.dns.disablePrefetch": true,
+          "network.dns.localDomains": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion,abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion.",
+          "network.http.speculative-parallel-limit": 0,
+          "network.proxy.allow_hijacking_localhost": true,
+          "network.proxy.http": "127.0.0.1",
+          "network.proxy.http_port": 44099,
+          "network.proxy.no_proxies_on": "",
+          "network.proxy.ssl": "127.0.0.1",
+          "network.proxy.ssl_port": 44099,
+          "network.proxy.type": 1,
+          "network.trr.mode": 5,
+          "xpinstall.signatures.required": false
+        },
+        "privateWindowGrant": true
+      },
+      {
+        "browserProcessExited": true,
+        "capabilities": {
+          "acceptInsecureCerts": true,
+          "browserName": "firefox",
+          "browserVersion": "153.3.0",
+          "moz:accessibilityChecks": false,
+          "moz:buildID": "20260921103000",
+          "moz:geckodriverVersion": "0.37.0",
+          "moz:headless": true,
+          "moz:platformVersion": "6.8.0-146-generic",
+          "moz:processID": 694092,
+          "moz:profile": "/home/claudia/stargate-observer-repair/target/runs/T205/attempt-2.t205/no-cleanup-profile",
+          "moz:shutdownTimeout": 60000,
+          "moz:webdriverClick": true,
+          "moz:windowless": false,
+          "pageLoadStrategy": "none",
+          "platformName": "linux",
+          "proxy": {},
+          "setWindowRect": true,
+          "strictFileInteractability": false,
+          "timeouts": {
+            "implicit": 0,
+            "pageLoad": 300000,
+            "script": 30000
+          },
+          "unhandledPromptBehavior": "dismiss and notify",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0"
+        },
+        "driverProcessID": 694086,
+        "installedThisLaunch": false,
+        "name": "no-cleanup-restart",
+        "packageSha256": "28e3173139f9d41dbeb8a8301cea8c1affe43614c2606049a724f1338ca3c01a",
+        "permanentAddon": true,
+        "prefs": {
+          "alerts.useSystemBackend": false,
+          "browser.privatebrowsing.autostart": true,
+          "dom.security.https_only_mode": false,
+          "dom.security.https_only_mode_pbm": false,
+          "extensions.autoDisableScopes": 0,
+          "extensions.install.requireBuiltInCerts": false,
+          "extensions.webextensions.uuids": "{\"stargate@stargate.local\": \"stargate-test\"}",
+          "media.peerconnection.enabled": false,
+          "network.dns.disablePrefetch": true,
+          "network.dns.localDomains": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion,abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion.",
+          "network.http.speculative-parallel-limit": 0,
+          "network.proxy.allow_hijacking_localhost": true,
+          "network.proxy.http": "127.0.0.1",
+          "network.proxy.http_port": 44099,
+          "network.proxy.no_proxies_on": "",
+          "network.proxy.ssl": "127.0.0.1",
+          "network.proxy.ssl_port": 44099,
+          "network.proxy.type": 1,
+          "network.trr.mode": 5,
+          "xpinstall.signatures.required": false
+        },
+        "privateWindowGrant": true
+      },
+      {
+        "browserProcessExited": true,
+        "capabilities": {
+          "acceptInsecureCerts": true,
+          "browserName": "firefox",
+          "browserVersion": "153.3.0",
+          "moz:accessibilityChecks": false,
+          "moz:buildID": "20260921103000",
+          "moz:geckodriverVersion": "0.37.0",
+          "moz:headless": true,
+          "moz:platformVersion": "6.8.0-146-generic",
+          "moz:processID": 694379,
+          "moz:profile": "/home/claudia/stargate-observer-repair/target/runs/T205/attempt-2.t205/candidate-profile",
+          "moz:shutdownTimeout": 60000,
+          "moz:webdriverClick": true,
+          "moz:windowless": false,
+          "pageLoadStrategy": "none",
+          "platformName": "linux",
+          "proxy": {},
+          "setWindowRect": true,
+          "strictFileInteractability": false,
+          "timeouts": {
+            "implicit": 0,
+            "pageLoad": 300000,
+            "script": 30000
+          },
+          "unhandledPromptBehavior": "dismiss and notify",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0"
+        },
+        "driverProcessID": 694373,
+        "installedThisLaunch": true,
+        "name": "candidate-enabled",
+        "packageSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "permanentAddon": true,
+        "prefs": {
+          "alerts.useSystemBackend": false,
+          "browser.privatebrowsing.autostart": true,
+          "dom.security.https_only_mode": false,
+          "dom.security.https_only_mode_pbm": false,
+          "extensions.autoDisableScopes": 0,
+          "extensions.install.requireBuiltInCerts": false,
+          "extensions.webextensions.uuids": "{\"stargate@stargate.local\": \"stargate-test\"}",
+          "media.peerconnection.enabled": true,
+          "network.dns.disablePrefetch": true,
+          "network.dns.localDomains": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion,abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion.",
+          "network.http.speculative-parallel-limit": 0,
+          "network.proxy.allow_hijacking_localhost": true,
+          "network.proxy.http": "127.0.0.1",
+          "network.proxy.http_port": 44099,
+          "network.proxy.no_proxies_on": "",
+          "network.proxy.ssl": "127.0.0.1",
+          "network.proxy.ssl_port": 44099,
+          "network.proxy.type": 1,
+          "network.trr.mode": 5,
+          "xpinstall.signatures.required": false
+        },
+        "privateWindowGrant": true
+      },
+      {
+        "browserProcessExited": true,
+        "capabilities": {
+          "acceptInsecureCerts": true,
+          "browserName": "firefox",
+          "browserVersion": "153.3.0",
+          "moz:accessibilityChecks": false,
+          "moz:buildID": "20260921103000",
+          "moz:geckodriverVersion": "0.37.0",
+          "moz:headless": true,
+          "moz:platformVersion": "6.8.0-146-generic",
+          "moz:processID": 694761,
+          "moz:profile": "/home/claudia/stargate-observer-repair/target/runs/T205/attempt-2.t205/candidate-profile",
+          "moz:shutdownTimeout": 60000,
+          "moz:webdriverClick": true,
+          "moz:windowless": false,
+          "pageLoadStrategy": "none",
+          "platformName": "linux",
+          "proxy": {},
+          "setWindowRect": true,
+          "strictFileInteractability": false,
+          "timeouts": {
+            "implicit": 0,
+            "pageLoad": 300000,
+            "script": 30000
+          },
+          "unhandledPromptBehavior": "dismiss and notify",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0"
+        },
+        "driverProcessID": 694755,
+        "installedThisLaunch": false,
+        "name": "candidate-disabled-restart",
+        "packageSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "permanentAddon": true,
+        "prefs": {
+          "alerts.useSystemBackend": false,
+          "browser.privatebrowsing.autostart": true,
+          "dom.security.https_only_mode": false,
+          "dom.security.https_only_mode_pbm": false,
+          "extensions.autoDisableScopes": 0,
+          "extensions.install.requireBuiltInCerts": false,
+          "extensions.webextensions.uuids": "{\"stargate@stargate.local\": \"stargate-test\"}",
+          "media.peerconnection.enabled": false,
+          "network.dns.disablePrefetch": true,
+          "network.dns.localDomains": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion,abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion.",
+          "network.http.speculative-parallel-limit": 0,
+          "network.proxy.allow_hijacking_localhost": true,
+          "network.proxy.http": "127.0.0.1",
+          "network.proxy.http_port": 44099,
+          "network.proxy.no_proxies_on": "",
+          "network.proxy.ssl": "127.0.0.1",
+          "network.proxy.ssl_port": 44099,
+          "network.proxy.type": 1,
+          "network.trr.mode": 5,
+          "xpinstall.signatures.required": false
+        },
+        "privateWindowGrant": true
+      },
+      {
+        "browserProcessExited": true,
+        "capabilities": {
+          "acceptInsecureCerts": true,
+          "browserName": "firefox",
+          "browserVersion": "153.3.0",
+          "moz:accessibilityChecks": false,
+          "moz:buildID": "20260921103000",
+          "moz:geckodriverVersion": "0.37.0",
+          "moz:headless": true,
+          "moz:platformVersion": "6.8.0-146-generic",
+          "moz:processID": 695081,
+          "moz:profile": "/home/claudia/stargate-observer-repair/target/runs/T205/attempt-2.t205/candidate-profile",
+          "moz:shutdownTimeout": 60000,
+          "moz:webdriverClick": true,
+          "moz:windowless": false,
+          "pageLoadStrategy": "none",
+          "platformName": "linux",
+          "proxy": {},
+          "setWindowRect": true,
+          "strictFileInteractability": false,
+          "timeouts": {
+            "implicit": 0,
+            "pageLoad": 300000,
+            "script": 30000
+          },
+          "unhandledPromptBehavior": "dismiss and notify",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0"
+        },
+        "driverProcessID": 695075,
+        "installedThisLaunch": false,
+        "name": "candidate-second-disabled-restart",
+        "packageSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "permanentAddon": true,
+        "prefs": {
+          "alerts.useSystemBackend": false,
+          "browser.privatebrowsing.autostart": true,
+          "dom.security.https_only_mode": false,
+          "dom.security.https_only_mode_pbm": false,
+          "extensions.autoDisableScopes": 0,
+          "extensions.install.requireBuiltInCerts": false,
+          "extensions.webextensions.uuids": "{\"stargate@stargate.local\": \"stargate-test\"}",
+          "media.peerconnection.enabled": false,
+          "network.dns.disablePrefetch": true,
+          "network.dns.localDomains": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion,abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion.",
+          "network.http.speculative-parallel-limit": 0,
+          "network.proxy.allow_hijacking_localhost": true,
+          "network.proxy.http": "127.0.0.1",
+          "network.proxy.http_port": 44099,
+          "network.proxy.no_proxies_on": "",
+          "network.proxy.ssl": "127.0.0.1",
+          "network.proxy.ssl_port": 44099,
+          "network.proxy.type": 1,
+          "network.trr.mode": 5,
+          "xpinstall.signatures.required": false
+        },
+        "privateWindowGrant": true
+      },
+      {
+        "browserProcessExited": true,
+        "capabilities": {
+          "acceptInsecureCerts": true,
+          "browserName": "firefox",
+          "browserVersion": "153.3.0",
+          "moz:accessibilityChecks": false,
+          "moz:buildID": "20260921103000",
+          "moz:geckodriverVersion": "0.37.0",
+          "moz:headless": true,
+          "moz:platformVersion": "6.8.0-146-generic",
+          "moz:processID": 695405,
+          "moz:profile": "/home/claudia/stargate-observer-repair/target/runs/T205/attempt-2.t205/t205-read-error-profile",
+          "moz:shutdownTimeout": 60000,
+          "moz:webdriverClick": true,
+          "moz:windowless": false,
+          "pageLoadStrategy": "none",
+          "platformName": "linux",
+          "proxy": {},
+          "setWindowRect": true,
+          "strictFileInteractability": false,
+          "timeouts": {
+            "implicit": 0,
+            "pageLoad": 300000,
+            "script": 30000
+          },
+          "unhandledPromptBehavior": "dismiss and notify",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0"
+        },
+        "driverProcessID": 695399,
+        "installedThisLaunch": true,
+        "name": "t205-read-error",
+        "packageSha256": "0ea231f60d861071f1ff9a4687868723efa45b94dc9e823be83845fac2a0b822",
+        "permanentAddon": true,
+        "prefs": {
+          "alerts.useSystemBackend": false,
+          "browser.privatebrowsing.autostart": true,
+          "dom.security.https_only_mode": false,
+          "dom.security.https_only_mode_pbm": false,
+          "extensions.autoDisableScopes": 0,
+          "extensions.install.requireBuiltInCerts": false,
+          "extensions.webextensions.uuids": "{\"stargate@stargate.local\": \"stargate-test\"}",
+          "media.peerconnection.enabled": false,
+          "network.dns.disablePrefetch": true,
+          "network.dns.localDomains": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion,abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion.",
+          "network.http.speculative-parallel-limit": 0,
+          "network.proxy.allow_hijacking_localhost": true,
+          "network.proxy.http": "127.0.0.1",
+          "network.proxy.http_port": 44099,
+          "network.proxy.no_proxies_on": "",
+          "network.proxy.ssl": "127.0.0.1",
+          "network.proxy.ssl_port": 44099,
+          "network.proxy.type": 1,
+          "network.trr.mode": 5,
+          "xpinstall.signatures.required": false
+        },
+        "privateWindowGrant": true
+      },
+      {
+        "browserProcessExited": true,
+        "capabilities": {
+          "acceptInsecureCerts": true,
+          "browserName": "firefox",
+          "browserVersion": "153.3.0",
+          "moz:accessibilityChecks": false,
+          "moz:buildID": "20260921103000",
+          "moz:geckodriverVersion": "0.37.0",
+          "moz:headless": true,
+          "moz:platformVersion": "6.8.0-146-generic",
+          "moz:processID": 695700,
+          "moz:profile": "/home/claudia/stargate-observer-repair/target/runs/T205/attempt-2.t205/t205-pending-profile",
+          "moz:shutdownTimeout": 60000,
+          "moz:webdriverClick": true,
+          "moz:windowless": false,
+          "pageLoadStrategy": "none",
+          "platformName": "linux",
+          "proxy": {},
+          "setWindowRect": true,
+          "strictFileInteractability": false,
+          "timeouts": {
+            "implicit": 0,
+            "pageLoad": 300000,
+            "script": 30000
+          },
+          "unhandledPromptBehavior": "dismiss and notify",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0"
+        },
+        "driverProcessID": 695694,
+        "installedThisLaunch": true,
+        "name": "t205-pending",
+        "packageSha256": "c60da851f017408c3dfba86a958bf0cdd1303c08bb3b82c0f3b3b407a57cd43a",
+        "permanentAddon": true,
+        "prefs": {
+          "alerts.useSystemBackend": false,
+          "browser.privatebrowsing.autostart": true,
+          "dom.security.https_only_mode": false,
+          "dom.security.https_only_mode_pbm": false,
+          "extensions.autoDisableScopes": 0,
+          "extensions.install.requireBuiltInCerts": false,
+          "extensions.webextensions.uuids": "{\"stargate@stargate.local\": \"stargate-test\"}",
+          "media.peerconnection.enabled": false,
+          "network.dns.disablePrefetch": true,
+          "network.dns.localDomains": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion,abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion.",
+          "network.http.speculative-parallel-limit": 0,
+          "network.proxy.allow_hijacking_localhost": true,
+          "network.proxy.http": "127.0.0.1",
+          "network.proxy.http_port": 44099,
+          "network.proxy.no_proxies_on": "",
+          "network.proxy.ssl": "127.0.0.1",
+          "network.proxy.ssl_port": 44099,
+          "network.proxy.type": 1,
+          "network.trr.mode": 5,
+          "xpinstall.signatures.required": false
+        },
+        "privateWindowGrant": true
+      },
+      {
+        "browserProcessExited": true,
+        "capabilities": {
+          "acceptInsecureCerts": true,
+          "browserName": "firefox",
+          "browserVersion": "153.3.0",
+          "moz:accessibilityChecks": false,
+          "moz:buildID": "20260921103000",
+          "moz:geckodriverVersion": "0.37.0",
+          "moz:headless": true,
+          "moz:platformVersion": "6.8.0-146-generic",
+          "moz:processID": 696062,
+          "moz:profile": "/home/claudia/stargate-observer-repair/target/runs/T205/attempt-2.t205/t205-cleanup-error-profile",
+          "moz:shutdownTimeout": 60000,
+          "moz:webdriverClick": true,
+          "moz:windowless": false,
+          "pageLoadStrategy": "none",
+          "platformName": "linux",
+          "proxy": {},
+          "setWindowRect": true,
+          "strictFileInteractability": false,
+          "timeouts": {
+            "implicit": 0,
+            "pageLoad": 300000,
+            "script": 30000
+          },
+          "unhandledPromptBehavior": "dismiss and notify",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0"
+        },
+        "driverProcessID": 696056,
+        "installedThisLaunch": true,
+        "name": "t205-cleanup-error",
+        "packageSha256": "411edfc1cda501d570360ac908669d76bdecaf05733d9b756b4e8af416a2406d",
+        "permanentAddon": true,
+        "prefs": {
+          "alerts.useSystemBackend": false,
+          "browser.privatebrowsing.autostart": true,
+          "dom.security.https_only_mode": false,
+          "dom.security.https_only_mode_pbm": false,
+          "extensions.autoDisableScopes": 0,
+          "extensions.install.requireBuiltInCerts": false,
+          "extensions.webextensions.uuids": "{\"stargate@stargate.local\": \"stargate-test\"}",
+          "media.peerconnection.enabled": false,
+          "network.dns.disablePrefetch": true,
+          "network.dns.localDomains": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion,abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion.",
+          "network.http.speculative-parallel-limit": 0,
+          "network.proxy.allow_hijacking_localhost": true,
+          "network.proxy.http": "127.0.0.1",
+          "network.proxy.http_port": 44099,
+          "network.proxy.no_proxies_on": "",
+          "network.proxy.ssl": "127.0.0.1",
+          "network.proxy.ssl_port": 44099,
+          "network.proxy.type": 1,
+          "network.trr.mode": 5,
+          "xpinstall.signatures.required": false
+        },
+        "privateWindowGrant": true
+      },
+      {
+        "browserProcessExited": true,
+        "capabilities": {
+          "acceptInsecureCerts": true,
+          "browserName": "firefox",
+          "browserVersion": "153.3.0",
+          "moz:accessibilityChecks": false,
+          "moz:buildID": "20260921103000",
+          "moz:geckodriverVersion": "0.37.0",
+          "moz:headless": true,
+          "moz:platformVersion": "6.8.0-146-generic",
+          "moz:processID": 696356,
+          "moz:profile": "/home/claudia/stargate-observer-repair/target/runs/T205/attempt-2.t205/t205-notification-error-profile",
+          "moz:shutdownTimeout": 60000,
+          "moz:webdriverClick": true,
+          "moz:windowless": false,
+          "pageLoadStrategy": "none",
+          "platformName": "linux",
+          "proxy": {},
+          "setWindowRect": true,
+          "strictFileInteractability": false,
+          "timeouts": {
+            "implicit": 0,
+            "pageLoad": 300000,
+            "script": 30000
+          },
+          "unhandledPromptBehavior": "dismiss and notify",
+          "userAgent": "Mozilla/5.0 (X11; Linux x86_64; rv:153.0) Gecko/20100101 Firefox/153.0"
+        },
+        "driverProcessID": 696350,
+        "installedThisLaunch": true,
+        "name": "t205-notification-error",
+        "packageSha256": "70d53e71460fd5e34841e2e0e53326f089395d554e54a578192700e4385fabb5",
+        "permanentAddon": true,
+        "prefs": {
+          "alerts.useSystemBackend": false,
+          "browser.privatebrowsing.autostart": true,
+          "dom.security.https_only_mode": false,
+          "dom.security.https_only_mode_pbm": false,
+          "extensions.autoDisableScopes": 0,
+          "extensions.install.requireBuiltInCerts": false,
+          "extensions.webextensions.uuids": "{\"stargate@stargate.local\": \"stargate-test\"}",
+          "media.peerconnection.enabled": true,
+          "network.dns.disablePrefetch": true,
+          "network.dns.localDomains": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion,abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion.",
+          "network.http.speculative-parallel-limit": 0,
+          "network.proxy.allow_hijacking_localhost": true,
+          "network.proxy.http": "127.0.0.1",
+          "network.proxy.http_port": 44099,
+          "network.proxy.no_proxies_on": "",
+          "network.proxy.ssl": "127.0.0.1",
+          "network.proxy.ssl_port": 44099,
+          "network.proxy.type": 1,
+          "network.trr.mode": 5,
+          "xpinstall.signatures.required": false
+        },
+        "privateWindowGrant": true
+      }
+    ]
+  },
+  "mutationName": "none",
+  "result": "GREEN",
+  "scenarios": {
+    "t205-candidate-process-restart-removes-only-legacy": {
+      "after": {
+        "T205configurationSentinel": {
+          "enabled": true,
+          "marker": "T205_UNRELATED"
+        },
+        "device": {
+          "bearerToken": "0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+          "name": "live-control",
+          "tokenStoredAt": 1
+        },
+        "isolationProfileId": "e9e44891e4c5ed0088add242e7e2cfcf6853703b0a73e20c5f20301833b5e10d",
+        "routes": {
+          "askOnFirstEncounter": false,
+          "byDomain": {
+            "sentinel.example": {
+              "route": "DIRECT"
+            }
+          },
+          "default": "DIRECT"
+        }
+      },
+      "before": {
+        "T205configurationSentinel": {
+          "enabled": true,
+          "marker": "T205_UNRELATED"
+        },
+        "device": {
+          "bearerToken": "0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+          "name": "live-control",
+          "tokenStoredAt": 1
+        },
+        "hardening": {
+          "lastAuditResult": {
+            "blockedSurface": "webrtc",
+            "readError": "T205_SYNTHETIC_LEGACY_ERROR"
+          },
+          "lastAuditedAt": 497000
+        },
+        "isolationProfileId": "e9e44891e4c5ed0088add242e7e2cfcf6853703b0a73e20c5f20301833b5e10d",
+        "routes": {
+          "askOnFirstEncounter": false,
+          "byDomain": {
+            "sentinel.example": {
+              "route": "DIRECT"
+            }
+          },
+          "default": "DIRECT"
+        }
+      },
+      "currentHardening": {
+        "hardeningOk": true,
+        "status": "disabled"
+      },
+      "destinationCaptures": [],
+      "httpCaptures": [],
+      "passed": true,
+      "sameProfileRealProcessRestart": true,
+      "socksCaptures": []
+    },
+    "t205-cleanup-error-finite-status-and-no-raw-output": {
+      "cleanupNotificationDisplayed": true,
+      "currentHardening": {
+        "hardeningOk": false,
+        "status": "unknown"
+      },
+      "destinationCaptures": [],
+      "faultIdentity": {
+        "changedMembers": {
+          "background/t205-fault.js": {
+            "afterSha256": "297985ed8bc73d50ab6cd1f8a4f0a1518b55bc56e5ef14b4c36a71306d6e1e30",
+            "beforeSha256": null
+          },
+          "manifest.json": {
+            "afterSha256": "a44c11e00878be66344ab9e79842030d6df8e5caaaf652f6d70d0598c9206c63",
+            "beforeSha256": "6d6d89a5a0e6844094dd861d208e6182fd172e2ea63207533e44c6c08c92e114"
+          }
+        },
+        "packageSha256": "411edfc1cda501d570360ac908669d76bdecaf05733d9b756b4e8af416a2406d",
+        "sourceSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "variant": "t205-cleanup-error"
+      },
+      "httpCaptures": [],
+      "outputs": {
+        "alerts": [
+          "Stargate: fail-closed baseline missing or changed | Reinstall browser-profile/user.js as the quickstart describes and restart the browser. Until then requests Stargate does not route follow the browser proxy settings and may connect directly.",
+          "Stargate: non-Direct routing blocked | Stargate could not complete its runtime hardening initialization, so all non-Direct routes remain blocked. Restart the browser to retry. WebRTC is the only hardening surface this extension can verify at runtime; this notification does not verify the rest of the browser profile."
+        ],
+        "consoleMessages": [
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"resource://services-settings/Attachments.sys.mjs\" line: 530}]",
+          "1791104723527\taddons.xpi-utils\tWARN\tSynchronous load of XPI database due to getAddonsByType([theme]) Stack: getAddonsByType@resource://gre/modules/addons/XPIDatabase.sys.mjs:2486:21\ninstallBuiltinAddon@resource://gre/modules/addons/XPIInstall.sys.mjs:4889:35\n",
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"resource://gre/modules/RemoteWebNavigation.sys.mjs\" line: 95}]",
+          "[JavaScript Warning: \"Window.fullScreen attribute is deprecated and will be removed in the future.\" {file: \"chrome://browser/content/browser.js\" line: 408}]",
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"moz-src:///browser/components/search/SERPCategorization.sys.mjs\" line: 918}]"
+        ]
+      },
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: Unknown; non-Direct routing readiness is not confirmed.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Unknown Other requests may use different routes. Connection success is not verified."
+      },
+      "socksCaptures": [
+        {
+          "host": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion",
+          "observedAtMonotonic": 59790.299942,
+          "passwordMatches": true,
+          "path": "/t205-positive-t205-protected-positive-after-pending-release",
+          "port": 33923,
+          "stage": "request",
+          "username": "sg1:f3790eeb86c9c8ee383f921cf9a8b874a8627ec62dd00f216777faf1c6e570f9"
+        },
+        {
+          "host": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion",
+          "observedAtMonotonic": 59790.627543,
+          "passwordMatches": true,
+          "path": "/favicon.ico",
+          "port": 33923,
+          "stage": "request",
+          "username": "sg1:f3790eeb86c9c8ee383f921cf9a8b874a8627ec62dd00f216777faf1c6e570f9"
+        }
+      ],
+      "storage": {
+        "device": {
+          "bearerToken": "0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+          "name": "live-control",
+          "tokenStoredAt": 1
+        },
+        "isolationProfileId": "bfb94cd4c4befa767db137fc737df6ba13b31070d461efb856a2715150835d31"
+      }
+    },
+    "t205-cleanup-error-protected-no-escape": {
+      "currentHardening": {
+        "hardeningOk": false,
+        "status": "unknown"
+      },
+      "destinationCaptures": [],
+      "hits": {
+        "destination": [],
+        "dnsMozLog": [],
+        "dnsStrace": [],
+        "impostorLabel": [],
+        "socks": [],
+        "systemProxy": []
+      },
+      "httpCaptures": [],
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: Unknown; non-Direct routing readiness is not confirmed.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Blocked by Stargate Other requests may use different routes. Connection success is not verified."
+      },
+      "postTerminalSeconds": 12,
+      "socksCaptures": [],
+      "terminal": {
+        "browserProgress": {
+          "events": [
+            {
+              "elapsedMs": 55,
+              "flags": 983041,
+              "networkStop": false,
+              "status": 0,
+              "url": "http://kmrskpjgjw3x3dkdqhyvtgsa7liyfzp3uhzmu5mckyxulpe2wizmro55.onion:33923/t205-t205-cleanup-error-protected-no-escape"
+            },
+            {
+              "elapsedMs": 105,
+              "flags": 131088,
+              "networkStop": false,
+              "status": 2147500036,
+              "url": "http://kmrskpjgjw3x3dkdqhyvtgsa7liyfzp3uhzmu5mckyxulpe2wizmro55.onion:33923/t205-t205-cleanup-error-protected-no-escape"
+            },
+            {
+              "elapsedMs": 108,
+              "flags": 786448,
+              "networkStop": true,
+              "status": 2147500036,
+              "url": "http://kmrskpjgjw3x3dkdqhyvtgsa7liyfzp3uhzmu5mckyxulpe2wizmro55.onion:33923/t205-t205-cleanup-error-protected-no-escape"
+            }
+          ],
+          "expected": "http://kmrskpjgjw3x3dkdqhyvtgsa7liyfzp3uhzmu5mckyxulpe2wizmro55.onion:33923/t205-t205-cleanup-error-protected-no-escape",
+          "expectedAbortStatus": 2147500036,
+          "terminal": {
+            "elapsedMs": 108,
+            "flags": 786448,
+            "networkStop": true,
+            "status": 2147500036,
+            "url": "http://kmrskpjgjw3x3dkdqhyvtgsa7liyfzp3uhzmu5mckyxulpe2wizmro55.onion:33923/t205-t205-cleanup-error-protected-no-escape"
+          },
+          "testedTabPreserved": true
+        },
+        "completed": true,
+        "completionEvidence": "browser URL-bound STATE_STOP | STATE_IS_NETWORK with NS_ERROR_ABORT",
+        "documentURI": "moz-extension://stargate-test/options/options.html",
+        "elapsedSeconds": 3.141,
+        "popupLabel": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Blocked by Stargate Other requests may use different routes. Connection success is not verified.",
+        "readyState": "complete",
+        "url": "moz-extension://stargate-test/options/options.html"
+      }
+    },
+    "t205-enabled-current-status-and-displayed-notification": {
+      "currentHardening": {
+        "hardeningOk": false,
+        "status": "enabled"
+      },
+      "destinationCaptures": [
+        {
+          "firstLine": "GET /direct/control-destination HTTP/1.1",
+          "host": "e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test:33923",
+          "observedAtMonotonic": 59556.812274,
+          "path": "/direct/control-destination"
+        },
+        {
+          "firstLine": "GET /favicon.ico HTTP/1.1",
+          "host": "e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test:33923",
+          "observedAtMonotonic": 59557.208402,
+          "path": "/favicon.ico"
+        }
+      ],
+      "httpCaptures": [],
+      "outputs": {
+        "alerts": [
+          "Stargate: fail-closed baseline missing or changed | Reinstall browser-profile/user.js as the quickstart describes and restart the browser. Until then requests Stargate does not route follow the browser proxy settings and may connect directly.",
+          "Stargate: non-Direct routing blocked | WebRTC is enabled, so Stargate has blocked all non-Direct routes. To restore them, set media.peerconnection.enabled to false in about:config and restart the browser. WebRTC is the only hardening surface this extension can verify at runtime; the rest of the hardened profile is verified outside the extension at each Stargate release."
+        ],
+        "consoleMessages": [
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"resource://services-settings/Attachments.sys.mjs\" line: 530}]",
+          "1791104537430\taddons.xpi-utils\tWARN\tSynchronous load of XPI database due to getAddonsByType([theme]) Stack: getAddonsByType@resource://gre/modules/addons/XPIDatabase.sys.mjs:2486:21\ninstallBuiltinAddon@resource://gre/modules/addons/XPIInstall.sys.mjs:4889:35\n",
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"resource://gre/modules/RemoteWebNavigation.sys.mjs\" line: 95}]",
+          "[JavaScript Warning: \"Window.fullScreen attribute is deprecated and will be removed in the future.\" {file: \"chrome://browser/content/browser.js\" line: 408}]",
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"moz-src:///browser/components/search/SERPCategorization.sys.mjs\" line: 918}]"
+        ]
+      },
+      "passed": true,
+      "socksCaptures": []
+    },
+    "t205-enabled-protected-no-escape": {
+      "currentHardening": {
+        "hardeningOk": false,
+        "status": "enabled"
+      },
+      "destinationCaptures": [],
+      "hits": {
+        "destination": [],
+        "dnsMozLog": [],
+        "dnsStrace": [],
+        "impostorLabel": [],
+        "socks": [],
+        "systemProxy": []
+      },
+      "httpCaptures": [],
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: WebRTC enabled at last check; non-Direct routing blocked.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Blocked by Stargate Other requests may use different routes. Connection success is not verified."
+      },
+      "postTerminalSeconds": 12,
+      "socksCaptures": [],
+      "terminal": {
+        "browserProgress": {
+          "events": [
+            {
+              "elapsedMs": 405,
+              "flags": 983041,
+              "networkStop": false,
+              "status": 0,
+              "url": "http://3nvyst27rrzrysrnbrdfp3e5dinayz3m4zf2jgkaz7fjmwpxkbmd7quq.onion:33923/t205-t205-enabled-protected-no-escape"
+            },
+            {
+              "elapsedMs": 522,
+              "flags": 131088,
+              "networkStop": false,
+              "status": 2147500036,
+              "url": "http://3nvyst27rrzrysrnbrdfp3e5dinayz3m4zf2jgkaz7fjmwpxkbmd7quq.onion:33923/t205-t205-enabled-protected-no-escape"
+            },
+            {
+              "elapsedMs": 527,
+              "flags": 786448,
+              "networkStop": true,
+              "status": 2147500036,
+              "url": "http://3nvyst27rrzrysrnbrdfp3e5dinayz3m4zf2jgkaz7fjmwpxkbmd7quq.onion:33923/t205-t205-enabled-protected-no-escape"
+            }
+          ],
+          "expected": "http://3nvyst27rrzrysrnbrdfp3e5dinayz3m4zf2jgkaz7fjmwpxkbmd7quq.onion:33923/t205-t205-enabled-protected-no-escape",
+          "expectedAbortStatus": 2147500036,
+          "terminal": {
+            "elapsedMs": 527,
+            "flags": 786448,
+            "networkStop": true,
+            "status": 2147500036,
+            "url": "http://3nvyst27rrzrysrnbrdfp3e5dinayz3m4zf2jgkaz7fjmwpxkbmd7quq.onion:33923/t205-t205-enabled-protected-no-escape"
+          },
+          "testedTabPreserved": true
+        },
+        "completed": true,
+        "completionEvidence": "browser URL-bound STATE_STOP | STATE_IS_NETWORK with NS_ERROR_ABORT",
+        "documentURI": "moz-extension://stargate-test/options/options.html",
+        "elapsedSeconds": 3.065,
+        "popupLabel": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Blocked by Stargate Other requests may use different routes. Connection success is not verified.",
+        "readyState": "complete",
+        "url": "moz-extension://stargate-test/options/options.html"
+      }
+    },
+    "t205-explicit-direct-positive": {
+      "allHttpCaptures": [],
+      "destinationCaptures": [
+        {
+          "firstLine": "GET /t205-direct-control HTTP/1.1",
+          "host": "127.0.0.1:33923",
+          "observedAtMonotonic": 59668.702635,
+          "path": "/t205-direct-control"
+        },
+        {
+          "firstLine": "GET /favicon.ico HTTP/1.1",
+          "host": "127.0.0.1:33923",
+          "observedAtMonotonic": 59669.114603,
+          "path": "/favicon.ico"
+        }
+      ],
+      "fixtureBrowserProxyType": 0,
+      "httpCaptures": [],
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: WebRTC disabled at last check.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Direct (unrouted) Other requests may use different routes. Connection success is not verified."
+      },
+      "socksCaptures": [],
+      "terminal": {
+        "completed": true,
+        "documentURI": "http://127.0.0.1:33923/t205-direct-control",
+        "elapsedSeconds": 0.472,
+        "readyState": "complete",
+        "url": "http://127.0.0.1:33923/t205-direct-control"
+      }
+    },
+    "t205-independent-capture-calibration": {
+      "controls": {
+        "destination": {
+          "handle": "6280d352-15f0-46dc-81c6-3f5bbe55bac8",
+          "host": "e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test",
+          "label": "e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a",
+          "mapped": true,
+          "terminal": {
+            "completed": true,
+            "documentURI": "http://e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test:33923/direct/control-destination",
+            "elapsedSeconds": 1.736,
+            "kind": "loaded",
+            "readyState": "complete"
+          },
+          "url": "http://e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test:33923/direct/control-destination"
+        },
+        "dns": {
+          "handle": "f7fc3365-3591-4e91-9d75-9f7b3b6ce348",
+          "host": "7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid",
+          "label": "7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2",
+          "mapped": false,
+          "terminal": {
+            "completed": true,
+            "documentURI": "about:neterror?e=dnsNotFound&u=http%3A//7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid%3A33923/direct/control-dns&c=UTF-8&captivePortalState=unknown&d=7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid%20could%20not%20be%20found.%20Please%20check%20the%20name%20and%20try%20again.&a=",
+            "elapsedSeconds": 2.763,
+            "kind": "error",
+            "readyState": "interactive"
+          },
+          "url": "http://7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid:33923/direct/control-dns"
+        },
+        "system-proxy": {
+          "handle": "7762932c-8fc5-4bf9-aa80-2b59aed02d4e",
+          "host": "bvud7zz4rrxj7wt66ui6zkip25pcmukpd3ypmcvkietiwvcviopx7isx.test",
+          "label": "bvud7zz4rrxj7wt66ui6zkip25pcmukpd3ypmcvkietiwvcviopx7isx",
+          "mapped": true,
+          "terminal": {
+            "completed": true,
+            "documentURI": "http://bvud7zz4rrxj7wt66ui6zkip25pcmukpd3ypmcvkietiwvcviopx7isx.test:33923/sysproxy/control-system-proxy",
+            "elapsedSeconds": 1.03,
+            "kind": "loaded",
+            "readyState": "complete"
+          },
+          "url": "http://bvud7zz4rrxj7wt66ui6zkip25pcmukpd3ypmcvkietiwvcviopx7isx.test:33923/sysproxy/control-system-proxy"
+        }
+      },
+      "destinationCaptures": [
+        {
+          "firstLine": "GET /direct/control-destination HTTP/1.1",
+          "host": "e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test:33923",
+          "observedAtMonotonic": 59556.812274,
+          "path": "/direct/control-destination"
+        },
+        {
+          "firstLine": "GET /favicon.ico HTTP/1.1",
+          "host": "e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test:33923",
+          "observedAtMonotonic": 59557.208402,
+          "path": "/favicon.ico"
+        }
+      ],
+      "hits": {
+        "destination": {
+          "destination": [
+            {
+              "firstLine": "GET /direct/control-destination HTTP/1.1",
+              "host": "e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test:33923",
+              "observedAtMonotonic": 59556.812274,
+              "path": "/direct/control-destination"
+            },
+            {
+              "firstLine": "GET /favicon.ico HTTP/1.1",
+              "host": "e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test:33923",
+              "observedAtMonotonic": 59557.208402,
+              "path": "/favicon.ico"
+            }
+          ],
+          "dnsMozLog": [],
+          "dnsStrace": [],
+          "impostorLabel": [],
+          "socks": [],
+          "systemProxy": []
+        },
+        "dns": {
+          "destination": [],
+          "dnsMozLog": [
+            "2026-10-04 09:01:20.873320 UTC - [Parent 693372: Socket Thread]: D/nsHostResolver Resolving host [7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid]<^privateBrowsingId=1&firstPartyDomain=7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid&partitionKey=%28http%2C7dczuv6kpb",
+            "2026-10-04 09:01:20.873766 UTC - [Parent 693372: Socket Thread]: D/nsHostResolver   No usable record in cache for host [7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid] type 0.",
+            "2026-10-04 09:01:20.874099 UTC - [Parent 693372: Socket Thread]: D/nsHostResolver NameLookup host:7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid af:0",
+            "2026-10-04 09:01:20.874307 UTC - [Parent 693372: Socket Thread]: D/nsHostResolver NameLookup: 7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid effectiveTRRmode: 1 flags: 12002",
+            "2026-10-04 09:01:20.874675 UTC - [Parent 693372: Socket Thread]: D/nsHostResolver NativeLookup host:7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid af:0",
+            "2026-10-04 09:01:20.875734 UTC - [Parent 693372: Socket Thread]: D/nsHostResolver   DNS lookup for host [7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid] blocking pending 'getaddrinfo' or trr query: callback [753d050b7170]",
+            "2026-10-04 09:01:20.877294 UTC - [Parent 693372: DNS Resolver #1]: E/nsHostResolver DNS resolve task - Calling getaddrinfo for host [7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid].",
+            "2026-10-04 09:01:20.886361 UTC - [Parent 693372: DNS Resolver #1]: E/nsHostResolver DNS resolve task - lookup completed for host [7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid]: failure: unknown host.",
+            "2026-10-04 09:01:20.886644 UTC - [Parent 693372: DNS Resolver #1]: D/nsHostResolver nsHostResolver::CompleteLookup 7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid 0 804B001E resolver=0 stillResolving=0",
+            "2026-10-04 09:01:20.886864 UTC - [Parent 693372: DNS Resolver #1]: D/nsHostResolver Caching host [7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid] negative record for 60 seconds.",
+            "2026-10-04 09:01:20.886979 UTC - [Parent 693372: DNS Resolver #1]: D/nsHostResolver CompleteLookup: 7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid has NO address",
+            "2026-10-04 09:01:20.887429 UTC - [Parent 693372: DNS Resolver #1]: D/nsHostResolver OnResolveHostComplete: 7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid",
+            "2026-10-04 09:01:22.248501 UTC - [Parent 693372: Main Thread]: D/nsHostResolver Resolving host [www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid]<^privateBrowsingId=1&firstPartyDomain=about.ef2a7dd5-93bc-417f-a698-142c3116864f.mozilla> type 0. [this=753d1a80b460]",
+            "2026-10-04 09:01:22.250872 UTC - [Parent 693372: Main Thread]: D/nsHostResolver   No usable record in cache for host [www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid] type 0.",
+            "2026-10-04 09:01:22.252654 UTC - [Parent 693372: Main Thread]: D/nsHostResolver NameLookup host:www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid af:0",
+            "2026-10-04 09:01:22.254112 UTC - [Parent 693372: Main Thread]: D/nsHostResolver NameLookup: www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid effectiveTRRmode: 1 flags: 2",
+            "2026-10-04 09:01:22.257544 UTC - [Parent 693372: Main Thread]: D/nsHostResolver NativeLookup host:www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid af:0",
+            "2026-10-04 09:01:22.261587 UTC - [Parent 693372: Main Thread]: D/nsHostResolver   DNS lookup for host [www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid] blocking pending 'getaddrinfo' or trr query: callback [753d1a8136f0]",
+            "2026-10-04 09:01:22.266484 UTC - [Parent 693372: DNS Resolver #1]: E/nsHostResolver DNS resolve task - Calling getaddrinfo for host [www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid].",
+            "2026-10-04 09:01:22.277267 UTC - [Parent 693372: DNS Resolver #1]: E/nsHostResolver DNS resolve task - lookup completed for host [www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid]: failure: unknown host.",
+            "2026-10-04 09:01:22.277566 UTC - [Parent 693372: DNS Resolver #1]: D/nsHostResolver nsHostResolver::CompleteLookup www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid 0 804B001E resolver=0 stillResolving=0",
+            "2026-10-04 09:01:22.278274 UTC - [Parent 693372: DNS Resolver #1]: D/nsHostResolver Caching host [www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid] negative record for 60 seconds.",
+            "2026-10-04 09:01:22.279299 UTC - [Parent 693372: DNS Resolver #1]: D/nsHostResolver CompleteLookup: www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid has NO address",
+            "2026-10-04 09:01:22.280984 UTC - [Parent 693372: DNS Resolver #1]: D/nsHostResolver OnResolveHostComplete: www.7dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2.invalid"
+          ],
+          "dnsStrace": [
+            "693633 sendmmsg(106<UDP:[127.0.0.1:33403->127.0.0.53:53]>, [{msg_hdr={msg_name=NULL, msg_namelen=0, msg_iov=[{iov_base=\"Ww\\1 \\0\\1\\0\\0\\0\\0\\0\\187dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2\\7invalid\\0\\0\\1\\0\\1\\0\\0)\\4\\260\\0\\0\\0\\0\\0\\0\", iov_len=93}], msg_iovlen=1, msg_controllen=0, msg_flags=0",
+            "693633 sendmmsg(106<UDP:[127.0.0.1:45606->127.0.0.53:53]>, [{msg_hdr={msg_name=NULL, msg_namelen=0, msg_iov=[{iov_base=\"\\0n\\1 \\0\\1\\0\\0\\0\\0\\0\\187dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2\\7invalid\\0\\0\\1\\0\\1\\0\\0)\\4\\260\\0\\0\\0\\0\\0\\0\", iov_len=93}], msg_iovlen=1, msg_controllen=0, msg_flags=",
+            "693633 sendmmsg(109<UDP:[127.0.0.1:34782->127.0.0.53:53]>, [{msg_hdr={msg_name=NULL, msg_namelen=0, msg_iov=[{iov_base=\"\\205m\\1 \\0\\1\\0\\0\\0\\0\\0\\1\\3www87dczuv6kpbxh2bttqtmyr7wxd6wgcdunhd4ecxcgtmqrpe6if5qqbev2\\7invalid\\0\\0\\1\\0\\1\\0\\0)\\4\\260\\0\\0\\0\\0\\0\\0\", iov_len=97}], msg_iovlen=1, msg_controllen=0, msg"
+          ],
+          "impostorLabel": [],
+          "socks": [],
+          "systemProxy": []
+        },
+        "system-proxy": {
+          "destination": [],
+          "dnsMozLog": [],
+          "dnsStrace": [],
+          "impostorLabel": [],
+          "socks": [],
+          "systemProxy": [
+            {
+              "firstLine": "GET http://bvud7zz4rrxj7wt66ui6zkip25pcmukpd3ypmcvkietiwvcviopx7isx.test:33923/sysproxy/control-system-proxy HTTP/1.1",
+              "host": "bvud7zz4rrxj7wt66ui6zkip25pcmukpd3ypmcvkietiwvcviopx7isx.test",
+              "observedAtMonotonic": 59555.372957,
+              "path": "/sysproxy/control-system-proxy"
+            },
+            {
+              "firstLine": "GET http://bvud7zz4rrxj7wt66ui6zkip25pcmukpd3ypmcvkietiwvcviopx7isx.test:33923/favicon.ico HTTP/1.1",
+              "host": "bvud7zz4rrxj7wt66ui6zkip25pcmukpd3ypmcvkietiwvcviopx7isx.test",
+              "observedAtMonotonic": 59555.730404,
+              "path": "/favicon.ico"
+            }
+          ]
+        }
+      },
+      "httpCaptures": [],
+      "passed": true,
+      "socksCaptures": []
+    },
+    "t205-no-cleanup-control-retains-legacy": {
+      "after": {
+        "T205configurationSentinel": {
+          "enabled": true,
+          "marker": "T205_UNRELATED"
+        },
+        "device": {
+          "bearerToken": "0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+          "name": "live-control",
+          "tokenStoredAt": 1
+        },
+        "hardening": {
+          "lastAuditResult": {
+            "blockedSurface": "webrtc",
+            "readError": "T205_SYNTHETIC_LEGACY_ERROR"
+          },
+          "lastAuditedAt": 497000
+        },
+        "isolationProfileId": "23879bd74d90c65719b22e035a5200a74126f9f771607c5d56c0c75cc6019844",
+        "routes": {
+          "askOnFirstEncounter": false,
+          "byDomain": {
+            "sentinel.example": {
+              "route": "DIRECT"
+            }
+          },
+          "default": "DIRECT"
+        }
+      },
+      "before": {
+        "T205configurationSentinel": {
+          "enabled": true,
+          "marker": "T205_UNRELATED"
+        },
+        "device": {
+          "bearerToken": "0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+          "name": "live-control",
+          "tokenStoredAt": 1
+        },
+        "hardening": {
+          "lastAuditResult": {
+            "blockedSurface": "webrtc",
+            "readError": "T205_SYNTHETIC_LEGACY_ERROR"
+          },
+          "lastAuditedAt": 497000
+        },
+        "isolationProfileId": "23879bd74d90c65719b22e035a5200a74126f9f771607c5d56c0c75cc6019844",
+        "routes": {
+          "askOnFirstEncounter": false,
+          "byDomain": {
+            "sentinel.example": {
+              "route": "DIRECT"
+            }
+          },
+          "default": "DIRECT"
+        }
+      },
+      "destinationCaptures": [
+        {
+          "firstLine": "GET /direct/control-destination HTTP/1.1",
+          "host": "e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test:33923",
+          "observedAtMonotonic": 59556.812274,
+          "path": "/direct/control-destination"
+        },
+        {
+          "firstLine": "GET /favicon.ico HTTP/1.1",
+          "host": "e67fzouq4vsvmvviwqhqmelfnviauoqy7efwjlgebvn4q4xxmmpcau4a.test:33923",
+          "observedAtMonotonic": 59557.208402,
+          "path": "/favicon.ico"
+        }
+      ],
+      "httpCaptures": [],
+      "passed": true,
+      "sameProfileRealProcessRestart": true,
+      "socksCaptures": []
+    },
+    "t205-notification-error-finite-status-and-no-raw-output": {
+      "cleanupNotificationDisplayed": true,
+      "currentHardening": {
+        "hardeningOk": false,
+        "status": "enabled"
+      },
+      "destinationCaptures": [],
+      "faultIdentity": {
+        "changedMembers": {
+          "background/t205-fault.js": {
+            "afterSha256": "cc2c0ed8f6ae192d7ae41a535452e4637d919055fc38cbb8af27272428fa7d30",
+            "beforeSha256": null
+          },
+          "manifest.json": {
+            "afterSha256": "a44c11e00878be66344ab9e79842030d6df8e5caaaf652f6d70d0598c9206c63",
+            "beforeSha256": "6d6d89a5a0e6844094dd861d208e6182fd172e2ea63207533e44c6c08c92e114"
+          }
+        },
+        "packageSha256": "70d53e71460fd5e34841e2e0e53326f089395d554e54a578192700e4385fabb5",
+        "sourceSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "variant": "t205-notification-error"
+      },
+      "httpCaptures": [],
+      "outputs": {
+        "alerts": [],
+        "consoleMessages": [
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"resource://services-settings/Attachments.sys.mjs\" line: 530}]",
+          "1791104766647\taddons.xpi-utils\tWARN\tSynchronous load of XPI database due to getAddonsByType([theme]) Stack: getAddonsByType@resource://gre/modules/addons/XPIDatabase.sys.mjs:2486:21\ninstallBuiltinAddon@resource://gre/modules/addons/XPIInstall.sys.mjs:4889:35\n",
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"resource://gre/modules/RemoteWebNavigation.sys.mjs\" line: 95}]",
+          "[JavaScript Warning: \"Window.fullScreen attribute is deprecated and will be removed in the future.\" {file: \"chrome://browser/content/browser.js\" line: 408}]",
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"moz-src:///browser/components/search/SERPCategorization.sys.mjs\" line: 918}]"
+        ]
+      },
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: WebRTC enabled at last check; non-Direct routing blocked.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Unknown Other requests may use different routes. Connection success is not verified."
+      },
+      "socksCaptures": [],
+      "storage": {
+        "device": {
+          "bearerToken": "0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+          "name": "live-control",
+          "tokenStoredAt": 1
+        },
+        "isolationProfileId": "6926e11f1f43c2e28cc727fc0f519d822020c7c711322afe70a5fa1d9423313d"
+      }
+    },
+    "t205-notification-error-protected-no-escape": {
+      "currentHardening": {
+        "hardeningOk": false,
+        "status": "enabled"
+      },
+      "destinationCaptures": [],
+      "hits": {
+        "destination": [],
+        "dnsMozLog": [],
+        "dnsStrace": [],
+        "impostorLabel": [],
+        "socks": [],
+        "systemProxy": []
+      },
+      "httpCaptures": [],
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: WebRTC enabled at last check; non-Direct routing blocked.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Blocked by Stargate Other requests may use different routes. Connection success is not verified."
+      },
+      "postTerminalSeconds": 12,
+      "socksCaptures": [],
+      "terminal": {
+        "browserProgress": {
+          "events": [
+            {
+              "elapsedMs": 56,
+              "flags": 983041,
+              "networkStop": false,
+              "status": 0,
+              "url": "http://p74ne2hi7ijvrdjzr7gdjy52wa5ulpf4h7dxrtpvntglsvyqzszfkb3p.onion:33923/t205-t205-notification-error-protected-no-escape"
+            },
+            {
+              "elapsedMs": 133,
+              "flags": 131088,
+              "networkStop": false,
+              "status": 2147500036,
+              "url": "http://p74ne2hi7ijvrdjzr7gdjy52wa5ulpf4h7dxrtpvntglsvyqzszfkb3p.onion:33923/t205-t205-notification-error-protected-no-escape"
+            },
+            {
+              "elapsedMs": 138,
+              "flags": 786448,
+              "networkStop": true,
+              "status": 2147500036,
+              "url": "http://p74ne2hi7ijvrdjzr7gdjy52wa5ulpf4h7dxrtpvntglsvyqzszfkb3p.onion:33923/t205-t205-notification-error-protected-no-escape"
+            }
+          ],
+          "expected": "http://p74ne2hi7ijvrdjzr7gdjy52wa5ulpf4h7dxrtpvntglsvyqzszfkb3p.onion:33923/t205-t205-notification-error-protected-no-escape",
+          "expectedAbortStatus": 2147500036,
+          "terminal": {
+            "elapsedMs": 138,
+            "flags": 786448,
+            "networkStop": true,
+            "status": 2147500036,
+            "url": "http://p74ne2hi7ijvrdjzr7gdjy52wa5ulpf4h7dxrtpvntglsvyqzszfkb3p.onion:33923/t205-t205-notification-error-protected-no-escape"
+          },
+          "testedTabPreserved": true
+        },
+        "completed": true,
+        "completionEvidence": "browser URL-bound STATE_STOP | STATE_IS_NETWORK with NS_ERROR_ABORT",
+        "documentURI": "moz-extension://stargate-test/options/options.html",
+        "elapsedSeconds": 3.03,
+        "popupLabel": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Blocked by Stargate Other requests may use different routes. Connection success is not verified.",
+        "readyState": "complete",
+        "url": "moz-extension://stargate-test/options/options.html"
+      }
+    },
+    "t205-pending-finite-status-and-no-raw-output": {
+      "cleanupNotificationDisplayed": true,
+      "currentHardening": {
+        "hardeningOk": false,
+        "status": "unknown"
+      },
+      "destinationCaptures": [],
+      "faultIdentity": {
+        "changedMembers": {
+          "background/t205-fault.js": {
+            "afterSha256": "8baba260233002f46aa499c0446d67834134a8238e60e0d9821bab72c69f0f81",
+            "beforeSha256": null
+          },
+          "manifest.json": {
+            "afterSha256": "a44c11e00878be66344ab9e79842030d6df8e5caaaf652f6d70d0598c9206c63",
+            "beforeSha256": "6d6d89a5a0e6844094dd861d208e6182fd172e2ea63207533e44c6c08c92e114"
+          }
+        },
+        "packageSha256": "c60da851f017408c3dfba86a958bf0cdd1303c08bb3b82c0f3b3b407a57cd43a",
+        "sourceSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "variant": "t205-pending"
+      },
+      "httpCaptures": [],
+      "outputs": {
+        "alerts": [
+          "Stargate: fail-closed baseline missing or changed | Reinstall browser-profile/user.js as the quickstart describes and restart the browser. Until then requests Stargate does not route follow the browser proxy settings and may connect directly."
+        ],
+        "consoleMessages": [
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"resource://services-settings/Attachments.sys.mjs\" line: 530}]",
+          "1791104661625\taddons.xpi-utils\tWARN\tSynchronous load of XPI database due to getAddonsByType([theme]) Stack: getAddonsByType@resource://gre/modules/addons/XPIDatabase.sys.mjs:2486:21\ninstallBuiltinAddon@resource://gre/modules/addons/XPIInstall.sys.mjs:4889:35\n",
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"resource://gre/modules/RemoteWebNavigation.sys.mjs\" line: 95}]",
+          "[JavaScript Warning: \"Window.fullScreen attribute is deprecated and will be removed in the future.\" {file: \"chrome://browser/content/browser.js\" line: 408}]",
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"moz-src:///browser/components/search/SERPCategorization.sys.mjs\" line: 918}]"
+        ]
+      },
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: Unknown; non-Direct routing readiness is not confirmed.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Unknown Other requests may use different routes. Connection success is not verified."
+      },
+      "socksCaptures": [],
+      "storage": {
+        "device": {
+          "bearerToken": "0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+          "name": "live-control",
+          "tokenStoredAt": 1
+        },
+        "isolationProfileId": "90e9cafafe12f272e06074ed14c5b27e7b3fad76650d64e41e04651be632ae87"
+      }
+    },
+    "t205-pending-protected-no-escape": {
+      "currentHardening": {
+        "hardeningOk": false,
+        "status": "unknown"
+      },
+      "destinationCaptures": [],
+      "hits": {
+        "destination": [],
+        "dnsMozLog": [],
+        "dnsStrace": [],
+        "impostorLabel": [],
+        "socks": [],
+        "systemProxy": []
+      },
+      "httpCaptures": [],
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: Unknown; non-Direct routing readiness is not confirmed.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Blocked by Stargate Other requests may use different routes. Connection success is not verified."
+      },
+      "postTerminalSeconds": 12,
+      "socksCaptures": [],
+      "terminal": {
+        "browserProgress": {
+          "events": [
+            {
+              "elapsedMs": 66,
+              "flags": 983041,
+              "networkStop": false,
+              "status": 0,
+              "url": "http://dgauqb7xg6nivqs6alozkiba4yydywqb5v73r7saa2wsp4bad23zyedc.onion:33923/t205-t205-pending-protected-no-escape"
+            },
+            {
+              "elapsedMs": 126,
+              "flags": 131088,
+              "networkStop": false,
+              "status": 2147500036,
+              "url": "http://dgauqb7xg6nivqs6alozkiba4yydywqb5v73r7saa2wsp4bad23zyedc.onion:33923/t205-t205-pending-protected-no-escape"
+            },
+            {
+              "elapsedMs": 130,
+              "flags": 786448,
+              "networkStop": true,
+              "status": 2147500036,
+              "url": "http://dgauqb7xg6nivqs6alozkiba4yydywqb5v73r7saa2wsp4bad23zyedc.onion:33923/t205-t205-pending-protected-no-escape"
+            }
+          ],
+          "expected": "http://dgauqb7xg6nivqs6alozkiba4yydywqb5v73r7saa2wsp4bad23zyedc.onion:33923/t205-t205-pending-protected-no-escape",
+          "expectedAbortStatus": 2147500036,
+          "terminal": {
+            "elapsedMs": 130,
+            "flags": 786448,
+            "networkStop": true,
+            "status": 2147500036,
+            "url": "http://dgauqb7xg6nivqs6alozkiba4yydywqb5v73r7saa2wsp4bad23zyedc.onion:33923/t205-t205-pending-protected-no-escape"
+          },
+          "testedTabPreserved": true
+        },
+        "completed": true,
+        "completionEvidence": "browser URL-bound STATE_STOP | STATE_IS_NETWORK with NS_ERROR_ABORT",
+        "documentURI": "moz-extension://stargate-test/options/options.html",
+        "elapsedSeconds": 3.009,
+        "popupLabel": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Blocked by Stargate Other requests may use different routes. Connection success is not verified.",
+        "readyState": "complete",
+        "url": "moz-extension://stargate-test/options/options.html"
+      }
+    },
+    "t205-pending-release-recovers-current-status": {
+      "currentHardening": {
+        "hardeningOk": true,
+        "status": "disabled"
+      },
+      "destinationCaptures": [],
+      "httpCaptures": [],
+      "passed": true,
+      "socksCaptures": []
+    },
+    "t205-protected-positive-after-failure-and-migration": {
+      "currentHardening": {
+        "hardeningOk": true,
+        "status": "disabled"
+      },
+      "destinationCaptures": [],
+      "httpCaptures": [],
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: WebRTC disabled at last check.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Tor Other requests may use different routes. Connection success is not verified."
+      },
+      "socksCaptures": [
+        {
+          "host": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion",
+          "observedAtMonotonic": 59666.179947,
+          "passwordMatches": true,
+          "path": "/t205-positive-t205-protected-positive-after-failure-and-migration",
+          "port": 33923,
+          "stage": "request",
+          "username": "sg1:88a76eebf39162dc7f78befe204cbedb1189978713c06204e8e2efd27505d2d8"
+        },
+        {
+          "host": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion",
+          "observedAtMonotonic": 59666.555071,
+          "passwordMatches": true,
+          "path": "/favicon.ico",
+          "port": 33923,
+          "stage": "request",
+          "username": "sg1:88a76eebf39162dc7f78befe204cbedb1189978713c06204e8e2efd27505d2d8"
+        }
+      ],
+      "terminal": {
+        "completed": true,
+        "documentURI": "http://abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion:33923/t205-positive-t205-protected-positive-after-failure-and-migration",
+        "elapsedSeconds": 0.394,
+        "readyState": "complete",
+        "url": "http://abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion:33923/t205-positive-t205-protected-positive-after-failure-and-migration"
+      }
+    },
+    "t205-protected-positive-after-pending-release": {
+      "currentHardening": {
+        "hardeningOk": true,
+        "status": "disabled"
+      },
+      "destinationCaptures": [],
+      "httpCaptures": [],
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: WebRTC disabled at last check.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Tor Other requests may use different routes. Connection success is not verified."
+      },
+      "socksCaptures": [
+        {
+          "host": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion",
+          "observedAtMonotonic": 59790.299942,
+          "passwordMatches": true,
+          "path": "/t205-positive-t205-protected-positive-after-pending-release",
+          "port": 33923,
+          "stage": "request",
+          "username": "sg1:f3790eeb86c9c8ee383f921cf9a8b874a8627ec62dd00f216777faf1c6e570f9"
+        },
+        {
+          "host": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion",
+          "observedAtMonotonic": 59790.627543,
+          "passwordMatches": true,
+          "path": "/favicon.ico",
+          "port": 33923,
+          "stage": "request",
+          "username": "sg1:f3790eeb86c9c8ee383f921cf9a8b874a8627ec62dd00f216777faf1c6e570f9"
+        }
+      ],
+      "terminal": {
+        "completed": true,
+        "documentURI": "http://abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion:33923/t205-positive-t205-protected-positive-after-pending-release",
+        "elapsedSeconds": 0.39,
+        "readyState": "complete",
+        "url": "http://abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion:33923/t205-positive-t205-protected-positive-after-pending-release"
+      }
+    },
+    "t205-protected-positive-after-second-restart": {
+      "currentHardening": {
+        "hardeningOk": true,
+        "status": "disabled"
+      },
+      "destinationCaptures": [],
+      "httpCaptures": [],
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: WebRTC disabled at last check.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Tor Other requests may use different routes. Connection success is not verified."
+      },
+      "socksCaptures": [
+        {
+          "host": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion",
+          "observedAtMonotonic": 59684.499184,
+          "passwordMatches": true,
+          "path": "/t205-positive-t205-protected-positive-after-second-restart",
+          "port": 33923,
+          "stage": "request",
+          "username": "sg1:88a76eebf39162dc7f78befe204cbedb1189978713c06204e8e2efd27505d2d8"
+        },
+        {
+          "host": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion",
+          "observedAtMonotonic": 59685.065032,
+          "passwordMatches": true,
+          "path": "/favicon.ico",
+          "port": 33923,
+          "stage": "request",
+          "username": "sg1:88a76eebf39162dc7f78befe204cbedb1189978713c06204e8e2efd27505d2d8"
+        }
+      ],
+      "terminal": {
+        "completed": true,
+        "documentURI": "http://abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion:33923/t205-positive-t205-protected-positive-after-second-restart",
+        "elapsedSeconds": 0.586,
+        "readyState": "complete",
+        "url": "http://abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion:33923/t205-positive-t205-protected-positive-after-second-restart"
+      }
+    },
+    "t205-read-error-finite-status-and-no-raw-output": {
+      "cleanupNotificationDisplayed": true,
+      "currentHardening": {
+        "hardeningOk": false,
+        "status": "unknown"
+      },
+      "destinationCaptures": [],
+      "faultIdentity": {
+        "changedMembers": {
+          "background/t205-fault.js": {
+            "afterSha256": "841b66420546535e4d98795c43447fb82a6079522abab3c4c23d95a2963a11a0",
+            "beforeSha256": null
+          },
+          "manifest.json": {
+            "afterSha256": "a44c11e00878be66344ab9e79842030d6df8e5caaaf652f6d70d0598c9206c63",
+            "beforeSha256": "6d6d89a5a0e6844094dd861d208e6182fd172e2ea63207533e44c6c08c92e114"
+          }
+        },
+        "packageSha256": "0ea231f60d861071f1ff9a4687868723efa45b94dc9e823be83845fac2a0b822",
+        "sourceSha256": "087b70d1730e90c14ac19cdb650ebbdabbdce229208a60b07e09b5c504dc9479",
+        "variant": "t205-read-error"
+      },
+      "httpCaptures": [],
+      "outputs": {
+        "alerts": [
+          "Stargate: fail-closed baseline missing or changed | Reinstall browser-profile/user.js as the quickstart describes and restart the browser. Until then requests Stargate does not route follow the browser proxy settings and may connect directly.",
+          "Stargate: non-Direct routing blocked | Stargate could not verify WebRTC is disabled, so all non-Direct routes remain blocked. To restore them, confirm media.peerconnection.enabled is false in about:config and restart the browser. WebRTC is the only hardening surface this extension can verify at runtime; the rest of the hardened profile is verified outside the extension at each Stargate release."
+        ],
+        "consoleMessages": [
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"resource://services-settings/Attachments.sys.mjs\" line: 530}]",
+          "1791104618416\taddons.xpi-utils\tWARN\tSynchronous load of XPI database due to getAddonsByType([theme]) Stack: getAddonsByType@resource://gre/modules/addons/XPIDatabase.sys.mjs:2486:21\ninstallBuiltinAddon@resource://gre/modules/addons/XPIInstall.sys.mjs:4889:35\n",
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"resource://gre/modules/RemoteWebNavigation.sys.mjs\" line: 95}]",
+          "[JavaScript Warning: \"Window.fullScreen attribute is deprecated and will be removed in the future.\" {file: \"chrome://browser/content/browser.js\" line: 408}]",
+          "[JavaScript Warning: \"unreachable code after return statement\" {file: \"moz-src:///browser/components/search/SERPCategorization.sys.mjs\" line: 918}]"
+        ]
+      },
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: Unknown; non-Direct routing readiness is not confirmed.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Unknown Other requests may use different routes. Connection success is not verified."
+      },
+      "socksCaptures": [
+        {
+          "host": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion",
+          "observedAtMonotonic": 59684.499184,
+          "passwordMatches": true,
+          "path": "/t205-positive-t205-protected-positive-after-second-restart",
+          "port": 33923,
+          "stage": "request",
+          "username": "sg1:88a76eebf39162dc7f78befe204cbedb1189978713c06204e8e2efd27505d2d8"
+        },
+        {
+          "host": "abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345abcd2345.onion",
+          "observedAtMonotonic": 59685.065032,
+          "passwordMatches": true,
+          "path": "/favicon.ico",
+          "port": 33923,
+          "stage": "request",
+          "username": "sg1:88a76eebf39162dc7f78befe204cbedb1189978713c06204e8e2efd27505d2d8"
+        }
+      ],
+      "storage": {
+        "device": {
+          "bearerToken": "0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+          "name": "live-control",
+          "tokenStoredAt": 1
+        },
+        "isolationProfileId": "6a982e386a74f78f4b51fa10fe8bb06f26c2f420375fe9239509804e80033863"
+      }
+    },
+    "t205-read-error-protected-no-escape": {
+      "currentHardening": {
+        "hardeningOk": false,
+        "status": "unknown"
+      },
+      "destinationCaptures": [],
+      "hits": {
+        "destination": [],
+        "dnsMozLog": [],
+        "dnsStrace": [],
+        "impostorLabel": [],
+        "socks": [],
+        "systemProxy": []
+      },
+      "httpCaptures": [],
+      "passed": true,
+      "popup": {
+        "hardening": "Runtime hardening: Unknown; non-Direct routing readiness is not confirmed.",
+        "route": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Blocked by Stargate Other requests may use different routes. Connection success is not verified."
+      },
+      "postTerminalSeconds": 12,
+      "socksCaptures": [],
+      "terminal": {
+        "browserProgress": {
+          "events": [
+            {
+              "elapsedMs": 102,
+              "flags": 983041,
+              "networkStop": false,
+              "status": 0,
+              "url": "http://4gyi7oag4so547vfxgqinbai56p7wqvrhkt52afo3oj7raouvv4pmcu2.onion:33923/t205-t205-read-error-protected-no-escape"
+            },
+            {
+              "elapsedMs": 204,
+              "flags": 131088,
+              "networkStop": false,
+              "status": 2147500036,
+              "url": "http://4gyi7oag4so547vfxgqinbai56p7wqvrhkt52afo3oj7raouvv4pmcu2.onion:33923/t205-t205-read-error-protected-no-escape"
+            },
+            {
+              "elapsedMs": 214,
+              "flags": 786448,
+              "networkStop": true,
+              "status": 2147500036,
+              "url": "http://4gyi7oag4so547vfxgqinbai56p7wqvrhkt52afo3oj7raouvv4pmcu2.onion:33923/t205-t205-read-error-protected-no-escape"
+            }
+          ],
+          "expected": "http://4gyi7oag4so547vfxgqinbai56p7wqvrhkt52afo3oj7raouvv4pmcu2.onion:33923/t205-t205-read-error-protected-no-escape",
+          "expectedAbortStatus": 2147500036,
+          "terminal": {
+            "elapsedMs": 214,
+            "flags": 786448,
+            "networkStop": true,
+            "status": 2147500036,
+            "url": "http://4gyi7oag4so547vfxgqinbai56p7wqvrhkt52afo3oj7raouvv4pmcu2.onion:33923/t205-t205-read-error-protected-no-escape"
+          },
+          "testedTabPreserved": true
+        },
+        "completed": true,
+        "completionEvidence": "browser URL-bound STATE_STOP | STATE_IS_NETWORK with NS_ERROR_ABORT",
+        "documentURI": "moz-extension://stargate-test/options/options.html",
+        "elapsedSeconds": 3.047,
+        "popupLabel": "Warning: the Stargate fail-closed proxy baseline of this profile is missing, changed or unverifiable, so requests Stargate does not route follow the browser proxy settings. Reinstall browser-profile/user.js (quickstart). Main navigation decision: Blocked by Stargate Other requests may use different routes. Connection success is not verified.",
+        "readyState": "complete",
+        "url": "moz-extension://stargate-test/options/options.html"
+      }
+    },
+    "t205-subsequent-successful-process-restart-preserves-no-history": {
+      "after": {
+        "T205configurationSentinel": {
+          "enabled": true,
+          "marker": "T205_UNRELATED"
+        },
+        "device": {
+          "bearerToken": "0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+          "name": "live-control",
+          "tokenStoredAt": 1
+        },
+        "isolationProfileId": "e9e44891e4c5ed0088add242e7e2cfcf6853703b0a73e20c5f20301833b5e10d",
+        "routes": {
+          "askOnFirstEncounter": false,
+          "byDomain": {
+            "sentinel.example": {
+              "route": "DIRECT"
+            }
+          },
+          "default": "DIRECT"
+        }
+      },
+      "before": {
+        "T205configurationSentinel": {
+          "enabled": true,
+          "marker": "T205_UNRELATED"
+        },
+        "device": {
+          "bearerToken": "0f1e2d3c0f1e2d3c0f1e2d3c0f1e2d3c",
+          "name": "live-control",
+          "tokenStoredAt": 1
+        },
+        "isolationProfileId": "e9e44891e4c5ed0088add242e7e2cfcf6853703b0a73e20c5f20301833b5e10d",
+        "routes": {
+          "askOnFirstEncounter": false,
+          "byDomain": {
+            "sentinel.example": {
+              "route": "DIRECT"
+            }
+          },
+          "default": "DIRECT"
+        }
+      },
+      "destinationCaptures": [
+        {
+          "firstLine": "GET /t205-direct-control HTTP/1.1",
+          "host": "127.0.0.1:33923",
+          "observedAtMonotonic": 59668.702635,
+          "path": "/t205-direct-control"
+        },
+        {
+          "firstLine": "GET /favicon.ico HTTP/1.1",
+          "host": "127.0.0.1:33923",
+          "observedAtMonotonic": 59669.114603,
+          "path": "/favicon.ico"
+        }
+      ],
+      "httpCaptures": [],
+      "passed": true,
+      "sameProfileRealProcessRestart": true,
+      "socksCaptures": []
+    }
+  }
+}

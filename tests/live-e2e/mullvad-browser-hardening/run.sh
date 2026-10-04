@@ -103,15 +103,12 @@ for p in "${PROPS[@]}"; do
 done
 echo
 
-# Property 4 double-check: the extension's runtime gate must agree with the
-# profile pref. This requires loading the extension and reading
-# storage.local.hardening.lastAuditResult. That step is browser-driven and
-# is documented in README §"What it verifies" properties 4-6; it is not
-# fully automatable from a shell script without a Marionette/geckodriver
-# harness, which is deferred to Phase 5+ (see workflow.md §"Live end-to-end
-# verification"). Until then, the prefs.js reads above are the automated
-# floor; properties 4-6 are executed manually per the README and the result
-# recorded in the release run sheet.
+# Property 4-runtime and property 6 require real-browser observations; the
+# connection-level probes documented in README cover their named scenarios.
+# Observe the current runtime result and routing behavior, rather than reading
+# an audit result from the obsolete storage.local.hardening key (T205).
+# Property 5's implementation and claim reconciliation remains T197's
+# responsibility. Record actual outcomes in the release run sheet.
 echo ">>> Part 2 — extension runtime gate + foreign-extension inventory"
 echo "  MANUAL (Phase 5+ automation deferred): load the extension, confirm"
 echo "  hardeningOk agrees with peerConnectionEnabled, exercise the foreign-"

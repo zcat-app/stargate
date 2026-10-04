@@ -320,7 +320,8 @@ tests-first suite (Principle VII) before implementation lands.
   WebRTC is enabled at runtime, the extension MUST raise a notification
   naming WebRTC and the remediation (architecture spec §14.5 failure UX; Gecko
   rejects `requireInteraction`, so the notification is transient and the popup's
-  blocked state is the persistent report), MUST write the failure record, and MUST NOT route non-Direct
+  blocked state is the route report), MUST keep only finite current volatile hardening status
+  and remove the obsolete legacy hardening storage key at startup (T205), and MUST NOT route non-Direct
   requests through port 8881 until the user remediates. The shipped profile
   template (`browser-profile/user.js`) sets `media.peerconnection.enabled=false`,
   because Mullvad Browser's default is enabled. The extension does

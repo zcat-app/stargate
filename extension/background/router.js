@@ -637,6 +637,9 @@
       .catch(() => {})
       .then(() => {
         const warning = baselineState === 'match' ? {} : { baseline: baselineState ?? 'unknown' };
+        // T205: opt-in current state preserves route-only callers and does
+        // not turn a past navigation decision into current hardening authority.
+        if (message.includeHardening === true) warning.hardening = auditHardening.status;
         if (privateAccess !== true) return { route: 'no-private-access', ...warning };
         const decision = tabDecisions.get(tabId)?.route;
         if (decision === 'tor') return { route: 'tor', ...warning };

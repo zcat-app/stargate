@@ -300,6 +300,8 @@ class WebDriver:
                  trace: "NameTrace | None" = None,
                  allow_private_browsing: bool = True,
                  install: bool = True,
+                 profile_dir: pathlib.Path | None = None,
+                 permanent: bool = False,
                  before_install: "Callable[[WebDriver], None] | None" = None) -> None:
         reservation = socket.socket()
         reservation.bind(("127.0.0.1", 0))
@@ -349,13 +351,19 @@ class WebDriver:
             elif WEBRTC_PREF in SHIPPED_TEMPLATE_PREFS:
                 prefs[WEBRTC_PREF] = SHIPPED_TEMPLATE_PREFS[WEBRTC_PREF]
             prefs.update(extra_prefs or {})
+            self.prefs = prefs
+            browser_args = ["-headless"]
+            if profile_dir is not None:
+                profile_dir.mkdir(parents=True, exist_ok=True)
+                browser_args += ["-profile", str(profile_dir.resolve())]
             value = self.request("POST", "/session", {"capabilities": {"alwaysMatch": {
                 "browserName": "firefox", "acceptInsecureCerts": accept_insecure_certs,
                 "pageLoadStrategy": "none",
                 "moz:firefoxOptions": {
-                    "binary": str(browser), "args": ["-headless"], "prefs": prefs,
+                    "binary": str(browser), "args": browser_args, "prefs": prefs,
                 },
             }}})
+            self.capabilities = value["capabilities"]
             self.session = value.get("sessionId") or value["capabilities"]["sessionId"]
             if before_install is not None:
                 before_install(self)
@@ -363,7 +371,7 @@ class WebDriver:
             # private-window access; T157/T186 sessions grant it explicitly.
             if install:
                 self.request("POST", f"/session/{self.session}/moz/addon/install", {
-                    "path": str(extension.resolve()), "temporary": True,
+                    "path": str(extension.resolve()), "temporary": not permanent,
                     "allowPrivateBrowsing": allow_private_browsing,
                 })
                 time.sleep(install_wait)
@@ -430,6 +438,27 @@ class WebDriver:
             ".then(value=>done(value),e=>done({error:String(e)}));"
         )
         return result if isinstance(result, dict) else {"unexpected": result}
+
+    def runtime_hardening_state(self) -> dict[str, object]:
+        self.navigate("moz-extension://stargate-test/options/options.html", timeout=2)
+        self.set_context("content")
+        return self.execute_async(
+            "const done=arguments[arguments.length-1];"
+            "browser.runtime.getBackgroundPage().then(p=>done({"
+            "hardeningOk:p.hardeningOk,status:p.auditHardening.status}),"
+            "()=>done({unavailable:true}));"
+        )
+
+    def set_raw_storage(self, items: dict[str, object]) -> None:
+        self.navigate("moz-extension://stargate-test/options/options.html", timeout=2)
+        self.set_context("content")
+        result = self.execute_async(
+            "const done=arguments[arguments.length-1];"
+            "browser.storage.local.set(arguments[0]).then(()=>done({ok:true}),"
+            "()=>done({ok:false}));", [items],
+        )
+        if result != {"ok": True}:
+            raise RuntimeError("synthetic storage seed failed")
 
     def background_state(self) -> dict[str, object]:
         self.set_context("chrome")
@@ -618,7 +647,7 @@ class WebDriver:
         )
         return terminal
 
-    def blocked_popup_label(self) -> str | None:
+    def blocked_popup_label(self, include_hardening: bool = False) -> str | dict[str, object] | None:
         self.set_context("content")
         original = self.request("GET", f"/session/{self.session}/window")
         before = self.request("GET", f"/session/{self.session}/window/handles")
@@ -637,7 +666,9 @@ class WebDriver:
         try:
             return self.execute(
                 "const e=document.getElementById('route-indicator');"
-                "return e ? e.textContent : null;"
+                "const h=document.getElementById('hardening-status');"
+                "return arguments[0] ? {route:e?e.textContent:null,hardening:h?h.textContent:null}"
+                ": e ? e.textContent : null;", [include_hardening]
             )
         finally:
             self.request("POST", f"/session/{self.session}/window", {"handle": original})
@@ -672,6 +703,11 @@ class WebDriver:
                 except OSError:
                     pass
         self.log_file.close()
+
+
+def zip_members(path: pathlib.Path) -> dict[str, bytes]:
+    with zipfile.ZipFile(path) as archive:
+        return {name: archive.read(name) for name in archive.namelist()}
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -764,6 +800,27 @@ def variant_extension(source: pathlib.Path, destination: pathlib.Path,
         scripts.insert(scripts.index("background/router.js"), "background/t157-startup.js")
         members["background/t157-startup.js"] = STARTUP_SCRIPT.encode()
         members["manifest.json"] = json.dumps(manifest, sort_keys=True).encode()
+    elif variant.startswith("t205-"):
+        if variant == "t205-no-cleanup":
+            source_text = members["background/hardening.js"].decode()
+            old = "await browser.storage.local.remove('hardening');"
+            if source_text.count(old) != 1:
+                raise RuntimeError("T205 cleanup control anchor differs")
+            members["background/hardening.js"] = source_text.replace(
+                old, "/* Test-only no-cleanup control: retain seeded legacy state. */"
+            ).encode()
+        else:
+            fault = {
+                "t205-read-error": "browser.privacy.network.peerConnectionEnabled.get=()=>Promise.reject(new Error('T205_RAW_READ_MARKER'));",
+                "t205-pending": "const original=browser.privacy.network.peerConnectionEnabled.get;let release;const held=new Promise(r=>release=r);window.t205Release=release;browser.privacy.network.peerConnectionEnabled.get=async function(...args){await held;return original.apply(this,args);};",
+                "t205-cleanup-error": "browser.storage.local.remove=()=>Promise.reject(new Error('T205_RAW_REMOVE_MARKER'));",
+                "t205-notification-error": "browser.notifications.create=()=>Promise.reject(new Error('T205_RAW_NOTIFICATION_MARKER'));",
+            }[variant]
+            script = "background/t205-fault.js"
+            scripts = manifest["background"]["scripts"]
+            scripts.insert(scripts.index("background/hardening.js"), script)
+            members[script] = ("'use strict';(function(){" + fault + "})();").encode()
+            members["manifest.json"] = json.dumps(manifest, sort_keys=True).encode()
     elif variant == "unknown-hardening":
         manifest["permissions"].remove("privacy")
         members["manifest.json"] = json.dumps(manifest, sort_keys=True).encode()
@@ -1214,6 +1271,28 @@ def t188_lan_address() -> str:
         probe_socket.close()
 
 
+def t205_migration_closed(before: dict[str, object], after: dict[str, object]) -> bool:
+    # Empty/fresh profiles must not masquerade as successful key migration.
+    return ("hardening" in before and
+            all(key in before for key in ("device", "isolationProfileId", "routes")) and
+            after == {key: value for key, value in before.items() if key != "hardening"})
+
+
+def t205_same_profile_restart(first: dict[str, object], second: dict[str, object],
+                              exited: bool) -> bool:
+    return (exited and isinstance(first.get("moz:processID"), int) and
+            isinstance(second.get("moz:processID"), int) and
+            first["moz:processID"] != second["moz:processID"] and
+            isinstance(first.get("moz:profile"), str) and
+            first["moz:profile"] == second.get("moz:profile"))
+
+
+def t205_status_matches(state: dict[str, object], expected: str) -> bool:
+    return (expected in ("enabled", "disabled", "unknown") and
+            state.get("status") == expected and
+            state.get("hardeningOk") is (expected == "disabled"))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--browser", type=pathlib.Path, required=True)
@@ -1225,7 +1304,7 @@ def main() -> int:
     parser.add_argument("--report-out", type=pathlib.Path,
                         default=pathlib.Path("target/runs/T157.browser.json"))
     parser.add_argument("--only", choices=("full", "startup", "sidecar", "context", "fixture", "navigation",
-                                           "descriptor-matrix", "blocked-proxy", "private-access"),
+                                           "descriptor-matrix", "blocked-proxy", "private-access", "hardening-state"),
                         default="full")
     parser.add_argument("--profile-template", type=pathlib.Path,
                         default=pathlib.Path("browser-profile/user.js"))
@@ -1287,6 +1366,14 @@ def main() -> int:
         scenarios[name] = result
         if not passed:
             failures.append(name)
+        if args.only == "hardening-state":
+            # A failed fixture retains completed observations, never loses
+            # them merely because a later browser operation throws.
+            report["result"] = "INCOMPLETE"
+            report["failures"] = list(failures)
+            args.report_out.parent.mkdir(parents=True, exist_ok=True)
+            args.report_out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
+            print(f"{name}: {'PASS' if passed else 'FAIL'}", flush=True)
 
     def blocked_label(label: str) -> bool:
         # T188: this mode runs without the shipped user.js, so the baseline
@@ -2022,13 +2109,283 @@ def main() -> int:
             wide.shutdown()
             wide.server_close()
 
+    def run_hardening_state() -> None:
+        workdir = args.report_out.with_suffix('.t205').resolve()
+        workdir.mkdir(parents=True, exist_ok=True)
+        report['hardeningStateScope'] = {
+            'browserBinarySha256': sha256(args.browser),
+            'driverBinarySha256': sha256(args.driver),
+            'harnessSha256': sha256(pathlib.Path(__file__)),
+            'profileTemplateSha256': sha256(args.profile_template),
+            'packageMembers': {name: hashlib.sha256(value).hexdigest()
+                               for name, value in zip_members(args.extension).items()},
+            'logging': 'geckodriver/browser stdout+stderr; Services.console messages; strace DNS sockets; MOZ_LOG nsHostResolver; alerts.useSystemBackend=false',
+            'limits': ['API-visible cleanup only, no forensic disk erasure',
+                       'Mullvad Browser 153.3.0esr development pin, no stable-release certification',
+                       'T200 profile/verification obligations remain pending; native-DNS harness preferences are injected, not shipped',
+                       'No per-request audit policy added; T190 owns mid-session drift'],
+        }
+        scope = report['hardeningStateScope']
+        sessions: list[dict[str, object]] = []
+        scope['sessions'] = sessions
+        sequence = 0
+        socks = Server(SocksHandler, 8881)
+        socks.start()
+
+        def launch(name: str, package: pathlib.Path, *, hardened: bool = True,
+                   install: bool = True, profile: pathlib.Path | None = None,
+                   mapped: list[str] | None = None) -> tuple[WebDriver, NameTrace]:
+            nonlocal sequence
+            sequence += 1
+            trace = NameTrace(workdir, f'{sequence:02d}-{name}')
+            prefs = t186_session_prefs(mapped or [PROTECTED_HOST])
+            prefs.update({'alerts.useSystemBackend': False})
+            browser = WebDriver(args.browser, args.driver, package, http_proxy.port,
+                                hardened, workdir / f'{sequence:02d}-{name}.driver.log',
+                                install_wait=2, extra_prefs=prefs, trace=trace,
+                                install=install, profile_dir=profile, permanent=True,
+                                before_install=t188_record_alerts)
+            browser.t205_record = {
+                'name': name, 'capabilities': browser.capabilities, 'prefs': browser.prefs,
+                'driverProcessID': browser.process.pid,
+                'packageSha256': sha256(package), 'installedThisLaunch': install,
+                'permanentAddon': True, 'privateWindowGrant': True,
+            }
+            sessions.append(browser.t205_record)
+            return browser, trace
+
+        def stop(browser: WebDriver) -> bool:
+            pid = browser.capabilities['moz:processID']
+            browser.close()
+            deadline = time.monotonic() + 5
+            while pathlib.Path(f'/proc/{pid}').exists() and time.monotonic() < deadline:
+                time.sleep(0.1)
+            exited = not pathlib.Path(f'/proc/{pid}').exists()
+            browser.t205_record['browserProcessExited'] = exited
+            return exited
+
+        def storage(browser: WebDriver) -> dict[str, object]:
+            browser.navigate('moz-extension://stargate-test/options/options.html', timeout=2)
+            return browser.read_raw_storage()
+
+        def alerts_and_console(browser: WebDriver) -> dict[str, object]:
+            browser.set_context('chrome')
+            return browser.execute(
+                "const alerts=[...(window.t188Alerts||[])];"
+                "const e=Services.wm.getEnumerator('alert:alert');"
+                "while(e.hasMoreElements()){const w=e.getNext();const a=w.arguments||[];"
+                "alerts.push(String(a[1]||'')+' | '+String(a[2]||''));}"
+                "return {alerts:[...new Set(alerts)],consoleMessages:"
+                "Services.console.getMessageArray().map(m=>String(m.message))};"
+            )
+
+        def positive(browser: WebDriver, name: str) -> None:
+            CAPTURES.reset('http', 'destination', 'socks')
+            path = '/t205-positive-' + name
+            terminal = browser.navigate(protected_url(path))
+            hits = [item for item in CAPTURES.snapshot('socks')
+                    if item.get('path') == path and item.get('host') == PROTECTED_HOST]
+            popup = browser.blocked_popup_label(include_hardening=True)
+            record(name, terminal.get('completed') is True and bool(hits) and
+                   all(item.get('passwordMatches') is True and
+                       re.fullmatch(r'sg1:[a-f0-9]{64}', str(item.get('username'))) for item in hits)
+                   and not CAPTURES.snapshot('destination') and not protected_captures() and
+                   'WebRTC disabled at last check' in str(popup.get('hardening')) and
+                   'Main navigation decision: Tor' in str(popup.get('route')),
+                   terminal, {'popup': popup, 'currentHardening': browser.runtime_hardening_state()})
+
+        def negative(browser: WebDriver, trace: NameTrace, name: str) -> None:
+            CAPTURES.reset('http', 'destination', 'socks')
+            label = t186_label()
+            url = f'http://{label}.onion:{destination.port}/t205-{name}'
+            terminal = browser.blocked_navigation(url)
+            # Keep the tested tab intact beyond the pinned ten-second proxy bound.
+            time.sleep(12)
+            hits = t186_hits(label, trace)
+            popup = browser.blocked_popup_label(include_hardening=True)
+            state = browser.runtime_hardening_state()
+            expected_label = ('WebRTC enabled at last check' if state.get('status') == 'enabled'
+                              else 'Unknown; non-Direct routing readiness is not confirmed')
+            record(name, terminal.get('completed') is True and t186_clean(hits) and
+                   state.get('hardeningOk') is False and expected_label in str(popup.get('hardening')), terminal,
+                   {'hits': hits, 'popup': popup, 'currentHardening': state, 'postTerminalSeconds': 12})
+
+        def variant(name: str) -> pathlib.Path:
+            package, identity = variant_extension(args.extension, workdir / (name + '.zip'), name)
+            scope.setdefault('faultPackages', {})[name] = identity
+            return package
+
+        def legacy_seed(browser: WebDriver) -> dict[str, object]:
+            browser.seed_valid_device()
+            before = storage(browser)
+            profile_id = before.get('isolationProfileId')
+            if not isinstance(profile_id, str) or not re.fullmatch('[a-f0-9]{64}', profile_id):
+                raise RuntimeError('candidate profile identity did not initialize')
+            browser.set_raw_storage({
+                'routes': {'default': 'DIRECT', 'byDomain': {'sentinel.example': {'route': 'DIRECT'}},
+                           'askOnFirstEncounter': False},
+                'T205configurationSentinel': {'enabled': True, 'marker': 'T205_UNRELATED'},
+                'hardening': {'lastAuditedAt': 497000,
+                              'lastAuditResult': {'blockedSurface': 'webrtc',
+                                                  'readError': 'T205_SYNTHETIC_LEGACY_ERROR'}},
+            })
+            seeded = storage(browser)
+            if (seeded.get('device') != VALID_DEVICE or seeded.get('isolationProfileId') != profile_id or
+                    'hardening' not in seeded):
+                raise RuntimeError('legacy and unrelated state were not actually seeded')
+            return seeded
+
+        try:
+            # Independent real-browser capture controls: no add-on overrides them.
+            controls = t186_controls(destination.port, 'sysproxy', 'direct')
+            calibration, trace = launch('capture-calibration', args.extension, install=False,
+                                        mapped=t186_mapped([controls]))
+            try:
+                CAPTURES.reset('http', 'destination', 'socks')
+                t186_run_requests(calibration, [controls['system-proxy']], settle=0)
+                calibration.set_proxy_type(0)
+                t186_run_requests(calibration, [controls['destination'], controls['dns']], settle=2)
+            finally:
+                stop(calibration)
+            hits = {name: t186_hits(str(item['label']), trace) for name, item in controls.items()}
+            calibrated = (all((item.get('terminal') or {}).get('completed') is True for item in controls.values())
+                          and bool(hits['system-proxy']['systemProxy']) and bool(hits['destination']['destination'])
+                          and bool(hits['dns']['dnsStrace']) and bool(hits['dns']['dnsMozLog']))
+            record('t205-independent-capture-calibration', calibrated, extra={'controls': controls, 'hits': hits})
+
+            # Test-only absence of cleanup must retain the legacy state across the
+            # exact same persistent-add-on/profile process restart mechanism.
+            package = variant('t205-no-cleanup')
+            profile = workdir / 'no-cleanup-profile'
+            browser, trace = launch('no-cleanup-seed', package, profile=profile)
+            try:
+                seeded = legacy_seed(browser)
+                first = browser.capabilities
+            finally:
+                exited = stop(browser)
+            browser, trace = launch('no-cleanup-restart', package, profile=profile, install=False)
+            try:
+                after = storage(browser)
+                continuity = t205_same_profile_restart(first, browser.capabilities, exited)
+                record('t205-no-cleanup-control-retains-legacy', continuity and after == seeded,
+                       extra={'before': seeded, 'after': after, 'sameProfileRealProcessRestart': continuity})
+            finally:
+                stop(browser)
+
+            # Unchanged candidate: enabled failure -> disabled restart, then a
+            # second successful restart with the installed add-on untouched.
+            profile = workdir / 'candidate-profile'
+            browser, trace = launch('candidate-enabled', args.extension, hardened=False, profile=profile)
+            try:
+                state = browser.runtime_hardening_state()
+                outputs = alerts_and_console(browser)
+                record('t205-enabled-current-status-and-displayed-notification',
+                       t205_status_matches(state, 'enabled') and
+                       any('WebRTC is enabled' in text for text in outputs['alerts']),
+                       extra={'currentHardening': state, 'outputs': outputs})
+                seeded = legacy_seed(browser)
+                negative(browser, trace, 't205-enabled-protected-no-escape')
+                first = browser.capabilities
+            finally:
+                exited = stop(browser)
+            browser, trace = launch('candidate-disabled-restart', args.extension, profile=profile, install=False)
+            try:
+                state = browser.runtime_hardening_state()
+                after = storage(browser)
+                continuity = t205_same_profile_restart(first, browser.capabilities, exited)
+                record('t205-candidate-process-restart-removes-only-legacy',
+                       continuity and t205_migration_closed(seeded, after) and t205_status_matches(state, 'disabled'),
+                       extra={'before': seeded, 'after': after, 'currentHardening': state,
+                              'sameProfileRealProcessRestart': continuity})
+                positive(browser, 't205-protected-positive-after-failure-and-migration')
+                # Real intentional Direct request: candidate selects Direct while
+                # the configured ordinary proxy remains available independently.
+                browser.set_proxy_type(0)
+                CAPTURES.reset('http', 'destination', 'socks')
+                terminal = browser.navigate(f'http://127.0.0.1:{destination.port}/t205-direct-control')
+                popup = browser.blocked_popup_label(include_hardening=True)
+                record('t205-explicit-direct-positive', terminal.get('completed') is True and
+                       any(item.get('path') == '/t205-direct-control' for item in CAPTURES.snapshot('destination'))
+                       and not CAPTURES.snapshot('socks') and not CAPTURES.snapshot('http') and
+                       'Main navigation decision: Direct (unrouted)' in str(popup.get('route')), terminal,
+                       {'popup': popup, 'fixtureBrowserProxyType': 0,
+                        'allHttpCaptures': CAPTURES.snapshot('http')})
+                browser.set_proxy_type(1)
+                first = browser.capabilities
+                preserved = storage(browser)
+            finally:
+                exited = stop(browser)
+            browser, trace = launch('candidate-second-disabled-restart', args.extension, profile=profile, install=False)
+            try:
+                after = storage(browser)
+                continuity = t205_same_profile_restart(first, browser.capabilities, exited)
+                record('t205-subsequent-successful-process-restart-preserves-no-history',
+                       continuity and after == preserved and 'hardening' not in after and
+                       t205_status_matches(browser.runtime_hardening_state(), 'disabled'),
+                       extra={'before': preserved, 'after': after, 'sameProfileRealProcessRestart': continuity})
+                positive(browser, 't205-protected-positive-after-second-restart')
+            finally:
+                stop(browser)
+
+            for name, expected in [('t205-read-error', 'unknown'), ('t205-pending', 'unknown'),
+                                   ('t205-cleanup-error', 'unknown'), ('t205-notification-error', 'enabled')]:
+                package = variant(name)
+                browser, trace = launch(name, package, hardened=name != 't205-notification-error',
+                                        profile=workdir / (name + '-profile'))
+                try:
+                    browser.seed_valid_device()
+                    state = browser.runtime_hardening_state()
+                    outputs = alerts_and_console(browser)
+                    current_store = storage(browser)
+                    raw_markers = ['T205_RAW_READ_MARKER', 'T205_RAW_REMOVE_MARKER', 'T205_RAW_NOTIFICATION_MARKER']
+                    # Service console and launcher/logging streams are explicit
+                    # sinks; synthetic marker text may not leak through them.
+                    logs = '\n'.join(path.read_text(errors='replace') for path in workdir.glob(f'{sequence:02d}-{name}.*')
+                                     if path.suffix != '.strace')
+                    popup = browser.blocked_popup_label(include_hardening=True)
+                    sinks = json.dumps({'state': state, 'store': current_store, 'outputs': outputs, 'popup': popup}) + logs
+                    expected_label = ('WebRTC enabled at last check' if expected == 'enabled'
+                                      else 'Unknown; non-Direct routing readiness is not confirmed')
+                    cleanup_notification = (name != 't205-cleanup-error' or any(
+                        'could not complete its runtime hardening initialization' in text and
+                        'this notification does not verify the rest of the browser profile.' in text and
+                        'verified outside the extension at each Stargate release' not in text
+                        for text in outputs['alerts']))
+                    record(name + '-finite-status-and-no-raw-output',
+                           t205_status_matches(state, expected) and 'hardening' not in current_store and
+                           not any(marker in sinks for marker in raw_markers) and cleanup_notification and
+                           expected_label in str(popup.get('hardening')),
+                           extra={'currentHardening': state, 'storage': current_store, 'outputs': outputs,
+                                  'popup': popup, 'cleanupNotificationDisplayed': cleanup_notification,
+                                  'faultIdentity': scope['faultPackages'][name]})
+                    negative(browser, trace, name + '-protected-no-escape')
+                    if name == 't205-pending':
+                        browser.navigate('moz-extension://stargate-test/options/options.html')
+                        browser.set_context('content')
+                        browser.execute_async("const done=arguments[arguments.length-1];browser.runtime.getBackgroundPage().then(p=>{p.t205Release();done({released:true});});")
+                        time.sleep(1)
+                        state = browser.runtime_hardening_state()
+                        record('t205-pending-release-recovers-current-status', t205_status_matches(state, 'disabled'),
+                               extra={'currentHardening': state})
+                        positive(browser, 't205-protected-positive-after-pending-release')
+                finally:
+                    stop(browser)
+        finally:
+            socks.stop()
+        if not all(item.get('browserProcessExited') is True for item in sessions):
+            record('t205-process-cleanup', False, extra={'sessions': sessions})
+
+
     def finish() -> int:
         report["result"] = "GREEN" if not failures else "RED"
         report["failures"] = failures
         rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
         args.report_out.parent.mkdir(parents=True, exist_ok=True)
         args.report_out.write_text(rendered)
-        if args.only == "private-access":
+        if args.only == "hardening-state":
+            print(json.dumps({"result": report["result"], "failures": failures,
+                              "passed": {name: value["passed"] for name, value in scenarios.items()}}, indent=2))
+        elif args.only == "private-access":
             # The complete record is in --report-out; stdout carries verdicts.
             observed = scenarios.get("t188-socks-pref-and-ip-literal-observations", {})
             print(json.dumps({
@@ -2047,9 +2404,11 @@ def main() -> int:
             print(rendered, end="")
         return 0 if not failures else 1
 
-    if args.only in ("descriptor-matrix", "blocked-proxy", "private-access"):
+    if args.only in ("descriptor-matrix", "blocked-proxy", "private-access", "hardening-state"):
         try:
-            if args.only == "descriptor-matrix":
+            if args.only == "hardening-state":
+                run_hardening_state()
+            elif args.only == "descriptor-matrix":
                 run_descriptor_matrix()
             elif args.only == "private-access":
                 run_private_access()
@@ -2197,12 +2556,12 @@ def main() -> int:
         try:
             browser.seed_valid_device()
             time.sleep(1)
-            audit_state = browser.read_raw_storage().get("hardening")
+            audit_state = browser.runtime_hardening_state()
             CAPTURES.reset("http", "destination", "socks")
             terminal = browser.blocked_navigation(protected_url("/unreadable-hardening-api"))
             record_negative("unreadable-hardening-api-no-fallback", terminal)
             scenarios["unreadable-hardening-api-no-fallback"].update({
-                "auditRecord": audit_state,
+                "currentHardening": audit_state,
                 "faultInjection": "privacy permission removed from otherwise identical package",
             })
         finally:

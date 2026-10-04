@@ -1003,13 +1003,16 @@ For each request:
   "blocklist": {
     "version": <generation>,
     "patterns": [ "*.onion.to", "*.onion.ws", "*.onion.cab", "..." ]
-  },
-  "hardening": {
-    "lastAuditedAt": <hourBucket>,
-    "lastAuditResult": { "doh": "disabled", "webrtc": "disabled", "h3": "disabled" }
   }
 }
 ```
+
+T205 removes the obsolete persistent hardening failure record. At background startup,
+`storage.local.remove('hardening')` removes only that legacy key, without reading its
+shape or rewriting device credentials, isolation profile identity or route settings.
+Cleanup failure leaves initialization unknown and protected routing closed; no durable
+migration marker, replacement event/hour/error record or raw diagnostic is created.
+API-visible deletion does not establish physical erasure or removal of external copies.
 
 Bearer tokens themselves SHOULD be stored in the browser's OS keyring via
 the WebExtensions password-storage path if available; otherwise in
@@ -1104,19 +1107,25 @@ false` at runtime (browser startup and on restart), the extension:
    must NOT claim a runtime block on DoH/DoT/HTTP-3; it states those
    surfaces are release-cadence-verified (Part 1) and names their drift as
    accepted residue (THREAT-MODEL §5.4/§5.5).
-2. Sets `hardeningOk = false` — a **pure function of
-   `peerConnectionEnabled`** — that `router.js` (T054) checks before
-   returning a SOCKS descriptor from `proxy.onRequest` for non-Direct
-   routes (FR-004). Direct routes are unaffected. There is no per-session
-   "profile confirmed" signal: DoH/DoT/HTTP-3 are not runtime-gated.
-3. Writes the last failure to `storage.local.hardening.lastAuditResult`
-   for the admin dashboard to surface (read via a future signed-export
-   flow — out of scope for this spec).
+2. Begins with `hardeningOk = false` and `auditHardening.status = 'unknown'`.
+   Only successful targeted legacy-key removal and an API-measured disabled value
+   set `hardeningOk = true`. Measured enabled, unknown/unavailable reads, pending
+   initialization and failed cleanup keep protected routing closed. Direct routes
+   remain separate. Results are finite current volatile state, with no stored history.
+   A delayed older audit cannot override a newer invocation's result. Startup/restart
+   remains the production cadence; T190 owns any per-request audit-policy decision.
+3. Delivers finite latest-check status through an opt-in `hardening` field in the
+   existing `stargate:getRoute` reply (`includeHardening: true`). Its values are
+   `enabled`, `disabled` or `unknown`. The popup presents it separately from the
+   main-navigation decision. This is no signed export, dashboard or history stream.
 
-The notification and stored result are explanatory UX only. Enforcement is the router's
-asynchronous blocking cancellation described in §14.3; the notification does not cancel a
-request. The popup reports a committed main-navigation cancellation as Blocked, distinguishes it
-from intentional Direct, and retains the existing mixed-request and unverified-connection scope.
+Notifications are explanatory only, and their rejection cannot authorize routing or
+retain arbitrary error detail. Enforcement is the protected-request gate and asynchronous
+blocking cancellation described in §14.3; the notification does not cancel a request.
+The popup reports a committed main-navigation cancellation as Blocked, distinguishes it
+from intentional Direct, and retains mixed-request and unverified-connection scope.
+T205 absorbs T117's complete §14.4/§14.5 reconciliation; its historical acceptance is
+superseded without rewriting completed T034b/T055 lineage.
 
 Non-Direct routing is **fail-closed at runtime against WebRTC**. The
 DoH/DoT/HTTP-3 surfaces are release-cadence-verified (Part 1) plus

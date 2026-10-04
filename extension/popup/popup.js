@@ -24,6 +24,10 @@
     'Warning: the Stargate fail-closed proxy baseline of this profile is missing, ' +
     'changed or unverifiable, so requests Stargate does not route follow the browser ' +
     'proxy settings. Reinstall browser-profile/user.js (quickstart).';
+  const HARDENING_DISABLED = 'Runtime hardening: WebRTC disabled at last check.';
+  const HARDENING_ENABLED = 'Runtime hardening: WebRTC enabled at last check; non-Direct routing blocked.';
+  const HARDENING_UNKNOWN = 'Runtime hardening: Unknown; non-Direct routing readiness is not confirmed.';
+  const hardeningIndicator = document.getElementById('hardening-status');
   const GET_ROUTE = 'stargate:getRoute';
   const indicator = document.getElementById('route-indicator');
   let refreshGeneration = 0;
@@ -32,8 +36,10 @@
     const generation = ++refreshGeneration;
     // A previous Tor decision cannot stand in for a pending/unreadable answer.
     indicator.textContent = LABEL_UNKNOWN;
+    hardeningIndicator.textContent = HARDENING_UNKNOWN;
     let label = LABEL_UNKNOWN;
     let warning = false;
+    let hardeningLabel = HARDENING_UNKNOWN;
     try {
       const [tab] = await browser.tabs.query({
         active: true,
@@ -43,8 +49,11 @@
         const answer = await browser.runtime.sendMessage({
           type: GET_ROUTE,
           tabId: tab.id,
+          includeHardening: true,
         });
         if (answer !== null && typeof answer === 'object') {
+          if (answer.hardening === 'disabled') hardeningLabel = HARDENING_DISABLED;
+          else if (answer.hardening === 'enabled') hardeningLabel = HARDENING_ENABLED;
           if (answer.route === 'tor') label = LABEL_TOR;
           else if (answer.route === 'unrouted') label = LABEL_DIRECT;
           else if (answer.route === 'blocked') label = LABEL_BLOCKED;
@@ -57,6 +66,7 @@
       // An unavailable background gives no evidence of either route.
     }
     if (generation === refreshGeneration) {
+      hardeningIndicator.textContent = hardeningLabel;
       indicator.textContent = warning ? BASELINE_WARNING + ' ' + label : label;
     }
   }

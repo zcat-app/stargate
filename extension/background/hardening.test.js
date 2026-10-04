@@ -9,8 +9,8 @@
 // stable Firefox WebExtensions API truthfully exposes): the gate reads
 // `browser.privacy.network.peerConnectionEnabled`, fails non-Direct
 // routing closed unless the value is exactly `false`, and on failure
-// surfaces a WebRTC-naming blocking notification plus a
-// `storage.local.hardening.lastAuditResult` record. DoH / DoT / HTTP-3
+// surfaces a WebRTC-naming transient notification and only finite current
+// volatile state; no persistent operational record (T205, Constitution III). DoH / DoT / HTTP-3
 // are release-cadence-verified out-of-band
 // (tests/live-e2e/mullvad-browser-hardening/) and MUST NOT be claimed as
 // runtime-gated — a mock that invented those prefs is the false-assurance
@@ -97,6 +97,9 @@ function makeBrowser(profile) {
     notificationRejections: [],
     // argument objects passed to browser.storage.local.set
     storageSets: [],
+    storageRemoves: [],
+    consoleCalls: [],
+    store: profile.store || {},
   };
 
   const privacyNetwork = new Proxy({}, {
@@ -109,11 +112,11 @@ function makeBrowser(profile) {
         return {
           get() {
             if (profile.rejectRead) {
-              return Promise.reject(new Error('mock: privacy API unavailable'));
+              return Promise.reject(new Error(profile.readMarker || 'mock: privacy API unavailable'));
             }
             // Read live through the profile object so a test can flip the
             // simulated profile state between audits (restart semantics).
-            return Promise.resolve(profile.peerConnectionEnabled);
+            return profile.readImpl ? profile.readImpl() : Promise.resolve(profile.peerConnectionEnabled);
           },
         };
       }
@@ -146,10 +149,17 @@ function makeBrowser(profile) {
 
   const storageLocal = {
     get(_keys) {
-      return Promise.resolve({});
+      return Promise.resolve(recorded.store);
+    },
+    remove(key) {
+      recorded.storageRemoves.push(key);
+      if (profile.removeError) return Promise.reject(new Error(profile.removeError));
+      delete recorded.store[key];
+      return Promise.resolve();
     },
     set(items) {
       recorded.storageSets.push(items);
+      Object.assign(recorded.store, items);
       return Promise.resolve();
     },
   };
@@ -170,7 +180,7 @@ function makeBrowser(profile) {
           return Promise.reject(new Error(rejection));
         }
         recorded.notifications.push(payload);
-        return Promise.resolve(1);
+        return profile.notificationError ? Promise.reject(new Error(profile.notificationError)) : Promise.resolve(1);
       },
     },
     storage: { local: storageLocal },
@@ -190,7 +200,7 @@ function loadHardening(profile) {
   const { browser, recorded } = makeBrowser(profile);
   const sandbox = {
     browser,
-    console,
+    console: Object.fromEntries(['warn', 'error', 'log'].map(level => [level, (...args) => recorded.consoleCalls.push([level, ...args.map(String)])])),
     setTimeout,
     clearTimeout,
   };
@@ -238,7 +248,7 @@ test('hardenedProfileAuditsCleanAndSilent', { skip: !implPresent() && IMPL_ABSEN
     'peerConnectionEnabled === false is the hardened state; routing must not be blocked'
   );
   assert.strictEqual(recorded.notifications.length, 0, 'no failure dialog on a hardened profile');
-  assert.strictEqual(recorded.storageSets.length, 0, 'no failure record on a hardened profile');
+  assert.strictEqual(recorded.storageSets.length, 0, 'no persistent audit event on a hardened profile');
 });
 
 test('webrtcEnabledFailsClosedAndDialogNamesActualPref', { skip: !implPresent() && IMPL_ABSENT }, async () => {
@@ -287,17 +297,7 @@ test('webrtcEnabledFailsClosedAndDialogNamesActualPref', { skip: !implPresent() 
     recorded.notificationRejections, [],
     "every notification option must be accepted by Gecko's notifications.create schema"
   );
-  assert.ok(recorded.storageSets.length >= 1, 'failure is written for the operator');
-  const items = recorded.storageSets[recorded.storageSets.length - 1];
-  assert.ok(
-    items && items.hardening && items.hardening.lastAuditResult !== undefined,
-    'failure record lives at storage.local.hardening.lastAuditResult (arch §14.5 Part 2 item 3)'
-  );
-  const record = JSON.stringify(items.hardening.lastAuditResult);
-  assert.match(
-    record, /webrtc|peerconnectionenabled/i,
-    'failure record identifies the blocked surface'
-  );
+  assert.deepStrictEqual(recorded.storageSets, [], 'no persistent failure event (T205)');
 });
 
 test('failureDialogNeverClaimsDohDotHttp3RuntimeBlocks', { skip: !implPresent() && IMPL_ABSENT }, async () => {
@@ -470,4 +470,63 @@ test('failureNotificationIsDisplayableOnEveryFailureShape', { skip: !implPresent
     assert.deepStrictEqual(recorded.notificationRejections, [], JSON.stringify(profile));
     assert.ok(recorded.notifications.length >= 1, JSON.stringify(profile));
   }
+});
+
+
+// T205 acceptance 1–3: the writer/legacy retention are behavioral falsifiers,
+// independent of any proposed new status symbol.
+test('T205_allAuditShapesNeverWritePersistentEventHourOrRawError', async () => {
+  for (const profile of [
+    { peerConnectionEnabled: false }, { peerConnectionEnabled: true },
+    { peerConnectionEnabled: undefined }, { rejectRead: true, readMarker: 'T205_RAW_READ_497000' },
+  ]) {
+    const { sandbox, recorded } = loadHardening(profile);
+    await drain();
+    await sandbox.auditHardening();
+    assert.deepStrictEqual(recorded.storageSets, [], 'no event/hour/error record is ever written');
+    assert.deepStrictEqual(recorded.consoleCalls, [], 'no diagnostic detail is retained');
+    assert.doesNotMatch(JSON.stringify(recorded.notifications), /T205_RAW_READ_497000/);
+  }
+});
+
+test('T205_successfulStartupDeletesOnlyLegacyKeyAndPreservesClientStateAcrossRestart', async () => {
+  const preserved = { device: { bearerToken: 'synthetic-device' }, isolationProfileId: 'synthetic-profile', routes: { default: 'DIRECT' }, unrelated: 'T205_CONFIG' };
+  const store = { ...structuredClone(preserved), hardening: { lastAuditedAt: 497000, lastAuditResult: { readError: 'T205_LEGACY_ERROR' } } };
+  for (let restart = 0; restart < 2; restart += 1) {
+    const { sandbox, recorded } = loadHardening({ peerConnectionEnabled: false, store });
+    assert.strictEqual(sandbox.hardeningOk, false, 'restart begins closed, never trusts stored state');
+    await drain();
+    assert.deepStrictEqual(store, preserved, 'remove obsolete key only');
+    assert.deepStrictEqual(recorded.storageRemoves, ['hardening']);
+    assert.deepStrictEqual(recorded.storageSets, []);
+    assert.strictEqual(sandbox.hardeningOk, true);
+  }
+});
+
+test('T205_failureThenSuccessClearsCurrentStateWithoutStoredHistory', async () => {
+  const profile = { peerConnectionEnabled: true, store: { hardening: { lastAuditedAt: 497000, lastAuditResult: { readError: 'T205_OLD_ERROR' } } } };
+  const { sandbox, recorded } = loadHardening(profile);
+  await drain();
+  assert.strictEqual(sandbox.hardeningOk, false);
+  assert.deepStrictEqual(profile.store, {});
+  assert.strictEqual(sandbox.auditHardening.status, 'enabled');
+  profile.peerConnectionEnabled = false;
+  await sandbox.auditHardening();
+  assert.strictEqual(sandbox.hardeningOk, true);
+  assert.strictEqual(sandbox.auditHardening.status, 'disabled');
+  assert.deepStrictEqual(recorded.storageSets, []);
+});
+
+test('T205_heldInitialReadCannotAuthorizeFromLegacySuccess', async () => {
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  const { sandbox, recorded } = loadHardening({ readImpl: () => held, store: { hardening: { lastAuditResult: { webrtc: 'disabled' } } } });
+  await drain();
+  assert.strictEqual(sandbox.hardeningOk, false);
+  assert.strictEqual(sandbox.auditHardening.status, 'unknown');
+  assert.deepStrictEqual(recorded.storageSets, []);
+  release({ value: false });
+  await drain();
+  assert.strictEqual(sandbox.hardeningOk, true);
+  assert.strictEqual(sandbox.auditHardening.status, 'disabled');
 });
