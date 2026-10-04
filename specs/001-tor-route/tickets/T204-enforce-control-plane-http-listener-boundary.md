@@ -1,7 +1,7 @@
 ---
 id: "T204"
 title: "Enforce control-plane HTTP listener boundary at startup"
-status: in-progress
+status: done
 created: "2026-10-03"
 last_updated: 2026-10-04
 source: "T155 resumed cumulative CP/browser CPB-M2; independently falsified 2026-10-03; approved next-scope-after-T203.md section C"
@@ -32,7 +32,7 @@ decision_refs:
   - "2026-10-03 user approved full next scope after T203: CP-listener and hardening-record repairs, T117 absorption, DNS-capture filing, then T155; conforming repairs only, no policy waiver"
   - "CPB-M2: falsify-2-cp-browser.md in .scratch/tmp/T155/redteam-a4r; pinned Quarkus 3.33.1 production-default bytecode corroborates wildcard host, actual packaged namespace observation remains required"
 tests_first: []
-reviews: {}
+reviews: { round: 2, date: 2026-10-04, verdict: OVERRIDE-APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -308,3 +308,25 @@ source inventory, tests-first checks, actual reviewer trailers and normal commit
 hooks remain required. This is the user's T204-only procedural override, not an
 invented security-risk acceptance or general workflow amendment. T155, T078/T079,
 cumulative milestone checks and external release gates remain open as applicable.
+
+### Completion record (2026-10-04)
+
+Implementation commit: `cf5ca157ae38e5a06f1a32d9c57676c927af9ed7` (20 paths of
+34). The user additionally confirmed “ok if focused check passed commit the test
+too”; both the corrected probe and discriminating regression are included.
+Completion is `OVERRIDE-APPROVE`, preserving actual archived GLM REWORK and Astra
+APPROVE. No round2 native review or repeated full suite was performed. The final
+focused results are host8/guest8 PASS, one selected production management-runtime
+case PASS, and the identical-command tests-first green bound to the final staged
+source. Prior full verification was37PASS/4SKIP/0FAIL; its interrupted repeat is
+not GREEN. Codex0.160.0/OpenCode1.18.33 were checked before both native launches.
+
+The initial commit hook refused twelve SHA256 manifest values near token/key path
+names. They were retained byte-for-byte in explicit `sha256` metadata objects;
+normalized old/new evidence is identical except the representation note. The
+source-bound green was refreshed after that metadata change; the normal hook
+then passed. No scanner change, allowlist or hook bypass was used. The existing
+driver's original validation, trailer, commit and lifecycle helpers were used
+under the recorded human exception; driver source and old GREEN cache stayed
+unchanged. The local merge is a development checkpoint, not milestone completion
+or a release claim; no push is authorized here.

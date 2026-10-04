@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 34 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 195 |
+| done | 196 |
 | deferred | 7 |
 | **total** | **237** |
 
@@ -39,9 +39,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T204 | Enforce control-plane HTTP listener boundary at startup | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -61,7 +59,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_195 ticket(s) done._
+_196 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -258,3 +256,4 @@ _195 ticket(s) done._
 - T196 — Repair live-evidence harness defects found by the T155 pass
 - T198 — Gate init on af_unix mediation; truthful init and quickstart
 - T203 — Remove observer raw Tor authority with finite health publication
+- T204 — Enforce control-plane HTTP listener boundary at startup
