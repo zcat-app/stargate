@@ -291,6 +291,32 @@ in their own namespaces. Sidecar endpoints have an enforced caller/port matrix; 
 cannot use arbitrary public TCP/UDP/DNS. T134 compares compliant designs. Host publication
 alone, `STARGATE_IN_CONTAINER` and no-masquerade are insufficient evidence.
 
+**T204 CP HTTP mechanism:** the headless control plane retains a bodyless
+`GET /healthz` application endpoint. When HTTP is enabled, its effective host
+must be the literal IPv4 loopback address `127.0.0.1` in the CP's own network
+namespace. With the pinned Quarkus 3.33.1 framework, the application guard checks
+the effective options before HTTP server deployment and refuses other host
+values without resolving them. IPv6 HTTP host values, HTTPS activation and HTTP domain sockets are unsupported;
+the separate framework management interface is also unsupported. HTTP may be
+disabled. Narayana separately reserves a loopback process-ID socket. Linux may
+show both sockets in the IPv6 socket table as IPv4-mapped loopback addresses.
+
+The Local Compose configuration retains CP `network_mode: none`, no published
+CP port and the authenticated Unix management channels. Its CP healthcheck is
+disabled, so Compose does not poll `/healthz` or accumulate Docker healthcheck
+history for it. The endpoint reports process liveness only; it does not establish
+Tor readiness, authenticated IPC or successful forwarding.
+
+This repairs the existing Local listener requirement without adding a route,
+cryptographic identity or permission for CP network egress. T204 records the
+implementation and validation status, including the exact package, source,
+configuration, harness and disposable Linux guest identities for executed
+checks. Source inspection and focused tests do not establish final-package or
+cross-platform validation. Untested platforms and deployment modes remain
+unverified. T204 owns this focused repair and its evidence; T155 owns integrated
+foundation closure. Ticket completion does not satisfy Constitution VIII's
+cumulative milestone review or external human release review requirements.
+
 **T162 deployment mechanism (T163 measured scope below):** the local DP uses the host
 network namespace and binds `127.0.0.1:8881` through the strict loopback check;
 the T125 wildcard exception is removed. The CP has `network_mode: none`; Tor alone

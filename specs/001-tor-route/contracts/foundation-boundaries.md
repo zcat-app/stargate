@@ -16,6 +16,19 @@ compromise of the CP process. A health helper may not become a generic command p
 T134 compares designs satisfying both listener and egress requirements. Shared networking
 is not pre-approved: shared egress without independent process controls fails the contract.
 
+**T204 CP HTTP boundary:** retain bodyless GET `/healthz` on effective literal
+`127.0.0.1` only. Validate the final Quarkus HTTP options before server deployment,
+not after application startup; reject other host literals and names without DNS.
+HTTP may be disabled. HTTPS, HTTP domain sockets and the separate management
+interface are unsupported: transport callbacks and the management Router observer
+refuse their activation before listening. The normal fast jar freezes management
+activation at build time; runtime overrides cannot add that interface. Preserve
+network-none, authenticated UDS management and disabled Docker health history.
+Tests cover production defaults, real config precedence and startup/restart;
+namespace observations inspect both TCP tables, distinguishing IPv4-mapped
+loopback representation from IPv6 wildcard or IPv6 loopback support. Narayana's
+non-HTTP process-ID loopback socket is included in the listener inventory.
+
 **T168 Local IP boundary:** before proxy or IPC serving, the pure-Go DP binds an
 ordinary TCP loopback listener (MPTCP disabled), rejects other inherited sockets,
 anonymous capabilities and devices, then installs Landlock ABI >= 4 TCP bind/connect

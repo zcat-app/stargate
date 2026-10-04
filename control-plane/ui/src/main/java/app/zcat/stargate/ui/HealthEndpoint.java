@@ -11,18 +11,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 
 /**
- * The control plane's single HTTP surface: the Compose healthcheck
- * (T040). spec.md §Assumptions "No Quarkus dashboard UI yet" — no admin
- * UI lands in this feature, and research.md §"Decision" (headless control
- * plane) pins the stub to "GET /healthz → 200 and serves nothing else".
+ * The control plane's bodyless GET /healthz stub (T040/T204), restricted to
+ * IPv4 loopback by {@link HttpListenerBoundary}. No admin UI lands in this
+ * feature (spec.md §Assumptions "No Quarkus dashboard UI yet").
  *
- * <p>The response is a fixed 200 with no body: the consumer is the Compose
- * healthcheck (control-plane/Dockerfile; the compose {@code healthcheck:}
- * block and the bounded wait in {@code scripts/stargate init} poll this
- * path), which needs a status code, not content. Constitution Principle II
- * keeps request bytes off this plane — the route reads nothing (no
- * headers, no payload) and holds no state, so it discloses nothing beyond
- * liveness on the compose-internal network.</p>
+ * <p>Compose healthchecks are disabled under Constitution III; neither
+ * Compose nor the installer polls this endpoint. It reports only process
+ * liveness, not Tor readiness, authenticated IPC or forwarding success.
+ * The handler reads no payload, headers or mutable state.</p>
  *
  * <p>Quarkus 3.33 has no declarative route annotation for plain
  * vertx-http; the documented registration mechanism is observing the

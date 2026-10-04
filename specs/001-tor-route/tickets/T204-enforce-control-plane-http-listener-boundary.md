@@ -1,9 +1,9 @@
 ---
 id: "T204"
 title: "Enforce control-plane HTTP listener boundary at startup"
-status: pending
+status: in-progress
 created: "2026-10-03"
-last_updated: "2026-10-03"
+last_updated: 2026-10-04
 source: "T155 resumed cumulative CP/browser CPB-M2; independently falsified 2026-10-03; approved next-scope-after-T203.md section C"
 phase: "Foundation audit remediation"
 story: "-"
@@ -217,3 +217,94 @@ Compose and operational-log fixtures retain their capability, history and silenc
 Do not weaken a test merely to clear verification. Historical T040/T041 completion claims and
 past evidence are not rewritten. New Majors, reserved wording, unresolved policy and ordinary
 round-cap/ESCALATE conditions retain the orchestrator's stop rules.
+
+## Constitution VIII impact assessment
+
+T204 repairs the existing Local CP HTTP listener requirement by checking effective
+framework options before listening. It narrows accepted HTTP configuration to
+literal `127.0.0.1`, refuses unsupported HTTP transports and leaves authenticated
+Unix management, CP identities, DP forwarding and network authority unchanged.
+The separate Narayana process-ID reservation remains part of the measured TCP
+inventory. This ticket adds no route or cryptographic identity.
+
+The ordinary ticket review and focused Linux guest evidence do not approve a
+release or establish untested-platform behavior. Constitution VIII's cumulative
+milestone review and external human release review remain open, including the
+release obligation already triggered by T203's material Tor/observer boundary
+change. T204 claims no exemption from those obligations. T155 still owns the
+integrated foundation closure, including its real-hour and TLS evidence.
+
+### Post-review verification direction (2026-10-04)
+
+Both original round-1 reviewers approved; GLM identified one Minor in the new
+probe: an unbounded Docker command could outlive the polling deadline. The
+independently reproduced repair bounds `checked()` at five seconds and both
+Docker-stop cleanup calls at fifteen seconds. Seven focused tests pass on the
+host and disposable guest; the unchanged listener predicate still rejects the
+recorded baseline wildcard, and the identical-command live green was refreshed
+against the unchanged production image. Historical matrix executions retain
+their original harness identities (20 cases, despite the original GLM prose
+saying 19).
+
+The earlier full gate passed 37 checks, skipped four and failed none, before
+this probe-only fix. A user-approved one-time lifecycle recovery started a fresh
+full verification, but the user then explicitly directed: “we do not need to go
+whole cycle, it was small fix that is already locally verified, no - pass it to
+review”. The owned verification process tree was stopped with SIGTERM (exit143),
+and its partial log retained as interrupted, not GREEN. This latest T204-only
+instruction authorizes proceeding directly to a fresh native reviewer pair
+using the focused post-fix evidence; it is not a fabricated full-gate result or
+a general procedure change. The baseline, round1, original verdicts and review
+history remain preserved. Final driver freshness mechanics remain subject to
+the same explicit direction and must be surfaced before any conflicting action.
+
+---
+
+# T204 refreshed round 1 disposition — orchestrator record
+
+Date: 2026-10-04. Reviewed snapshot: 6f98d6f2fa44a9ed9d94cd4748bfda77afa19186f2431d80d0f751c03436dea7.
+Imported verdicts: Astra APPROVE/no findings; GLM REWORK, one procedural Major and one harness Minor. Both original verdicts and manifest remain unchanged. No commit is authorized on this REWORK set.
+
+## GLM Major: full verification after the timeout-only fix
+
+The user explicitly superseded the previously approved one-time full-cycle recovery:
+
+> we do not need to go whole cycle, it was small fix that is already locally verified, no - pass it to review
+
+Root reported and implemented this direction before the fresh review: cancel only the owned repeated full verification, preserve its exit143 log as interrupted, and present focused post-fix evidence to fresh reviewers. Root also checked and authorized a prospective completion path retaining normal manifest/identity/snapshot/inventory/tests-first/lock/trailer/hook checks while omitting only the repeated full verification. That path has NOT executed because the set contains REWORK.
+
+This document explicitly connects the existing human authorization to GLM's refreshed R1 Major. It does not invent a new user approval, claim the latest full gate passed, waive a privacy invariant, or replace a reviewer verdict. The earlier full gate is 37 PASS / 4 SKIP / 0 FAIL before the timeout fix. After the fix, seven host tests, seven guest tests, baseline replay and identical-command live green passed; the interrupted full run is not GREEN. Astra explicitly accepted this distinction. GLM did not identify a production defect in this finding; it requested this specific recorded authorization or full verification. The user's no-repeat instruction remains controlling for this bounded T204 probe repair. No general workflow change is authorized.
+
+After the named Minor correction below is locally checked, the developer must present the truthful bounded evidence and this authorization to the ordinary fresh pair for disposition. No rejected approval may be consumed or converted by root. Any genuinely new substantive Major or ESCALATE remains a stop.
+
+## GLM Minor: exact inventory in positive HTTP matrix cases
+
+Root checked cp_listener.py: the HTTP branch checks loopback plus bodyless health, but not the count of observed sockets. The non-HTTP branch does check its one expected Narayana socket. Separately, the actually used target/runs/T204/make-evidence.py:19-24 checks every retained HTTP row for two sockets and one8080; therefore this gap does not invalidate the current recorded matrix inventory. It is nevertheless a real omission in the reusable test verdict path: an extra loopback listener could pass that path.
+
+Authorized in-ticket correction: make the named HTTP-case verdict reject the extra listener; retain a discriminating pre-fix RED and post-fix GREEN, positive controls, and a relevant guest management-runtime case. No production or framework configuration change. Keep old harness/execution identities historical; do not relabel the prior20-case run as newly executed. Refresh affected source-bound evidence and ordinary review. Root is applying the already authorized proven-point/own-orphan repair doctrine, not accepting or deferring the Minor.
+
+### Latest human completion override (2026-10-04)
+
+After the refreshed pair returned Astra APPROVE/no findings and GLM REWORK
+(procedural Major plus the exact-inventory harness Minor), the user explicitly
+instructed: “fuck it commit and merge”, and added: “if it is reall issue 078 and
+079 will catch it”. Root confirmed that this supersedes the proposed additional
+full verification/review cycle and authorizes local completion plus a local main
+checkpoint, with no push or release claim. The earlier review dispositions remain
+unchanged: GLM did not approve the final candidate, and Astra's approval precedes
+the final harness-only correction. The final delta is approved by this human
+instruction, with focused evidence, not represented as independently re-reviewed.
+
+The named inventory Minor is fixed and locally checked: an extra numeric-loopback
+listener now fails the HTTP-case verdict. Eight focused tests pass on both host
+and guest, and one fresh management-runtime case on the unchanged production image
+observes exactly HTTP8080 plus the Narayana reservation. Its report records a
+completed selection and an incomplete full matrix; the earlier20-case evidence
+keeps its original identities. The same tests-first command is refreshed against
+the final candidate before commit. No production code/package changed after the
+reviewed production repair. The historical full gate remains37PASS/4SKIP/0FAIL;
+the later interrupted run is not GREEN. Existing review identity/hash checks,
+source inventory, tests-first checks, actual reviewer trailers and normal commit
+hooks remain required. This is the user's T204-only procedural override, not an
+invented security-risk acceptance or general workflow amendment. T155, T078/T079,
+cumulative milestone checks and external release gates remain open as applicable.

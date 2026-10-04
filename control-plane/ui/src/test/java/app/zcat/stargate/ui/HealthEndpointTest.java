@@ -18,14 +18,9 @@ import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
 
 /**
- * Contract tests for the control plane's only HTTP surface (T040): the
- * compose healthcheck. spec.md §Assumptions "No Quarkus dashboard UI yet"
- * — the CP exposes "no HTTP admin UI for this feature beyond a health
- * endpoint used by {@code docker compose} healthchecks", and research.md
- * §"Decision" pins the stub shape: GET /healthz → 200, serves nothing
- * else. Each test pins one clause of that contract; anything extra the
- * module starts serving is a regression toward an undeclared admin
- * surface.
+ * Finite HTTP contract (T040/T204): bodyless GET /healthz, no admin routes.
+ * Compose does not poll the stub; Docker health history remains disabled.
+ * Effective listener configuration is covered separately by HttpListenerBoundaryTest.
  */
 @QuarkusTest
 class HealthEndpointTest {
@@ -42,7 +37,7 @@ class HealthEndpointTest {
                 HttpRequest.newBuilder(healthz).GET().build(),
                 HttpResponse.BodyHandlers.ofString());
         assertEquals(200, response.statusCode(),
-                "the compose healthcheck contract is GET /healthz → 200");
+                "the finite health contract is GET /healthz → 200");
         assertTrue(response.body().isEmpty(),
                 "healthcheck response must carry no body, got: "
                         + response.body());

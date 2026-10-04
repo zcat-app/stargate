@@ -16,22 +16,17 @@
 
     <artifactId>ui</artifactId>
 
-    <name>Stargate Control Plane :: ui (v1 healthcheck stub)</name>
+    <name>Stargate Control Plane :: ui (v1 loopback health stub)</name>
     <description>
         Stub in v1 of the 001-tor-route feature. Serves exactly one HTTP
-        surface — the compose healthcheck GET /healthz (T040, gated by
+        surface — the loopback GET /healthz stub (T040/T204, gated by
         HealthEndpointTest); the admin UI lands in a later
         feature spec (spec.md §Assumptions "No Quarkus dashboard UI yet").
     </description>
 
     <dependencies>
-        <!-- T040: the ONLY HTTP surface is the compose healthcheck, so the
-             substrate is bare quarkus-vertx-http with one route registered
-             by observing the Router (Quarkus 3.33 ships no declarative
-             @Route annotation) — deliberately not quarkus-rest/Qute: the
-             stub must "serve nothing else" (research.md §"Decision",
-             headless CP), and the future admin-UI feature picks its own
-             stack. -->
+        <!-- The health-only Router and pre-listen option guard share the bare
+             HTTP substrate. Compose does not poll it (Constitution III). -->
         <dependency>
             <groupId>io.quarkus</groupId>
             <artifactId>quarkus-vertx-http</artifactId>
@@ -60,11 +55,8 @@
                     </execution>
                 </executions>
             </plugin>
-            <!-- T041: HealthEndpoint (@Observes Router → GET /healthz) is a
-                 CDI bean consumed at the runtime module's boot; without an
-                 index the ui jar is a library and the observer never fires
-                 (the compose healthcheck would 404). Same reasoning as the
-                 persistence pom's jandex stanza. -->
+            <!-- Index both the health route and boundary beans so the runtime
+                 artifact discovers their observers and pre-listen callbacks. -->
             <plugin>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>

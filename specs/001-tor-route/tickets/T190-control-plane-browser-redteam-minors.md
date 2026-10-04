@@ -102,3 +102,9 @@ Blocked-result semantics (T186); revocation status (T187); private-window access
 ## Approved dependency reconciliation — 2026-10-03
 
 The approved T204 CP listener repair and T205 hardening-record/schema repair precede this ticket because its HealthEndpoint and hardening comments/tests consume those mechanisms. Their direct own-change orphan corrections belong to those owners; this ticket retains its remaining acceptance and does not duplicate completed repairs.
+
+## T204 endpoint-javadoc absorption
+
+T204 owns Acceptance 6's `HealthEndpoint` javadoc correction together with its
+HTTP listener repair: Compose and the installer do not poll the stub. T190's
+`ControlGrpcService` javadoc item, other acceptance and lifecycle remain pending.

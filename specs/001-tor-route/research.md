@@ -98,8 +98,11 @@ populated: `api/` (gRPC server only), `core/` (token loader, sidecar
 monitor, healthcheck), `persistence/` (audit-log writes; entity classes
 for the full schema arch §6 created up-front but only `audit_log` written
 by this feature), `runtime/` (`@QuarkusMain`, packaging). `ui/` is a stub
-that responds to a Compose healthcheck path (`GET /healthz` → 200) and
-serves nothing else. No admin REST endpoints. No Qute admin templates.
+that retains bodyless `GET /healthz` → 200 and serves nothing else. T152 disabled
+Compose healthchecks; T204 supersedes the original healthcheck-consumer assumption
+with enforced literal IPv4 loopback options before listening. HTTPS, HTTP domain
+sockets and the separate management interface are unsupported. No admin REST
+endpoints. No Qute admin templates.
 
 **Rationale**: the spec (Assumptions section) defers the admin dashboard
 to a later feature, but the control plane must run because (a) it is the

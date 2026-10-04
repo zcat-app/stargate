@@ -43,7 +43,7 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 **Primary Dependencies**:
 
 - **Data plane**: Go stdlib (`net`, `crypto/subtle`, `context`, `log/slog`); `golang.org/x/net/proxy` for SOCKS5 client outbound to the Tor sidecar; `google.golang.org/grpc` for the inter-plane client; protobuf v3 generated stubs from `proto/stargate/v1/`. No third-party HTTP server frameworks — the data plane uses the stdlib for SOCKS5 framing and CONNECT.
-- **Control plane**: Quarkus core, Quarkus gRPC, Hibernate ORM with Panache, Quarkus JDBC SQLite, Flyway, `quarkus-vertx-http` (body-less GET `/healthz`; Compose does not probe it), SnakeYAML for `tokens.yaml` parsing.
+- **Control plane**: Quarkus core, Quarkus gRPC, Hibernate ORM with Panache, Quarkus JDBC SQLite, Flyway, `quarkus-vertx-http` (body-less GET `/healthz` with T204 pre-listen IPv4 loopback enforcement; Compose does not probe it), SnakeYAML for `tokens.yaml` parsing.
 - **Extension**: WebExtensions APIs — `proxy`, `storage`, `webRequest`, `webRequestBlocking`, `privacy`, `notifications`. No third-party JS deps.
 - **Test-only (Go, not shipped)**: `github.com/google/gopacket` for live-packet capture in `tests/integration/dns_leak_test.go` (T034) and `tests/integration/egress_consensus_test.go` (T034f) — requires `CAP_NET_RAW` or root on the test runner (CI configures this for the integration job). `github.com/docker/docker/client` (Docker SDK for Go) for every `tests/contract/` Docker bring-up harness (research.md §5). Both are CI-only and never linked into the data-plane binary. Pinned via `go.mod` at scaffold time (T002 / T002a) and updated only through the regular dependency-update workflow (Principle IV — pinned, tested, manually promoted).
 
@@ -375,7 +375,9 @@ the resolutions deliberately rather than accepting them implicitly.
    emit `SidecarEvent`s. The plan defines a *headless* control plane
    in this feature: `api/` (gRPC server only), `core/` (token loader,
    sidecar monitor), `persistence/` (`audit_log` writes), and `ui/`
-   shipping a health endpoint that Compose does not probe. The full UI lands in
+   shipping a health endpoint with effective `127.0.0.1` option enforcement
+   before listening (T204). HTTPS, HTTP domain sockets and the separate management
+   interface are unsupported. Compose does not probe the endpoint. The full UI lands in
    a separate feature. research.md §3.
 
 3. **`SC-005` (≥200 concurrent CONNECTs) is measured against a synthetic

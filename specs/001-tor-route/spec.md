@@ -692,7 +692,9 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
 - **No Quarkus dashboard UI yet.** The control plane runs (it has to —
   it owns the token loader and the gRPC server to the data plane) but
   exposes no HTTP admin UI for this feature. The existing `/healthz` endpoint
-  is not used for Docker health history; Compose healthchecks are disabled
+  accepts only the effective literal `127.0.0.1` through a pre-listen guard
+  (T204); HTTPS, HTTP domain sockets and framework management are unsupported.
+  It is not used for Docker health history; Compose healthchecks are disabled
   under Constitution III. The admin UI lands in a later
   feature; this slice deliberately defers it to keep the cone small.
 - **Reference target onion service for the success-criterion tests.**

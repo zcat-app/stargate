@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-10-03
+**Last updated:** 2026-10-04
 
 ---
 
@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 35 |
-| in-progress | 0 |
+| pending | 34 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 195 |
@@ -32,7 +32,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
-| T204 | Enforce control-plane HTTP listener boundary at startup | Foundation audit remediation | ✓ |  |
 | T205 | Remove persistent hardening failure events and reconcile the | Foundation audit remediation | ✓ |  |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 
@@ -40,7 +39,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T204 | Enforce control-plane HTTP listener boundary at startup | in-progress | ✓ | Foundation audit remediation |
 
 ---
 
