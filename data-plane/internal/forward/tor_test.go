@@ -36,6 +36,14 @@ type stub struct {
 	rep    byte
 	silent bool
 
+	// hold, when non-nil, withholds the BND reply until it is closed: the
+	// request stays pending at the upstream the way it does at Tor while
+	// a connect is unresolved (T208). got, when non-nil, replaces the
+	// echo relay: it receives every byte that reached the upstream after
+	// the reply, delivered once the data plane closed the connection.
+	hold chan struct{}
+	got  chan []byte
+
 	mu       sync.Mutex
 	offered  []byte
 	selected byte
@@ -67,17 +75,32 @@ func newStubUnix(t *testing.T, rep byte) *stub {
 
 func newStubOnListener(t *testing.T, ln net.Listener, rep byte, silent bool) *stub {
 	t.Helper()
-	s := &stub{ln: ln, rep: rep, silent: silent}
+	return startStub(t, &stub{ln: ln, rep: rep, silent: silent})
+}
+
+// newHoldingStub is a success-replying upstream that withholds its BND
+// reply until the test closes hold, then reports what it received.
+func newHoldingStub(t *testing.T) *stub {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("stub listen: %v", err)
+	}
+	return startStub(t, &stub{ln: ln, hold: make(chan struct{}), got: make(chan []byte, 1)})
+}
+
+func startStub(t *testing.T, s *stub) *stub {
+	t.Helper()
 	go func() {
 		for {
-			conn, err := ln.Accept()
+			conn, err := s.ln.Accept()
 			if err != nil {
 				return
 			}
 			go s.serve(conn)
 		}
 	}()
-	t.Cleanup(func() { ln.Close() })
+	t.Cleanup(func() { s.ln.Close() })
 	return s
 }
 
@@ -187,7 +210,15 @@ func (s *stub) serve(conn net.Conn) {
 	s.host = host
 	s.port = port
 	s.mu.Unlock()
+	if s.hold != nil {
+		<-s.hold
+	}
 	if _, err := conn.Write([]byte{0x05, s.rep, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); err != nil {
+		return
+	}
+	if s.got != nil {
+		b, _ := io.ReadAll(br) // returns when the data plane closes the upstream
+		s.got <- b
 		return
 	}
 	if s.rep == 0x00 {
@@ -471,16 +502,161 @@ func TestForwardDialDeadlineIsRouteTimeout(t *testing.T) {
 
 // T173 removes the NO_AUTH Dial/Pipe seam. The same-target refusal regression
 // and its real SOCKS partition/empty-password controls replace that old assertion.
-func TestProductionDialDeadlineIsThirtySeconds(t *testing.T) {
-	// contracts/socks5-auth.md §"Deadlines" row 1: the dial-and-handshake
-	// ceiling is 30 s, wired as the single named constant; row 2: no
-	// live-tunnel idle deadline exists. bridge's terminal deadline only
-	// cancels pending I/O after a pump has finished.
-	if upstreamDialTimeout != 30*time.Second {
-		t.Fatalf("upstreamDialTimeout = %v, want 30s", upstreamDialTimeout)
+func TestProductionDialDeadlineIsContractValue(t *testing.T) {
+	// contracts/socks5-auth.md §"Deadlines" row 1 (value set by T208): the
+	// dial-and-handshake ceiling is 250 s, wired as the single named
+	// constant; row 2: no live-tunnel idle deadline exists. bridge's
+	// terminal deadline only cancels pending I/O after a pump has finished.
+	if upstreamDialTimeout != 250*time.Second {
+		t.Fatalf("upstreamDialTimeout = %v, want 250s (contracts/socks5-auth.md §Deadlines row 1)", upstreamDialTimeout)
 	}
 	if f := New("tor:9050", &stubCounter{}); f.dialTimeout != upstreamDialTimeout {
 		t.Fatalf("New().dialTimeout = %v, want the production constant", f.dialTimeout)
+	}
+}
+
+// Characterization (T208; passes before and after the deadline change): a
+// sidecar that ANSWERS with REP=0x06 (Tor's own "TTL expired", sent when it
+// gives up on a stream) is the sidecar's failure reply, so the class is
+// ROUTE_REFUSED (0x04). ROUTE_TIMEOUT (0x06) is reserved for the data
+// plane's own deadline — the sidecar gave no reply
+// (contracts/socks5-auth.md §"Deadlines"; pinned by
+// TestForwardDialDeadlineIsRouteTimeout).
+func TestForwardUpstreamTTLExpiredReplyIsRouteRefused(t *testing.T) {
+	s := newStub(t, 0x06, false)
+	f := New(s.addr(), &stubCounter{})
+	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "deadmeta.onion:443")
+
+	cli, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("client dial: %v", err)
+	}
+	t.Cleanup(func() { cli.Close() })
+
+	select {
+	case err := <-errc:
+		var re listener.RouteError
+		if !errors.As(err, &re) {
+			t.Fatalf("err = %v, want a listener.RouteError classification", err)
+		}
+		if re.SOCKS5Reply() != 0x04 {
+			t.Fatalf("SOCKS5Reply = 0x%02x, want 0x04 (ROUTE_REFUSED) for an upstream REP=0x06", re.SOCKS5Reply())
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Forward did not return after the upstream's REP=0x06")
+	}
+}
+
+// awaitPendingAtUpstream blocks until the stub has read the request, i.e.
+// the data plane's connect is pending upstream with the reply withheld.
+func awaitPendingAtUpstream(t *testing.T, s *stub) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if atyp, _, _ := s.target(); atyp != 0 {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("request never became pending at the upstream stub")
+}
+
+// Characterization (T208; passes before and after the deadline change;
+// THREAT-MODEL §5.10 "Upstream deadline"): the data plane does not watch
+// the client while the upstream connect is pending. When the client sent
+// bytes after its request and then closed, and the upstream answers
+// afterwards, those bytes are forwarded and the upstream connection is then
+// closed promptly — nothing else is sent on it.
+func TestForwardAbandonedClientPendingBytesForwardedThenUpstreamClosed(t *testing.T) {
+	s := newHoldingStub(t)
+	f := New(s.addr(), &stubCounter{})
+	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "unresolvable.invalid:443")
+
+	cli, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("client dial: %v", err)
+	}
+	const early = "bytes-sent-before-the-reply"
+	if _, err := cli.Write([]byte(early)); err != nil {
+		t.Fatalf("client write: %v", err)
+	}
+	awaitPendingAtUpstream(t, s)
+
+	// The request stays pending although the client is still there...
+	select {
+	case err := <-errc:
+		t.Fatalf("Forward returned (%v) while the upstream reply was withheld", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	// ...and after it has gone: no client-liveness coupling in this phase.
+	if err := cli.Close(); err != nil {
+		t.Fatalf("client close: %v", err)
+	}
+	select {
+	case err := <-errc:
+		t.Fatalf("Forward returned (%v) on client close while the upstream reply was withheld", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	close(s.hold) // the upstream answers after the client has gone
+	select {
+	case got := <-s.got:
+		if string(got) != early {
+			t.Fatalf("upstream received %q after its reply, want exactly the client's pending bytes %q", got, early)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("upstream connection was not closed promptly after the reply to an abandoned request")
+	}
+	select {
+	case <-errc: // nil or a client-reply write error; both end the request
+	case <-time.After(5 * time.Second):
+		t.Fatal("Forward did not return after the upstream closed")
+	}
+}
+
+// Characterization (T208; passes before and after the deadline change): a
+// client that RESET its connection while the upstream connect was pending
+// makes Forward return the client-reply write error once the upstream
+// answers, and the upstream connection is closed promptly with nothing
+// forwarded on it.
+func TestForwardResetClientReturnsWriteErrorAndClosesUpstream(t *testing.T) {
+	s := newHoldingStub(t)
+	f := New(s.addr(), &stubCounter{})
+	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "unresolvable.invalid:443")
+
+	cli, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("client dial: %v", err)
+	}
+	awaitPendingAtUpstream(t, s)
+	if err := cli.(*net.TCPConn).SetLinger(0); err != nil { // close sends RST
+		t.Fatalf("SetLinger: %v", err)
+	}
+	if err := cli.Close(); err != nil {
+		t.Fatalf("client close: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond) // let the RST land on the data-plane side
+
+	close(s.hold)
+	select {
+	case err := <-errc:
+		if err == nil {
+			t.Fatal("Forward = nil after the client reset, want the client-reply write error")
+		}
+		var re listener.RouteError
+		if errors.As(err, &re) {
+			t.Fatalf("err = %v is a route classification; want the plain client write error", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Forward did not return after the upstream answered a reset client")
+	}
+	select {
+	case got := <-s.got:
+		if len(got) != 0 {
+			t.Fatalf("upstream received %d bytes for a reset client, want none", len(got))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("upstream connection was not closed promptly for a reset client")
 	}
 }
 

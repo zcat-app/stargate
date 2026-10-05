@@ -62,6 +62,7 @@ SafeLogging 1
 | 11 | `DataDirectory /var/lib/tor` is explicit                                            | The image entrypoint runs `tor -f /etc/tor/torrc` WITHOUT `--defaults-torrc /etc/tor/torrc-defaults`, so Debian's defaults file (which would set `DataDirectory /var/lib/tor`) is never loaded (T087 / sol-review B2+M3). Without an explicit directive Tor falls back to its compile-time default of `$HOME/.tor` = `/var/lib/tor/.tor` for USER `tor`, landing the control cookie at `/var/lib/tor/.tor/control_auth_cookie` — not the `/var/lib/tor/control_auth_cookie` the Tor-internal publisher and T062's control-port helper require. Pinning `DataDirectory /var/lib/tor` here makes the cookie path deterministic and keeps guard state on the `stargate-tor-state` volume (mounted at `/var/lib/tor`).                       |
 | 12 | NO comments containing per-user data (no labels, no token references, no domains)   | The rendered file is a Principle III boundary — it must contain no per-user content.                                                              |
 | 13 | The file ends with a single trailing `\n` (no CRLF, no missing newline at EOF)      | Determinism / byte-for-byte test reproducibility.                                                                                                  |
+| 14 | NO `SocksTimeout` directive | The data plane's upstream deadline (`contracts/socks5-auth.md` §Deadlines) is sized against Tor's default of 120 s. Setting the option requires re-deriving that deadline in the same change. |
 
 ---
 

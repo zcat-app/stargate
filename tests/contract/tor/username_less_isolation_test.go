@@ -90,14 +90,15 @@ const (
 	ulPollEvery    = 2 * time.Second // control-port poll cadence (T062's pace)
 	ulConnectWait  = 3 * time.Minute // first-working-CONNECT window. Post-bootstrap
 	// descriptor fetch + circuit-builder warmup can outlive PROGRESS=100
-	// (T033 keeps a 90 s retry for the same transience); this is wider than
-	// that because the first pairing runs closest to boot on a possibly
+	// (T033 retries for the same transience: 90 s when this was written,
+	// 390 s since T208); this was set wider than T033's then-90 s window
+	// because the first pairing runs closest to boot on a possibly
 	// cold volume. Honest provenance: the diagnosed live REP=1 storms were
 	// the DST.ADDR wire bug (§Notes #4), NOT warmup — the headroom is
 	// precautionary and costs nothing on the happy path. Only the first
 	// pairing uses this; the calibration subtest runs descriptor-warm and
 	// keeps ulStreamWait.
-	ulStreamWait      = 90 * time.Second // stream-attach wait (T033's retry window)
+	ulStreamWait      = 90 * time.Second // stream-attach wait (the 90 s T033's retry window had before T208)
 	ulDrainWait       = 30 * time.Second // wait for prior subtest's streams to detach
 	ulOverallDeadline = 18 * time.Minute // whole-suite ctx (test -timeout 20m is the outer bound;
 	// worst-case arithmetic: up 5m + boot 5m + connect 3m + stream 1.5m +

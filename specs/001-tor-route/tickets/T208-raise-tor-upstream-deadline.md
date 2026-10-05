@@ -1,9 +1,9 @@
 ---
 id: "T208"
 title: "Raise the Tor upstream deadline; align the onion-load gate"
-status: pending
+status: in-progress
 created: "2026-10-05"
-last_updated: "2026-10-05"
+last_updated: 2026-10-05
 source: "T155 TestOnionLoad diagnosis, 2026-10-04; maintainer chose option A (fix the contract deadline and align the tests)"
 phase: "Foundation audit remediation"
 story: "-"
@@ -30,6 +30,7 @@ constitution_refs:
 decision_refs:
   - "2026-10-04 maintainer: \"ok go with A, draft the ticket and wording\" (fix the contract deadline and align the tests)"
   - "2026-10-05 maintainer: \"ok 250s, wording approved\" (value 250 s; socks5-auth §Deadlines, torrc invariant 14 and THREAT-MODEL §5.10 wording as drafted in .scratch/tmp/T208/T208-draft.md Part 2)"
+  - "2026-10-05 maintainer, relayed by the orchestrator after review round 1: \"Keep the 3 runs, disclose\" (rework the late-acknowledgement finding; keep the three live selections as the acceptance 8 evidence and disclose that they ran with the pre-rework test binary)"
 reviews: {}
 overrides: []
 aborted_attempts: []
@@ -200,6 +201,141 @@ T155.
    is left and why (quoted historical text).
 10. Run `scripts/verify.sh` on the exact candidate, pass the ordinary review gate, and
     record the Constitution VIII impact assessment below.
+
+## Implementation record
+
+### Grounding and Constitution Check (acceptance 1)
+
+Read before any edit: the constitution, `contracts/socks5-auth.md` §"SOCKS5 request-phase
+failures (post-auth)" and §Deadlines, `contracts/torrc.md` §Invariants, spec User Story 1,
+`data-model.md` §1.8 delivery status row, THREAT-MODEL §5.10, and the raw measurement
+directory named in Context. All 40 digests in its `SHA256SUMS.txt` matched the files on
+2026-10-05; the sanitized summary is `evidence/T208-live-results.json`
+(`measurements_2026_10_04`), which states for each claim whether it was measured or
+inferred. It carries the raw tables under the raw files' own labels and no relay
+identity, address, cookie or token.
+
+| Principle | State | Evidence |
+|---|---|---|
+| I Dumb Router | compliant by evidence | One constant changes in `forward/tor.go`. No payload handling, record, flag, environment input or idle deadline is added. `TestForwardDialDeadlineIsRouteTimeout`, the mapping tests and the two abandoned-client characterization tests pass before and after. |
+| II Plane Separation | compliant by evidence | No control-plane call enters admission or forwarding. The delivery wait is in the live test only and reads the T187 status line. |
+| III Privacy by construction | compliant by evidence | The failure mapping and the zeroed ten-byte reply are unchanged (`TestForwardUpstreamRefusalIsRouteRefused`, `TestForwardUpstreamTTLExpiredReplyIsRouteRefused`, listener reply tests). No log, counter or stored record is added. |
+| V Honest threat model | compliant by evidence | THREAT-MODEL §5.10 gains the approved note in this change; the contract rationale states what the value does not cover. |
+| VII Tests-first | compliant by evidence | `evidence/T208-tests-first.json`: red on the baseline for the contract value and for the gate behaviour, green on the identical command. Characterization tests are labelled as such. |
+| VIII Review and evidence | pending evidence | Driver verify and the ordinary review gate run on the exact candidate; live selections are recorded below. Milestone and external human review remain open (see the impact assessment). |
+
+### Tests-first (acceptance 2)
+
+The pre-fix patch held the replaced production-value test, the characterization tests,
+the torrc invariant case, the hermetic gate tests and a seam in `onion_load_test.go`: the
+`t033Gate` type with the old retry loop moved into it unchanged, and two declared helpers
+without behaviour. On that patch the probe failed on behaviour, not compilation:
+`TestProductionDialDeadlineIsContractValue` (30 s, want 250 s) and seven of the eight
+`TestT033…` tests. Passing on the baseline, as characterization or guard:
+`TestForwardUpstreamTTLExpiredReplyIsRouteRefused`,
+`TestForwardAbandonedClientPendingBytesForwardedThenUpstreamClosed`,
+`TestForwardResetClientReturnsWriteErrorAndClosesUpstream`,
+`TestT033GateAttemptRunningAtWindowCloseFinishes` and `TestTorrcInvariants/no_SocksTimeout`.
+
+### Sweep (acceptance 9)
+
+Commands, run from the repository root on the candidate:
+
+```
+git grep -n -i -E "30 ?s\b|30[- ]second|thirty|ThirtySeconds|upstreamDialTimeout"
+git grep -n -i -E "30 ?s(econd)?s?\b.{0,60}(dial|upstream|handshake|deadline|ROUTE_TIMEOUT)|(dial|upstream|handshake|ROUTE_TIMEOUT).{0,60}\b30 ?s\b"
+git grep -n -E "dial deadline|dial-and-handshake|20–25|5–15 s"
+git grep -n -E "90 ?s\b|90-second|t033ReqWait|t033ReqDead"
+git grep -n -E "13 invariants|rows 1–13|1–13"
+git grep -n "TestOnionLoad\|onion_load"
+```
+
+Corrected: every item the acceptance lists. In `fake_socks5_tor.go` and
+`fake_socks5_tor_test.go` the comments also called the Deadlines table rows "193" and
+"194", which are not row numbers of the two-row table; they now say row 1 and row 2.
+
+Left as they are, with the reason:
+
+- `specs/001-tor-route/contracts/socks5-auth.md` row 1 phase text ("Open TCP to
+  `tor:9050`") and `contracts/torrc.md` §"`invariants_test.go`" ("Parses the golden"):
+  acceptance 3 allows no other contract text to change. The first is recorded as
+  inaccurate in the approved wording file; the second is now incomplete, because row
+  14's case also reads the shipped `sidecars/tor/torrc`.
+- T072's "Historical tasks.md body" block quote, and the done tickets T042, T043, T047
+  and T068a, and the deferred T155: quoted historical text and closed records of what
+  was built or found at the time.
+- `tasks.md` T030 line ("rows 1–13"): it describes what T030 delivered; row 14's case
+  is this ticket's.
+- `tests/contract/socks5/*_test.go` client deadlines of 30 s ("covers HMAC auth … the
+  forward path's upstream dial") and the 40–45 s client socket timeouts in
+  `tests/live-e2e/local-topology/`: client budgets against an upstream that answers at
+  once; none cites the contract deadline or depends on it.
+- `data-plane/internal/listener/socks5.go` `inboundHandshakeTimeout = 30 * time.Second`,
+  and the 30 s reconnect cap in `controlclient` and `control-grpc.md`: different
+  deadlines.
+- `tests/contract/torrc/render_byte_match_test.go` ("rows 1–12 are broken out"): stale
+  before this ticket (row 13 existed) and not made false by it; out of budget.
+
+### Live selections (acceptance 8)
+
+Three selections of the T182 suite ran on 2026-10-05 in a disposable QEMU guest (TCG)
+booted from a copy of the saved guest disk, with the AppArmor profile enforcing and the
+owner rules installed. The data-plane image was built in the guest from the candidate's
+`data-plane/` tree (same tree digest on host and guest) and was the same image in all
+three. Details, digests and limits: `evidence/T208-live-results.json`
+(`live_selections_2026_10_05`).
+
+| Selection | `TestOnionLoad` | delivery wait | attempts (duration, class) | control | `TestStreamIsolationPerFirstPartyDomain` |
+|---|---|---|---|---|---|
+| 1 | PASS | 62.1 s | 120.5 s `0x04`; 3.3 s ok | 119.3 s `0x04` | FAIL: reference ok; second onion data-plane failure reply |
+| 2 | PASS | 90.4 s | 5.5 s ok | 36.1 s ok | FAIL: reference data-plane failure reply; second onion ok |
+| 3 | PASS | 69.9 s | 6.0 s ok | 1.7 s ok | PASS: distinct circuits, both BUILT |
+
+Counts: 3 selections of 3 allowed, 2 reruns. `TestOnionLoad` 3 pass, 0 fail, 0 skip.
+`TestStreamIsolationPerFirstPartyDomain` 1 pass, 2 fail, 0 skip.
+`TestT126PartitionUsernameReferenceVector` 3 pass. Both reruns were of the kind
+acceptance 8 allows: the only failure was one stream-isolation target that
+`t059ClassifyDialErr` labelled as a data-plane failure reply. No stop condition
+occurred. Each of the two tests passed in at least one selection.
+
+Recorded limits and accepted asymmetries: the stream-isolation test's 3-minute client
+context is shorter than the deadline, so it cannot show a data-plane `0x06`; its
+data-plane-reply label does not distinguish `0x04` from `0x03`, `0x01` or `0x06`; its
+client-window label (which did not occur) can hide a later reply. No selection reached
+the 250 s deadline: every failed `TestOnionLoad` attempt ended with Tor's reply at about
+120 s, so the deadline's own behaviour rests on the data-plane unit tests. Container
+logs were not readable in the guest, so the two failures carry no Tor log tail.
+
+The shipped Tor's option matching, which the row 14 case relies on, was checked in the
+guest with `tor --verify-config`: `SocksTime` and `SocksT` are read as `SocksTimeout`,
+`sockstimeout` is accepted, and `Socks` is read as `Socks4Proxy`.
+
+### Review round 1 rework
+
+Round 1 returned one Major: `awaitDelivery` accepted exit 0 before checking the
+allowance, so an acknowledgement observed after expiry still opened the retry window
+(acceptance 6a and 7). Regression first: `TestT033GateRejectsLateAcknowledgement` (seven
+not-yet answers, then exit 0 at 331 s against 300 s) and
+`TestT033GateStatusCallsAreBoundedByTheRemainingAllowance` failed on the reviewed code and
+are the second red in `evidence/T208-tests-first.json`; the first red is kept there under
+`superseded`. The fix makes the allowance a hard bound: each status call's context ends
+with it, the last pause is cut to what is left, no call starts once it is spent, and an
+answer at or after expiry is expiry. `TestT033GateWindowOpensOnlyAfterAcknowledged` stays
+as the timely positive control. Only `tests/integration/onion_load_test.go` and
+`tests/integration/onion_load_gate_test.go` changed.
+
+Live evidence after the rework (maintainer decision 2026-10-05, "Keep the 3 runs,
+disclose"): no further selection was run. The three selections above ran with the
+pre-rework test binary, sha256
+`535dbf0f82c76f9df49acd045b0ecc02a4766a058935a4b54fcea47f7004f661`. The data-plane tree
+and image are unchanged by the rework and are those of the final candidate. Delivery took
+62.1 s, 90.4 s and 69.9 s against the 300 s allowance, so the changed branch was not
+exercised live; the two hermetic tests cover it.
+
+### Files touched
+
+The 23 budgeted paths, no others. The gate test is
+`tests/integration/onion_load_gate_test.go`.
 
 ## Grounded files budget: 23 paths
 

@@ -3,7 +3,7 @@ id: T072
 title: 'Extend `data-plane/internal/forward/tor.go` (from T047) to map upstrea'
 status: pending
 created: 2026-07-04
-last_updated: "2026-09-21"
+last_updated: "2026-10-05"
 source: tasks.md#T072
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
@@ -57,7 +57,7 @@ Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
 
 ## T172 selected acceptance (supersedes conflicting historical task text)
 
-Implement the 30 s upstream dial/handshake timeout and map `ROUTE_DOWN/REFUSED/TIMEOUT` only to the fixed SOCKS5 REP `03/04/06` with zero BND fields, EOF and no upstream text. No idle deadline after handshake, event-gated admission, HTTP template path or fallback. T065–T070/T067a/b remain the verification consumers.
+Implement the upstream dial/handshake timeout at the contract value (250 s since T208; `contracts/socks5-auth.md` §Deadlines) and map `ROUTE_DOWN/REFUSED/TIMEOUT` only to the fixed SOCKS5 REP `03/04/06` with zero BND fields, EOF and no upstream text. No idle deadline after handshake, event-gated admission, HTTP template path or fallback. T065–T070/T067a/b remain the verification consumers.
 
 ## T173 renderer dependency refinement
 

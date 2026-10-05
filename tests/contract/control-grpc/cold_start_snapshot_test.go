@@ -166,8 +166,11 @@ func t020aDialAuthenticatedConnect(t *testing.T, h *dpHarness, plaintext string)
 	if err != nil {
 		t.Fatalf("dial proxy %s: %v", h.proxyAddr, err)
 	}
-	// 30 s covers HMAC auth + the worst-case forward dial
-	// (contracts/socks5-auth.md §"Deadlines"); the ROUTE_DOWN sub-test
+	// 30 s covers HMAC auth + the forward dial in this hermetic suite,
+	// where the upstream answers or the dial fails at once. It does not
+	// cover the data plane's upstream deadline (250 s since T208,
+	// contracts/socks5-auth.md §"Deadlines"), which no test here waits
+	// out; the ROUTE_DOWN sub-test
 	// tightens the deadline before its post-reply EOF read.
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 

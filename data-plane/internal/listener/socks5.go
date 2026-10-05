@@ -30,7 +30,7 @@ import (
 // malicious local client from pinning a goroutine forever. It is
 // cleared before the byte-pipe handoff: the contract forbids any
 // post-handshake idle deadline (contracts/socks5-auth.md §"Deadlines";
-// T025b). The separate 30 s UPSTREAM dial deadline lives in
+// T025b). The separate UPSTREAM dial deadline (250 s, T208) lives in
 // forward/tor.go (T047) per the contract's implementation note.
 const inboundHandshakeTimeout = 30 * time.Second
 

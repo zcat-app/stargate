@@ -243,7 +243,10 @@ func (h *dpHarness) socks5ConnectReply(t *testing.T, plaintext string) []byte {
 		t.Fatalf("dial proxy %s: %v", h.proxyAddr, err)
 	}
 	defer conn.Close()
-	// 30 s covers HMAC auth (sub-ms) + worst-case forward dial.
+	// 30 s covers HMAC auth (sub-ms) + the forward dial in this hermetic
+	// suite, where the upstream answers or the dial fails at once. It does
+	// not cover the data plane's upstream deadline (250 s since T208,
+	// contracts/socks5-auth.md §"Deadlines").
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 
 	// Method negotiation: offer USERNAME/PASSWORD only.

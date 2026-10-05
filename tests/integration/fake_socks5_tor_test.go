@@ -83,9 +83,9 @@ func TestAcceptAndRelayRoundTrip(t *testing.T) {
 
 // TestSlowTriggersDeadline verifies Slow mode's pre-BND-reply latency is
 // observable to a consumer's handshake-phase deadline (T019a §Acceptance
-// case (b)). contracts/socks5-auth.md §"Deadlines" row 193 bounds the
+// case (b)). contracts/socks5-auth.md §"Deadlines" row 1 bounds the
 // "Open TCP + complete SOCKS5 method + auth + write request + read BND
-// reply" phase to 30 s → ROUTE_TIMEOUT; row 194 marks post-handshake as
+// reply" phase to 250 s (T208) → ROUTE_TIMEOUT; row 2 marks post-handshake as
 // deadline-free. Slow mode's delay MUST land BEFORE writeReply so the
 // data plane's ROUTE_TIMEOUT fires (codereview F1). T067/T067a/T067b
 // depend on this surface.

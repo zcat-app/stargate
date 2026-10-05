@@ -1,0 +1,1389 @@
+{
+ "ticket": "T208",
+ "schema": 1,
+ "sanitization": "No relay identity, relay address, cookie, bearer token or isolation username appears in this file. Onion services appear under labels; the two test targets are the public addresses already named in spec.md and tests/integration.",
+ "measurements_2026_10_04": {
+  "raw_directory": "/home/claudia/stargate/.scratch/tmp/T155/onion-rootcause/run-20261004-fable",
+  "raw_directory_note": "Gitignored working directory on the maintainer workstation; SHA256SUMS.txt there lists the same digests. All 40 digests were re-verified against the files when this summary was built (2026-10-05).",
+  "date": "2026-10-04",
+  "environment": {
+   "tor": "Tor 0.4.9.13, the shipped sidecar image and torrc",
+   "guest": "disposable QEMU guest under TCG emulation, full Local stack",
+   "native": "the same guest-built Tor image run directly on the outer host (native speed), no data plane",
+   "onions": "ONION_T033 is the reference onion of spec User Story 1 (port 443); ONION_B is a second onion service (port 80)"
+  },
+  "selection_timeline": [
+   {
+    "guest_clock": "21:26:32.698",
+    "event": "test_start",
+    "offset_from_window_open_s": -107.21,
+    "detail": ""
+   },
+   {
+    "guest_clock": "21:26:34.199",
+    "event": "compose_up_start",
+    "offset_from_window_open_s": -105.71,
+    "detail": ""
+   },
+   {
+    "guest_clock": "21:27:37.445",
+    "event": "compose_up_done",
+    "offset_from_window_open_s": -42.47,
+    "detail": ""
+   },
+   {
+    "guest_clock": "21:27:43.761",
+    "event": "bootstrap_probe returned",
+    "offset_from_window_open_s": -36.15,
+    "detail": "dur=6302ms done=False"
+   },
+   {
+    "guest_clock": "21:27:55.836",
+    "event": "bootstrap_probe returned",
+    "offset_from_window_open_s": -24.07,
+    "detail": "dur=7051ms done=False"
+   },
+   {
+    "guest_clock": "21:28:10.612",
+    "event": "bootstrap_probe returned",
+    "offset_from_window_open_s": -9.3,
+    "detail": "dur=9761ms done=False"
+   },
+   {
+    "guest_clock": "21:28:19.891",
+    "event": "bootstrap_probe returned",
+    "offset_from_window_open_s": -0.02,
+    "detail": "dur=4268ms done=True"
+   },
+   {
+    "guest_clock": "21:28:19.907",
+    "event": "bootstrap_done",
+    "offset_from_window_open_s": -0.0,
+    "detail": ""
+   },
+   {
+    "guest_clock": "21:28:19.910",
+    "event": "window_open",
+    "offset_from_window_open_s": 0.0,
+    "detail": ""
+   },
+   {
+    "guest_clock": "21:29:50.470",
+    "event": "window_closed",
+    "offset_from_window_open_s": 90.56,
+    "detail": "ok=False"
+   },
+   {
+    "guest_clock": "21:33:20.862",
+    "event": "post_window_control_done",
+    "offset_from_window_open_s": 300.95,
+    "detail": ""
+   },
+   {
+    "guest_clock": "21:33:20.867",
+    "event": "test_end",
+    "offset_from_window_open_s": 300.96,
+    "detail": ""
+   }
+  ],
+  "attempt_table": [
+   {
+    "n": 1,
+    "phase": "window",
+    "start_offset_ms": 0,
+    "end_offset_ms": 82,
+    "duration_ms": 81,
+    "category": "AUTH_REJECTED"
+   },
+   {
+    "n": 2,
+    "phase": "window",
+    "start_offset_ms": 5108,
+    "end_offset_ms": 5130,
+    "duration_ms": 22,
+    "category": "AUTH_REJECTED"
+   },
+   {
+    "n": 3,
+    "phase": "window",
+    "start_offset_ms": 10136,
+    "end_offset_ms": 10173,
+    "duration_ms": 37,
+    "category": "AUTH_REJECTED"
+   },
+   {
+    "n": 4,
+    "phase": "window",
+    "start_offset_ms": 15179,
+    "end_offset_ms": 15205,
+    "duration_ms": 25,
+    "category": "AUTH_REJECTED"
+   },
+   {
+    "n": 5,
+    "phase": "window",
+    "start_offset_ms": 20215,
+    "end_offset_ms": 20228,
+    "duration_ms": 12,
+    "category": "AUTH_REJECTED"
+   },
+   {
+    "n": 6,
+    "phase": "window",
+    "start_offset_ms": 25233,
+    "end_offset_ms": 25285,
+    "duration_ms": 52,
+    "category": "AUTH_REJECTED"
+   },
+   {
+    "n": 7,
+    "phase": "window",
+    "start_offset_ms": 30292,
+    "end_offset_ms": 30323,
+    "duration_ms": 31,
+    "category": "AUTH_REJECTED"
+   },
+   {
+    "n": 8,
+    "phase": "window",
+    "start_offset_ms": 35333,
+    "end_offset_ms": 35374,
+    "duration_ms": 41,
+    "category": "AUTH_REJECTED"
+   },
+   {
+    "n": 9,
+    "phase": "window",
+    "start_offset_ms": 40399,
+    "end_offset_ms": 40447,
+    "duration_ms": 47,
+    "category": "AUTH_REJECTED"
+   },
+   {
+    "n": 10,
+    "phase": "window",
+    "start_offset_ms": 45454,
+    "end_offset_ms": 45476,
+    "duration_ms": 22,
+    "category": "AUTH_REJECTED"
+   },
+   {
+    "n": 11,
+    "phase": "window",
+    "start_offset_ms": 50485,
+    "end_offset_ms": 50519,
+    "duration_ms": 34,
+    "category": "AUTH_REJECTED"
+   },
+   {
+    "n": 12,
+    "phase": "window",
+    "start_offset_ms": 55522,
+    "end_offset_ms": 85552,
+    "duration_ms": 30030,
+    "category": "SOCKS_REP_06"
+   },
+   {
+    "n": 13,
+    "phase": "post_window_control",
+    "start_offset_ms": 90568,
+    "end_offset_ms": 120628,
+    "duration_ms": 30060,
+    "category": "SOCKS_REP_06"
+   },
+   {
+    "n": 14,
+    "phase": "post_window_control",
+    "start_offset_ms": 125637,
+    "end_offset_ms": 155668,
+    "duration_ms": 30031,
+    "category": "SOCKS_REP_06"
+   },
+   {
+    "n": 15,
+    "phase": "post_window_control",
+    "start_offset_ms": 160677,
+    "end_offset_ms": 190796,
+    "duration_ms": 30119,
+    "category": "SOCKS_REP_06"
+   },
+   {
+    "n": 16,
+    "phase": "post_window_control",
+    "start_offset_ms": 195801,
+    "end_offset_ms": 225849,
+    "duration_ms": 30048,
+    "category": "SOCKS_REP_06"
+   },
+   {
+    "n": 17,
+    "phase": "post_window_control",
+    "start_offset_ms": 230862,
+    "end_offset_ms": 260904,
+    "duration_ms": 30041,
+    "category": "SOCKS_REP_06"
+   },
+   {
+    "n": 18,
+    "phase": "post_window_control",
+    "start_offset_ms": 265910,
+    "end_offset_ms": 295944,
+    "duration_ms": 30033,
+    "category": "SOCKS_REP_06"
+   }
+  ],
+  "attempt_table_note": "One instrumented TestOnionLoad selection through the data plane. Attempts 1-12 fall inside the 90 s window; 13-18 were added after it by the instrumented copy. SOCKS_REP_06 here is the data plane's own 30 s deadline.",
+  "page_loads_through_data_plane_after_window": [
+   {
+    "start": "21:34:11",
+    "onion": "ONION_B",
+    "outcome": "OK",
+    "socks_ms": 2311,
+    "tls_ms": null,
+    "http_ms": 582,
+    "total_ms": 2894,
+    "status": 200,
+    "bytes": 879
+   },
+   {
+    "start": "21:34:16",
+    "onion": "ONION_T033",
+    "outcome": "OK",
+    "socks_ms": 235,
+    "tls_ms": 1339,
+    "http_ms": 2069,
+    "total_ms": 3645,
+    "status": 200,
+    "bytes": 225341
+   },
+   {
+    "start": "21:34:21",
+    "onion": "ONION_B",
+    "outcome": "OK",
+    "socks_ms": 492,
+    "tls_ms": null,
+    "http_ms": 496,
+    "total_ms": 989,
+    "status": 200,
+    "bytes": 879
+   },
+   {
+    "start": "21:34:24",
+    "onion": "ONION_T033",
+    "outcome": "OK",
+    "socks_ms": 239,
+    "tls_ms": 836,
+    "http_ms": 2923,
+    "total_ms": 3999,
+    "status": 200,
+    "bytes": 225341
+   },
+   {
+    "start": "21:34:30",
+    "onion": "ONION_B",
+    "outcome": "OK",
+    "socks_ms": 522,
+    "tls_ms": null,
+    "http_ms": 508,
+    "total_ms": 1031,
+    "status": 200,
+    "bytes": 879
+   },
+   {
+    "start": "21:34:33",
+    "onion": "ONION_T033",
+    "outcome": "OK",
+    "socks_ms": 274,
+    "tls_ms": 758,
+    "http_ms": 2005,
+    "total_ms": 3038,
+    "status": 200,
+    "bytes": 225341
+   },
+   {
+    "start": "21:34:38",
+    "onion": "ONION_B",
+    "outcome": "OK",
+    "socks_ms": 462,
+    "tls_ms": null,
+    "http_ms": 622,
+    "total_ms": 1086,
+    "status": 200,
+    "bytes": 879
+   },
+   {
+    "start": "21:34:41",
+    "onion": "ONION_T033",
+    "outcome": "OK",
+    "socks_ms": 223,
+    "tls_ms": 815,
+    "http_ms": 3423,
+    "total_ms": 4461,
+    "status": 200,
+    "bytes": 225341
+   }
+  ],
+  "probe_table": {
+   "guest round1 (warm) direct to Tor": [
+    {
+     "end": "21:36:40",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 2079,
+     "state": "warm"
+    },
+    {
+     "end": "21:36:42",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 1879,
+     "state": "warm"
+    },
+    {
+     "end": "21:36:43",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 1157,
+     "state": "warm"
+    },
+    {
+     "end": "21:36:47",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 4225,
+     "state": "warm"
+    },
+    {
+     "end": "21:37:38",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 51068,
+     "state": "warm"
+    },
+    {
+     "end": "21:37:40",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 1843,
+     "state": "warm"
+    }
+   ],
+   "guest round2 (warm, interleaved) direct to Tor": [
+    {
+     "end": "21:43:03",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 2323,
+     "state": "warm"
+    },
+    {
+     "end": "21:45:21",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 1602,
+     "state": "warm"
+    },
+    {
+     "end": "21:45:55",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 29994,
+     "state": "warm"
+    },
+    {
+     "end": "21:46:04",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 3962,
+     "state": "warm"
+    },
+    {
+     "end": "21:46:11",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 2455,
+     "state": "warm"
+    },
+    {
+     "end": "21:46:18",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 2226,
+     "state": "warm"
+    }
+   ],
+   "guest after NEWNYM (cold onion state) direct to Tor": [
+    {
+     "end": "21:50:32",
+     "onion": "ONION_T033",
+     "outcome": "SOCKS_REP_06",
+     "duration_ms": 119856,
+     "state": "cold-HS"
+    },
+    {
+     "end": "21:50:45",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 2182,
+     "state": "cold-HS"
+    },
+    {
+     "end": "21:52:56",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 87041,
+     "state": "cold-HS"
+    },
+    {
+     "end": "21:57:08",
+     "onion": "ONION_B",
+     "outcome": "SOCKS_REP_06",
+     "duration_ms": 120012,
+     "state": "cold-HS"
+    },
+    {
+     "end": "22:00:15",
+     "onion": "ONION_T033",
+     "outcome": "SOCKS_REP_06",
+     "duration_ms": 120068,
+     "state": "cold-HS"
+    },
+    {
+     "end": "22:01:12",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 1545,
+     "state": "cold-HS"
+    }
+   ],
+   "native interleaved direct to Tor": [
+    {
+     "end": "21:42:51",
+     "onion": "ONION_T033",
+     "outcome": "PROBE_PATIENCE_EXPIRED",
+     "duration_ms": 125100,
+     "state": "cold (fresh Tor)"
+    },
+    {
+     "end": "21:45:08",
+     "onion": "ONION_B",
+     "outcome": "PROBE_PATIENCE_EXPIRED",
+     "duration_ms": 125022,
+     "state": "cold (fresh Tor)"
+    },
+    {
+     "end": "21:45:23",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 1927,
+     "state": "warm"
+    },
+    {
+     "end": "21:45:57",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 1468,
+     "state": "warm"
+    },
+    {
+     "end": "21:46:06",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 1208,
+     "state": "warm"
+    },
+    {
+     "end": "21:46:13",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 1686,
+     "state": "warm"
+    }
+   ],
+   "native after NEWNYM (cold onion state) direct to Tor": [
+    {
+     "end": "21:48:23",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 40911,
+     "state": "cold-HS"
+    },
+    {
+     "end": "21:50:34",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 2332,
+     "state": "cold-HS"
+    },
+    {
+     "end": "21:51:26",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 33244,
+     "state": "cold-HS"
+    },
+    {
+     "end": "21:54:56",
+     "onion": "ONION_B",
+     "outcome": "SOCKS_REP_06",
+     "duration_ms": 120544,
+     "state": "cold-HS"
+    },
+    {
+     "end": "21:58:12",
+     "onion": "ONION_T033",
+     "outcome": "CONNECTED",
+     "duration_ms": 51031,
+     "state": "cold-HS"
+    },
+    {
+     "end": "22:00:59",
+     "onion": "ONION_B",
+     "outcome": "CONNECTED",
+     "duration_ms": 43785,
+     "state": "cold-HS"
+    }
+   ]
+  },
+  "probe_table_note": "Connects made directly against Tor with no data-plane deadline. SOCKS_REP_06 here is Tor's own failure reply after SocksTimeout; PROBE_PATIENCE_EXPIRED is the probe client giving up at 125 s (the phase summary shows how Tor ended those two streams).",
+  "probe_summary": [
+   {
+    "environment": "guest",
+    "state": "cold-HS",
+    "onion": "ONION_B",
+    "n": 3,
+    "connected": 2,
+    "at_least_30s_or_failed": 1,
+    "values": "median=1.86s range=1.54..2.18s ['2.2', '120.0!SOCKS_REP_06', '1.5']"
+   },
+   {
+    "environment": "guest",
+    "state": "cold-HS",
+    "onion": "ONION_T033",
+    "n": 3,
+    "connected": 1,
+    "at_least_30s_or_failed": 3,
+    "values": "median=87.04s range=87.04..87.04s ['119.9!SOCKS_REP_06', '87.0', '120.1!SOCKS_REP_06']"
+   },
+   {
+    "environment": "guest",
+    "state": "warm",
+    "onion": "ONION_B",
+    "n": 6,
+    "connected": 6,
+    "at_least_30s_or_failed": 0,
+    "values": "median=2.05s range=1.60..4.22s ['1.9', '4.2', '1.8', '1.6', '4.0', '2.2']"
+   },
+   {
+    "environment": "guest",
+    "state": "warm",
+    "onion": "ONION_T033",
+    "n": 6,
+    "connected": 6,
+    "at_least_30s_or_failed": 2,
+    "values": "median=2.39s range=1.16..51.07s ['2.1', '1.2', '51.1', '2.3', '30.0', '2.5']"
+   },
+   {
+    "environment": "native",
+    "state": "cold (fresh Tor)",
+    "onion": "ONION_B",
+    "n": 1,
+    "connected": 0,
+    "at_least_30s_or_failed": 1,
+    "values": "no connects ['125.0!PROBE_PATIENCE_EXPIRED']"
+   },
+   {
+    "environment": "native",
+    "state": "cold (fresh Tor)",
+    "onion": "ONION_T033",
+    "n": 1,
+    "connected": 0,
+    "at_least_30s_or_failed": 1,
+    "values": "no connects ['125.1!PROBE_PATIENCE_EXPIRED']"
+   },
+   {
+    "environment": "native",
+    "state": "cold-HS",
+    "onion": "ONION_B",
+    "n": 3,
+    "connected": 2,
+    "at_least_30s_or_failed": 2,
+    "values": "median=23.06s range=2.33..43.78s ['2.3', '120.5!SOCKS_REP_06', '43.8']"
+   },
+   {
+    "environment": "native",
+    "state": "cold-HS",
+    "onion": "ONION_T033",
+    "n": 3,
+    "connected": 3,
+    "at_least_30s_or_failed": 3,
+    "values": "median=40.91s range=33.24..51.03s ['40.9', '33.2', '51.0']"
+   },
+   {
+    "environment": "native",
+    "state": "warm",
+    "onion": "ONION_B",
+    "n": 2,
+    "connected": 2,
+    "at_least_30s_or_failed": 0,
+    "values": "median=1.58s range=1.47..1.69s ['1.5', '1.7']"
+   },
+   {
+    "environment": "native",
+    "state": "warm",
+    "onion": "ONION_T033",
+    "n": 2,
+    "connected": 2,
+    "at_least_30s_or_failed": 0,
+    "values": "median=1.57s range=1.21..1.93s ['1.9', '1.2']"
+   }
+  ],
+  "phase_summary": {
+   "guest": [
+    {
+     "start": "21:34:11",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 2.2,
+     "note": "",
+     "descriptor_fetch_s": 0.9,
+     "intro_extend_s": 0.2,
+     "intro_ack_s": 0.1,
+     "rendezvous_join_after_intro_s": 0.7
+    },
+    {
+     "start": "21:34:16",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 0.2,
+     "note": "",
+     "descriptor": "cached"
+    },
+    {
+     "start": "21:34:21",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 0.5,
+     "note": "",
+     "descriptor": "cached"
+    },
+    {
+     "start": "21:34:24",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 0.2,
+     "note": "",
+     "descriptor": "cached"
+    },
+    {
+     "start": "21:34:30",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 0.5,
+     "note": "",
+     "descriptor": "cached"
+    },
+    {
+     "start": "21:34:33",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 0.2,
+     "note": "",
+     "descriptor": "cached"
+    },
+    {
+     "start": "21:34:38",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 0.4,
+     "note": "",
+     "descriptor": "cached"
+    },
+    {
+     "start": "21:34:41",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 0.2,
+     "note": "",
+     "descriptor": "cached"
+    },
+    {
+     "start": "21:36:38",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 2.0,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.2,
+     "intro_ack_s": 0.3,
+     "rendezvous_join_after_intro_s": 1.2
+    },
+    {
+     "start": "21:36:40",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 1.6,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.7,
+     "intro_ack_s": 0.3,
+     "rendezvous_join_after_intro_s": 0.6
+    },
+    {
+     "start": "21:36:42",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 1.1,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.3,
+     "intro_ack_s": 0.3,
+     "rendezvous_join_after_intro_s": 0.6
+    },
+    {
+     "start": "21:36:43",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 4.0,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.6,
+     "intro_ack_s": 0.2,
+     "rendezvous_join_after_intro_s": 1.5
+    },
+    {
+     "start": "21:36:47",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 51.0,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 38.7,
+     "intro_ack_s": 1.3,
+     "rendezvous_join_after_intro_s": 12.1
+    },
+    {
+     "start": "21:37:39",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 1.7,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.2,
+     "intro_ack_s": 0.3,
+     "rendezvous_join_after_intro_s": 0.9
+    },
+    {
+     "start": "21:43:00",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 2.1,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.8,
+     "intro_ack_s": 0.2,
+     "rendezvous_join_after_intro_s": 0.5
+    },
+    {
+     "start": "21:45:19",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 1.5,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.1,
+     "intro_ack_s": 0.3,
+     "rendezvous_join_after_intro_s": 1.0
+    },
+    {
+     "start": "21:45:25",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 29.9,
+     "note": "INTRO:CLOSED/TIMEOUT@+27s",
+     "descriptor": "cached",
+     "intro_extend_s": 24.8,
+     "intro_ack_s": 3.7,
+     "rendezvous_join_after_intro_s": 4.6
+    },
+    {
+     "start": "21:46:00",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 3.8,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.2,
+     "intro_ack_s": 3.1,
+     "rendezvous_join_after_intro_s": 3.4
+    },
+    {
+     "start": "21:46:09",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 2.4,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.7,
+     "intro_ack_s": 0.6,
+     "rendezvous_join_after_intro_s": 1.2
+    },
+    {
+     "start": "21:46:16",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 2.1,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.4,
+     "intro_ack_s": 0.2,
+     "rendezvous_join_after_intro_s": 0.9
+    },
+    {
+     "start": "21:48:32",
+     "target": "ONION_T033:443",
+     "result": "FAILED:TIMEOUT",
+     "total_s": 119.8,
+     "note": "2 desc requests",
+     "descriptor": "norecv"
+    },
+    {
+     "start": "21:50:42",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 2.1,
+     "note": "",
+     "descriptor_fetch_s": 1.3,
+     "intro_extend_s": 0.2,
+     "intro_ack_s": 0.2,
+     "rendezvous_join_after_intro_s": 0.4
+    },
+    {
+     "start": "21:51:29",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 87.0,
+     "note": "",
+     "descriptor_fetch_s": 3.1,
+     "intro_extend_s": 1.3,
+     "intro_ack_s": 0.6,
+     "rendezvous_join_after_intro_s": 1.0
+    },
+    {
+     "start": "21:55:08",
+     "target": "ONION_B:80",
+     "result": "FAILED:TIMEOUT",
+     "total_s": 120.0,
+     "note": "",
+     "descriptor": "norecv"
+    },
+    {
+     "start": "21:58:15",
+     "target": "ONION_T033:443",
+     "result": "FAILED:TIMEOUT",
+     "total_s": 120.0,
+     "note": "2 desc requests",
+     "descriptor": "norecv"
+    },
+    {
+     "start": "22:01:11",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 1.5,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.4,
+     "intro_ack_s": 0.4,
+     "rendezvous_join_after_intro_s": 0.7
+    }
+   ],
+   "native": [
+    {
+     "start": "21:40:46",
+     "target": "ONION_T033:443",
+     "result": "FAILED:TIMEOUT",
+     "total_s": 132.1,
+     "note": "INTRO_SENT@+13s, no JOIN before end",
+     "descriptor_fetch_s": 11.9,
+     "intro_extend_s": 0.8,
+     "intro_ack_s": 0.4
+    },
+    {
+     "start": "21:43:03",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 208.1,
+     "note": "INTRO:FAILED/TIMEOUT@+207s",
+     "descriptor_fetch_s": 105.2,
+     "intro_extend_s": 0.3,
+     "intro_ack_s": 0.4,
+     "rendezvous_join_after_intro_s": 0.5
+    },
+    {
+     "start": "21:45:21",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 1.9,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.4,
+     "intro_ack_s": 0.3,
+     "rendezvous_join_after_intro_s": 1.2
+    },
+    {
+     "start": "21:45:56",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 1.5,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.3,
+     "intro_ack_s": 0.4,
+     "rendezvous_join_after_intro_s": 0.7
+    },
+    {
+     "start": "21:46:04",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 1.2,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.2,
+     "intro_ack_s": 0.2,
+     "rendezvous_join_after_intro_s": 0.5
+    },
+    {
+     "start": "21:46:11",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 1.7,
+     "note": "",
+     "descriptor": "cached",
+     "intro_extend_s": 0.1,
+     "intro_ack_s": 0.1,
+     "rendezvous_join_after_intro_s": 0.8
+    },
+    {
+     "start": "21:47:42",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 40.9,
+     "note": "",
+     "descriptor_fetch_s": 39.4,
+     "intro_extend_s": 0.3,
+     "intro_ack_s": 0.3,
+     "rendezvous_join_after_intro_s": 1.0
+    },
+    {
+     "start": "21:50:32",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 2.3,
+     "note": "",
+     "descriptor_fetch_s": 1.0,
+     "intro_extend_s": 0.3,
+     "intro_ack_s": 0.3,
+     "rendezvous_join_after_intro_s": 0.6
+    },
+    {
+     "start": "21:50:53",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 33.2,
+     "note": "",
+     "descriptor_fetch_s": 31.4,
+     "intro_extend_s": 0.4,
+     "intro_ack_s": 0.6,
+     "rendezvous_join_after_intro_s": 1.1
+    },
+    {
+     "start": "21:52:56",
+     "target": "ONION_B:80",
+     "result": "FAILED:TIMEOUT",
+     "total_s": 120.5,
+     "note": "2 desc requests",
+     "descriptor": "norecv"
+    },
+    {
+     "start": "21:57:21",
+     "target": "ONION_T033:443",
+     "result": "OK",
+     "total_s": 51.0,
+     "note": "INTRO:FAILED/TIMEOUT@+50s",
+     "descriptor_fetch_s": 9.0,
+     "intro_extend_s": 0.1,
+     "intro_ack_s": 0.1,
+     "rendezvous_join_after_intro_s": 0.5
+    },
+    {
+     "start": "22:00:15",
+     "target": "ONION_B:80",
+     "result": "OK",
+     "total_s": 43.8,
+     "note": "",
+     "descriptor_fetch_s": 42.3,
+     "intro_extend_s": 0.3,
+     "intro_ack_s": 0.4,
+     "rendezvous_join_after_intro_s": 0.7
+    }
+   ]
+  },
+  "phase_summary_note": "Per connect, from Tor control events: descriptor_fetch_s is request to receipt of the service descriptor; intro_extend_s is the final extension of the introduction circuit; intro_ack_s is introduction sent to acknowledged; rendezvous_join_after_intro_s is introduction sent to rendezvous joined. descriptor \"cached\" means no descriptor request was made for the connect; \"norecv\" means a request was made and no descriptor arrived before the stream ended. The first 8 guest rows are the page loads through the data plane; the rest are direct probes.",
+  "descriptor_summary": {
+   "guest": {
+    "ONION_B": {
+     "requests": 5,
+     "received_after_s": [
+      0.9,
+      1.3,
+      0.5
+     ],
+     "no_reply_before_log_end": 2
+    },
+    "ONION_T033": {
+     "requests": 6,
+     "received_after_s": [
+      3.1,
+      38.0
+     ],
+     "no_reply_before_log_end": 4
+    }
+   },
+   "native": {
+    "ONION_T033": {
+     "requests": 4,
+     "received_after_s": [
+      11.9,
+      39.4,
+      31.4,
+      9.0
+     ],
+     "no_reply_before_log_end": 0
+    },
+    "ONION_B": {
+     "requests": 5,
+     "received_after_s": [
+      105.2,
+      1.0,
+      42.7,
+      42.3
+     ],
+     "no_reply_before_log_end": 1
+    }
+   }
+  },
+  "descriptor_summary_note": "Descriptor requests per onion with the time until the descriptor was received. Directory relays are not identified.",
+  "guest_load": [
+   {
+    "interval": "compose-up(build)",
+    "seconds": 60,
+    "idle_percent": 36.9,
+    "iowait_percent": 1.8,
+    "load1": 5.2,
+    "psi_cpu_percent": 40.7
+   },
+   {
+    "interval": "start->bootstrap",
+    "seconds": 44,
+    "idle_percent": 13.2,
+    "iowait_percent": 0.1,
+    "load1": 5.5,
+    "psi_cpu_percent": 30.2
+   },
+   {
+    "interval": "window:auth-denials",
+    "seconds": 51,
+    "idle_percent": 27.9,
+    "iowait_percent": 0.1,
+    "load1": 5.5,
+    "psi_cpu_percent": 12.5
+   },
+   {
+    "interval": "window:authenticated-attempt",
+    "seconds": 29,
+    "idle_percent": 83.2,
+    "iowait_percent": 0.0,
+    "load1": 3.76,
+    "psi_cpu_percent": 1.8
+   },
+   {
+    "interval": "post-window DP attempts",
+    "seconds": 205,
+    "idle_percent": 78.6,
+    "iowait_percent": 0.0,
+    "load1": 2.52,
+    "psi_cpu_percent": 3.6
+   },
+   {
+    "interval": "DP page loads",
+    "seconds": 36,
+    "idle_percent": 80.9,
+    "iowait_percent": 0.0,
+    "load1": 1.06,
+    "psi_cpu_percent": 2.2
+   },
+   {
+    "interval": "guest direct round1",
+    "seconds": 63,
+    "idle_percent": 83.4,
+    "iowait_percent": 0.0,
+    "load1": 1.09,
+    "psi_cpu_percent": 1.9
+   },
+   {
+    "interval": "idle (image export)",
+    "seconds": 90,
+    "idle_percent": 65.6,
+    "iowait_percent": 0.0,
+    "load1": 2.48,
+    "psi_cpu_percent": 16.0
+   },
+   {
+    "interval": "interleaved round",
+    "seconds": 331,
+    "idle_percent": 83.0,
+    "iowait_percent": 0.0,
+    "load1": 1.42,
+    "psi_cpu_percent": 2.1
+   },
+   {
+    "interval": "cold cycles",
+    "seconds": 817,
+    "idle_percent": 84.6,
+    "iowait_percent": 0.0,
+    "load1": 1.4,
+    "psi_cpu_percent": 2.2
+   }
+  ],
+  "raw_file_sha256": {
+   "progress.log": "31673d566491ea2d89c8733ff5bfdc01be17debb9095a2224840a4defe00657f",
+   "notes/preregistration.md": "e3abff4c68c8ec36034adb1c8c6dc89897aedf3ac75be4b842744d56a461dd34",
+   "instrumentation/onion_load_test.original.go": "dc6316447160126c9739375dabb3f425acfbb8a5d08b11398f0081bb4728cb1e",
+   "instrumentation/onion_load_test.instrumented.go": "48af2481dadb79476f3ab329005a7e7e945bbf99319e24a12fb0ea82a046633a",
+   "instrumentation/onion_load_test.diag.patch": "0b29ae7ec24ddf7479c7837f3dfa1b3489da39d3e282a148ff9875cc53482fe1",
+   "instrumentation/integration-diag.test": "bd4f31153afb66fe5fadcb5411552daac947cf73737f96c3bb8b2c6a8d1452a9",
+   "guest-tools/driver.sh": "ca624624784274f9e1732aff20af876615e36b449189d831a251578da289bd1d",
+   "guest-tools/sampler.py": "ed374a1e89cddd5e00dd2839144466068eb8955372e47ef929e95e948fc68104",
+   "guest-tools/torwatch.v1-wrong-cookie-path.py": "fd1936ad25030b463089a3e33b1d14afa7199f420e19eafe2ceda3c088559bbb",
+   "guest-tools/torwatch.py": "3dfb0a4098d98694222dbfa51d6718d9c3d143d41d6232c6cafd399311ee5651",
+   "guest-tools/probe.py": "579409ae2523e296b84fd84e0de87d41c63262628a7f7ac0feccc3d62243211f",
+   "guest-tools/dpload.py": "b024e094ba46c1aad0e4fd8a24bd908f53adcea584ac2c1ada347892d7532913",
+   "guest-tools/native_tor.py": "25275606e58ed213e8da0141722bc06a5da660450c6fd2b535b3b9cb1844c6ce",
+   "guest-tools/interleave.sh": "4f199a8ea74bdd288de379e0ca0aa5725e03b8db27293d44790b0a8ba87ce213",
+   "guest-tools/coldcycles.sh": "96311440f48a0effdcc4c420a14f8f01199d4c9a2181716c5385c46a6608dc42",
+   "guest-tools/newnym.sh": "bac6c30aacb4842fe079cf6aebb85c8f76e35f2a6fde76036c12616d6a87b9a2",
+   "guest-evidence/t155-onion-diag-fable-r1/test.raw.log": "6b97af10eced4f27ec0b7c8df692e86b154179970095c35635e2ea79913b82de",
+   "guest-evidence/t155-onion-diag-fable-r1/test-events.jsonl": "d01efce814b9e508c5bf0f6fc51916304b827da89eb056700420be103e7ac1c9",
+   "guest-evidence/t155-onion-diag-fable-r1/sampler.jsonl": "7786ee0e3f2d37e94529754750968a45d75fa5c8a419a2f8a56adb4deb86aae1",
+   "guest-evidence/t155-onion-diag-fable-r1/torwatch.jsonl": "9ad0af3a9d36651435c57a265a99dff04c0147a1fb16faa9424221cc289b2181",
+   "guest-evidence/t155-onion-diag-fable-r1/dpload.jsonl": "23b5d39328d372b6786c0572d0ed3e5861372073fe60fb24cf40ee1888cccdbc",
+   "guest-evidence/t155-onion-diag-fable-r1/probes-guest-round1.jsonl": "debda0fa84bb7affc2eac7a5e09ce3596c5cd6fe4515e58ae22d7308f41f7138",
+   "guest-evidence/t155-onion-diag-fable-r1/probes-guest-round2.jsonl": "ff94108b1fbb7ecc274c11ad044a226d8116c41234a4c7f6d1465d8fc8ece486",
+   "guest-evidence/t155-onion-diag-fable-r1/probes-guest-newnym.jsonl": "68d579f2d936a9d06b1c0fef3bdd0ca31625aa266d924eac55a58421b6da0d4d",
+   "guest-evidence/t155-onion-diag-fable-r1/containers.jsonl": "0b03bbd510fc5f6ed5bf50cab5b5adc0c779a43e867fffca5b0a08b088c1d488",
+   "guest-evidence/t155-onion-diag-fable-r1/driver.log": "c3f25c1482f878312dfdc768d8f17b6d6de37f071ff453ea6b7f5dc83c745765",
+   "native/torwatch-native.jsonl": "86baad41973262de4f6a43493ac58f5b59af1ed02542981f60d6da72e4b1c3ff",
+   "native/probes-native.jsonl": "72f69150a6bb59883bc3add795f49cc9b144cd0eff68368d3c1f636622dd8781",
+   "native/probes-native-newnym.jsonl": "16d555906541a96712c9d0a6080be25fde8f950746635898872558b3d0cd4369",
+   "native/container.json": "64f66d25b99fb1dea049e9146abf268edcf7910a43548b78e2a3ac2f4ac54568",
+   "guest-oddities.txt": "779f1728218470bf293341cdb0183a40bd532bdf0203052f102a325c68d8c37c",
+   "guest-preflight.txt": "35ce5437fb11f0ea80b66c3685275a1790d6c506e76014e2e4b884d7899a718a",
+   "guest-restore.txt": "088cb9d09019a024e0887f416264d2574ddf3be55691d01b8adfe3b8727de4e3",
+   "analysis/attempts.txt": "8a903d11cea842d49b0f45315ea8ccb004eaf291c5c1ff69c70f26456f5e0833",
+   "analysis/probes-table.txt": "3916c8b731a0a9ef4adeadd58e275c8ba4122f50c83e654b727557e28b9304d3",
+   "analysis/hs-summary-guest.txt": "aaa430633be801ac09f29d50ad06f104fb8f95b18c52af83d359611970edfce7",
+   "analysis/hs-summary-native.txt": "26ec8d0997cdeb96f3c024ce7299a54b90c743b8fe1916b7749d269bda48f721",
+   "analysis/hsdirs-guest.txt": "d6274309f7fa239349ed2350ddc059dbfd696d1ac32983dcee98aa608d0bcb8c",
+   "analysis/hsdirs-native.txt": "c9bdf89ae11ff209c1b3a4e3524d54e2ba51ba5957f67508ff2570213a6bb00d",
+   "analysis/pressure.txt": "193ff5696443bf9d69fe076ec7d85fadcc379f7c9841749143743ab50b7eb544"
+  },
+  "measured": [
+   "Attempt table: the one authenticated attempt inside the 90 s window and the six added after it each ended at the data plane's 30 s deadline (30.03-30.12 s, SOCKS_REP_06); attempts 1-11 were authentication denials.",
+   "Guest load during the authenticated attempts: 79-83% idle (guest_load rows 'window:authenticated-attempt' and 'post-window DP attempts').",
+   "Tor joined the reference onion's rendezvous 245 s after the first authenticated attempt began (control event at 21:33:20.442 against the attempt's start at 21:29:15.433, guest clock).",
+   "The next 8 of 8 page loads through the data plane returned 200 in 1.0-4.5 s.",
+   "Thirty connects directly against Tor with no data-plane deadline (probe_table): 16 warm, of which 14 took 1.2-4.2 s and two took 30.0 s and 51.1 s; 12 after a reset of Tor's onion state, of which eleven had to fetch the descriptor (two completed within 3 s, five took 33-87 s, four were failed by Tor at 119.9-120.5 s) and one found a cached descriptor (1.5 s); 2 first connects on a freshly started Tor at native speed.",
+   "The two first connects on a freshly started Tor at native speed: Tor failed one after 132.1 s and completed the other after 208.1 s (phase_summary.native rows 1-2; the probe client itself gave up at 125 s, so the durations come from Tor's control events).",
+   "Slow connects occurred at native speed and on both onion services.",
+   "The control-plane container started at 21:27:34.3 and the last authentication denial ended at 21:29:10.4, the first authenticated attempt starting at 21:29:15.4 (guest clock): token delivery was acknowledged between 96 s and 101 s after control-plane start and 50.5-55.5 s into the 90 s window. The ticket Context gives 97 s and 51 s."
+  ],
+  "inferred": [
+   "What Tor was doing inside the measured 90 s window: the first control-event subscriber used a wrong cookie path and captured no in-window events. It is inferred from the post-window events and the native measurements that the reference onion's first connect was still in descriptor fetch or rendezvous.",
+   "That the 2026-10-01 and other earlier TestOnionLoad failures had the same cause: retained logs show reply classes, not Tor events.",
+   "That these durations are representative: all measurements are from one evening."
+  ]
+ },
+ "live_selections_2026_10_05": {
+  "date": "2026-10-05",
+  "procedure": "T182 suite (TestOnionLoad, TestT126PartitionUsernameReferenceVector, TestStreamIsolationPerFirstPartyDomain), one go-test invocation per selection, in a disposable QEMU guest under TCG emulation booted from a copy of the saved guest-t182 disk, with the stargate-dp AppArmor profile in enforce mode and the data-plane owner rules installed; fresh compose projects, volumes, keys and token per selection.",
+  "candidate": {
+   "baseline_head": "9e4788fbc9fc7ea8051216135d6b7dff057df8a3",
+   "data_plane_tree_sha256": "2aa4dcc573623eb1d2f9785fb76b864c82ae6d8c6b5fe0c13aac718a561c90b3",
+   "data_plane_tree_note": "sha256 over the sorted sha256sum lines of every tracked file under data-plane/ in the staged candidate; the guest computed the same value over the transferred tree before each selection.",
+   "data_plane_image": "sha256:77990695c6c94733a0d6b5f1ae7bb4772aaa82542f3efd4f67baa1760d2c5f85, built in the guest from that tree by selection 1 (created 2026-10-05T00:45:07Z) and reused unchanged by selections 2 and 3",
+   "tor_image": "sha256:d4a997f31217e56366e645e857ac72cf3504e244dbb6f44f85410bdbddb7e0a0 (Tor version 0.4.9.13)",
+   "control_plane_image": "sha256:7cd2033a69b93fc69eba6b57e4e16ed71d38e578801764adf1083098ce6848bf",
+   "test_binary_sha256": "535dbf0f82c76f9df49acd045b0ecc02a4766a058935a4b54fcea47f7004f661",
+   "later_changes": "After the selections, review round 1 found that the delivery wait accepted an acknowledgement observed after its allowance had expired. The rework changed tests/integration/onion_load_test.go (awaitDelivery and the status runner) and tests/integration/onion_load_gate_test.go only. No file under data-plane/, compose/, sidecars/ or scripts/ changed, so the data-plane tree digest and image above are those of the final candidate.",
+   "test_binary_disclosure": "The three selections ran with the pre-rework test binary (sha256 535dbf0f82c76f9df49acd045b0ecc02a4766a058935a4b54fcea47f7004f661). No selection was run with the reworked test binary: the cap of three was used. Delivery took 62.1 s, 90.4 s and 69.9 s against the 300 s allowance, so the changed branch (an answer at or after expiry) was not exercised live; it is covered by the hermetic tests TestT033GateRejectsLateAcknowledgement and TestT033GateStatusCallsAreBoundedByTheRemainingAllowance.",
+   "maintainer_decision": "2026-10-05, relayed by the orchestrator: \"Keep the 3 runs, disclose\"."
+  },
+  "selections": [
+   {
+    "selection": 1,
+    "suite_start_utc": "2026-10-05T00:44:24Z",
+    "suite_end_utc": "2026-10-05T00:56:28Z",
+    "suite_exit": 1,
+    "TestOnionLoad": {
+     "result": "PASS",
+     "test_seconds": 431.9,
+     "delivery_wait_s": 62.093,
+     "delivery_state": "ACKNOWLEDGED(1)",
+     "attempts": [
+      {
+       "n": 1,
+       "duration_s": 120.458,
+       "class": "0x04"
+      },
+      {
+       "n": 2,
+       "duration_s": 3.315,
+       "class": "ok"
+      }
+     ],
+     "control_onion": {
+      "duration_s": 119.337,
+      "class": "0x04"
+     }
+    },
+    "TestT126PartitionUsernameReferenceVector": "PASS",
+    "TestStreamIsolationPerFirstPartyDomain": {
+     "result": "FAIL",
+     "test_seconds": 292.0,
+     "per_target": {
+      "reference_onion:443": "ok",
+      "second_onion:80": "data-plane failure reply (t059ClassifyDialErr: \"ROUTE: upstream (tor sidecar) refused the CONNECT\")"
+     }
+    },
+    "skips": 0,
+    "raw_log": "target/runs/T208-vm/selection-1.log",
+    "raw_log_sha256": "0af4fbc8844536ffbc4c263d9704393eeb217780b51cc18b19a2c5227f2ace16"
+   },
+   {
+    "selection": 2,
+    "suite_start_utc": "2026-10-05T00:58:05Z",
+    "suite_end_utc": "2026-10-05T01:08:25Z",
+    "suite_exit": 1,
+    "TestOnionLoad": {
+     "result": "PASS",
+     "test_seconds": 214.23,
+     "delivery_wait_s": 90.42,
+     "delivery_state": "ACKNOWLEDGED(1)",
+     "attempts": [
+      {
+       "n": 1,
+       "duration_s": 5.451,
+       "class": "ok"
+      }
+     ],
+     "control_onion": {
+      "duration_s": 36.126,
+      "class": "ok"
+     }
+    },
+    "TestT126PartitionUsernameReferenceVector": "PASS",
+    "TestStreamIsolationPerFirstPartyDomain": {
+     "result": "FAIL",
+     "test_seconds": 405.09,
+     "per_target": {
+      "reference_onion:443": "data-plane failure reply (t059ClassifyDialErr: \"ROUTE: upstream (tor sidecar) refused the CONNECT\")",
+      "second_onion:80": "ok"
+     }
+    },
+    "skips": 0,
+    "raw_log": "target/runs/T208-vm/selection-2.log",
+    "raw_log_sha256": "bf1936dda98d20e220b3c93ee436c1ce23dddd6d145c62b2827dad75aaa3f8e7"
+   },
+   {
+    "selection": 3,
+    "suite_start_utc": "2026-10-05T01:09:58Z",
+    "suite_end_utc": "2026-10-05T01:16:29Z",
+    "suite_exit": 0,
+    "TestOnionLoad": {
+     "result": "PASS",
+     "test_seconds": 169.64,
+     "delivery_wait_s": 69.933,
+     "delivery_state": "ACKNOWLEDGED(1)",
+     "attempts": [
+      {
+       "n": 1,
+       "duration_s": 6.031,
+       "class": "ok"
+      }
+     ],
+     "control_onion": {
+      "duration_s": 1.747,
+      "class": "ok"
+     }
+    },
+    "TestT126PartitionUsernameReferenceVector": "PASS",
+    "TestStreamIsolationPerFirstPartyDomain": {
+     "result": "PASS",
+     "test_seconds": 220.34,
+     "per_target": {
+      "reference_onion:443": "ok",
+      "second_onion:80": "ok",
+      "outcome": "streams attached to distinct circuits, both BUILT"
+     }
+    },
+    "skips": 0,
+    "raw_log": "target/runs/T208-vm/selection-3.log",
+    "raw_log_sha256": "4dffb5d278e7f105fd0d0d801d982eff676a2dfc25e9bedcabf0648b41551ee6"
+   }
+  ],
+  "time_to_first_success_after_acknowledgement_s": {
+   "note": "TestOnionLoad only: seconds from the opening of the retry window to the end of the first successful load, including failed attempts and the 5 s pause between attempts. The second onion is loaded once, after the reference verdict.",
+   "reference_onion": {
+    "selection_1": 128.8,
+    "selection_2": 5.5,
+    "selection_3": 6.0
+   },
+   "second_onion_control": {
+    "selection_1": "no success (one attempt, Tor failure reply 0x04 after 119.3 s)",
+    "selection_2": 36.1,
+    "selection_3": 1.7
+   }
+  },
+  "counts": {
+   "selections_run": 3,
+   "selection_cap": 3,
+   "TestOnionLoad": {
+    "pass": 3,
+    "fail": 0,
+    "skip": 0
+   },
+   "TestStreamIsolationPerFirstPartyDomain": {
+    "pass": 1,
+    "fail": 2,
+    "skip": 0
+   },
+   "TestT126PartitionUsernameReferenceVector": {
+    "pass": 3,
+    "fail": 0,
+    "skip": 0
+   },
+   "reruns": 2,
+   "rerun_basis": "Selections 1 and 2 each failed only in TestStreamIsolationPerFirstPartyDomain, on one target that t059ClassifyDialErr labelled as a data-plane failure reply. That is a rerun kind acceptance 8 allows. No TestOnionLoad attempt ended in 0x06 or 0x03, there was no authentication denial after acknowledgement, no TLS, HTTP or transfer error, no allowance expiry and no harness or provisioning error.",
+   "closing_condition": "Met: TestOnionLoad passed in selections 1, 2 and 3; TestStreamIsolationPerFirstPartyDomain passed in selection 3."
+  },
+  "limits": [
+   "TestStreamIsolationPerFirstPartyDomain uses its own 3-minute client context per connect, shorter than the 250 s deadline, so it cannot show a data-plane 0x06.",
+   "Its data-plane-reply label does not distinguish 0x04 from 0x03, 0x01 or 0x06. Its 3-minute window makes a data-plane 0x06 impossible for a single connect, but 0x03 and 0x01 are not excluded by the label; the two failed targets are recorded under the label only.",
+   "Its client-window label can hide a reply the data plane would have sent later; that label did not occur.",
+   "No selection exercised the 250 s deadline itself: every failed TestOnionLoad attempt ended with Tor's own reply at about 120 s. The deadline's own behaviour is covered by the data-plane unit tests, not by this live evidence.",
+   "Container logs were not readable in the guest (logging driver), so the two stream-isolation failures have no Tor log tail.",
+   "Three selections on one night in one emulated guest; the gate still depends on public onion availability. In selection 1 the second onion failed in both tests, and in selection 2 the reference onion failed in the stream-isolation test after loading in 5.5 s in TestOnionLoad.",
+   "One guest's live evidence does not approve a release (Constitution VIII); T155 owns the integrated foundation evidence."
+  ]
+ }
+}

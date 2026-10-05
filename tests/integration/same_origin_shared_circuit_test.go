@@ -99,7 +99,7 @@ const (
 	soBootDeadline = 5 * time.Minute  // tor bootstrap on the live network (T032's deadline)
 	soPollEvery    = 2 * time.Second  // control-port poll cadence (T062's pace)
 	soConnectWait  = 3 * time.Minute  // first-working-CONNECT window (T058a's cold-boot insurance)
-	soStreamWait   = 90 * time.Second // stream-attach wait (T033's retry window)
+	soStreamWait   = 90 * time.Second // stream-attach wait (the 90 s T033's retry window had before T208)
 	soDrainWait    = 30 * time.Second // wait for the prior subtest's streams to detach
 	soDownDeadline = 90 * time.Second // compose down cleanup
 	soExecDead     = 15 * time.Second // compose logs deadline (forensics only)

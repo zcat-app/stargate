@@ -1915,6 +1915,17 @@ request log. This is an implementation repair within the existing transport boun
 new trust boundary. T158 separately repairs current-hour exposure with immutable completed-hour publication. See the
 [T149 evidence](specs/001-tor-route/analysis/T149-accounting-evidence.md) for the local evidence layer.
 
+**Upstream deadline (T208):** the data plane waits up to 250 s, previously 30 s, for
+the Tor sidecar to answer a connect request, so that it ends fewer connects Tor would
+complete. It does not watch the client during that wait. If the user abandons the
+request, it stays pending at Tor until Tor answers or the deadline expires, and Tor may
+still open the connection to the destination after the user has left. The data plane
+sends nothing of its own on that connection. Bytes the client had already sent after
+its request can be forwarded when Tor answers; the data plane then closes the
+connection. The data plane does not cap pending requests, so a page that starts many
+can hold many. This behaviour existed before; T208 lengthens it and adds no new trust
+boundary.
+
 The [T173 evidence record](specs/001-tor-route/analysis/T173-connect-refusal-evidence.md)
 identifies the tested candidate and distinguishes socket tests from Local deployment proof.
 T172 remains the reviewed contract decision; neither it nor a passing unit suite proves

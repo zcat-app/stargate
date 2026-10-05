@@ -148,7 +148,7 @@ const (
 	t059UpDead      = 10 * time.Minute // per compose-up phase (T033's build+start)
 	t059BootDead    = 5 * time.Minute  // tor bootstrap (T033)
 	t059ConnectWait = 3 * time.Minute  // per-conn retry window (T058a's rationale)
-	t059StreamWait  = 90 * time.Second // stream-attach wait (T033/T058a)
+	t059StreamWait  = 90 * time.Second // stream-attach wait (T058a; T033's window before T208)
 	t059PollEvery   = 5 * time.Second  // bootstrap poll cadence (T033)
 	t059StreamPoll  = 2 * time.Second  // stream-status poll cadence (T058a)
 	t059ExecDead    = 15 * time.Second // docker compose exec deadline (T033)

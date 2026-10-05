@@ -253,9 +253,9 @@ func (s *Server) serve(c net.Conn) {
 
 	// Slow mode: delay the BND reply (the success reply below) past
 	// the data plane's dial-and-handshake deadline. contracts/socks5-
-	// auth.md §"Deadlines" row 193 bounds the phase "Open TCP to
+	// auth.md §"Deadlines" row 1 bounds the phase "Open TCP to
 	// tor:9050 + complete SOCKS5 method + auth + write request + read
-	// BND reply" to 30 s → ROUTE_TIMEOUT; row 194 marks post-handshake
+	// BND reply" to 250 s (T208) → ROUTE_TIMEOUT; row 2 marks post-handshake
 	// as deadline-free / long-lived. The Slow delay MUST land BEFORE
 	// writeReply so the data plane's ROUTE_TIMEOUT fires — placing it
 	// after writeReply would only delay the post-handshake byte pipe,

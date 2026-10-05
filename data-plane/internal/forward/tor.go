@@ -37,7 +37,16 @@ import (
 // (contracts/socks5-auth.md §"Deadlines" row 1), so re-tuning is one
 // edit. Row 2: no idle deadline exists after the handshake — the tunnel
 // is a deliberately long-lived byte pipe (Principle I, T025b).
-const upstreamDialTimeout = 30 * time.Second
+//
+// 250 s (T208) is a finite backstop against a sidecar that never answers,
+// not a judgment about how long a destination may take: it exceeds two of
+// Tor's SocksTimeout periods (120 s by default; contracts/torrc.md
+// invariant 14 keeps the option unset), so that outside the cases the
+// contract lists Tor's own answer — mapped to ROUTE_REFUSED — ends the
+// attempt first. The client is not watched during this phase: an abandoned
+// request stays pending upstream until Tor answers or this deadline
+// expires (THREAT-MODEL §5.10).
+const upstreamDialTimeout = 250 * time.Second
 
 // Route classification REP codes (contracts/socks5-auth.md §"SOCKS5
 // request-phase failures (post-auth)").

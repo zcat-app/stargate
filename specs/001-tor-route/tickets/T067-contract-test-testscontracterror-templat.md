@@ -3,7 +3,7 @@ id: T067
 title: "Test SOCKS5 ROUTE_TIMEOUT failure reply"
 status: pending
 created: 2026-07-04
-last_updated: "2026-09-12"
+last_updated: "2026-10-05"
 source: tasks.md#T067
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
@@ -56,4 +56,4 @@ Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
 
 ## T172 selected acceptance (supersedes conflicting historical task text)
 
-Implement authenticated SOCKS5 `ROUTE_TIMEOUT` under `tests/contract/socks5/`: slow fake SOCKS backend exceeding the bounded 30 s dial/handshake deadline yields exactly `05 06 00 01 00 00 00 00 00 00`, then EOF; no idle deadline is introduced after success.
+Implement authenticated SOCKS5 `ROUTE_TIMEOUT` under `tests/contract/socks5/`: slow fake SOCKS backend exceeding the bounded dial/handshake deadline (250 s since T208; this ticket decides whether the test waits out the production value or runs the data plane with a shortened deadline, `contracts/socks5-auth.md` §Deadlines) yields exactly `05 06 00 01 00 00 00 00 00 00`, then EOF; no idle deadline is introduced after success.

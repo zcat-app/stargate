@@ -180,13 +180,37 @@ dial-and-handshake phase only:
 
 | Phase                                                                                         | Deadline | Mapped to        |
 |-----------------------------------------------------------------------------------------------|----------|------------------|
-| Open TCP to `tor:9050` + complete SOCKS5 method + auth (if any) + write request + read BND reply | **30 s** | `ROUTE_TIMEOUT`  |
+| Open TCP to `tor:9050` + complete SOCKS5 method + auth (if any) + write request + read BND reply | **250 s** | `ROUTE_TIMEOUT`  |
 | Post-handshake (BND reply received; data plane is now a byte pipe)                            | **none** | n/a — long-lived |
 
-Rationale: 30 s is generous against Tor's worst-case .onion descriptor
-lookup + rendezvous-circuit build (typical: 5–15 s; observed tail: 20–25 s
-under guard pressure) while keeping a clearly-finite ceiling so the
-forwarding path doesn't queue dead connections. **No idle deadline is
+Rationale: the deadline is a finite backstop against a sidecar that never answers. It
+is not a judgment about how long a destination may take. Tor fails an unattached stream
+after `SocksTimeout` (120 s by default; the sidecar's torrc does not set it, see
+`contracts/torrc.md` invariant 14), and for an onion service it restarts that clock
+when the service descriptor arrives. 250 s covers a descriptor wait followed by one
+further period. Outside the cases below, Tor's own answer ends the attempt within that
+time, and a destination Tor could not reach is reported as Tor's failure reply,
+`ROUTE_REFUSED` (`0x04`). `ROUTE_TIMEOUT` (`0x06`) means the sidecar gave no reply
+within 250 s.
+
+The value does not cover every case, and it has a cost:
+
+- Tor can keep a stream pending for longer. It applies `SocksTimeout` again after a
+  stream is attached to a rendezvous circuit; it restarts the clock again if it has to
+  fetch the descriptor a second time because no introduction point was usable; and it
+  applies none to an unattached stream when the service's descriptor is already cached
+  and advertises proof-of-work defences. In those cases the data plane can end an
+  attempt that Tor has not given up on.
+- The data plane does not watch the client during this phase. If the client disconnects
+  first, the upstream request stays pending until Tor answers or the deadline expires
+  (THREAT-MODEL §5.10).
+
+The previous value, 30 s, assumed a worst case of 20–25 s. Measurements on 2026-10-04
+with the shipped Tor 0.4.9.13 sidecar image, in an emulated guest and at native speed,
+found first connects to an onion service that Tor completed only after 33–87 s, and one
+after 208 s (`specs/001-tor-route/evidence/T208-live-results.json`).
+
+**No idle deadline is
 applied after handshake completes** — Principle I requires the data plane
 to be a transparent byte pipe (spec §"Edge Cases" — WebSocket upgrade
 through the SOCKS CONNECT command; HTTP/2 over the same circuit); pinning a per-frame
@@ -196,11 +220,13 @@ underlying Tor circuit drops (spec §"Edge Cases" — *Tor circuit failure
 mid-request* path, covered by T070a — verifies no synthesised error
 bytes leak in that case).
 
-Implementation guidance: the 30 s value is wired as a single named
-constant in `data-plane/internal/forward/tor.go` (T072) so any future
-re-tuning is one edit; the contract test `request_phase_failures_test.go`
-(T067a) drives `fake_socks5_tor.go slow` mode at a delay strictly greater
-than this value to deterministically trigger `0x06`.
+Implementation guidance: the value is wired as a single named constant in
+`data-plane/internal/forward/tor.go` (T047; set to 250 s by T208) so any future
+re-tuning is one edit. It is sized against the sidecar's `SocksTimeout`;
+`contracts/torrc.md` invariant 14 keeps that option unset. The contract tests for `0x06`
+(T067, T067a, T067b) use `fake_socks5_tor.go slow` mode; whether they wait out the
+production value or run the data plane with a shortened deadline is decided in those
+tickets.
 
 ### Invariants enforced by the contract test
 

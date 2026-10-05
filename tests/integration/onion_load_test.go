@@ -6,6 +6,7 @@ package integration
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -31,21 +32,46 @@ import (
 // (spec.md §"User Story 1") — the stable, publicly reachable target the
 // spec pins for US1.
 //
-// Timeouts: bootstrap can take several minutes on a cold guard selection;
-// the per-request timeout absorbs Tor circuit-build + onion rendezvous
-// latency (two orders of magnitude slower than clearnet); the route-wait
-// window absorbs Tor circuit-build + any transient dial retry — admission
-// is not CP-gated (data-model.md §2; Principle II; sol-review B3;
-// remediated by T090), so the DP forwards as soon as the listener is up.
+// Timeouts (T208). Three separate allowances follow compose-up, so that
+// none consumes another's budget:
+//
+//   - bootstrap can take several minutes on a cold guard selection;
+//   - token delivery: the data plane authenticates no request until the
+//     control plane's first delivery is acknowledged, and that took 97 s
+//     from control-plane start in the emulated guest (2026-10-04
+//     measurement, specs/001-tor-route/evidence/T208-live-results.json).
+//     The test waits for `scripts/stargate status` to read ACKNOWLEDGED
+//     within its own allowance; expiry fails the test and names token
+//     delivery. Admission is still not gated on a sidecar event
+//     (data-model.md §2; Principle II; T090): this wait is for the
+//     credential, not for a route-enable signal;
+//   - the retry window is for Tor alone and opens at the acknowledgement.
+//     390 s fits three attempts that Tor fails after its 120 s
+//     SocksTimeout. An attempt already running when the window closes
+//     finishes.
+//
+// The per-attempt client timeout is the data plane's upstream deadline
+// (contracts/socks5-auth.md §"Deadlines" row 1, mirrored below because this
+// module cannot import the data plane's internal constant) plus an
+// allowance for TLS and page transfer, so a slow attempt ends with the
+// data plane's reply class and not with this client's own timeout.
+//
+// Worst case after compose-up: bootstrap 5 m + delivery 5 m + window
+// 6.5 m + one in-flight attempt 5.2 m + control 5.2 m ≈ 27 m; with the
+// 10 m compose-up bound the go-test timeout must exceed 37 m.
 const (
-	t033Project   = "stargate-t033-test"
-	t033Onion     = "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion"
-	t033DPAddr    = "127.0.0.1:8881"
-	t033ReqWait   = 90 * time.Second  // retry window for the onion load (route-enable + circuit-build slack)
-	t033ReqDead   = 120 * time.Second // per-attempt HTTP client timeout
-	t033BootWait  = 5 * time.Minute   // Tor bootstrap (cold guard selection)
-	t033ExecDead  = 15 * time.Second  // docker compose exec deadline (nc control-socket probe)
-	t033PollEvery = 5 * time.Second
+	t033Project       = "stargate-t033-test"
+	t033Onion         = "duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion"
+	t033DPAddr        = "127.0.0.1:8881"
+	t033UpstreamDead  = 250 * time.Second                    // the data plane's upstream deadline (contract row 1)
+	t033TransferSlack = 60 * time.Second                     // TLS handshake + page transfer after the SOCKS reply
+	t033ReqDead       = t033UpstreamDead + t033TransferSlack // per-attempt client timeout
+	t033ReqWait       = 390 * time.Second                    // retry window for the onion load, opened at ACKNOWLEDGED
+	t033DeliveryWait  = 5 * time.Minute                      // token delivery to read ACKNOWLEDGED after bootstrap
+	t033StatusDead    = 60 * time.Second                     // one `scripts/stargate status` call (it bounds each Docker call itself)
+	t033BootWait      = 5 * time.Minute                      // Tor bootstrap (cold guard selection)
+	t033ExecDead      = 15 * time.Second                     // docker compose exec deadline (nc control-socket probe)
+	t033PollEvery     = 5 * time.Second
 
 	// t033ControlSocket is tor's only control endpoint (torrc contract
 	// invariant #3; T162 removed TCP 9051).
@@ -57,9 +83,12 @@ const (
 var t033ProfileID = strings.Repeat("11", 32)
 
 // TestOnionLoad is the US1 MVP gate (T033): bring up the full
-// local-profile stack, load the spec's reference onion through port 8881
-// via SOCKS5h, and assert (a) page bytes received and (b) Tor reports an
-// established circuit. Test-first per Constitution Principle VII —
+// local-profile stack, wait for token delivery to be acknowledged, load
+// the spec's reference onion through port 8881 via SOCKS5h, and assert
+// (a) page bytes received and (b) Tor reports an established circuit.
+// After the verdict it loads T059's second onion once as a control and
+// logs the result; the control never changes the verdict (T208).
+// Test-first per Constitution Principle VII —
 // self-skips until T047 (forward/tor.go), T050 (main.go), and the
 // control plane land; the test is the target the implementation lands
 // against.
@@ -187,14 +216,30 @@ func TestOnionLoad(t *testing.T) {
 	}
 
 	// --- Load the onion via SOCKS5h through port 8881 -------------------
-	// Retry within a bounded window to absorb Tor circuit-build + onion
-	// rendezvous latency. Admission is not CP-gated (data-model.md §2;
-	// T090), so the DP forwards as soon as the listener is up — the
-	// retry window is for Tor, not for a route-enable event.
+	// The gate first waits, within its own allowance, for the control
+	// plane's token delivery to read ACKNOWLEDGED: until then the data
+	// plane denies every request, which is not what the retry window
+	// measures. The window then retries within a bound that absorbs Tor's
+	// descriptor fetch + rendezvous latency. Admission is not gated on a
+	// sidecar event (data-model.md §2; T090) — the retry window is for
+	// Tor, not for a route-enable event.
 	t.Logf("loading https://%s/ via SOCKS5h through %s …", t033Onion, t033DPAddr)
-	body, ok := t033TryLoadOnion(ctx, t, token, t033ReqWait)
-	if !ok {
-		t.Fatalf("onion load did not succeed within %s", t033ReqWait)
+	gate := t033Gate{
+		deliveryStatus: func(ctx context.Context) (int, string, error) {
+			return t033DeliveryStatus(ctx, repoRoot, composeFile, envFile)
+		},
+		loadReference: func(ctx context.Context) ([]byte, error) { return t033LoadOnion(ctx, token) },
+		loadControl:   func(ctx context.Context) error { return t033LoadControl(ctx, token) },
+		now:           time.Now,
+		sleep:         time.Sleep,
+		logf:          t.Logf,
+		deliveryWait:  t033DeliveryWait,
+		window:        t033ReqWait,
+		poll:          t033PollEvery,
+	}
+	body, err := gate.run(ctx)
+	if err != nil {
+		t.Fatalf("%v", err)
 	}
 	t.Logf("OK: received %d bytes from %s", len(body), t033Onion)
 
@@ -211,23 +256,168 @@ func TestOnionLoad(t *testing.T) {
 	}
 }
 
-// t033TryLoadOnion retries the HTTPS GET via SOCKS5h within a bounded
-// window, returning the body on the first success. The retry absorbs
-// transient Tor circuit-build + onion rendezvous latency. Admission is
-// not CP-gated (data-model.md §2; T090), so no route-enable wait is
-// involved. Each attempt logs its error so a dead route, auth failure,
-// or TLS issue surfaces in the test output for diagnosis.
-func t033TryLoadOnion(ctx context.Context, t *testing.T, token string, window time.Duration) ([]byte, bool) {
-	deadline := time.Now().Add(window)
-	for time.Now().Before(deadline) {
-		body, err := t033LoadOnion(ctx, token)
-		if err == nil {
-			return body, true
-		}
-		t.Logf("load attempt failed (will retry until %s): %v", deadline.Format(time.TimeOnly), err)
-		time.Sleep(t033PollEvery)
+// t033Gate is the timed part of TestOnionLoad that follows Tor bootstrap,
+// with its effects injected so the gate logic runs hermetically in
+// onion_load_gate_test.go (T208). deliveryStatus is one `scripts/stargate
+// status` call (exit code, printed state); loadReference is one attempt at
+// the reference onion; loadControl is the single control load.
+type t033Gate struct {
+	deliveryStatus func(ctx context.Context) (exit int, state string, err error)
+	loadReference  func(ctx context.Context) ([]byte, error)
+	loadControl    func(ctx context.Context) error
+	now            func() time.Time
+	sleep          func(time.Duration)
+	logf           func(format string, args ...any)
+	deliveryWait   time.Duration
+	window         time.Duration
+	poll           time.Duration
+}
+
+// run is the gate: wait for token delivery, retry the reference onion
+// within the window, then load the control once. The returned verdict is
+// the reference onion's alone (spec.md User Story 1); the control result
+// is logged for diagnosis and never returned.
+func (g t033Gate) run(ctx context.Context) ([]byte, error) {
+	if err := g.awaitDelivery(ctx); err != nil {
+		return nil, err
 	}
-	return nil, false
+	body, err := g.loadWithinWindow(ctx)
+	started := g.now()
+	controlErr := g.loadControl(ctx)
+	g.logf("T033 control onion (not part of the verdict): class=%s duration=%s err=%v",
+		t033ReplyClass(controlErr), g.now().Sub(started).Round(time.Millisecond), controlErr)
+	return body, err
+}
+
+// awaitDelivery polls `scripts/stargate status` until it exits 0
+// (ACKNOWLEDGED). Exits 20 (state unavailable), 30 (PENDING), 50 (UNKNOWN)
+// and 70 (Docker did not answer in time) mean not yet. Any other exit, a
+// status command that could not run, or expiry of the allowance is an
+// error that names token delivery, so a delivery problem is never reported
+// as an onion-load failure. The allowance is a hard bound: each status
+// call's context ends with it, no call starts once it is spent, and an
+// answer that arrives after it — an acknowledgement included — is expiry.
+func (g t033Gate) awaitDelivery(ctx context.Context) error {
+	started := g.now()
+	deadline := started.Add(g.deliveryWait)
+	lastExit, lastState := -1, "no answer"
+	expired := func() error {
+		return fmt.Errorf("token delivery was not ACKNOWLEDGED within %s (last `stargate status` exit %d: %s)",
+			g.deliveryWait, lastExit, lastState)
+	}
+	for {
+		remaining := deadline.Sub(g.now())
+		if remaining <= 0 {
+			return expired()
+		}
+		callCtx, cancel := context.WithTimeout(ctx, remaining)
+		exit, state, err := g.deliveryStatus(callCtx)
+		cancel()
+		if err == nil {
+			lastExit, lastState = exit, state
+		}
+		if !g.now().Before(deadline) {
+			return expired()
+		}
+		if err != nil {
+			return fmt.Errorf("token delivery: `stargate status` could not run: %w", err)
+		}
+		switch exit {
+		case 0:
+			g.logf("T033 token delivery: %s after %s", state, g.now().Sub(started).Round(time.Millisecond))
+			return nil
+		case 20, 30, 50, 70: // not yet
+		default:
+			return fmt.Errorf("token delivery: `stargate status` exit %d (%s) is not a not-yet state", exit, state)
+		}
+		g.sleep(min(g.poll, deadline.Sub(g.now())))
+	}
+}
+
+// loadWithinWindow retries the HTTPS GET via SOCKS5h within the window,
+// returning the body on the first success. The retry absorbs Tor's
+// descriptor fetch + onion rendezvous latency. No attempt starts after the
+// window has closed; one already running finishes. Each attempt logs its
+// duration and reply class (the live record T208 acceptance 8 needs) and
+// its error, so a dead route, an auth denial or a TLS issue surfaces in
+// the test output for diagnosis.
+func (g t033Gate) loadWithinWindow(ctx context.Context) ([]byte, error) {
+	deadline := g.now().Add(g.window)
+	for n := 1; g.now().Before(deadline); n++ {
+		started := g.now()
+		body, err := g.loadReference(ctx)
+		g.logf("T033 attempt %d: class=%s duration=%s", n, t033ReplyClass(err), g.now().Sub(started).Round(time.Millisecond))
+		if err == nil {
+			return body, nil
+		}
+		g.logf("load attempt failed (will retry until %s): %v", deadline.Format(time.TimeOnly), err)
+		g.sleep(g.poll)
+	}
+	return nil, fmt.Errorf("onion load did not succeed within %s", g.window)
+}
+
+// t033ReplyClass labels one attempt's outcome for the live record. The
+// SOCKS5 replies are read from x/net's error text (the surface
+// forward/tor.go's classify and t059ClassifyDialErr key on; pinned against
+// real client bytes by TestT033ReplyClassFromRealClientErrors): 0x04 is
+// Tor's failure reply relayed as ROUTE_REFUSED, 0x06 the data plane's own
+// deadline, 0x03 an unreachable sidecar. "other" covers TLS, HTTP and
+// transfer errors.
+func t033ReplyClass(err error) string {
+	if err == nil {
+		return "ok"
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "username/password authentication failed"):
+		return "auth-denied"
+	case strings.Contains(msg, "unknown error network unreachable"):
+		return "0x03"
+	case strings.Contains(msg, "unknown error host unreachable"):
+		return "0x04"
+	case strings.Contains(msg, "unknown error TTL expired"):
+		return "0x06"
+	case strings.Contains(msg, "unknown error "):
+		return "socks-reply-other"
+	case strings.Contains(msg, "connection refused"):
+		return "listener-unreachable"
+	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(msg, "context deadline exceeded") || strings.Contains(msg, "Client.Timeout"):
+		return "client-timeout"
+	default:
+		return "other"
+	}
+}
+
+// t033DeliveryStatus runs `scripts/stargate status` once and returns its
+// exit code and its first output line (validated vocabulary only; the
+// command never prints token material). It is addressed to this test's
+// own compose project through STARGATE_PROJECT, STARGATE_COMPOSE_FILE and
+// STARGATE_ENV_FILE; pointing the env file at the tracked example means
+// the command's env-file bootstrap finds it present and creates nothing
+// in the checkout. The call ends with ctx (the gate passes the remaining
+// delivery allowance) or after t033StatusDead, whichever is sooner.
+func t033DeliveryStatus(ctx context.Context, repoRoot, composeFile, envFile string) (int, string, error) {
+	sCtx, cancel := context.WithTimeout(ctx, t033StatusDead)
+	defer cancel()
+	cmd := exec.CommandContext(sCtx, "bash", filepath.Join(repoRoot, "scripts", "stargate"), "status")
+	cmd.Env = append(os.Environ(),
+		"STARGATE_PROJECT="+t033Project,
+		"STARGATE_COMPOSE_FILE="+composeFile,
+		"STARGATE_ENV_FILE="+envFile,
+	)
+	out, err := cmd.Output()
+	state, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+	var exitErr *exec.ExitError
+	switch {
+	case err == nil:
+		return 0, state, nil
+	case sCtx.Err() != nil:
+		return 0, "", fmt.Errorf("no answer within its bound (%s per call, or what was left of the delivery allowance): %w", t033StatusDead, sCtx.Err())
+	case errors.As(err, &exitErr) && exitErr.ExitCode() > 0:
+		return exitErr.ExitCode(), state, nil
+	default:
+		return 0, "", err
+	}
 }
 
 // t033LoadOnion issues GET https://<reference-onion>/ via SOCKS5h through
@@ -244,9 +434,25 @@ func t033TryLoadOnion(ctx context.Context, t *testing.T, token string, window ti
 // tool MUST NOT silently skip cert verification, and DuckDuckGo's onion
 // serves a valid certificate.
 func t033LoadOnion(ctx context.Context, token string) ([]byte, error) {
+	return t033Fetch(ctx, token, t033Onion, "https://"+t033Onion+"/")
+}
+
+// t033LoadControl loads the second onion T059 uses (t059OnionB, plain
+// HTTP on port 80) once through the same port 8881, with that onion's own
+// partition username so it shares no circuit with the reference load. It
+// tells a failure of the reference onion apart from a route that reaches
+// no onion at all; TestOnionLoad's verdict does not depend on it.
+func t033LoadControl(ctx context.Context, token string) error {
+	_, err := t033Fetch(ctx, token, t059OnionB, fmt.Sprintf("http://%s:%d/", t059OnionB, t059OnionBPrt))
+	return err
+}
+
+// t033Fetch issues one GET for url through the data plane with the
+// partition username of onion (the first-party site of the navigation).
+func t033Fetch(ctx context.Context, token, onion, url string) ([]byte, error) {
 	dialer, err := proxy.SOCKS5("tcp", t033DPAddr, &proxy.Auth{
 		// Partition — stream-isolation key (not a credential).
-		User:     t126PartitionUsername(token, t033ProfileID, t033Onion),
+		User:     t126PartitionUsername(token, t033ProfileID, onion),
 		Password: token, // bearer token — the credential the DP validates
 	}, proxy.Direct)
 	if err != nil {
@@ -262,7 +468,7 @@ func t033LoadOnion(ctx context.Context, token string) ([]byte, error) {
 
 	reqCtx, cancel := context.WithTimeout(ctx, t033ReqDead)
 	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, "https://"+t033Onion+"/", nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("request: %w", err)
 	}

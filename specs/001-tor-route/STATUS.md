@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 34 |
-| in-progress | 0 |
+| pending | 33 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 197 |
@@ -36,13 +36,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
-| T208 | Raise the Tor upstream deadline; align the onion-load gate | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T208 | Raise the Tor upstream deadline; align the onion-load gate | in-progress | ✓ | Foundation audit remediation |
 
 ---
 

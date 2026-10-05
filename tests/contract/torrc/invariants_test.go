@@ -4,9 +4,9 @@
 // invariants_test.go is the per-row companion to T029's whole-file byte-match
 // gate (render_byte_match_test.go). FR-011 (spec.md §"Sidecar configuration",
 // amended by T089) pins the Tor sidecar's image-baked torrc byte-for-byte
-// against contracts/torrc.md §"Rendered file"; that contract lists 13
+// against contracts/torrc.md §"Rendered file"; that contract lists 14
 // invariants in its Invariants table. T029 catches any drift as an opaque
-// "first diverging byte at offset N"; this test breaks the 13 rows out as
+// "first diverging byte at offset N"; this test breaks the 14 rows out as
 // named subtests so a missing or mutated directive reports by row. Per
 // contracts/torrc.md §"invariants_test.go": "This test gives a clearer diff
 // message than the byte-match test when a directive is missing or changed."
@@ -19,17 +19,21 @@
 // The test consumes the package-level wantTorrc golden pinned by T029 rather
 // than re-transcribing or re-extracting from the contract document. T029
 // already gates doc ↔ golden byte-equality; a second transcription would be a
-// third copy that could drift.
+// third copy that could drift. Row 14 (T208) additionally reads the shipped
+// sidecars/tor/torrc and requires it to equal the golden byte for byte.
 package torrc
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 )
 
 // TestTorrcInvariants asserts each row of contracts/torrc.md §"Invariants"
-// (rows 1–13) individually against the wantTorrc golden pinned by T029. Each
+// (rows 1–14) individually against the wantTorrc golden pinned by T029; row 14
+// also reads the shipped sidecars/tor/torrc file. Each
 // subtest names its row so a failure reports the specific invariant violated,
 // not an opaque byte offset. Subtests are independent: directive parsing happens
 // once at the top, each subtest reads the parsed maps without mutating them.
@@ -292,6 +296,70 @@ func TestTorrcInvariants(t *testing.T) {
 				"endings must be LF only")
 		}
 	})
+
+	// Row 14 — NO SocksTimeout directive (T208). The data plane's upstream
+	// deadline (contracts/socks5-auth.md §"Deadlines") is sized against Tor's
+	// default SocksTimeout of 120 s; setting the option requires re-deriving
+	// that deadline in the same change. The golden is scanned with Tor's own
+	// name matching, and the shipped file must equal the golden byte for
+	// byte, so a prefixed form or a `%include` in the shipped file cannot
+	// carry the option past this hermetic guard.
+	t.Run("no_SocksTimeout", func(t *testing.T) {
+		if hits := socksTimeoutDirectives(wantTorrc); len(hits) != 0 {
+			t.Errorf("wantTorrc sets SocksTimeout (%q) — contracts/torrc.md "+
+				"invariant #14 forbids it: the data plane's upstream deadline "+
+				"is sized against Tor's default", hits)
+		}
+		// The matcher must see the spellings Tor resolves to SocksTimeout,
+		// and must not fire on the SocksPort line the golden carries.
+		for _, line := range []string{"SocksTimeout 300", "sockstimeout 300", "SocksTime 300", "\tSOCKST 300", "+SocksTimeout 300"} {
+			if hits := socksTimeoutDirectives(wantTorrc + line + "\n"); len(hits) != 1 {
+				t.Errorf("matcher found %d SocksTimeout directives in golden + %q, want 1 — "+
+					"Tor resolves this name to SocksTimeout", len(hits), line)
+			}
+		}
+		for _, line := range []string{"SocksPort 9050", "SocksPolicy accept *", "Socks 300", "# SocksTimeout 300"} {
+			if hits := socksTimeoutDirectives(line + "\n"); len(hits) != 0 {
+				t.Errorf("matcher treats %q as SocksTimeout (%q); it is not", line, hits)
+			}
+		}
+		shippedPath := filepath.Join(findRepoRoot(t), "sidecars", "tor", "torrc")
+		shipped, err := os.ReadFile(shippedPath)
+		if err != nil {
+			t.Fatalf("reading the shipped torrc %s: %v", shippedPath, err)
+		}
+		if string(shipped) != wantTorrc {
+			t.Errorf("shipped %s does NOT equal the wantTorrc golden byte for byte "+
+				"(first diverging byte at offset %d; golden %d bytes, shipped %d bytes) — "+
+				"contracts/torrc.md invariant #14 is checked on the golden, so the "+
+				"shipped file must be the golden", shippedPath,
+				firstDifferingOffset(shipped, []byte(wantTorrc)), len(wantTorrc), len(shipped))
+		}
+	})
+}
+
+// socksTimeoutDirectives returns the directive names in torrc that Tor
+// resolves to its SocksTimeout option. Tor matches option names
+// case-insensitively and accepts an abbreviation, resolving a truncated name
+// to the first option it is a prefix of; `SocksT…` can only be SocksTimeout
+// (a shorter prefix resolves to an earlier option: the shipped Tor 0.4.9.13
+// reads `Socks` as Socks4Proxy and `SocksT`, `SocksTime` as SocksTimeout,
+// checked with `tor --verify-config` on 2026-10-05). A leading `+` or `/`
+// (Tor's append/clear forms) is not part of the name.
+func socksTimeoutDirectives(torrc string) []string {
+	const option, minimum = "sockstimeout", len("sockst")
+	var out []string
+	for _, raw := range strings.Split(torrc, "\n") {
+		fields := strings.Fields(raw)
+		if len(fields) == 0 || strings.HasPrefix(fields[0], "#") {
+			continue
+		}
+		name := strings.ToLower(strings.TrimLeft(fields[0], "+/"))
+		if len(name) >= minimum && strings.HasPrefix(option, name) {
+			out = append(out, fields[0])
+		}
+	}
+	return out
 }
 
 // parseDirectives parses torrc content into a map of directive name → argument
