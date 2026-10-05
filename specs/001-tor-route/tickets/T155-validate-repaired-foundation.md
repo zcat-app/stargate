@@ -1,13 +1,13 @@
 ---
 id: "T155"
 title: "Validate repaired foundation before feature work"
-status: pending
+status: deferred
 created: "2026-09-12"
-last_updated: "2026-10-03"
+last_updated: "2026-10-05"
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
-blocked_by: ["T203", "T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T120", "T114", "T121", "T123", "T124", "T126", "T132", "T157", "T158", "T159", "T161", "T162", "T163", "T164", "T165", "T167", "T168", "T172", "T173", "T174", "T176", "T183", "T184", "T185", "T186", "T187", "T188", "T193", "T194", "T195", "T196", "T198", "T204", "T205"]
+blocked_by: ["T208", "T203", "T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T120", "T114", "T121", "T123", "T124", "T126", "T132", "T157", "T158", "T159", "T161", "T162", "T163", "T164", "T165", "T167", "T168", "T172", "T173", "T174", "T176", "T183", "T184", "T185", "T186", "T187", "T188", "T193", "T194", "T195", "T196", "T198", "T204", "T205"]
 parallel: false
 files_budget: 17   # raised 8 -> 14 in attempt 3 and 14 -> 17 in attempt 4, both pre-granted (rule 2026-10-01); attempt 4's raise adds the
                    # Acceptance 6 filings the maintainer directed into this candidate on 2026-10-03 (new T200, T201; additions to T189, T197, T199; T078 blocked_by).
@@ -24,8 +24,10 @@ complexity: "high"
 risk: "high"
 round_cap: 3
 spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md"]
-decision_refs: ["2026-10-03 maintainer: approve full next scope after T203; T204 and T205 repairs, T117 absorption, T206 release-only filing, then T155 TLS-probe repair and full validation", "Maintainer 2026-10-03: refine A6 verbatim; require authenticated live GetStatus red/green publication probe (Attempt 4 resumed below)"]
+decision_refs: ["2026-10-03 maintainer: approve full next scope after T203; T204 and T205 repairs, T117 absorption, T206 release-only filing, then T155 TLS-probe repair and full validation", "Maintainer 2026-10-03: refine A6 verbatim; require authenticated live GetStatus red/green publication probe (Attempt 4 resumed below)", "2026-10-05 maintainer: \"ok 250s, wording approved\"; park T155, file T208, reopen T155 after it for one final live pass"]
 remediates: "T125"
+deferred_on: "T208"
+deferred_reason: blocked-on-new-ticket
 tests_first: []
 reviews: {}
 overrides: []
@@ -36,6 +38,43 @@ clarity_check: {}
 ---
 
 # T155: Validate the repaired foundation before feature work
+
+## Deferred on T208 — 2026-10-05
+
+T155's resumed validation on baseline `403d424` stopped at the mandatory HTTPS onion
+load: `TestOnionLoad` failed in both T182-suite selections on 2026-10-04. A diagnosis on
+2026-10-04 (one instrumented selection in the disposable guest and a native-speed Tor
+control) found that the data plane's 30 s upstream deadline ends first connects to an
+onion service that Tor completes later. Token-delivery lag was also present in the
+2026-10-03 passing run and does not separate pass from fail. The measurements and their
+limits are recorded in T208.
+
+The maintainer chose to repair the contract deadline and align the onion-load test in a
+new ticket (2026-10-04, "ok go with A") and approved its value and wording (2026-10-05,
+"ok 250s, wording approved"). T155 is deferred on T208. This is not a waiver: mandatory
+HTTPS onion load remains unproved and T155 remains incomplete.
+
+The stopped candidate is preserved, uncommitted: 13 staged paths and no unstaged change
+at HEAD `403d42405357bc7b1e36f50abae57432474eb53f`, in the detached checkout
+`/home/claudia/stargate-observer-repair`. Index SHA-256
+`bfee08a8438f866995930314550760ad2e5c81ac3c00c4f5a6262ab665cd7ed8`; staged diff SHA-256
+`184e3345b2825394d728a385577524e1859e4ec51d0d5744f047e8a41de8d9dd`. Verified archive:
+`/home/claudia/stargate/.scratch/tmp/T155/park/20261005-t208/`. The D1 correction and its
+independent closure are part of that candidate and are not committed by this filing. The
+earlier 17-path candidate at `10a9323` stays preserved as recorded below.
+
+Live results taken on 2026-10-04 bind the data-plane binary of baseline `403d424`. T208
+changes that binary. On resume, evidence renewal follows affected inputs under this
+ticket's existing rule, and no 2026-10-04 live result is presented as evidence for the
+changed binary. No ordinary review, full verify, commit or merge of the T155 candidate
+was run.
+
+On resume: reopen through the prescribed lifecycle on the new HEAD, establish the new
+start-sha, reconcile the preserved candidate (including the one comment line T208
+changes in `tests/integration/stream_isolation_test.go`), recapture RED/GREEN, then run
+one final live pass, verify and the ordinary review. Earlier records stay superseded and
+are never relabelled. After T155 completes, the reserved T202 decision and the approved
+T202, T200, T201 sequence follow unchanged.
 
 ## Current approved continuation — 2026-10-03
 

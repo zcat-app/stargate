@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-10-04
+**Last updated:** 2026-10-05
 
 ---
 
@@ -18,8 +18,8 @@
 | in-review | 0 |
 | escalated | 0 |
 | done | 197 |
-| deferred | 6 |
-| **total** | **237** |
+| deferred | 7 |
+| **total** | **238** |
 
 ---
 
@@ -29,7 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T155 | Validate repaired foundation before feature work | Foundation audit remediation | ✓ |  |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
@@ -37,6 +36,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
+| T208 | Raise the Tor upstream deadline; align the onion-load gate | Foundation audit remediation | ✓ |  |
 
 ---
 
@@ -56,6 +56,7 @@ _(nothing in flight)_
 | T117 | Reconcile arch §14.4 hardening-record example with T091 | blocked-on-new-ticket | T205 |
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
+| T155 | Validate repaired foundation before feature work | blocked-on-new-ticket | T208 |
 
 ---
 
