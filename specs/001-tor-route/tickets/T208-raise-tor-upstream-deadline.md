@@ -1,7 +1,7 @@
 ---
 id: "T208"
 title: "Raise the Tor upstream deadline; align the onion-load gate"
-status: in-progress
+status: done
 created: "2026-10-05"
 last_updated: 2026-10-05
 source: "T155 TestOnionLoad diagnosis, 2026-10-04; maintainer chose option A (fix the contract deadline and align the tests)"
@@ -31,7 +31,7 @@ decision_refs:
   - "2026-10-04 maintainer: \"ok go with A, draft the ticket and wording\" (fix the contract deadline and align the tests)"
   - "2026-10-05 maintainer: \"ok 250s, wording approved\" (value 250 s; socks5-auth §Deadlines, torrc invariant 14 and THREAT-MODEL §5.10 wording as drafted in .scratch/tmp/T208/T208-draft.md Part 2)"
   - "2026-10-05 maintainer, relayed by the orchestrator after review round 1: \"Keep the 3 runs, disclose\" (rework the late-acknowledgement finding; keep the three live selections as the acceptance 8 evidence and disclose that they ran with the pre-rework test binary)"
-reviews: {}
+reviews: { round: 2, date: 2026-10-05, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

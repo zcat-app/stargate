@@ -96,6 +96,11 @@ recorded under the widened allowlist.
 | 2026-10-04 | T205 | 1 (caller-environment disclosure refresh) | REWORK (1 procedural Major, 1 Minor) | APPROVE (0) |
 | 2026-10-04 | T205 | 2 | APPROVE (0) | APPROVE (0) |
 
+| Date | Ticket | Round | astra | glm |
+|---|---|---|---|---|
+| 2026-10-05 | T208 | 1 | REWORK (1 Major) | APPROVE (0) |
+| 2026-10-05 | T208 | 2 | APPROVE (0) | APPROVE (0) |
+
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
 ### Findings
@@ -172,6 +177,7 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-10-04 | T205 | 1 (post-doc-fix and own-orphan refresh) | Minor | Popup-delivery regression bypasses the real status handler | missed | missed | fixed | The same coverage gap remained in this candidate. |
 | 2026-10-04 | T205 | 1 (caller-environment disclosure refresh) | Minor | Popup-delivery regression bypasses the real status handler | found | missed | fixed | Real-handler bridge passes; assigning hardeningOk=false in the opt-in branch fails the repaired test. Mutation confined to scratch. |
 | 2026-10-04 | T205 | 1 (caller-environment disclosure refresh) | Major | Complete final verification under corrected caller environment outstanding | found | dismissed | fixed | Procedural closure satisfied by actual full5 GREEN37/4/0. Severity and review-stage timing narrowed/disputed; GLM's unchanged-source full3 validity argument is supported. No production defect demonstrated. |
+| 2026-10-05 | T208 | 1 | Major | Live-test delivery wait accepted an acknowledgement observed after its allowance expired | found | dismissed | fixed | `awaitDelivery` returned on exit 0 before its deadline check. GLM examined the expiry logic and called the allowance arithmetic bounded (its 6a and 7 marked MET). Confirmed by the orchestrator against the code; `TestT033GateRejectsLateAcknowledgement` and `TestT033GateStatusCallsAreBoundedByTheRemainingAllowance` failed on the reviewed code and pass after the fix. Test harness only; no production code. |
 
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
@@ -401,3 +407,21 @@ two runs each. Verdicts, handoff, candidate patch and launcher:
 Signal from the replay (one ticket, n=2 per model — suggestive only):
 Flash matched or beat full GLM-5.3 on the test-integrity defect, and no GLM
 run caught the blocking-call deadline defect that Astra caught at `low`.
+
+T208: rounds 1 and 2 are recorded above. Actual tools for both launches were
+Codex **0.160.0** (`gpt-6-astra`, `high`) and OpenCode **1.18.33**
+(`zai-coding-plan/glm-5.3-flash`, `xhigh`, native `max`). Durations were not
+measured. Round 2 had no findings from either reviewer. Verdicts are retained
+in `target/runs/T208-r1.verdict`, `target/runs/T208-r2.verdict` and the
+append-only `target/runs/T208.review-history`. Both driver verifications were
+GREEN, 37 PASS / 4 SKIP / 0 FAIL. Both reviewers reported read-only
+inspection: neither ran builds or tests, and neither could compare the
+contract wording with the approved draft, which is not in the candidate.
+
+Not findings, recorded for the maintainer: both reviewers suggested keeping
+approved wording or its digest with "apply verbatim" acceptances, and a
+mechanical check tying the integration module's mirrored 250 s literal to the
+contract row; GLM asked that the saved live procedure's go-test timeout be
+confirmed above the 37 m worst case (the T208 wrapper used 80 m); both
+deferred to `stargate-perf` the resource occupancy of the longer pending
+window. No tickets were filed for these.

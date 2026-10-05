@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 33 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 197 |
+| done | 198 |
 | deferred | 7 |
 | **total** | **238** |
 
@@ -41,9 +41,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T208 | Raise the Tor upstream deadline; align the onion-load gate | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -63,7 +61,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_197 ticket(s) done._
+_198 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -262,3 +260,4 @@ _197 ticket(s) done._
 - T203 — Remove observer raw Tor authority with finite health publication
 - T204 — Enforce control-plane HTTP listener boundary at startup
 - T205 — Remove persistent hardening failure events and reconcile the schema
+- T208 — Raise the Tor upstream deadline; align the onion-load gate
