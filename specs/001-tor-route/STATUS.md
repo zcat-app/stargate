@@ -13,12 +13,12 @@
 
 | Status | Count |
 |---|---|
-| pending | 33 |
+| pending | 34 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 198 |
-| deferred | 7 |
+| deferred | 6 |
 | **total** | **238** |
 
 ---
@@ -29,6 +29,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
+| T155 | Validate repaired foundation before feature work | Foundation audit remediation | ✓ |  |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
@@ -55,7 +56,6 @@ _(nothing in flight)_
 | T117 | Reconcile arch §14.4 hardening-record example with T091 | blocked-on-new-ticket | T205 |
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
-| T155 | Validate repaired foundation before feature work | blocked-on-new-ticket | T208 |
 
 ---
 
