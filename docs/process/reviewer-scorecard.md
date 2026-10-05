@@ -101,6 +101,18 @@ recorded under the widened allowlist.
 | 2026-10-05 | T208 | 1 | REWORK (1 Major) | APPROVE (0) |
 | 2026-10-05 | T208 | 2 | APPROVE (0) | APPROVE (0) |
 
+| Date | Ticket | Round | astra | glm |
+|---|---|---|---|---|
+| 2026-10-01 | T155 (attempt 3) | 1 | REWORK (4 Major) | REWORK (1 Major, 2 Minor) |
+| 2026-10-02 | T155 (attempt 3) | 2 | APPROVE-WITH-FIXES (1 Minor) | APPROVE (1 Minor) |
+| 2026-10-02 | T155 (attempt 3) | 2 (post-doc-fix refresh) | REWORK (2 Major) | APPROVE (0) |
+| 2026-10-03 | T155 (attempt 4) | 1 | ESCALATE (2 Major) | APPROVE (1 Minor) |
+| 2026-10-05 | T155 | 1 | APPROVE-WITH-FIXES (1 Minor) | APPROVE-WITH-FIXES (1 Minor) |
+| 2026-10-05 | T155 | 1 (post-doc-fix refresh) | REWORK (1 Major) | APPROVE (0) |
+| 2026-10-05 | T155 | 2 (launch failed closed: Codex login rejected, no verdict imported) | – | – |
+| 2026-10-05 | T155 | 2 | APPROVE (1 Minor) | APPROVE (1 Minor) |
+| 2026-10-05 | T155 | 2 (post-Minor-fix refresh) | APPROVE (0) | APPROVE (0) |
+
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
 ### Findings
@@ -178,6 +190,23 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-10-04 | T205 | 1 (caller-environment disclosure refresh) | Minor | Popup-delivery regression bypasses the real status handler | found | missed | fixed | Real-handler bridge passes; assigning hardeningOk=false in the opt-in branch fails the repaired test. Mutation confined to scratch. |
 | 2026-10-04 | T205 | 1 (caller-environment disclosure refresh) | Major | Complete final verification under corrected caller environment outstanding | found | dismissed | fixed | Procedural closure satisfied by actual full5 GREEN37/4/0. Severity and review-stage timing narrowed/disputed; GLM's unchanged-source full3 validity argument is supported. No production defect demonstrated. |
 | 2026-10-05 | T208 | 1 | Major | Live-test delivery wait accepted an acknowledgement observed after its allowance expired | found | dismissed | fixed | `awaitDelivery` returned on exit 0 before its deadline check. GLM examined the expiry logic and called the allowance arithmetic bounded (its 6a and 7 marked MET). Confirmed by the orchestrator against the code; `TestT033GateRejectsLateAcknowledgement` and `TestT033GateStatusCallsAreBoundedByTheRemainingAllowance` failed on the reviewed code and pass after the fix. Test harness only; no production code. |
+| 2026-10-01 | T155 (attempt 3) | 1 | Major | Fresh cumulative redteam record promised or cited as committed but absent from the candidate | found | found | fixed | Durable record written into the ticket. |
+| 2026-10-01 | T155 (attempt 3) | 1 | Major | Principal foundation harness neither preserved nor bound by the recorded snapshot | found | missed | fixed | `t155_stack.py` and hashed results committed. |
+| 2026-10-01 | T155 (attempt 3) | 1 | Major | F4 did not show same-target isolation across the device and site axes | found | missed | fixed | `partition_axes_test.go` with a production-mutant red. |
+| 2026-10-01 | T155 (attempt 3) | 1 | Major | Surviving redteam findings had no remediation tickets | found | missed | fixed | T196, T197, T198 filed. |
+| 2026-10-01 | T155 (attempt 3) | 1 | Minor | Wire-harness defect list omitted row R3 | missed | found | fixed | |
+| 2026-10-01 | T155 (attempt 3) | 1 | Minor | README cross-reference named R4 instead of R-6 | missed | found | fixed | |
+| 2026-10-02 | T155 (attempt 3) | 2 | Minor | README snapshot paragraph still described the five-file candidate | found | found | fixed | GLM rated it non-blocking; Astra returned APPROVE-WITH-FIXES. |
+| 2026-10-02 | T155 (attempt 3) | 2 (post-doc-fix refresh) | Major | Live evidence had no TLS-resumption or traffic-counter publication assertion | found | missed | fixed | Attempt 4 added `wireprobe resume` and, after the next item, the real-hour `GetStatus` probe. GLM had approved the same candidate. |
+| 2026-10-02 | T155 (attempt 3) | 2 (post-doc-fix refresh) | Major | New remediation owners blocked only T078, not T155 (Acceptance 6) | found | missed | fixed | Maintainer upheld it for T196 and T198. |
+| 2026-10-03 | T155 (attempt 4) | 1 | Major | Claimed `GetStatus` coverage measured CP persistence, a separate data path | found | missed | fixed | Maintainer chose refine; authenticated real-hour probe with an active-hour-export mutant red. |
+| 2026-10-03 | T155 (attempt 4) | 1 | Major | Approved filing plan conflicted with unchanged Acceptance 6 | found | missed | fixed | Maintainer replaced Acceptance 6 verbatim (refine). |
+| 2026-10-03 | T155 (attempt 4) | 1 | Minor | Device, site and profile partition vectors had no committed independent provenance | missed | found | fixed | Python HMAC transcript added to the results record. |
+| 2026-10-05 | T155 | 1 | Minor | Evidence omitted the two isolation limits the contract requires T155 evidence to state | found | missed | fixed | Sentence added to the README Evidence index. |
+| 2026-10-05 | T155 | 1 | Minor | `partition_vector_provenance` transcript cited by the test was missing from the rewritten results record | missed | found | fixed | Dropped by the developer's rewrite of the record; re-executed (identical output) and restored. |
+| 2026-10-05 | T155 | 1 (post-doc-fix refresh) | Major | `t155_stack.py` exited 0 on an interrupted or incomplete run (only `Exception` caught; no completion guard) | found | missed | fixed | GLM had walked every check call site in round 1 and approved twice. Mandatory-check completion guard with regression `test_t155_stack.py`; F2 carried forward by a mechanical comparison, no rerun. Present since attempt 3; earlier rounds of both reviewers missed it. |
+| 2026-10-05 | T155 | 2 | Minor | Non-zero `docker compose down` exit ignored by the repaired entrypoint | found | missed | fixed | Fixed before commit, red before green; both reviewers had returned APPROVE. |
+| 2026-10-05 | T155 | 2 | Minor | Mandatory-list drift guard did not cover a check recorded at module level | missed | found | fixed | Latent; test now requires none exists, with detector controls. |
 
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
@@ -425,3 +454,26 @@ contract row; GLM asked that the saved live procedure's go-test timeout be
 confirmed above the 37 m worst case (the T208 wrapper used 80 m); both
 deferred to `stargate-perf` the resource occupancy of the longer pending
 window. No tickets were filed for these.
+
+T155: the rounds of attempts 3 and 4 (2026-10-01 to 2026-10-03) are recorded
+above from the append-only `target/runs/T155.review-history`; they were not
+entered earlier because the ticket did not land. For the 2026-10-05 rounds the
+tools were Codex **0.160.0** for round 1 and its refresh and **0.160.1** for
+round 2 and its refresh (the CLI updated itself between them; `gpt-6-astra`,
+`high`), and OpenCode **1.18.33** throughout
+(`zai-coding-plan/glm-5.3-flash`, `xhigh`, native `max`). The first round-2
+launch failed closed before any verdict: Codex returned HTTP 401
+`token_invalidated` and "The 'gpt-6-astra' model is not supported when using
+Codex with a ChatGPT account"; the maintainer restored access and the set was
+launched again unchanged. Durations were not measured. Driver verification was
+GREEN three times, 38 PASS / 4 SKIP / 0 FAIL. Both reviewers reported
+read-only inspection without raw live artefacts; Astra reproduced the round-1
+Major and the round-2 Minor by executing the entrypoint block in memory with
+inert stand-ins. Verdicts are retained in `target/runs/T155-r1.verdict`,
+`target/runs/T155-r2.verdict` and the review history.
+
+Not findings, recorded for the maintainer: GLM noted that README R-1 names
+`tests/integration/sc003_dns_leak.md`, which does not exist until R-1 first
+runs, and that a reviewer or evaluator running `git write-tree` outside a
+read-only brief (it happened twice in this ticket's advisory passes) may merit
+a hardening note in the reviewer contract. No tickets were filed for these.

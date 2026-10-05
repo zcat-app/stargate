@@ -1,7 +1,7 @@
 ---
 id: "T155"
 title: "Validate repaired foundation before feature work"
-status: in-progress
+status: done
 created: "2026-09-12"
 last_updated: 2026-10-05
 source: "reviews/redteam-20260912-677960b.md"
@@ -36,7 +36,7 @@ spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md"]
 decision_refs: ["2026-10-03 maintainer: approve full next scope after T203; T204 and T205 repairs, T117 absorption, T206 release-only filing, then T155 TLS-probe repair and full validation", "Maintainer 2026-10-03: refine A6 verbatim; require authenticated live GetStatus red/green publication probe (Attempt 4 resumed below)", "2026-10-04 maintainer: \"ok do that in the 155\"; D1-only current-ticket diagnostic correction and explicit exception to A6/workflow new-remediation filing, genuine RED/GREEN and affected evidence; no new owner/edges or privacy waiver", "2026-10-05 maintainer: \"ok 250s, wording approved\"; park T155, file T208, reopen T155 after it for one final live pass", "2026-10-05 maintainer (relayed by the orchestrator): \"Fold in, one new ticket\" and \"Evaluator checks, then file\"; r5 survivors filed as additions to T189/T190/T197/T199 and new T209, T078 blocked_by T209; the 19-path budget raise approved by that choice", "2026-10-05 maintainer: \"A: No, scoped + release decision\" (onion-to-clearnet redirect: not an automatic route downgrade under 001's destination-only routing; 001-specific, not extended to user-selected routes; disclosure wording and a redirect test under T190 item 7; maintainer decides block-or-disclose before T078)", "2026-10-05 maintainer: \"Accept Claude-only now\" (the all-Claude r5 pass is accepted as the Acceptance 5 pass; the Astra and GLM cumulative passes remain T078's under the 2026-09-29 decision recorded there)", "2026-10-05 maintainer: \"Split to T209 (Recommended)\" (the three T203 orphans, including the quickstart floor reason, and the Dockerfile/Makefile comments to T209; THREAT-MODEL banner/§5.9 and CLAUDE.md stay in T197); \"Owners for two, rest no ticket (Recommended)\" (A2 m7 to T197, A3 m2 increment to T199, others no ticket); \"evaluate and ultrathing best solution\" (the unhomed notes and the T077 edge delegated to the orchestrator; orchestrator decided 2026-10-05); maintainer acknowledged the resulting set: \"ok looks good\"", "2026-10-05 maintainer, on the round-1 review Major: \"Completion guard, carry evidence (Recommended)\" (t155_stack.py exits 0 only when every mandatory check of the mode is recorded PASS; interrupts recorded as incomplete; regression tests first; F2 carried forward by a mechanical comparison, no rerun; budget 21); \"Stale SD entry to T209 (Recommended)\"; \"R-7 to T078 (Recommended)\"; \"Keep fixing to the cap\" (a further harness-only Major that does not touch recorded live evidence may be fixed inside T155 up to round 3)"]
 remediates: "T125"
 tests_first: []
-reviews: {}
+reviews: { round: 2, date: 2026-10-05, verdict: APPROVE }
 overrides: []
 aborted_attempts: [{ date: 2026-10-02, round: 3, reason: "run-task --reset", history: target/runs/T155.review-history }, { date: 2026-10-03, round: 1, reason: "run-task --reset", history: target/runs/T155.review-history }, { date: 2026-10-04, round: 1, reason: "run-task --reset", history: target/runs/T155.review-history }]
 reopens: []
@@ -721,6 +721,21 @@ in this candidate (maintainer, 2026-10-05): the stale present-tense ControlPort 
 in the 2026-07-16 T094a SECURITY-DECISIONS entry is T209 Acceptance 9 ("Stale SD entry to
 T209 (Recommended)"; the wording stays reserved for the maintainer and nothing was written
 to that file), and release-cadence item R-7 is owned by T078 ("R-7 to T078 (Recommended)").
+
+### Closure follow-up (2026-10-05)
+
+Committed as `c688164` after round 2 (both reviewers APPROVE on the refreshed candidate;
+driver verify GREEN, 38 gates passed, 4 skipped, none failed). Acceptance 1 closure: the 16
+records in `redteam/findings/open/` were re-checked read-only against HEAD before the move
+(11 close, 5 close with named residue) and moved to `redteam/findings/closed/` in the
+`docs: mark T155 done` commit. The re-check corrected the 2026-10-01 reconciliation in
+three places: 20260727-001 is closed by T203 (`d8aa28c`) as well as T164, not by the state
+of 2026-10-01; the residues it attributed to T191 items 6 and 9 are gone because T191 is
+done (what remains is owned by T199 items 1-2, T081 and T209 Acceptance 8 and 9); and
+20260912-007's code fix is T173 (`56a4946`). Residue of the three T155-evidence findings
+(20260912-001, -002, -006) is the stated limit of the guest evidence: README R-7 (owned by
+T078), R-2 (T034f), the running-DP label check (T209) and a clean physical reference host
+(T077).
 
 ## Acceptance
 

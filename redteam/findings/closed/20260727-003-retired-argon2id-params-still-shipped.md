@@ -1,17 +1,27 @@
 ---
 id: 20260727-003-retired-argon2id-params-still-shipped
-status: open
+status: closed
 severity: major
 principle: [VI, VII]
 threat-model: 5.14
 location: data-plane/internal/auth/params.go:5-36
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
+fix-commit: 8c607f3 (T143, Java constants and test removed); Go side 643e32d
 decision-ref: 'SECURITY-DECISIONS.md 2026-07-15 — Bearer-token verifier: HMAC-SHA-256 + install-time pepper (T092)'
+remediation-ticket: T143
+closed-date: 2026-10-05
+closed-by: T143 deleted Argon2idParams.java and its pinning test; RetiredTokenVerifierTest asserts the class is absent alongside the active HMAC minter, and params.go carries only the HMAC-SHA-256 pepper constants
 ---
 
 # Retired Argon2id verifier parameters still ship on both planes, documented as authoritative and pinned green by tests
+
+## Closure — 2026-10-05
+
+The retired KDF constants no longer ship on either plane.
+`control-plane/core/.../RetiredTokenVerifierTest.java` fails if `Argon2idParams` reappears,
+using a positive control on the same classpath. `data-plane/internal/auth/params.go` cites
+data-model §1.5's HMAC design.
 
 Found independently by both the security and performance reviewers in the same run.
 

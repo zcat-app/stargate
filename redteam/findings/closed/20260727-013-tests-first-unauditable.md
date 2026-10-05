@@ -1,17 +1,28 @@
 ---
 id: 20260727-013-tests-first-unauditable
-status: open
+status: closed
 severity: major
 principle: [VI, VII]
 threat-model: n/a — process/governance surface
 location: specs/001-tor-route/tickets/ (T011, T012, T019) + git history
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
+fix-commit: 51b1bd1
 decision-ref: null
+remediation-ticket: T144
+closed-date: 2026-10-05
+closed-by: T144 records the unrecoverable historical ordering gap without fabricating evidence and makes run-task require a durable red/green tests-first record for privacy-critical tickets
 ---
 
 # Principle VII (tests-first) is unauditable on 4 of 5 privacy-critical implementation/test pairs
+
+## Closure — 2026-10-05
+
+`scripts/test-first-evidence.py` (enforced by
+`scripts/run-task.sh` `check`) and the per-ticket `evidence/*-tests-first.json` records make
+future ordering auditable. T144's "Historical evidence audit" records the T001-T009 gap and the
+T094 decomposition as they stand. Past ordering stays unauditable by design; no retrospective
+evidence was created.
 
 ## What the history shows
 

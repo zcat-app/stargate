@@ -1,17 +1,27 @@
 ---
 id: 20260727-005-ci-installs-agent-clis-unpinned
-status: open
+status: closed
 severity: major
 principle: [IV]
 threat-model: n/a — CI/supply-chain surface; THREAT-MODEL has no CI section (see 20260727-004)
 location: .github/workflows/agent-task.yml:126,132
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
+fix-commit: 0cd5188
 decision-ref: null
+remediation-ticket: T141
+closed-date: 2026-10-05
+closed-by: T141 installs exact opencode and claude-code release archives verified by committed sha256/sha512 digests before unpacking, and ci_inputs_test.sh rejects a removed or bypassed digest check
 ---
 
 # CI installs agent CLIs via unpinned `curl | bash` and floating `npm -g`
+
+## Closure — 2026-10-05
+
+`.github/workflows/agent-task.yml` no longer pipes an installer to a
+shell or runs `npm -g`. `tests/contract/workflow/ci_inputs_test.sh` carries negative controls
+for a removed check and a bypassed check. Related supply-chain residue (setup-toolchain
+downloads pinned by version only; gitleaks binary) is owned by T199 items 3-4.
 
 ## What the code does
 

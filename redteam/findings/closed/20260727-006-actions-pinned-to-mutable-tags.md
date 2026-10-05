@@ -1,17 +1,27 @@
 ---
 id: 20260727-006-actions-pinned-to-mutable-tags
-status: open
+status: closed
 severity: major
 principle: [IV, VI]
 threat-model: n/a — CI/supply-chain surface
 location: .github/ (13 `uses:` refs across 3 files)
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
+fix-commit: 0cd5188
 decision-ref: null
+remediation-ticket: T141
+closed-date: 2026-10-05
+closed-by: T141 pins every external action by full commit SHA and ci_inputs_test.sh fails on any mutable external uses reference
 ---
 
 # Every GitHub Action is pinned to a mutable tag, not a commit SHA
+
+## Closure — 2026-10-05
+
+Every external `uses:` across agent-task, verify, docker-cadence and
+setup-toolchain is a 40-hex SHA. Later workflows added by T191 follow the same rule and are
+discovered by the same test. Whether the gitleaks binary fetched by the pinned action is
+digest-checked is owned by T199 item 4.
 
 ## What the code does
 

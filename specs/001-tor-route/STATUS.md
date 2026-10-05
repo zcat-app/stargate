@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 34 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 198 |
+| done | 199 |
 | deferred | 6 |
 | **total** | **239** |
 
@@ -29,6 +29,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
+| T064 | Author the curated leak corpus `tests/contract/error-templat | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
+| T067b | Contract test for the auth-pass + route-failure counter-incr | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
+| T070b | Contract test for `WatchEvents` failure transitions (`UNHEAL | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
+| T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
+| T109 | Cross-host JVM reproducibility assertion at release cadence | 6: Polish & Cross-Cutting Concerns |  | ✓ |
+| T110 | Hermetic digest-agreement assertion for alpine:3.20 pins | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
+| T111 | BUILD-DIFFS: document extension zip binary as build input | 6: Polish & Cross-Cutting Concerns |  | ✓ |
+| T112 | Wire the stale-prose regression guard as a contract test | 6: Polish & Cross-Cutting Concerns |  | ✓ |
+| T119 | Gate invalid-path field preservation in options.save.test.js | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
@@ -42,9 +51,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T155 | Validate repaired foundation before feature work | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -63,7 +70,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_198 ticket(s) done._
+_199 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -219,6 +226,7 @@ _198 ticket(s) done._
 - T151 — Name the actual WebRTC remediation preference
 - T152 — Replace detailed operational journals with hourly aggregates
 - T153 — Surface incompatible peer versions at CP startup
+- T155 — Validate repaired foundation before feature work
 - T156 — Strengthen constitution and reconcile implementation prerequisites
 - T157 — Block protected-route failure without Direct fallback
 - T158 — Publish only finalized aggregate counter buckets

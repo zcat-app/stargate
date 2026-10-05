@@ -1,17 +1,35 @@
 ---
 id: 20260727-001-tor-controlport-unbounded-cp-authority
-status: open
+status: closed
 severity: major
 principle: [I, II, III, V]
 threat-model: 5.8 (adjacent); no dedicated section exists — that absence is part of the finding
 location: sidecars/tor/torrc:6-8
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
+fix-commit: 6aea8c0 (T164, CP cookie authority removed); d8aa28c (T203, observer cookie/ControlSocket authority removed)
 decision-ref: SECURITY-DECISIONS.md "2026-07-16 — docker-socket-proxy mechanism removed (T094a)"
+remediation-ticket: T138 (investigation); T164; T203; T191 item 9
+closed-date: 2026-10-05
+closed-by: T164 and T203 leave native Tor control authority only inside the Tor container (private ControlSocket, fixed health publisher), with no cookie, group or Tor-state mount for CP, DP or observer, asserted by local_compose_test.sh and THREAT-MODEL §5.8/§5.9
 ---
 
 # Tor ControlPort grants unbounded authority to the control plane; production torrc weakens the cookie for it and the threat model is silent
+
+## Closure — 2026-10-05
+
+The ControlPort is gone (`sidecars/tor/torrc:6`). T164 (6aea8c0)
+removed the CP's cookie. T203 (d8aa28c) removed the observer's cookie and ControlSocket mount
+that T164 had left in place, and moved bootstrap reads into a fixed Tor-internal publisher.
+`CookieAuthFileGroupReadable 1` remains, with its justification in `contracts/torrc.md`
+invariants 3-4. `tests/contract/compose/local_compose_test.sh` fails if the CP gains the Tor
+cookie group, or if the CP, DP or observer mounts `stargate-tor-state`. T155's (c688164) 2026-10-05 F1
+run observed that prohibited Tor commands never arrive. Residue:
+- observer published provenance → T081 (SECURITY-DECISIONS 2026-10-02, T191);
+- stale observer-cookie prose in `compose/env/local.env.example` and the local-topology
+  README → T209 Acceptance 8;
+- the 2026-07-16 SECURITY-DECISIONS entry's present-tense ControlPort description awaits a
+  maintainer-approved supersession → T209 Acceptance 9.
 
 ## What the code does
 

@@ -1,17 +1,29 @@
 ---
 id: 20260727-010-opencode-deny-rules-absent
-status: open
+status: closed
 severity: major
 principle: [IV, V]
 threat-model: n/a — CI/agent-automation surface
 location: scripts/agent-cli/opencode.sh:22-27 vs opencode.json:36-82
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
+fix-commit: 3673c51 (T142); a046386 (T191 item 6, deny rules and credential split)
 decision-ref: null
+remediation-ticket: T142; T191 item 6
+closed-date: 2026-10-05
+closed-by: opencode.json ends its bash map with deny rules for git push and exfiltration commands, the adapter comment states they are text-pattern controls, and the agent job holds only a non-persisted read token while a separate publish job pushes agent/$TICKET
 ---
 
 # The opencode adapter's documented CI safety net ("deny rules") does not exist
+
+## Closure — 2026-10-05
+
+The maintainer resolved the finding with bash deny rules, not a risk
+acceptance (2026-10-02). T191 (a046386) measured them on opencode 1.18.33 and moved the push
+into a separate publish job. `ci_inputs_test.sh` checks the last-match deny result and
+`persist-credentials: false`. The adapter now documents that an allowed interpreter bypasses
+text rules and that the provider key is readable by the agent. Residue: the test's push
+counter misses continuation-line pushes → T199 items 1-2.
 
 ## What the code does
 

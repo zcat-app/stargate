@@ -1,17 +1,27 @@
 ---
 id: 20260727-007-verify-gates-skip-on-cleared-exec-bit
-status: open
+status: closed
 severity: major
 principle: [VI, VII]
 threat-model: n/a — build-integrity surface
 location: scripts/verify.sh:79-94,169-175
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
+fix-commit: 5293b7d
 decision-ref: null
+remediation-ticket: T139
+closed-date: 2026-10-05
+closed-by: T139 invokes required gate tooling through its interpreter so file mode cannot downgrade a gate, and required_coverage_test.sh exercises cleared and set exec bits
 ---
 
 # `verify.sh` gates silently downgrade to SKIP when a gate script's exec bit is cleared — aggregate stays GREEN
+
+## Closure — 2026-10-05
+
+`scripts/verify.sh` runs the license-header, ground-check and
+go-workspace gates as `bash …` or `python3 …`, so clearing an exec bit no longer yields SKIP.
+`tests/contract/workflow/required_coverage_test.sh` (`test_required_runner_modes`) is the
+regression.
 
 ## What the code does
 

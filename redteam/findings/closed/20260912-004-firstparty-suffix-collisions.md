@@ -1,15 +1,17 @@
 ---
 id: "20260912-004-firstparty-suffix-collisions"
-status: "open"
+status: "closed"
 severity: "major"
 principle: ["III"]
 threat-model: "5.10"
 location: "extension/lib/firstparty.js:109"
 first-seen-run: "20260912-677960b"
 first-seen-date: "2026-09-12"
-fix-commit: null
+fix-commit: "3393309"
 decision-ref: null
 remediation-ticket: "T136"
+closed-date: "2026-10-05"
+closed-by: "T136 derives first parties from Firefox's native publicSuffix API and tests the complete router path with public/private suffix collisions such as alice/bob.co.uk and alice/bob.github.io"
 ---
 
 # Distinct registrable first parties share the Tor isolation key
@@ -23,6 +25,7 @@ and exactly which live behavior was or was not demonstrated.
 
 ## Remediation and regression
 
-Executable owner: **T136** under `specs/001-tor-route/tickets/`.
-Use its named acceptance probes and canonical review flow; do not amend the
-original approved commit. This open record is not a risk acceptance.
+Closed by T136 (3393309). `extension/background/router.test.js` and
+`extension/lib/firstparty*.test.js` are the regressions. T155's (c688164) 2026-10-05 F4 run
+(`TestStreamIsolationPerFirstPartyDomain` and the site axis in `partition_axes_test.go`) landed
+distinct sites on distinct circuits.

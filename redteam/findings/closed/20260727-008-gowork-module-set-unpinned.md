@@ -1,17 +1,26 @@
 ---
 id: 20260727-008-gowork-module-set-unpinned
-status: open
+status: closed
 severity: major
 principle: [VI, VII]
 threat-model: n/a — build-integrity surface
 location: scripts/go-workspace-gate.py:75-101 (consumed by scripts/verify.sh:169-175)
 first-seen-run: 20260727-8bc5f6a
 first-seen-date: 2026-07-27
-fix-commit: null
+fix-commit: 5293b7d
 decision-ref: null
+remediation-ticket: T139
+closed-date: 2026-10-05
+closed-by: T139 adds a mandatory module set to go-workspace-gate.py that fails when data-plane, proto, tests/contract, tests/internal/loginvariants or tests/integration is omitted from go.work
 ---
 
 # Deleting one `go.work` line silently drops a whole module — including the data plane — from the Go test gate
+
+## Closure — 2026-10-05
+
+`scripts/go-workspace-gate.py` FAILs with "mandatory module(s)
+omitted from go.work". `required_coverage_test.sh` removes each module in turn and asserts the
+failure. The suggested CODEOWNERS gate was not adopted.
 
 ## What the code does
 
