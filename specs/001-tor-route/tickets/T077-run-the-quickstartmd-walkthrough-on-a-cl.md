@@ -7,7 +7,7 @@ last_updated: "2026-09-12"
 source: tasks.md#T077
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: ["T009", "T155", "T071", "T072", "T073", "T126", "T156"]
+blocked_by: ["T009", "T155", "T071", "T072", "T073", "T126", "T156", "T209"]
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: false

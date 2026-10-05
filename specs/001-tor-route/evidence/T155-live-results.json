@@ -1,0 +1,1118 @@
+{
+ "schema": 1,
+ "ticket": "T155",
+ "attempt": "2026-10-05 final live pass after T208 (baseline f555892)",
+ "status": "Every required foundation live check (F1, F2 with F3, F4, F5, F7) was executed once on the candidate below and passed; no rerun, no SKIP. After the pass, review round 1 found that the F2 harness entrypoint could exit 0 on an interrupted or incomplete run; the entrypoint was repaired and F2 is carried forward by the mechanical comparison in `f2_carry_forward` (no rerun). Driver verify, the review gate and Acceptance 6 filings are recorded in the ticket, not here.",
+ "sanitization": "No bearer token, key, cookie, relay identity, isolation username or packet payload appears in this file. The two onion test targets are the public addresses already named in spec.md and tests/integration and appear under labels. Raw artefacts stay under gitignored target/.",
+ "candidate": {
+  "baseline": "f5558925547e81737987ea8ea34f6c09495e051d",
+  "index_tree_at_execution": "d6f46b9b8eb269814b316a40e86a3826b728226e",
+  "staged_diff_sha256_at_execution": "c9f2a91d835b7e4520cb2a2a03c8e1023376c37d903df2a257db42ff01565bd8",
+  "candidate_tar_sha256": "52e73917a56ced28b8fdd46887e3aede48a2351aaa0571a2072441479dcee90f",
+  "tracked_files": 782,
+  "per_file_manifest": {
+   "path": "target/runs/T155r/candidate-manifest.json",
+   "sha256": "5294655d2e6f89b687aa5cba26a256ed68270a7683aedf334183d81de3073a9a"
+  },
+  "data_plane_tree_sha256": "2aa4dcc573623eb1d2f9785fb76b864c82ae6d8c6b5fe0c13aac718a561c90b3",
+  "data_plane_tree_note": "sha256 over the sorted sha256sum lines of every tracked file under data-plane/; the guest computed the same value over the shipped tree before every phase. Same value as T208's final candidate (specs/001-tor-route/evidence/T208-live-results.json): this is the 250 s upstream-deadline data plane.",
+  "integration_test_sha256": "4dcf4d7a49f3b65a83d3b279a15aa0ba700cc15f9e81116ae58c6dad4e07a87f",
+  "integration_test_note": "tests/integration compiled on the host with go1.26.3 and the guest source path mapped; executed only in the guest.",
+  "guest_archive_commit": "44337d0c686ead76597c4d6c3fee6cc7e40b6d8c",
+  "guest_archive_commit_scope": "local commit of the shipped archive in a throwaway guest repository, not a project commit",
+  "changes_after_execution": "After the pass these candidate paths changed: this file, the tests-first record, the README Evidence index, the T155 ticket, generated STATUS.md and the Acceptance 6 ticket filings (none executed by a live check); and, in review round 2 (2026-10-05), tests/live-e2e/local-topology/t155_stack.py (entrypoint only, see `f2_carry_forward`) with its new hermetic test test_t155_stack.py. The shipped archive carried the README and ticket as they stood before those edits and the pre-fix harness."
+ },
+ "environment": {
+  "guest": "fresh per-ticket copy (guest-T155r.qcow2) of the saved QEMU guest image guest-t182.qcow2 (sha256 dda2d30ddb3ea7dbf45d647db04b1bf2139b1d223a3cb2b86fda5af1650959f1 before boot), TCG emulation, 4 vCPU, 6 GiB; Ubuntu 24.04.5 LTS, kernel 6.8.0-142-generic, Docker 29.1.3, Compose 2.40.3, go1.26.3; guest IPv6 enabled (fec0::/64 user network). No stargate-dp AppArmor profile and no owner rule were present before F1.",
+  "order": "F1, then F2 (F3 inside), F4 T126 suite, F4 T182 suite, F7, all on that one guest boot; F5 on the host during F2.",
+  "image_build": "Images were built in the guest through the shared BuildKit relay; layer cache from earlier tickets was available, so image 'created' times predate this pass. The data-plane image the T182 suite ran is sha256:77990695c6c94733a0d6b5f1ae7bb4772aaa82542f3efd4f67baa1760d2c5f85, the same id T208 recorded for this data-plane tree.",
+  "host_browser": {
+   "binary": "/home/claudia/stargate/target/t157-tools/mullvad-browser/Browser/mullvadbrowser",
+   "version": "Mullvad MullvadBrowser 153.3.0esr",
+   "binary_sha256": "00162321fe062e0ff0fb4160c530e728e1d80a830cd0f1783f754081715dde7f",
+   "geckodriver": "0.37.0",
+   "geckodriver_sha256": "23c877d64e37e1558ae41fffa1f629a7f937dac45c5accb59e5d2f9c6a9af0e5",
+   "profiles": "disposable, created by probe.py per scenario",
+   "channel": "Alpha (release residue R-8)"
+  }
+ },
+ "evidence_renewal": {
+  "rule": "T155 ticket and live-e2e README: results keep their snapshots; changed inputs invalidate affected evidence.",
+  "changed_inputs_since_403d424": [
+   "data-plane/internal/forward/tor.go (upstreamDialTimeout 30 s -> 250 s) and data-plane/internal/listener/socks5.go (T208)",
+   "tests/integration/onion_load_test.go and onion_load_gate_test.go (T208 delivery gate, 310 s attempt timeout, 390 s window, control onion)",
+   "other T208 test/contract/threat-model edits listed by `git diff --stat 403d424 f555892`",
+   "T155's own tests/integration/stream_isolation_test.go merge (T208 comment line plus the D1 helper correction)"
+  ],
+  "affected_and_renewed": "Every check that deploys the data-plane binary or runs the integration binary: F1, F2 (with F3), F4 (both suites), F7. All were executed again in this pass.",
+  "unchanged_inputs_reexecuted_anyway": "F5: extension sources, probe.py and browser-profile/user.js are unchanged since 403d424 (the rebuilt extension package has the same sha256 as on 2026-10-04) and F5 uses no data plane; it was executed again rather than carried forward.",
+  "not_presented_as_current": "No 2026-10-04 or earlier live result is evidence for this candidate. They are kept unchanged under `superseded`.",
+  "tests_first": "specs/001-tor-route/evidence/T155-tests-first.json holds the current red/green pair (review round 2: the F2 harness completion guard, command `python3 -B -m unittest discover -s tests/live-e2e/local-topology -p test_t155_stack.py`); the D1/TLS pair captured earlier on baseline f555892 and the six records before it stay under its `superseded` list. The live mutant reds of earlier attempts (pin-on-full-handshake-only DP, constant upstream username, active-hour export) bind their original baselines and were not repeated; the test sources they exercised are unchanged."
+ },
+ "partition_vector_provenance": {
+  "date": "2026-10-05",
+  "source": "contracts/foundation-boundaries.md Browser SOCKS isolation identity \u2014 T136; independently computed with Python standard library, without importing or reading Go helper implementation; synthetic inputs only",
+  "command": [
+   "python3",
+   "-c",
+   "import hashlib, hmac, json\nbase = (\"0f1e2d3c\" * 4, \"11\" * 32, \"abcd2345\" * 7 + \".onion\")\nvariants = {\"base\": base,\n            \"device\": (\"a1b2c3d4\" * 4, base[1], base[2]),\n            \"site\": (base[0], base[1], \"wxyz2345\" * 7 + \".onion\"),\n            \"profile\": (base[0], \"22\" * 32, base[2])}\nfor name, (token, profile, onion) in variants.items():\n    message = json.dumps([\"stargate-isolation-v1\", profile, \"normal\", \"firefox-default\", \"onion:\" + onion], separators=(\",\", \":\")).encode()\n    print(name, \"sg1:\" + hmac.new(token.encode(), message, hashlib.sha256).hexdigest())\n"
+  ],
+  "output": "base sg1:1940cde7068246610f120ee0926ad88113942aa2e83d71ba649deab843077a06\ndevice sg1:fb949c3678076ecb821ae348014b63e26545145dcb8a92ac4c505ddfb5c82f3d\nsite sg1:0b6165577bb38306bd5e76aa90517c20580a65d25da9eb0ff19ea7babed62189\nprofile sg1:625891e4088b29c3c9134a12055b82d13b63ddc7f9156b47156f8fb74e94c2ac\n",
+  "provenance_note": "Re-executed on 2026-10-05 for this candidate (restored after the round-1 review found the section missing from this record). The command and output are byte-identical to the transcript first recorded on 2026-10-03 in the attempt-4 candidate. The four usernames equal the want-strings of TestT155PartitionAxesDerivation in tests/integration/partition_axes_test.go; the base vector is also the contract vector in contracts/foundation-boundaries.md. Hermetic computation over synthetic inputs, not a live result."
+ },
+ "runs": {
+  "F1": {
+   "command": "STARGATE_LIVE_E2E=1 STARGATE_DISPOSABLE_HOST=1 python3 -B tests/live-e2e/local-topology/run.py (root)",
+   "attempts": 1,
+   "exit": 0,
+   "pass_lines": 52,
+   "fail_lines": 0,
+   "skip_lines": 0,
+   "start_utc": "2026-10-05T08:07:21Z",
+   "end_utc": "2026-10-05T08:35:31Z",
+   "includes_cache_warm_s": 90,
+   "covers": "clean-volume real init; 127.0.0.1:8881 only, non-loopback and ::1 refused; IPv4 and IPv6 DP-UID TCP/UDP/DNS egress denied with positive controls; owner-rule loss and re-init; Landlock/seccomp-unavailable refusals and recovery; deployed CP finite event windows and observer-down recovery; authenticated token reload; observer boundary; CP/observer/publisher-down authenticated forwarding",
+   "raw_log": {
+    "path": "target/runs/T155r/f1-attempt1.log",
+    "sha256": "c07b4e88f6a245d1d3077ed49fd258ef9c28cd07ff1eb1cef1a434f401d1e32f"
+   },
+   "guest_evidence_tar_without_pcaps": {
+    "path": "target/runs/T155r/f1-attempt1.guest-evidence.tar",
+    "sha256": "ffcde4d665f794a9e58fc81716b1f5e082db0cc011378500753af04a2f20fca1"
+   },
+   "guest_evidence_dir": "/home/ubuntu/t155r/target/live-e2e/T163-20261005-080852 (pcaps stayed in the guest disk)"
+  },
+  "F2": {
+   "command": "python3 -B tests/live-e2e/local-topology/t155_stack.py (root, BUILDX_BUILDER=t165-native)",
+   "attempts": 1,
+   "exit": 0,
+   "counts": {
+    "PASS": 104,
+    "FAIL": 0
+   },
+   "start_utc": "2026-10-05T08:36:36Z",
+   "end_utc": "2026-10-05T09:48:48Z",
+   "wire_gate": {
+    "rows_R1_to_R9": "each printed PASS, none SKIP",
+    "script_exit": 0,
+    "log_sha256": "6962f108c2b1940a7e6a1a1be505ebfdbad3a077c5f769c2479272b84c6377a0"
+   },
+   "old_identity_after_R9_rotation": "refused with GetStatus code=Unavailable; current identity answered",
+   "tls_resumption": {
+    "step_2_before_rotation": "ticket offered, resumed, RPC answered",
+    "step_4_old_ticket_after_rotation": "ticket offered, one handshake, pin verified, resumed (selected PSK path), RPC refused (Unavailable)",
+    "step_5_old_identity_full_handshake": "RPC refused",
+    "step_6_rotated_identity": "RPC answered",
+    "probe_exit": 0,
+    "dp_process_unchanged": true,
+    "log_sha256": "fbc8369a7acd2eea5c6a7422b38077751dfd624b8c8778d1d4ca9287bc93e9a8",
+    "scope": "shows the pin-verified resumed path was selected and no RPC was answered; it does not claim a completed Finished or the rejection cause"
+   },
+   "F3_connect_refusal": {
+    "exit": 0,
+    "result_line": "deployed refusal, traced Tor control, stop/restart and retained offline auth",
+    "log_sha256": "7a1ba55d3f571787b632f57a88a572abe3bee68214a93e7b32832c2392cae76b"
+   },
+   "traffic_publication": {
+    "dp_identity": "df8ed1a30412b8d9cc1b6b8c7a67afdddc2e2b8ccb9fd7db0c24c780aea4999a 2026-10-05T08:40:45.397806739Z 38110",
+    "sample_count": 12,
+    "pre_rollover_empty_samples": 7,
+    "post_rollover_identical_samples": 5,
+    "completed_row_normalized": {
+     "route": "TOR",
+     "hourBucket": 497552,
+     "requestCount": 5,
+     "byteCount": 1113
+    },
+    "additional_traffic_immutable_checks": 3,
+    "real_utc_boundary": "2026-10-05T09:00:00Z, same running DP process",
+    "scalar_representation": "protobuf JSON 64-bit scalars are decimal strings in the raw record; integers here",
+    "record_sha256": "ba556f731d75a1307a0b5a9f25ef8a2b5164f398577bd843bfab01d428c5a256"
+   },
+   "also_passed": "fresh volumes; no-token denial; authenticated, post-rotation and 180 s idle reloads acknowledged; unknown token denied; revocation; DP restart with CP down restoring the snapshot unchanged with Tor bytes; STALE_CONFLICT rollback refusal with revocation surviving, and recovery; completed-hour-only aggregates and retention with positive control; logging driver none on all four stack containers; only control.db and dp-snapshot.json in the state volumes",
+   "results_json_sha256": "cd839c3dfc05d75028bcfa521a6331c96188a2607b565528c3be78680cfe0835",
+   "raw_log": {
+    "path": "target/runs/T155r/f2-attempt1.log",
+    "sha256": "96e5b28ddd87460f8d1bf261e9f62a4c1900a8c0403d4049df1c5499b66cc3ac"
+   },
+   "guest_evidence_tar": {
+    "path": "target/runs/T155r/f2-attempt1.guest-evidence.tar",
+    "sha256": "d79d38d4865b13722b009b75029b8cfe3d31e5776b9cf4a2e886d5d831913c81"
+   }
+  },
+  "F4_T126_suite": {
+   "selection": "^(TestStreamIsolationDPUNAMEForwarding|TestT126.*|TestT155.*)$",
+   "attempts": 1,
+   "exit": 0,
+   "go_test_records": {
+    "PASS": 14,
+    "FAIL": 0,
+    "SKIP": 0
+   },
+   "start_utc": "2026-10-05T09:49:33Z",
+   "end_utc": "2026-10-05T09:55:30Z",
+   "subtests": {
+    "DistinctPartitionsSameTargetDiverge": "distinct BUILT circuits (104.57 s)",
+    "CalibrationSamePartitionShares": "one shared circuit (14.24 s)",
+    "DeviceAxisDivergesSameTarget": "distinct BUILT circuits (22.73 s)",
+    "SiteAxisDivergesSameTarget": "distinct BUILT circuits (29.88 s)"
+   },
+   "raw_log": {
+    "path": "target/runs/T155r/t126-attempt1.log",
+    "sha256": "004e8758e5cb613e69ab507f1f262ce9bb2d2a2a95ace0053e22720b105bfe73"
+   }
+  },
+  "F4_T182_suite": {
+   "selection": "^(TestOnionLoad|TestT126PartitionUsernameReferenceVector|TestStreamIsolationPerFirstPartyDomain)$",
+   "attempts": 1,
+   "exit": 0,
+   "go_test_records": {
+    "PASS": 3,
+    "FAIL": 0,
+    "SKIP": 0
+   },
+   "start_utc": "2026-10-05T09:56:15Z",
+   "end_utc": "2026-10-05T10:09:38Z",
+   "TestOnionLoad": {
+    "result": "PASS",
+    "test_seconds": 435.45,
+    "delivery_state": "ACKNOWLEDGED(1)",
+    "delivery_wait_s": 117.796,
+    "attempts": [
+     {
+      "n": 1,
+      "class": "ok",
+      "duration_s": 91.86
+     }
+    ],
+    "bytes_received": 225341,
+    "authentication_denials_after_acknowledgement": 0,
+    "control_onion_not_part_of_verdict": {
+     "class": "0x04",
+     "duration_s": 120.435
+    },
+    "note": "The single reference-onion attempt completed after 91.86 s, longer than the former 30 s data-plane deadline and inside the 250 s one. HTTPS onion load is proved on this data-plane tree by this one selection."
+   },
+   "TestStreamIsolationPerFirstPartyDomain": {
+    "result": "PASS",
+    "test_seconds": 278.44,
+    "outcome": "reference onion:443 and second onion:80 attached to distinct circuits, both BUILT"
+   },
+   "data_plane_image": "sha256:77990695c6c94733a0d6b5f1ae7bb4772aaa82542f3efd4f67baa1760d2c5f85",
+   "tor": "Tor 0.4.9.13 (image sha256:d4a997f31217e56366e645e857ac72cf3504e244dbb6f44f85410bdbddb7e0a0)",
+   "raw_log": {
+    "path": "target/runs/T155r/t182-attempt1.log",
+    "sha256": "08f3a91174c1812759b297944094a14408efb9a8838ad9e58ce2e03c6a74f4db"
+   }
+  },
+  "F5_four_browser_modes": {
+   "attempts": 1,
+   "start_utc": "2026-10-05T08:36:42Z",
+   "end_utc": "2026-10-05T08:52:03Z",
+   "modes": {
+    "descriptor-matrix": {
+     "exit": 0,
+     "result": "GREEN",
+     "failures": 0,
+     "scenario_count": 5,
+     "scenarios_passed": 5,
+     "report_sha256": "379c40de66b0b777263b152c67b7ff449a08bfaa11482ffc29e4cb3cf3638ba8"
+    },
+    "blocked-proxy": {
+     "exit": 0,
+     "result": "GREEN",
+     "failures": 0,
+     "scenario_count": 3,
+     "scenarios_passed": 3,
+     "report_sha256": "ae1fb70566203f4c14a441e3ad29463c6d84df6052b7680e76115f3aba75db00"
+    },
+    "private-access": {
+     "exit": 0,
+     "result": "GREEN",
+     "failures": 0,
+     "scenario_count": 10,
+     "scenarios_passed": 10,
+     "report_sha256": "c9acca547da4cfa1656eb17dc4c70a65cfecd1510f777442d32d70f26f2a3f1f"
+    },
+    "full": {
+     "exit": 0,
+     "result": "GREEN",
+     "failures": 0,
+     "scenario_count": 17,
+     "scenarios_passed": 17,
+     "report_sha256": "97d73596bd9aa99dd8266babfd5a165b12398485474374404f5f3dd8552db922"
+    }
+   },
+   "extension_zip_sha256": "27cd4548cfd3860dc3fade9017b98665642037a32714bee76b3f094592a24aa2",
+   "browser_profile_user_js_sha256": "e8455e40ce2db470229da48cbc8570bbabc4d5af0a1df0810474bfaef9392491",
+   "scope": "pinned browser, disposable profiles; attribution at the browser's own sockets and resolver with calibrated catchers, not a host NIC capture. The probe injects its own preferences; this does not certify the shipped DoH/HTTP-3 defaults (T200 pending).",
+   "raw_dir": "target/runs/T155r/browser-attempt1"
+  },
+  "F7_T162_docker_tier": {
+   "command": "STARGATE_TEST_TAGS=docker bash tests/contract/stargate-cli/t162_enforcement_test.sh",
+   "attempts": 1,
+   "exit": 0,
+   "start_utc": "2026-10-05T10:09:54Z",
+   "end_utc": "2026-10-05T10:35:17Z",
+   "reported_groups": [
+    "OK: T162 absent/ineffective rule, zero-packet denial, loopback and reverse-channel falsifiers",
+    "OK: T162 profiled SOCKS, dp.sock, control.sock, authenticated gRPC; abstract channel denied with byte-exchange positive control"
+   ],
+   "raw_log": {
+    "path": "target/runs/T155r/t162-attempt1.log",
+    "sha256": "fc65a6145c771c77906846e45b90aeeb59520195771e4e374f8bc1840fae352a"
+   }
+  }
+ },
+ "f2_carry_forward": {
+  "date": "2026-10-05",
+  "basis": "live-e2e README D-live-6: an explicit reviewed input/scope comparison; maintainer decision 2026-10-05 \"Completion guard, carry evidence (Recommended)\" (no rerun)",
+  "finding": "Review round 1 (Astra, Major): the entrypoint of t155_stack.py caught only Exception, so an interrupt (KeyboardInterrupt/SystemExit) inside a phase, or an early return, could end with exit 0 from a partial result list.",
+  "plain_statement": "The recorded 2026-10-05 F2 run used the pre-fix harness. Only the success decision and the abnormal-termination paths changed afterwards. The data-plane binary and every check body are unchanged.",
+  "executed_harness_sha256": "9337f4b0950be26d7f6f540f289bce3a49e0333e220dbe9aff62d81acf27f339",
+  "repaired_harness_sha256": "eba5ace525421e509c96374808cfba3aa58ad52ad4dd765405605dbdcbe5045e",
+  "diff_scope": "The first 558 lines of the file (every function, check and phase body, through the end of main()) are byte-identical in both versions. The change is confined to what follows: a declared MANDATORY list per mode with missing_mandatory(), and the `if __name__ == \"__main__\":` block (BaseException recorded as an explicit incomplete FAIL; a cleanup that raises or returns a non-zero exit recorded as a failure; exit 0 only when every mandatory check of the mode was recorded PASS the required number of times and nothing failed). No file under data-plane/, control-plane/, compose/, sidecars/ or scripts/ changed.",
+  "mechanical_check": {
+   "input": "target/runs/T155r/f2x/target/live-e2e/T155-stack-20261005-083640/results.json",
+   "input_sha256": "cd839c3dfc05d75028bcfa521a6331c96188a2607b565528c3be78680cfe0835",
+   "method": "missing_mandatory(None, results) from the repaired harness, evaluated over the recorded results of the full-mode run",
+   "mandatory_names_full_mode": 65,
+   "mandatory_pass_records_required": 92,
+   "recorded_results": 104,
+   "recorded_non_pass": 0,
+   "missing": [],
+   "recorded_names_not_in_mandatory_list": [],
+   "repeated_checks_recorded_vs_required": {
+    "traffic publication positive control: authenticated Tor destination bytes": "5/5",
+    "GetStatus excludes active/future traffic hours": "12/8",
+    "previously published traffic rows remain immutable": "12/8",
+    "DP process unchanged during traffic publication": "12/8",
+    "completed traffic row unchanged after more Tor traffic": "3/3"
+   },
+   "result": "The recorded run satisfies the new completion guard: the repaired entrypoint would also have exited 0 on these results. The list was not adjusted to fit; it is derived from the check()/require() calls in the source and test_t155_stack.py fails on any difference."
+  },
+  "completion_of_the_recorded_run": "The raw log (runs.F2.raw_log) ends with main()'s last check, 'final aggregates completed hours only', followed by 'T155 STACK: 104 PASS, 0 FAIL'; the guest wrapper recorded exit 0. The run was not interrupted.",
+  "regression": {
+   "path": "tests/live-e2e/local-topology/test_t155_stack.py",
+   "sha256": "04f64535530c42336ce1373748322b6fb55c21ed1e8d71529049b38e07c6e26e",
+   "scope": "hermetic; executes the real entrypoint block with stand-in phases for full, --only resumption and --only traffic: interrupt after one PASS, SystemExit(0) inside a phase, early return, one missing mandatory check, too few repetitions, a failed mandatory check, failed, interrupted or non-zero-exit cleanup, ordinary exception and normal completion; plus the source-derived drift check of the mandatory list, which also requires that no check is recorded outside a function. Red/green in T155-tests-first.json."
+  },
+  "not_claimed": "No live run of the repaired entrypoint exists. The focused modes (--only resumption, --only traffic) were not run in the 2026-10-05 pass and are covered hermetically only.",
+  "review_round_2_minors": "Round 2 (both APPROVE) left two Minors in this harness, fixed before commit and re-reviewed in the same round: a non-zero `compose down` exit was ignored (Astra), and the drift check did not cover a check recorded at module level (GLM). Neither touches a check body; the recorded F2 teardown is not re-evaluated by this change (the recorded results hold only phase checks)."
+ },
+ "counts": {
+  "phases_executed": 6,
+  "reruns": 0,
+  "failed_attempts": 0,
+  "required_skips": 0,
+  "tool_time_limit_events_affecting_a_test": 0
+ },
+ "limits": [
+  "One guest, one evening, TCG emulation: guest-kernel claims only (not physical NIC, routed IPv6, LAN/VPS or hypervisor).",
+  "The live gates depend on public onion availability. TestOnionLoad's control onion returned a failure reply (0x04) after about 120 s in this selection and loaded in the stream-isolation test minutes later.",
+  "No attempt reached the 250 s deadline itself; its own behaviour is covered by the data-plane unit tests (T208).",
+  "The 2026-10-04 full F2 run failed two checks after one control-plane exit of unknown cause during the wire gate; that exit did not recur here (one run). Its cause remains unknown.",
+  "F1's packet captures remain on the retained guest disk copy, not on the host.",
+  "The F2 result was produced by the pre-fix harness entrypoint and is carried forward by `f2_carry_forward`; the repaired entrypoint has hermetic coverage only."
+ ],
+ "release_residue": {
+  "T078_T079": "pending",
+  "R1_R8": "NOT RUN",
+  "T200": "shipped DoH/HTTP-3 defaults pending",
+  "T206": "capture-integrity Minor remains a release/consumer blocker"
+ },
+ "superseded": [
+  {
+   "schema": 1,
+   "ticket": "T155",
+   "attempt": "2026-10-04 D1 current-ticket repair",
+   "status": "INCOMPLETE: required HTTPS onion load failed twice; no third retry/full verify/cumulative/native review/commit",
+   "candidate": {
+    "baseline": "403d42405357bc7b1e36f50abae57432474eb53f",
+    "live_executed_index_before_D1": "e11dfc3b5335fe52c2e00bd432a92c64c0d4f5af",
+    "live_executed_source_manifest_sha256": "fbca49b9223f4252551aa3aaee952a53bcb504d27008f1368301da94e223dc27",
+    "whole_old_candidate_or_integration_binary_equals_current": false
+   },
+   "D1": {
+    "severity": "Info",
+    "scope": "static source diagnostic attribution, no production privacy defect established",
+    "governing_user_direction": "2026-10-04: ok do that in the 155; D1-only exception to A6/workflow follow-up filing recorded in ticket; no new owner/edges or privacy waiver",
+    "current_red": {
+     "baseline": "403d42405357bc7b1e36f50abae57432474eb53f",
+     "snapshot_sha256": "d5fdc1d6bee7399ea51ba43444d85ce7ea16d36488ad22989ab7db0c1158f0e6",
+     "exit_code": 1,
+     "classification": "TLS controls pass; actual unchanged D1 helper fails03/04/06; six branch controls pass"
+    },
+    "current_red_green_location": "specs/001-tor-route/evidence/T155-tests-first.json",
+    "GREEN": "Consult the normal controller record for actual identical-command outcome and source snapshot; no self-referential digest embedded",
+    "independent_closure": {
+     "disposition": "Info repaired and independently reverified; no bounded D1 survivor; not ordinary review or full-ticket approval",
+     "date": "2026-10-04",
+     "report_path": "/home/claudia/stargate/.scratch/tmp/T155/D1-closure-falsification/report.md",
+     "report_sha256": "392920cb97c351ea15a9afec3fab45457ebc320847c6d5a5e7e6285a24b617ed",
+     "corrected": {
+      "helper_sha256": "100ac3354ab14d9bb9df86b737f371566a25b3a96772ab149cb40fc17d64c0b8",
+      "exit_code": 0,
+      "subtests_pass": 9,
+      "raw_sha256": "e7107f76eaaf6e895f95b8e6c94c0acff142ceb7c3e09047b5fc7e51be671718"
+     },
+     "isolated_original": {
+      "helper_sha256": "0e1cf0689330bb23500e7912e64b5ccef877bb5e28e6ddddad13fb09f38b71bb",
+      "exit_code": 1,
+      "failed_cases": [
+       "03",
+       "04",
+       "06"
+      ],
+      "preservation_controls_pass": 6,
+      "raw_sha256": "78023da6cfcce818c1486842636f2d3df9346afea04b7cdac303d4cb2578a0ba"
+     },
+     "basis": "Independent real-helper contrast plus READ caller guards/controller source binding/original TLS chronology; no live workload or ordinary gate",
+     "first_GREEN_archive": "target/runs/T155-resume/D1-first-combined-GREEN-before-independent-closure-20261004",
+     "overall_ticket": "INCOMPLETE: required HTTPS load failed twice, causes UNKNOWN"
+    },
+    "original_TLS_RED": "naturally retained newest superseded baseline403d424/6f98765e96644549c0c0df19e99a961b338c328590bac1a4becb027854f88180",
+    "original_TLS_unchanged_command_observation": {
+     "classification": "actual unchanged original primary TLS command passing observation; not promoted old controller pair",
+     "command": [
+      "env",
+      "TMPDIR=/tmp/T155",
+      "PYTHONDONTWRITEBYTECODE=1",
+      "GOPROXY=off",
+      "GOSUMDB=off",
+      "GOTOOLCHAIN=local",
+      "GOFLAGS=-mod=readonly",
+      "GOMAXPROCS=2",
+      "/home/claudia/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.3.linux-amd64/bin/go",
+      "test",
+      "-p",
+      "1",
+      "-count=1",
+      "-v",
+      "-run",
+      "^Test(ProbeResumeDiscriminates|FalsifyEarlyAbortBeforePSKAcceptance)$",
+      "./tests/contract/compose/wireprobe"
+     ],
+     "exit_code": 0,
+     "started_at": "2026-10-04T18:48:11.944543+00:00",
+     "ended_at": "2026-10-04T18:48:13.066751+00:00",
+     "raw_output_sha256": "cdea858612a2df5b574719db0a88cee687a8e140cb4aeaba97f4ba55b229cd14",
+     "source_sha256": {
+      "tests/contract/compose/wireprobe/wireprobe.go": "04e7e3c1b2bd1c500ccc102a1f99adc0c35b361057d07e32b9881c4b65de6cc0",
+      "tests/contract/compose/wireprobe/wireprobe_test.go": "ce800bb11e221ecf3512155611bc3d8d2f37492b0aba640397ca549d6e9bb352"
+     },
+     "source_scope": "exact executed TLS input files unchanged from final live source; current evidence JSON not yet written, no old full-source/binary equivalence claimed"
+    },
+    "no_new_live_run": true
+   },
+   "evidence_scope_comparison": {
+    "method": "READ comparison of all778 retained executed-manifest inputs against current files, plus permitted literal/comment diff and unchanged caller Fatal guards; not a new runtime experiment",
+    "changed_existing_inputs": {
+     "specs/001-tor-route/evidence/T155-tests-first.json": {
+      "executed_snapshot_sha256": "8d1c0ca2b5c25c9f1768f536d03be421b69dc313a989ef9b0d10c501d5032b96",
+      "comparison_before_GREEN_sha256": "2e1ffef25132ee9ab10bc9700355e53fec7ac9e1f7a5761766c9436fe0632b65",
+      "metadata_not_executable_input": true
+     },
+     "specs/001-tor-route/live-e2e/README.md": {
+      "executed_snapshot_sha256": "c9f246d32789f4117047cf7e7df3176b86c5a8e2862334e1fe6b50ff05277742",
+      "current_sha256": "149867f11729e967d40beb05e993237f8ce29180a388b58094bda835909a82fe"
+     },
+     "specs/001-tor-route/tickets/T155-validate-repaired-foundation.md": {
+      "executed_snapshot_sha256": "649f2d62e6ebcb8fd88c0dd62b456ba23156bbc88eae0bb4d48b795c0475a9bd",
+      "current_sha256": "60f24000cbeacdec76bfb755a0a6b6447d677f56f853853a56ff9d2a778758f0"
+     },
+     "tests/integration/stream_isolation_test.go": {
+      "executed_snapshot_sha256": "0e1cf0689330bb23500e7912e64b5ccef877bb5e28e6ddddad13fb09f38b71bb",
+      "current_sha256": "100ac3354ab14d9bb9df86b737f371566a25b3a96772ab149cb40fc17d64c0b8"
+     }
+    },
+    "new_regression": "tests/integration/route_diagnostic_test.go",
+    "unchanged_old_inputs": 774,
+    "affected": "shared integration failure diagnostic only; hermetic actual helper proof renews this output",
+    "unaffected": "DP/CP/sidecars/Compose/auth/routing/deadlines, F1 topology/egress, F2/3 traffic/TLS/IPC, F5 extension/browser and F7 confinement input scopes unchanged",
+    "caller_guards": "READ: all three callers still Fatal on non-nil dial errors before circuit assertions; no injected runtime guard proof claimed",
+    "old_integration_binary": "a5502a80e3acfa9ae339a8fa6f94411ed2498c91f0a234ae9ecacee2138a78d0; never described as execution of corrected full source",
+    "missing_property": "scope comparison cannot supply required HTTPS load or relabel failures",
+    "comparison_timing": "Executable-input comparison after static D1 correction, before first combined GREEN; tests-first comparison hash records that historical metadata. Ticket hash refreshed after independent closure metadata; no executable input changed. Same combined GREEN renewed to bind final results metadata."
+   },
+   "actual_runs": {
+    "F1": {
+     "attempt": 1,
+     "exit": 0,
+     "pass_checks": 52,
+     "fail_checks": 0,
+     "skip_checks": 0,
+     "raw_log": {
+      "path": "target/runs/T155-resume/foundation-attempt1.log",
+      "sha256": "a1c633ba73a43603fdeb4d3718a4ddb014ead3fc9c1337b78d06a85c055d3156"
+     },
+     "raw_tar": {
+      "path": "target/runs/T155-resume/foundation-attempt1.guest-evidence.tar",
+      "sha256": "55d12d2fe3c956b7b278612e3412b70d91d4aa55f91f77caededc2ac353c5dfc"
+     },
+     "guest_evidence_dir": "/home/ubuntu/t155-resume-foundation-final/target/live-e2e/T163-20261004-134326",
+     "guest_archive_commit": "6bf48cad1a190d6d31144e3b1d71da6bc78262d7",
+     "archive_commit_scope": "local commit of shipped archive, not project HEAD",
+     "harness_sha256": {
+      "observer.py": "d3d4d20246e7bcb6fe3e8dd7364685a2ee4659c353d14708c4c94eeb7f8095e4",
+      "observer_probe.go": "4808efbc2084f26ed175289f71fc392ac33f654db8103695b3e41e18e2cebbbc",
+      "run.py": "463402279c1a2d0e9c0e6680f54b177440714344f64f838d15bcaa074dfb893d"
+     },
+     "observer_source_sha256": "95f39c207fca773b08e2d1a26a5f44ee7acd44201e6e617312673d3e29444e8e",
+     "observer_probe_matrix": {
+      "forbidden_inputs": [
+       "GETINFO",
+       "GETINFO",
+       "GETCONF",
+       "SETCONF",
+       "SETEVENTS",
+       "ATTACHSTREAM",
+       "ADD_ONION",
+       "SIGNAL",
+       "COMMAND",
+       "HEALTH/2",
+       "HEALTH/1",
+       "HEALTH/1\nX",
+       "HEALTH/1"
+      ],
+      "real_health": "READY/1",
+      "invalid_auth_and_eof_refused": true,
+      "autonomous_fixed_sampling": true,
+      "fresh_ready_not_ready_malformed_timeout": true,
+      "publisher_stop_expiry_observer_restart_mtime": true,
+      "invalid_file_shape_future_domain_symlink_fifo": true,
+      "dead_publisher_expiry_and_recovery": true,
+      "controlled_publisher_image": "sha256:2d1ee617ea6125d3a8b5c7bf2b2716fe48b9eccf84a504fd5d11c55312db68cd"
+     },
+     "observer_probe_matrix_sha256": "ad7e8b6ef1e8328acecf20a726c223eae014f688332e36509a3e15c1dc547b30",
+     "production_context_scope": "Current relay has no raw cookie/control socket; publisher inside Tor retains full native Tor authority. No command ACL on publisher certified.",
+     "cp_events_sha256": "0308f0103f62bdd94876ca021dbd22e058413527856decf2a736dd31881ad5bb",
+     "warm_binaries_sha256": {
+      "observer-probe-warm": "ef11dcac18d2d83488e77f70bda4972b5a82bc6b54ba4adcc48ee99e54a7395b",
+      "confinement-warm.test": "ab614133801a18e0beeb653eef5f6f5b48e0e99f3810a26ac8819470a07049e7"
+     }
+    },
+    "F2_original_full": {
+     "baseline": "403d42405357bc7b1e36f50abae57432474eb53f",
+     "source_archive_sha256": "2f5a13d732828ca7ced55b3ec4f7c45e141978d055f47c9b498e1877d54a7935",
+     "exit": 1,
+     "counts": {
+      "PASS": 354,
+      "FAIL": 2
+     },
+     "failures": [
+      {
+       "check": "wire runtime row R9 PASS (not SKIP)",
+       "result": "FAIL",
+       "detail": ""
+      },
+      {
+       "check": "pre-rotation (old) CP identity refused by DP",
+       "result": "FAIL",
+       "detail": ""
+      }
+     ],
+     "qualification": "Original full F2 remains RED. R9 guard skipped without rotation; old copied CP identity was not shown stale. Observed CP exit1 cause unknown. Later genuine rotation/resumption and remaining phases passed their own checks.",
+     "artifacts": {
+      "full-stack-final-attempt1.guest-evidence.tar": "6e055e99d09cd2b41216cff3d5e50eefdeba87445903d8e870ca310d7b11adf5",
+      "full-stack-final-attempt1.results.json": "3b1fa337d547d9327fd929e852857b67ed0a2f484b172fb55c18b6007159ab62",
+      "stack-20261004-140917.log": "8ccb633ee19641dc902d137846e61997800b014d7e5c8bc3a61fdc44763c0847",
+      "full-stack-final-attempt1.host.log": "8ccb633ee19641dc902d137846e61997800b014d7e5c8bc3a61fdc44763c0847"
+     }
+    },
+    "F5_four_browser_modes": {
+     "ignored_summary_path": "target/runs/T155-resume/browser-final-summary.json",
+     "summary_sha256": "ba753905714d6d339f810896b6181815549d6717c3de47b623c820c380efef30",
+     "result": {}
+    },
+    "wire_confirmation": {
+     "ignored_summary_path": "target/runs/T155-resume/wire-confirmation-attempt1.summary.json",
+     "summary_sha256": "bf4302d460eabea55e5dc1b5a0beb20708e9c34a953c98899bddace53161ce6c",
+     "result": {}
+    },
+    "retained_state_return": {
+     "ignored_summary_path": "target/runs/T155-resume/wire-retained-return-attempt1.summary.json",
+     "summary_sha256": "b90a4f926f81d47028fd3528faef7fc174f4c0f9a95d38e1b079036a24f0a4d4",
+     "result": {
+      "exit": 0,
+      "counts": {
+       "PASS": 35
+      },
+      "artifacts": {
+       "wire-retained-return-attempt1.guest-evidence.tar": "6607092e07f01af2b9eff3bd40544e5a8bfc389b3e783204cf40460aaea4c2ad",
+       "wire-retained-return-attempt1.host.log": "8a6e862481446c3af5a74a8f658fe878a4b8b02782367d2c421499bafda96b32"
+      }
+     }
+    },
+    "T126_first": {
+     "ignored_summary_path": "target/runs/T155-resume/integration-final-attempt1.summary.json",
+     "summary_sha256": "83f3ef5c8d02da90a5b9dd5b3d1751c0a51f494fd30ad2f5faaf1bf4a18d461e",
+     "result": {
+      "exit": 1,
+      "counts_including_parent": {
+       "PASS": 11,
+       "FAIL": 3
+      },
+      "native_records": [
+       {
+        "name": "TestT155PartitionAxesDerivation (0.02s)",
+        "result": "PASS",
+        "nested": false
+       },
+       {
+        "name": "TestT126PartitionUsernameReferenceVector (0.00s)",
+        "result": "PASS",
+        "nested": false
+       },
+       {
+        "name": "TestT126SignalTrapReleasedAfterStop (1.02s)",
+        "result": "PASS",
+        "nested": false
+       },
+       {
+        "name": "TestT126SignalTrapReleasedAfterStop/ActiveTrapHandlesSignal (0.27s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestT126SignalTrapReleasedAfterStop/StoppedTrapIgnoresLaterSignal (0.70s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestT126ControlPhaseDeadlines (0.63s)",
+        "result": "PASS",
+        "nested": false
+       },
+       {
+        "name": "TestT126ControlPhaseDeadlines/BootstrapHungTransportFailsWithinPhase (0.31s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestT126ControlPhaseDeadlines/StreamsHungTransportFailsWithinPhase (0.31s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestT126ControlPhaseDeadlines/RespondingTransportSucceeds (0.00s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestStreamIsolationDPUNAMEForwarding (772.14s)",
+        "result": "FAIL",
+        "nested": false
+       },
+       {
+        "name": "TestStreamIsolationDPUNAMEForwarding/DistinctPartitionsSameTargetDiverge (379.64s)",
+        "result": "FAIL",
+        "nested": true
+       },
+       {
+        "name": "TestStreamIsolationDPUNAMEForwarding/CalibrationSamePartitionShares (188.84s)",
+        "result": "FAIL",
+        "nested": true
+       },
+       {
+        "name": "TestStreamIsolationDPUNAMEForwarding/DeviceAxisDivergesSameTarget (37.53s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestStreamIsolationDPUNAMEForwarding/SiteAxisDivergesSameTarget (27.81s)",
+        "result": "PASS",
+        "nested": true
+       }
+      ],
+      "artifacts": {
+       "integration-final-attempt1.guest-evidence.tar": "d910b26712984b3119f05f6389af4960db2a76b9c969bf4d467a55105209961c",
+       "final-t126-attempt1.log": "48279bb34b8292077db8bc53f2c4a60a3b195dea1ec6c8082d62e0edf490204d",
+       "integration-final-attempt1.host.log": "4a324cbd5e9c081b5a9b4f295091687bcf60cb0878e85f5fac1279f7f369848f",
+       "integration-final-attempt1.post-state-events.txt": "c464d4b5f804d7e64d6d47134dabd80b5e2a5bf103ae85362df33ec0a81ffc42"
+      }
+     }
+    },
+    "T126_retry": {
+     "ignored_summary_path": "target/runs/T155-resume/t126-final-attempt2.summary.json",
+     "summary_sha256": "ff4113b5b489ce3463e502d76836b65559a56d0082ad7147538144a1e0630f80",
+     "result": {
+      "exit": 0,
+      "counts_including_parent": {
+       "PASS": 14
+      },
+      "native_records": [
+       {
+        "name": "TestT155PartitionAxesDerivation (0.01s)",
+        "result": "PASS",
+        "nested": false
+       },
+       {
+        "name": "TestT126PartitionUsernameReferenceVector (0.00s)",
+        "result": "PASS",
+        "nested": false
+       },
+       {
+        "name": "TestT126SignalTrapReleasedAfterStop (0.84s)",
+        "result": "PASS",
+        "nested": false
+       },
+       {
+        "name": "TestT126SignalTrapReleasedAfterStop/ActiveTrapHandlesSignal (0.15s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestT126SignalTrapReleasedAfterStop/StoppedTrapIgnoresLaterSignal (0.67s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestT126ControlPhaseDeadlines (0.61s)",
+        "result": "PASS",
+        "nested": false
+       },
+       {
+        "name": "TestT126ControlPhaseDeadlines/StreamsHungTransportFailsWithinPhase (0.30s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestT126ControlPhaseDeadlines/BootstrapHungTransportFailsWithinPhase (0.30s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestT126ControlPhaseDeadlines/RespondingTransportSucceeds (0.00s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestStreamIsolationDPUNAMEForwarding (269.16s)",
+        "result": "PASS",
+        "nested": false
+       },
+       {
+        "name": "TestStreamIsolationDPUNAMEForwarding/DistinctPartitionsSameTargetDiverge (92.22s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestStreamIsolationDPUNAMEForwarding/CalibrationSamePartitionShares (17.41s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestStreamIsolationDPUNAMEForwarding/DeviceAxisDivergesSameTarget (17.51s)",
+        "result": "PASS",
+        "nested": true
+       },
+       {
+        "name": "TestStreamIsolationDPUNAMEForwarding/SiteAxisDivergesSameTarget (19.09s)",
+        "result": "PASS",
+        "nested": true
+       }
+      ],
+      "artifacts": {
+       "raw_logs_tar_sha256": "5bef23c113bf2534535539fd289c5b4dfe17173c4a8da3f8ea67390c3bdfef5a",
+       "raw_log_sha256": "c41e35f6d512809a9a73f12bd67ce5065f0c4a64649ec9d86b1935ddfdaaf04a"
+      }
+     }
+    },
+    "T182_first": {
+     "ignored_summary_path": "target/runs/T155-resume/t182-final-attempt1.summary.json",
+     "summary_sha256": "0773a604d55bbd324bb0431a4f6adcac335a4d1d42d5bb2bef31248b1dcc7a07",
+     "result": {
+      "exit": 1,
+      "counts": {
+       "PASS": 1,
+       "FAIL": 2,
+       "SKIP": 0
+      },
+      "native_records": [
+       {
+        "result": "FAIL",
+        "name": "TestOnionLoad (253.32s)"
+       },
+       {
+        "result": "PASS",
+        "name": "TestT126PartitionUsernameReferenceVector (0.00s)"
+       },
+       {
+        "result": "FAIL",
+        "name": "TestStreamIsolationPerFirstPartyDomain (320.62s)"
+       }
+      ],
+      "artifacts": {
+       "t182-final-attempt1.guest-evidence.tar": "360aae3d9b88285315e7f294ecab99cfe9c89bb018f679df9e5671c0085f0c61",
+       "final-t182-attempt1.log": "348382a3332a82fd54c25c560f6486ad7b538c58bb23a0efc2d946c11903db80",
+       "integration-final-attempt2.host.log": "ad748a46e48f1d9dbdfb03503e7eb45471747538e116a65161d878f7af394a55"
+      }
+     }
+    },
+    "T182_retry": {
+     "ignored_summary_path": "target/runs/T155-resume/t182-final-attempt2.summary.json",
+     "summary_sha256": "a1b0b87cde51e155b218573be0eb42117ae11d74b07653aa719f494678d11406",
+     "result": {
+      "exit": 1,
+      "counts": {
+       "PASS": 2,
+       "FAIL": 1,
+       "SKIP": 0
+      },
+      "native_records": [
+       {
+        "result": "FAIL",
+        "name": "TestOnionLoad (226.07s)"
+       },
+       {
+        "result": "PASS",
+        "name": "TestT126PartitionUsernameReferenceVector (0.00s)"
+       },
+       {
+        "result": "PASS",
+        "name": "TestStreamIsolationPerFirstPartyDomain (195.07s)"
+       }
+      ],
+      "artifacts": {
+       "t182-final-attempt2.guest-evidence.tar": "af3ad8654dec1c57de7a42b2842eec57b8a26bf38a18ae44f7dc0e1dbebe10db",
+       "final-t182-attempt2.log": "e8f6c8ea083ee66a79700511bf380dffb882237d001972e110528d7db426e232",
+       "t182-only-attempt2.host.log": "0e3d46105b4c4ac022f276186ca43bc6360d6cbc1b1744fb7f67be1538d2a780",
+       "t182-attempt2.collection-host.log": "bef91b983c60cb3910a5c32840449629cde5023db26e64f5d74b09fc35c33a32"
+      }
+     }
+    },
+    "T162_first": {
+     "ignored_summary_path": "target/runs/T155-resume/t162-first-attempt1.summary.json",
+     "summary_sha256": "23f642e4f4c9afb6d5f55f913f23a0bfb986367cd7db00fb689a00659e960727",
+     "result": {
+      "exit": 0,
+      "reported_groups": [
+       "OK: T162 absent/ineffective rule, zero-packet denial, loopback and reverse-channel falsifiers",
+       "OK: T162 profiled SOCKS, dp.sock, control.sock, authenticated gRPC; abstract channel denied with byte-exchange positive control"
+      ],
+      "group_count": 2,
+      "artifacts": {
+       "t162-first-attempt1.guest-evidence.tar": "93027f3fef832290699b1d23d625d54f0b3ccd9eee1e11b61cd83da5b3c90412",
+       "final-t162-attempt1.log": "65626e713e3bf4725e5f31b7161af7aaad30ff5cab7dfe137994ab260e0a3704",
+       "t162-first-attempt1.host.log": "007a71ca4251c64d9caee5c18352d53588bb3ae05e905c6c64dc1fb336687c01",
+       "t162-first-attempt1.collection-host.log": "54111ebad7b6366f7b1035672e1e9b898786cb87116a6acb9da820028434ac72"
+      }
+     }
+    },
+    "F3_actual_realhour": {
+     "result": "GREEN",
+     "scope": "Real authenticated GetStatus counter publication on same running DP, not full F2 acceptance",
+     "record_sha256": "284e495d8c2f9157bcc752931bcdd04bfaacb8563e706111b94e8ddabc061ebe",
+     "binary_sha256": "bdd58ce41c23f97bb3db32d4c5c4e15d90e900301a29c5f8e0ba80939392fb09",
+     "sealed_archive_sha256": "c664f5e527a53f41e35923adb8606884b9288454feb15cf2fce705993384cc37",
+     "dp_identity": "05a4b4281f046b6d3766ac0b595441e50e0205ba5fcdbf4354947a0d7d426103 2026-10-04T14:12:53.158566973Z 31707",
+     "sample_count": 96,
+     "pre_rollover_empty_samples": 91,
+     "completed_row_normalized": {
+      "route": "TOR",
+      "hourBucket": 497534,
+      "requestCount": 5,
+      "byteCount": 1113
+     },
+     "post_rollover_identical_samples": 5,
+     "additional_traffic_immutable_checks": 3,
+     "scalar_representation": "Original protobuf JSON64-bit scalars are decimal strings; normalized counts here are integers. Original record retained byte-exact."
+    },
+    "F5_four_modes": {
+     "attempt": 2,
+     "result": "GREEN",
+     "extension_package": {
+      "extension_zip_sha256": "27cd4548cfd3860dc3fade9017b98665642037a32714bee76b3f094592a24aa2",
+      "member_sha256": {
+       "README.md": "f935f379003e6435a068a38b61ef20f8ffb54458970a8b406a7ac9958575ebe4",
+       "background/hardening.edges.test.js": "6a38acc678f9a4684155617b23c4af35d5e116266c32776b63c454ad02038453",
+       "background/hardening.js": "47c0b5bdd8244fd188949372e0043f52e35f59626cb868a812cc60a69a6fffb7",
+       "background/hardening.test.js": "33deab96de2bcc7d4e7c58a90ac80735051397799af685c5d18e32f7888c1abb",
+       "background/router.js": "fdd8a9ea0e1413f15e4c15a7394369315785073bd306e74280ae1a1037f1fe1f",
+       "background/router.test.js": "8ee02548b9391ae3d72e3a1daf068d3667b1b7a35237fbe9effb46a6d34539df",
+       "lib/firstparty.edges.test.js": "69c8b3b607db165b7bfa00825bd5d2f5c8653acc4cd765c2a7e96a739daa7893",
+       "lib/firstparty.js": "5466d0a6bb165d5eef68dfd8fe754dd8765f7a6d35712c43d121c0d0f6e58d69",
+       "lib/firstparty.test.js": "1b8ffbde11a69e2d86796384c46cf76cd119a9b30cea7efc8428831dbd66affb",
+       "lib/storage.js": "1343706edd87268a6f552b6b599ba8ad5159192daeb3ac77dad232724347a232",
+       "lib/storage.test.js": "de96204589ec66142619461362ba7a7c2272debebb7a469866febd4dbc0d3b3f",
+       "manifest.json": "6d6d89a5a0e6844094dd861d208e6182fd172e2ea63207533e44c6c08c92e114",
+       "manifest.test.js": "095b59c80cc072f76672e7ec65a31d6f0197bc7f8de1d28f8f56b33467a7db15",
+       "options/options.html": "d8f6039b74fe660371582381422a063d36f1cc8a2bf7020af0aa813eabb16227",
+       "options/options.js": "d17289914c39125abbf63d21d17e9fa162e4ad95dc49ef1f889c90947e0cd466",
+       "options/options.save.test.js": "db79357fbb63e83bb18ccd389670e9b7306b21500f5a4e6b4100e10828059db1",
+       "options/options.test.js": "b416632bb21a833aaf25c1e1b4bd755e1e82e52f6c15ec1429bc32001bfb1abe",
+       "popup/popup.html": "f79f59767767dd63997d8722be5c187601eddfb1f7323a84c47e98f9f9271b6f",
+       "popup/popup.js": "9853c8e18db2e0d458343a235801dbb8cf7dbc845c8f9feb3376490954319456",
+       "popup/popup.test.js": "5f6b900d44fdb9acc4b91bf823b31b0b2a047be54af066843cf4e1a7544774a4",
+       "run-tests.sh": "f12efeea3091ffda283e10c71e767ec1451f4d926453c24440b6e0f2e5ebfa21"
+      },
+      "all_current_members_match": true,
+      "note": "Rebuilt finalcandidate ZIP, not inherited T205 package; assertions are member identity, not browser results.",
+      "executed_input_source_sha256": {
+       "extension/background/hardening.js": "47c0b5bdd8244fd188949372e0043f52e35f59626cb868a812cc60a69a6fffb7",
+       "extension/background/router.js": "fdd8a9ea0e1413f15e4c15a7394369315785073bd306e74280ae1a1037f1fe1f",
+       "extension/popup/popup.js": "9853c8e18db2e0d458343a235801dbb8cf7dbc845c8f9feb3376490954319456",
+       "extension/popup/popup.html": "f79f59767767dd63997d8722be5c187601eddfb1f7323a84c47e98f9f9271b6f",
+       "extension/lib/storage.js": "1343706edd87268a6f552b6b599ba8ad5159192daeb3ac77dad232724347a232",
+       "tests/live-e2e/mullvad-browser-hardening/probe.py": "4204cb03e9aea0cdf2a664048f1ac474009e57e207b0d859582fb06cdd671199",
+       "tests/live-e2e/mullvad-browser-hardening/test_probe.py": "d1192aba5dda2e6443bc37d1a6bc157e0d17ad59dba8acabda7923de4bb5b0a0",
+       "browser-profile/user.js": "e8455e40ce2db470229da48cbc8570bbabc4d5af0a1df0810474bfaef9392491"
+      },
+      "identity_scope": "All21 actual rebuilt ZIP members match current files. Eight inherited delivered source identities rechecked; fresh T155 runtime outcomes recorded separately."
+     },
+     "raw_archive": {
+      "path": "target/runs/T155-resume/browser-attempt2.raw.tar",
+      "sha256": "7738c9a56f8a37e4e18303d2b389a84f0627bd8cf25756911b00e71e69ab8fb8"
+     },
+     "scope": "Actual pinned browser in disposable profiles, Alpha channel; browser socket/resolver attribution with calibrated catchers, not host NIC proof. Injected fixture prefs do not certify shipped DoH/HTTP3 defaults; T200 remains pending. T205 current volatile state repair is delivered provenance, not a new T155 hardening-state19/19 execution.",
+     "modes": {
+      "descriptor-matrix": {
+       "exit": 0,
+       "result": "GREEN",
+       "failures": [],
+       "scenario_count": 5,
+       "scenarios": {
+        "t186-d1-null-comparison": {
+         "passed": true
+        },
+        "t186-d1-socks-impostor-comparison": {
+         "passed": true,
+         "nameReceived": true
+        },
+        "t186-d4-https-privileged": {
+         "passed": true
+        },
+        "t186-d5-unix-sink": {
+         "passed": true,
+         "unixSocksSupported": true
+        },
+        "t186-positive-controls": {
+         "passed": true
+        }
+       },
+       "raw_report_path": "/tmp/T155/b2/descriptor-matrix.json",
+       "raw_report_sha256": "351a01510a5b5e133801d9b77e3f2e4e0ee913a47a130f2e551606996c1d23dd",
+       "executed_extension_sha256": "27cd4548cfd3860dc3fade9017b98665642037a32714bee76b3f094592a24aa2",
+       "profile": "fresh disposable profile per WebDriver session",
+       "report_keys": [
+        "artifactSha256",
+        "browserVersion",
+        "command",
+        "driverVersion",
+        "executedExtensionSha256",
+        "extensionSha256",
+        "failures",
+        "mutationName",
+        "result",
+        "scenarios",
+        "t186Designs",
+        "t186MatrixExtensionSha256",
+        "t186Modes",
+        "t186ResolverLinesTotal"
+       ],
+       "descriptor_design_controls": {
+        "D4": true,
+        "D5": true
+       }
+      },
+      "blocked-proxy": {
+       "exit": 0,
+       "result": "GREEN",
+       "failures": [],
+       "scenario_count": 3,
+       "scenarios": {
+        "t186-blocked-hardening-closed-no-direct-proxy-or-dns": {
+         "passed": true,
+         "controlsPassed": true,
+         "fixtureStorageSeeded": true,
+         "hardened": false
+        },
+        "t186-blocked-missing-token-no-direct-proxy-or-dns": {
+         "passed": true,
+         "controlsPassed": true,
+         "fixtureStorageSeeded": false,
+         "hardened": true
+        },
+        "t186-tor-route-positive-control": {
+         "passed": true
+        }
+       },
+       "raw_report_path": "/tmp/T155/b2/blocked-proxy.json",
+       "raw_report_sha256": "485ad24f0109a20dbcc97637e3ce8143605cb33445453fa835591ffe03965929",
+       "executed_extension_sha256": "27cd4548cfd3860dc3fade9017b98665642037a32714bee76b3f094592a24aa2",
+       "profile": "fresh disposable profile per WebDriver session",
+       "report_keys": [
+        "artifactSha256",
+        "browserVersion",
+        "command",
+        "driverVersion",
+        "executedExtensionSha256",
+        "extensionSha256",
+        "failures",
+        "mutationName",
+        "result",
+        "scenarios",
+        "t186NoBlocker"
+       ]
+      },
+      "private-access": {
+       "exit": 0,
+       "result": "GREEN",
+       "failures": [],
+       "scenario_count": 10,
+       "scenarios": {
+        "t188-baseline-drift-warned": {
+         "passed": true
+        },
+        "t188-baseline-sink-receives-protected-names-remotely": {
+         "passed": true
+        },
+        "t188-forced-direct-onion-reaches-the-sink": {
+         "passed": true
+        },
+        "t188-ordinary-windows-without-access-detected-and-blocked": {
+         "passed": true
+        },
+        "t188-ordinary-with-access-tor-and-direct": {
+         "passed": true
+        },
+        "t188-positive-controls": {
+         "passed": true
+        },
+        "t188-ppb-extension-without-access-protected-fail-closed-clearnet-direct": {
+         "passed": true
+        },
+        "t188-ppb-no-extension-protected-fail-closed-clearnet-direct": {
+         "passed": true
+        },
+        "t188-ppb-with-access-tor-and-direct": {
+         "passed": true
+        },
+        "t188-socks-pref-and-ip-literal-observations": {
+         "passed": true
+        }
+       },
+       "raw_report_path": "/tmp/T155/b2/private-access.json",
+       "raw_report_sha256": "3146c85800e82037661774ebf360838a797840a6967058d3774843fdad975062",
+       "executed_extension_sha256": "27cd4548cfd3860dc3fade9017b98665642037a32714bee76b3f094592a24aa2",
+       "profile": "fresh disposable profile per WebDriver session",
+       "report_keys": [
+        "artifactSha256",
+        "browserVersion",
+        "command",
+        "driverVersion",
+        "executedExtensionSha256",
+        "extensionSha256",
+        "failures",
+        "mutationName",
+        "result",
+        "scenarios",
+        "t188Template"
+       ]
+      },
+      "full": {
+       "exit": 0,
+       "result": "GREEN",
+       "failures": [],
+       "scenario_count": 17,
+       "scenarios": {
+        "absent-initiating-context-no-fallback": {
+         "passed": true
+        },
+        "destination-positive-control": {
+         "passed": true
+        },
+        "direct-positive-control": {
+         "passed": true
+        },
+        "hardening-failure-no-fallback": {
+         "passed": true
+        },
+        "hardening-failure-notification-displayed": {
+         "passed": true
+        },
+        "malformed-token-no-fallback": {
+         "passed": true
+        },
+        "missing-token-no-fallback": {
+         "passed": true
+        },
+        "redirect-no-fallback": {
+         "passed": true
+        },
+        "sidecar-identical-path-positive-control": {
+         "passed": true
+        },
+        "sidecar-identical-path-unavailable": {
+         "passed": true
+        },
+        "sidecar-reconnect-race-positive-control": {
+         "passed": true
+        },
+        "startup-initialization-overlap": {
+         "passed": true
+        },
+        "subresource-and-retry-no-fallback": {
+         "passed": true
+        },
+        "tor-positive-control": {
+         "passed": true
+        },
+        "tor-redirect-positive-control": {
+         "passed": true
+        },
+        "tor-subresource-retry-positive-control": {
+         "passed": true
+        },
+        "unreadable-hardening-api-no-fallback": {
+         "passed": true
+        }
+       },
+       "raw_report_path": "/tmp/T155/b2/full.json",
+       "raw_report_sha256": "57ffb9e5809d32a9fff942eeafff234a5ad27427d93870f99014d224846eadfa",
+       "executed_extension_sha256": "27cd4548cfd3860dc3fade9017b98665642037a32714bee76b3f094592a24aa2",
+       "profile": "fresh disposable profile per WebDriver session",
+       "report_keys": [
+        "artifactSha256",
+        "browserVersion",
+        "command",
+        "driverVersion",
+        "executedExtensionSha256",
+        "extensionSha256",
+        "failures",
+        "mutationName",
+        "result",
+        "scenarios",
+        "unknownHardeningFaultExtensionSha256"
+       ]
+      }
+     }
+    },
+    "selected_PSK_after_rotation": {
+     "result": "GREEN",
+     "scope": "Actual live current-DP-pin-verified selected PSK negative attempt; refused RPC, no completed-Finished/rejection-cause claim; not aggregate F2GREEN",
+     "record_sha256": "8153dfbb08a09fe84c94559f056ad9bde1c4423e6eaa1fbd830875af15682156",
+     "binary_sha256": "bdd58ce41c23f97bb3db32d4c5c4e15d90e900301a29c5f8e0ba80939392fb09",
+     "archive_sha256": "40c8b83d1c116c216372c44d57f4e2613e0c2b457a0a0be403f0295b77d22d4e",
+     "stable_dp_started": "2026-10-04T15:07:15.677832463Z",
+     "stable_dp_pid": 93405,
+     "prior_R9_skip": "Required wireR9 not executed, earlierold-key-negative assertion failed before this valid separate rotation sequence. Preserved failure remains."
+    }
+   },
+   "required_open": {
+    "TestOnionLoad": "firstFAIL253.32s, retryFAIL226.07s; each10auth-refusal then2TTL-expired; causeUNKNOWN; no HTTP200/nonempty body/HTTPS completion proof",
+    "F2": "original full command remainsRED354PASS2FAIL including requiredR9SKIP and precondition-invalid oldCPnegative; separate actual wholewireR1\u2013R9 and new-lifetime return controls retained without aggregate fullGREEN",
+    "CP_exit": "original full F2 CPexit1causeUNKNOWN; successful new observations do not diagnose it",
+    "TLS_scope": "selected-PSK current-DP-pin-verified attempt plus refusedRPC, not completed Finished or proof of rejection cause"
+   },
+   "release_residue": {
+    "T078_T079": "pending",
+    "R1_R8": "NOT RUN",
+    "T200": "injected DoH/HTTP3 not shipped",
+    "T206": "capture-integrity Minor remains release/consumer blocker"
+   },
+   "retention": "all earlier source/record/history/raw attempts preserved; no T207/T189 filing, consumer-edge change, runtime restart or additional live test during D1 correction"
+  }
+ ]
+}

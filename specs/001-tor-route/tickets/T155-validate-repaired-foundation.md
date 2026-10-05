@@ -1,15 +1,15 @@
 ---
 id: "T155"
 title: "Validate repaired foundation before feature work"
-status: pending
+status: in-progress
 created: "2026-09-12"
-last_updated: "2026-10-05"
+last_updated: 2026-10-05
 source: "reviews/redteam-20260912-677960b.md"
 phase: "Foundation audit remediation"
 story: "-"
 blocked_by: ["T208", "T203", "T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T120", "T114", "T121", "T123", "T124", "T126", "T132", "T157", "T158", "T159", "T161", "T162", "T163", "T164", "T165", "T167", "T168", "T172", "T173", "T174", "T176", "T183", "T184", "T185", "T186", "T187", "T188", "T193", "T194", "T195", "T196", "T198", "T204", "T205"]
 parallel: false
-files_budget: 17   # raised 8 -> 14 in attempt 3 and 14 -> 17 in attempt 4, both pre-granted (rule 2026-10-01); attempt 4's raise adds the
+files_budget: 21   # raised 8 -> 14 in attempt 3 and 14 -> 17 in attempt 4, both pre-granted (rule 2026-10-01); attempt 4's raise adds the
                    # Acceptance 6 filings the maintainer directed into this candidate on 2026-10-03 (new T200, T201; additions to T189, T197, T199; T078 blocked_by).
                    # Attempt 4 touches 17 paths, each named in Acceptance or directly implementing/testing an acceptance item:
                    # ticket, STATUS.md, evidence/T155-tests-first.json (fixed overhead); live-e2e/README.md (A4);
@@ -19,12 +19,21 @@ files_budget: 17   # raised 8 -> 14 in attempt 3 and 14 -> 17 in attempt 4, both
                    # tests/contract/compose/wireprobe/wireprobe.go + wireprobe_test.go (A2 "peer-pin rotation/resumption": live resumption probe and its hermetic discrimination test)
                    # tickets T200 and T201 (new), T189, T197, T199 (items added) and T078 (blocked_by + one decision line) (A6)
                    # (attempt 3's ticket filings and its T078 blocked_by edit landed separately and are not in this candidate)
+                   # Resume after T208 (2026-10-05) touches 20 paths: the 13 reconciled candidate paths (ticket, STATUS.md, both evidence
+                   # JSONs, live-e2e README, wireprobe.go/_test.go, the tracker test, t155_stack.py, partition_axes, route_diagnostic,
+                   # stream_isolation_dp_uname and stream_isolation tests) plus the Acceptance 6 filings below.
+                   # raised 17 -> 20 on 2026-10-05, not pre-granted: 19 paths were shown to and approved by the maintainer with the filing shape
+                   # "Fold in, one new ticket" (new T209; additions to T189, T190, T197, T199; T078 blocked_by); the twentieth, T077 blocked_by,
+                   # was decided by the orchestrator under the maintainer's delegation of the same day. 20 exceeds twice the pre-attempt-3
+                   # budget of 8; the maintainer's choice, not the pre-grant rule, authorizes that.
+                   # raised 20 -> 21 on 2026-10-05, maintainer-approved ("Completion guard, carry evidence (Recommended)"):
+                   # tests/live-e2e/local-topology/test_t155_stack.py, the regression for the round-1 review Major.
 privacy_critical: true
 complexity: "high"
 risk: "high"
 round_cap: 3
 spec_refs: [".specify/memory/constitution.md", "specs/001-tor-route/spec.md"]
-decision_refs: ["2026-10-03 maintainer: approve full next scope after T203; T204 and T205 repairs, T117 absorption, T206 release-only filing, then T155 TLS-probe repair and full validation", "Maintainer 2026-10-03: refine A6 verbatim; require authenticated live GetStatus red/green publication probe (Attempt 4 resumed below)", "2026-10-05 maintainer: \"ok 250s, wording approved\"; park T155, file T208, reopen T155 after it for one final live pass"]
+decision_refs: ["2026-10-03 maintainer: approve full next scope after T203; T204 and T205 repairs, T117 absorption, T206 release-only filing, then T155 TLS-probe repair and full validation", "Maintainer 2026-10-03: refine A6 verbatim; require authenticated live GetStatus red/green publication probe (Attempt 4 resumed below)", "2026-10-04 maintainer: \"ok do that in the 155\"; D1-only current-ticket diagnostic correction and explicit exception to A6/workflow new-remediation filing, genuine RED/GREEN and affected evidence; no new owner/edges or privacy waiver", "2026-10-05 maintainer: \"ok 250s, wording approved\"; park T155, file T208, reopen T155 after it for one final live pass", "2026-10-05 maintainer (relayed by the orchestrator): \"Fold in, one new ticket\" and \"Evaluator checks, then file\"; r5 survivors filed as additions to T189/T190/T197/T199 and new T209, T078 blocked_by T209; the 19-path budget raise approved by that choice", "2026-10-05 maintainer: \"A: No, scoped + release decision\" (onion-to-clearnet redirect: not an automatic route downgrade under 001's destination-only routing; 001-specific, not extended to user-selected routes; disclosure wording and a redirect test under T190 item 7; maintainer decides block-or-disclose before T078)", "2026-10-05 maintainer: \"Accept Claude-only now\" (the all-Claude r5 pass is accepted as the Acceptance 5 pass; the Astra and GLM cumulative passes remain T078's under the 2026-09-29 decision recorded there)", "2026-10-05 maintainer: \"Split to T209 (Recommended)\" (the three T203 orphans, including the quickstart floor reason, and the Dockerfile/Makefile comments to T209; THREAT-MODEL banner/§5.9 and CLAUDE.md stay in T197); \"Owners for two, rest no ticket (Recommended)\" (A2 m7 to T197, A3 m2 increment to T199, others no ticket); \"evaluate and ultrathing best solution\" (the unhomed notes and the T077 edge delegated to the orchestrator; orchestrator decided 2026-10-05); maintainer acknowledged the resulting set: \"ok looks good\"", "2026-10-05 maintainer, on the round-1 review Major: \"Completion guard, carry evidence (Recommended)\" (t155_stack.py exits 0 only when every mandatory check of the mode is recorded PASS; interrupts recorded as incomplete; regression tests first; F2 carried forward by a mechanical comparison, no rerun; budget 21); \"Stale SD entry to T209 (Recommended)\"; \"R-7 to T078 (Recommended)\"; \"Keep fixing to the cap\" (a further harness-only Major that does not touch recorded live evidence may be fixed inside T155 up to round 3)"]
 remediates: "T125"
 tests_first: []
 reviews: {}
@@ -484,6 +493,235 @@ It was restored exactly from HEAD after capture; earlier red/green pairs remain 
 `superseded`. Command: `bash target/runs/T155a4r/traffic-tf.sh`. No red rerun was needed.
 
 
+## Resume after T208 — 2026-10-05
+
+Baseline and start-sha `f5558925547e81737987ea8ea34f6c09495e051d` (T208 done at `334835d`,
+`496f89e`). The developer is a fresh Claude subagent on the orchestrator's configuration
+(self-reported Fable 5.1 at the start of this resume and Opus 5.5 later in the same session;
+not independently verified).
+
+### Reconciliation of the preserved 13-path candidate
+
+Source: the verified archive `park/20261005-t208/` (its `restore/` tree was compared
+byte-for-byte with the preserved checkout before use). No path was dropped; the union is
+13 paths within `files_budget` 17, so no budget raise was needed.
+
+| Path | How |
+|---|---|
+| `tests/contract/compose/wireprobe/wireprobe.go`, `wireprobe_test.go`, `tests/contract/workflow/live_e2e_tracker_test.sh`, `tests/integration/partition_axes_test.go`, `route_diagnostic_test.go`, `stream_isolation_dp_uname_test.go`, `tests/live-e2e/local-topology/t155_stack.py` | taken as-is (none changed between `403d424` and `f555892`) |
+| `tests/integration/stream_isolation_test.go` | merged: T208's comment line stays; the two D1 hunks applied on top without conflict |
+| this ticket | merged: committed frontmatter, park note and history kept; the candidate's D1 direction and closure block inserted at its original place after Acceptance 6, and its 2026-10-04 `decision_refs` entry added |
+| `specs/001-tor-route/live-e2e/README.md` | taken, then its Evidence index rewritten for this pass |
+| `specs/001-tor-route/evidence/T155-tests-first.json` | taken as the starting record; the new red moved all six earlier records under `superseded` |
+| `specs/001-tor-route/evidence/T155-live-results.json` | rewritten for this pass; the candidate's whole 2026-10-04 record is kept unchanged under `superseded`; the `partition_vector_provenance` transcript cited by `partition_axes_test.go` and the attempt-4 section above was re-executed on 2026-10-05 (output identical to 2026-10-03) and restored after round-1 review |
+| `specs/001-tor-route/STATUS.md` | regenerated, not merged |
+
+The earlier review history (`target/runs/T155.review-history`) was copied into this
+worktree unchanged (SHA-256 `3c9f4174…6046d`) so later gate records append to it.
+
+### Tests first on the new baseline
+
+One command for red and green (hermetic `wireprobe` resume/early-abort tests, then
+`TestT059RouteDiagnosticDoesNotInventTorRefusal`). Red was captured with every candidate
+file staged except the D1 helper correction: the TLS controls pass and the three reply
+classes 0x03/0x04/0x06 fail on the unrepaired helper while its six preservation controls
+pass (red snapshot `857323da…`). The live mutant reds of earlier attempts bind their own
+baselines and were not repeated; the test sources they exercised are unchanged.
+
+### Final live pass (one pass, no rerun)
+
+Evidence renewal: T208 changed the data-plane binary, so every check that deploys it or
+runs the integration binary was executed again; F5's inputs are unchanged and it was
+executed again anyway. Candidate identity, per-check results, timings, raw-log hashes and
+limits: `specs/001-tor-route/evidence/T155-live-results.json`; raw artefacts under
+`target/runs/T155r/`. Fresh copy of the saved QEMU TCG guest (`guest-T155r.qcow2`), one boot.
+
+| Check | Result (attempts) |
+|---|---|
+| F1 `run.py` | exit 0, 52 pass lines, no fail or skip (1) |
+| F2 `t155_stack.py` full, F3 inside | exit 0, 104 pass, 0 fail (1): wire rows R1-R9 each PASS with script exit 0; old identity refused after rotation; TLS resumption phase (resumed before rotation; old ticket on the pin-verified resumed path gets no RPC; old identity refused; rotated identity answered); real UTC rollover at 09:00 on one running DP with 7 empty pre-rollover reads, then an unchanged completed row (5 requests, 1113 bytes) through three further traffic rounds; `connect_refusal.py` exit 0 |
+| F4 T126 suite with device and site axes | exit 0, 14 pass records (1) |
+| F4 T182 suite | exit 0 (1): `TestOnionLoad` PASS, one attempt, `ok` after 91.86 s, 225341 bytes; `TestStreamIsolationPerFirstPartyDomain` PASS |
+| F5 four browser modes, pinned Mullvad Browser 153.3.0esr | all four GREEN, 35 scenarios (1) |
+| F7 T162 docker tier | exit 0, both groups OK (1) |
+
+The mandatory HTTPS onion load is proved on the 250 s data plane by this one selection.
+The 2026-10-04 control-plane exit during the wire gate did not recur; its cause is still
+unknown. `TestOnionLoad`'s control onion (not part of its verdict) returned a failure reply
+after about 120 s. No tool time limit ended a test command.
+
+### Cumulative redteam on this candidate (Acceptance 5)
+
+Blind export of index tree `d6f46b9b8eb269814b316a40e86a3826b728226e` (432 files; review
+history, findings, SECURITY-DECISIONS, tickets, STATUS, evidence, analysis, journal and
+scorecard removed). Three `stargate-redteam` reviewers (transport; control plane and
+browser; deployment), each self-reported Claude Opus 5.5, then three `general-purpose`
+falsifiers with the project history, each self-reported Claude Fable 5.1. All Claude, models
+not independently verified, independence limited to fresh context (the developer is also
+Claude). Everything was read-only source inspection: no build, test, container, browser or
+probe was run by reviewers or falsifiers, because the live pass was in progress. Reports:
+`.scratch/tmp/T155/redteam-r5/` (gitignored); this section is the durable record.
+
+- Claimed: 1 Blocker and 4 Majors (area 2: B1 onion-page clearnet requests go Direct, M1
+  shipped profile lacks DoH/HTTP-3 off, M2 threat-model prose for mechanisms that do not
+  exist, M3 stale popup route label; area 3: M1 AppArmor confinement not checked on the
+  running DP), 22 Minors, 18 Info.
+- **After falsification no Blocker and no Major survived.** B1, M1, M2 and M3 are the
+  claims already owned at Minor by T190 item 7, T200, T197 item 3 with T190 item 3, and
+  T197 item 1. Area 3 M1's core repeats a claim falsified in the 694dbd8, 79d49e9 and
+  989b8f9 passes (on the measured rootful local daemon a host without AppArmor exits 60
+  and a missing profile makes Docker refuse the start). The eight area 1 Minors are
+  owned by T189 items 1-5 or T067a/T067b, already accepted and disclosed, or falsified
+  against the contracts.
+- The new increments that survived, all Minor or Info, and their dispositions are in the next
+  section.
+
+### Survivor dispositions and filings (maintainer decisions, 2026-10-05)
+
+The maintainer chose the filing shape "Fold in, one new ticket" and the process "Evaluator
+checks, then file" (2026-10-05, relayed by the orchestrator). An independent evaluator checked the drafts before anything was written, and its required
+corrections were applied. The same evaluator session then re-checked the second revision,
+read-only, and returned APPROVE WITH REQUIRED CORRECTIONS; its further corrections were
+applied before filing. The evaluator is Claude: the first pass self-reported Fable 5.1 and
+the re-check runtime reported Opus 5.5, neither independently verified, so independence is
+limited to fresh context from the developer. In the first pass the evaluator ran
+`git write-tree` once by mistake, outside its read-only brief; the index file hash was
+unchanged between the end of the first pass and the re-check, and the re-check ran no git
+command that writes.
+The filings are inside this candidate because Acceptance 6 requires them before closure and
+a HEAD move would invalidate the tests-first baseline. The budget raise to 19 paths is
+maintainer-approved by the filing choice; the twentieth path (T077's `blocked_by`) was
+decided by the orchestrator under the maintainer's delegation of 2026-10-05 ("evaluate and
+ultrathing best solution"). Neither is pre-granted.
+
+| Survivor (after falsification) | Severity | Disposition |
+|---|---|---|
+| A2 B1 redirect sub-case: an onion-to-clearnet HTTP redirect is not named or tested (READ, not run) | Minor | **T190** item 7 addition: the maintainer's 001-specific reading, then a block-or-disclose decision before T078, then disclosure and a test written to that decision |
+| A2 M3 new part: a main-frame navigation that never commits leaves the Tor label over a clearnet page (READ, not run) | Minor | **T197** item 1 addition |
+| A3 M1 increment: `init` verifies the invoking kernel, not the running DP's label; supported daemon scope unstated; the harness reads `docker inspect` | Minor | new **T209** (blocks T078 and T077) |
+| A3 m3: observer `read_only`, `cap_drop` and `no-new-privileges` unasserted | Minor | new **T209** |
+| A3 m5 comment half and m6 T203 orphans: Dockerfile/Makefile "verified"/"digest pinned" comments; env example and local-topology README describing the pre-T203 observer; quickstart Engine-floor reason citing a removed `subpath` | Minor | **T209** Acceptance 8 (maintainer: "Split to T209 (Recommended)") |
+| A3 m6 remainder: THREAT-MODEL banner/§5.9, `CLAUDE.md` deployment sentence | Minor | **T197** item 6 |
+| A3 m1 gitleaks half: CI gitleaks binary not digest-checked | Minor | **T199** item 4 |
+| A2 m2: `<local>` bypass leaves single-label hosts unrouted | Minor | **T190** item 10 (filed under Acceptance 6; maintainer delegated the choice 2026-10-05, orchestrator decided) |
+| A2 m3: two labels sharing one token value | Info | **T190** item 8 addition |
+| A2 m4: 8881 squatting while the DP is down | Info | **T197** item 7 |
+| A2 M2 residue: `run.sh` still names the foreign-extension inventory | Info | **T197** item 3 addition |
+| A2 m7: THREAT-MODEL §4.1 and §4.3-§4.5 describe routes 001 does not ship in the present tense, with no per-route implemented/target label (Principle V) | Info | **T197** item 8 (maintainer: "Owners for two, rest no ticket (Recommended)") |
+| A3 m2 increment: the `docker-cadence` path filter omits `data-plane/cmd/tor-health-publisher/**` (in the Tor image since T203) and `data-plane/cmd/tor-observer/**` (in the observer image) | Info | **T199** item 5 (same decision) |
+| A1 i5: `tor:9050` wording in `socks5-auth.md` and `dpharness.go` | Info | **T189** item 4 addition |
+| A1 i3: verifier-count timing (read from the code; unmeasured) | Info | **T189** item 8 |
+| A3 i3: a compromised DP can read the host name (interface identifiers via socket ioctl unverified); A2 i6: the CP image copies its jars owned by the runtime user (read-only rootfs mitigates); A3 i6: `init` admits one fixture Compose path under the repository root, by design (T162); A1 m7 refinement: on a quiet host the hourly rows also let the CP infer one tunnel's lifetime (same class as the THREAT-MODEL quiet-host disclosure) | Info | no ticket (maintainer, 2026-10-05); this row is the durable record, the scratch reports are not |
+| A3 i4: the Tor entrypoint's 0.2 s poll spawns about five short processes per iteration | Info (performance) | no ticket; for the `stargate-perf` pass at T079 |
+
+Notes, not findings (maintainer delegated the choice 2026-10-05; orchestrator decided not to
+ticket them): `proto/stargate/v1/control.proto` names T067b's contract-test harness as a
+`GetStatus` caller (its test file is named in `contracts/control-grpc.md`); whoever runs
+T067b checks that the comment still holds (the falsifier did not establish it is wrong). A
+DP-side `sg1:` username-shape gate (F1 m1) is an optional design change for the maintainer;
+a quickstart line "restart the DP after repairing keys" (F1 i4) is optional. Two leftovers
+were homed under the same delegation: the `init` comment on `stargate-keys` ownership,
+noted by the area 2 falsifier (T190 item 5), and the `torrc.md` "Parses the golden"
+sentence that T208 recorded as incomplete (T189 item 4).
+
+T078's `blocked_by` gains T209; T189, T190, T197 and T199 already block it. T077's
+`blocked_by` gains T209 (T209 changes `init` and the quickstart prerequisites T077 walks
+through; T088 hands daemon variance to T077). None of these blocks T155: no Blocker or Major
+survived.
+
+Redirect reading (maintainer, 2026-10-05, "A: No, scoped + release decision"): under 001's
+destination-only routing, an onion page's redirect to a clearnet URL is not an "automatic
+route downgrade" (Constitution III network-origins matrix). The reading is specific to 001
+and does not extend to user-selected routes. Disclosure wording and a redirect test are
+filed under T190 item 7. Before T078 the maintainer decides whether clearnet requests
+initiated from an onion page are blocked instead of only disclosed; T190 item 7 records
+that decision before its test is written. Because the reading is "no", the falsifier's
+condition for this item to block T155 is not met. No onion-to-clearnet redirect has been
+run; the behaviour is read from `router.js`.
+
+Acceptance 5 (maintainer, 2026-10-05, "Accept Claude-only now"): the r5 pass recorded above
+is this ticket's cumulative pass. Its form: three `stargate-redteam` reviewers and three
+falsifiers, all Claude (reviewers self-reported Opus 5.5, falsifiers self-reported Fable 5.1;
+not independently verified), read-only source inspection (nothing was built or run; the
+developer is also Claude), on the blind export of index tree
+`d6f46b9b8eb269814b316a40e86a3826b728226e`. One falsifier ran `git write-tree` in the
+worktree, outside its allowed read-only commands; it printed the already-recorded tree id
+and reported no other write. Against that snapshot the candidate adds the two evidence JSONs and the new T209 ticket,
+and changes this ticket, STATUS.md, the live-e2e README (its Evidence index) and tickets
+T077, T078, T189, T190, T197 and T199; none of those is executable. After review round 1 the
+candidate also changes `tests/live-e2e/local-topology/t155_stack.py` (entrypoint only) and
+adds `tests/live-e2e/local-topology/test_t155_stack.py`; that change was not seen by the r5
+pass and is covered by the ordinary review of round 2 (next section). The Astra and GLM cumulative passes remain T078's under the
+2026-09-29 decision recorded there.
+
+### Review round 1 and the harness completion guard (2026-10-05)
+
+Driver verify before review: GREEN, 38 gates passed, 4 skipped (the wire runtime rows and the
+T162 docker tier, both run live in F2 and F7; the docker operational capture; release-cadence
+reproducibility), none failed.
+
+- Round 1 (snapshot `c879c531…`): both reviewers APPROVE-WITH-FIXES, one Minor each, both
+  documentation. Astra: the evidence did not state the two isolation limits the contract
+  requires of T155 evidence; the sentence was added to the README Evidence index. GLM: the
+  `partition_vector_provenance` transcript cited by `partition_axes_test.go` was missing from
+  the results record; the command was re-executed (output identical to 2026-10-03) and the
+  section restored.
+- Round 1 refresh after those fixes (snapshot `fb1ade0e…`): GLM APPROVE; Astra REWORK with one
+  Major. `t155_stack.py`'s entrypoint caught only `Exception`, so an interrupt inside a
+  phase skipped the failure record and the `finally` block exited 0 from a partial result
+  list; nothing checked that the run was complete. Astra did not claim the recorded run
+  was interrupted.
+
+Maintainer decision (2026-10-05, "Completion guard, carry evidence (Recommended)"), tests first:
+
+- Red: `test_t155_stack.py` executes the real entrypoint block with stand-in phases. Against
+  the unrepaired harness, an interrupt after one passing check, `SystemExit(0)` inside a
+  phase and an early return each ended with exit 0 in all three modes (9 failures); the
+  cases that need the mandatory list failed or errored because none existed; the
+  ordinary-exception control passed.
+- Fix: the harness declares the mandatory check names per mode (`MANDATORY`: 65 names for
+  the full run, 10 for `--only resumption`, 11 for `--only traffic`, with minimum counts
+  for the repeated traffic checks). The entrypoint records an interrupt or any other
+  `BaseException` as an explicit incomplete failure, records a failed cleanup, and exits 0
+  only when every mandatory check of the mode was recorded PASS and nothing failed.
+  Cleanup still runs.
+- Drift guard, as chosen: the test reads the `check()`/`require()` names from the harness
+  source (per function, with the wire-row names expanded) and requires the declared list of
+  each mode to equal them, so a new or renamed check cannot be left out. The comparison with
+  a completed run's `results.json` is done once, below, as the carry-forward check; it is
+  not a permanent test, because raw results are not in the repository.
+- Green: the identical command passes (11 tests at that point; 13 after the round-2 additions below). The D1/TLS red/green pair moved under
+  `superseded` in the tests-first record with the six earlier records.
+
+F2 is carried forward without a rerun (README D-live-6). The recorded run used the pre-fix
+harness. Only the success decision and the abnormal-termination paths changed: the first
+558 lines of `t155_stack.py`, which hold every function and check body, are byte-identical
+before and after, and no file under `data-plane/`, `control-plane/`, `compose/`, `sidecars/`
+or `scripts/` changed. The recorded `results.json` (SHA-256 `cd839c3d…`) was checked with the
+repaired harness's own `missing_mandatory`: all 65 mandatory names are present with at least
+the required counts, no recorded name is outside the list, and none of the 104 results is a
+failure. Its raw log ends with the last check of the full run. The comparison is recorded
+in `evidence/T155-live-results.json` (`f2_carry_forward`). The repaired entrypoint and the
+two focused modes have hermetic coverage only.
+
+Round 2 (snapshot `13df1e5d…`; a first launch failed closed on a rejected Codex login and
+imported nothing): both reviewers APPROVE, each with one Minor in this ticket's own harness.
+Both were fixed here before commit instead of being left for a follow-up, tests first, and
+the changed candidate was re-reviewed in the same round. Astra: a non-zero exit of
+`docker compose down` was ignored, so a failed teardown could still end with exit 0; red
+(3 failures, one per mode) then green, and the entrypoint now records it as a failed cleanup.
+GLM: the drift guard read check names only from functions, so a check added at module
+level would escape it; the test now requires that no `check()`/`require()` call exists
+outside a function (with positive controls for its detector). Neither change touches a
+check body or the recorded results, so the F2 carry-forward above is unchanged; whether the
+recorded run's teardown returned zero was not captured by the earlier entrypoint.
+
+Two items from the Acceptance 1 closure re-check were given owners inside tickets already
+in this candidate (maintainer, 2026-10-05): the stale present-tense ControlPort description
+in the 2026-07-16 T094a SECURITY-DECISIONS entry is T209 Acceptance 9 ("Stale SD entry to
+T209 (Recommended)"; the wording stays reserved for the maintainer and nothing was written
+to that file), and release-cadence item R-7 is owned by T078 ("R-7 to T078 (Recommended)").
+
 ## Acceptance
 
 1. Reconcile every September audit finding and the July finding ownership table against
@@ -507,6 +745,54 @@ It was restored exactly from HEAD after capture; earlier red/green pairs remain 
    constitutional conflicts require the governance path and cannot be accepted by this plan.
    Record the reviewed snapshot and invalidate affected evidence after further changes.
 6. Leave T078/T079 pending for the completed milestone. File new findings as focused remediation tickets. Surviving Blocker/Major findings block this ticket; surviving Minor/Info findings block T078 and their affected consumers, and T078 cannot complete while any remains open. Reverify closure.
+
+
+**D1-only governing maintainer direction — 2026-10-04.** The user explicitly
+approved "ok do that in the 155" after the orchestrator described correcting D1
+within T155 with a specific exception to follow-up filing. For this source-backed
+Info only, current T155 owns the static `t059ClassifyDialErr` `unknown error `
+result/comment correction and `TestT059RouteDiagnosticDoesNotInventTorRefusal`.
+This governing direction supersedes A6's new-ticket filing sentence and the
+workflow's done-ticket-to-new-remediation rule for D1 only; exact A6 remains above.
+No T207/T189 filing, new consumer edge, completed T059/T126 ticket/history amendment,
+constitutional exception, privacy waiver or unresolved-finding acceptance is authorized.
+
+Author the real-helper regression before the fix and preserve behavioral RED then
+identical-command GREEN, including nil, AUTH, listener/deadline branch controls and
+nonempty ROUTE for fixed 0x03/0x04/0x06 without arbitrary details or invented native
+Tor refusal. Preserve branch order and every caller's failed-CONNECT Fatal guard.
+Record D1 and its independent closure check; all other A6 finding rules remain binding.
+The current combined capture naturally preserves the original TLS RED under
+`superseded`: its new RED proves D1 while the repaired TLS controls pass. The original
+TLS command is also executed unchanged as a separate passing observation; no older
+record is promoted or transcribed. Candidate-bound evidence and normal gates remain
+required. This bounded rework adds only the shared helper and focused regression to
+the existing paths; with the sanitized results index the union is 13 paths within 17.
+
+Evidence renewal follows affected inputs: retain every actual executed snapshot,
+compare unchanged input scopes, and do not represent an old full source or binary as
+the corrected one. This static diagnostic correction intrinsically needs hermetic
+proof and independent guard review; no new live run is authorized by it. Required
+HTTPS onion load remains unproved after two actual TestOnionLoad failures with
+UNKNOWN original causes. T155 remains incomplete; this repair supplies no permission
+to retry, change targets/windows/auth-readiness gates, or run final verification/reviews
+against a known missing mandatory live property.
+
+**D1 independent closure — 2026-10-04.** The fresh independent falsifier
+reverified the bounded Info correction: the exact corrected helper passed all nine
+regression controls (exit 0); substituting the exact original helper only in an
+isolated copy failed 0x03/0x04/0x06 while the six preservation controls passed
+(exit 1). It independently checked the unchanged caller Fatal guards, identical
+combined controller argv/source binding and retained original TLS chronology.
+Report: `/home/claudia/stargate/.scratch/tmp/T155/D1-closure-falsification/report.md`,
+SHA-256 `392920cb97c351ea15a9afec3fab45457ebc320847c6d5a5e7e6285a24b617ed`.
+Corrected/original raw SHA-256:
+`e7107f76eaaf6e895f95b8e6c94c0acff142ceb7c3e09047b5fc7e51be671718` /
+`78023da6cfcce818c1486842636f2d3df9346afea04b7cdac303d4cb2578a0ba`.
+D1 is repaired and independently reverified with no bounded survivor. This is
+not an ordinary reviewer verdict or whole-ticket approval: mandatory HTTPS onion
+load remains unproved after two failures with UNKNOWN causes, and T155 remains
+incomplete. This closure supplies no permission for another runtime attempt.
 
 7. Verify T156 policy end-to-end: device/profile/site partitioning, no Direct fallback,
    complete-hour-only metric publication, operational-writer/retention cleanup, and acknowledged

@@ -27,8 +27,10 @@
 // DP kept the credentials apart"; a failing control marks this run
 // uncalibrated rather than green.
 //
-// Partitions vary only the browser-profile id (the production way one
-// target gets two usernames: distinct profiles, modes or containers).
+// The first pair varies only the browser-profile id (the production way one
+// target gets two usernames: distinct profiles, modes or containers). T155
+// adds the device (second bearer token) and first-party-site axes as further
+// subtests of this stack (partition_axes_test.go), one axis per pair.
 // The helper is pinned to the foundation-boundaries reference vector by a
 // hermetic test below, so a drift in the tuple shape fails in the PR gate.
 //
@@ -379,7 +381,8 @@ func TestStreamIsolationDPUNAMEForwarding(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate bearer token: %v", err)
 	}
-	if err := t126SeedToken(ctx, token); err != nil {
+	// T155: a second device token so the device axis can be exercised live.
+	if err := t126SeedToken(ctx, token, t155DeviceTwoToken); err != nil {
 		t.Fatalf("seed token into %s_stargate-control-config: %v", t126Project, err)
 	}
 
@@ -448,6 +451,18 @@ func TestStreamIsolationDPUNAMEForwarding(t *testing.T) {
 				"uncalibrated (T060's same-credential consolidation no longer holds?)\n%s", t126DPAddr, circ, forensics())
 		}
 		t.Logf("OK: calibration — same partition shares circuit %s", circ[0])
+	})
+
+	// T155: the device and first-party-site axes, one axis different per pair,
+	// same target, against the calibration above (partition_axes_test.go).
+	base := t155Cred{user: userA, token: token}
+	t.Run("DeviceAxisDivergesSameTarget", func(t *testing.T) {
+		device := t155Cred{user: t126PartitionUsername(t155DeviceTwoToken, t126ProfileA, t126Onion), token: t155DeviceTwoToken}
+		t155RunAxisPair(t, ctx, ctl, composeFile, envFile, target, "device", base, device, forensics)
+	})
+	t.Run("SiteAxisDivergesSameTarget", func(t *testing.T) {
+		site := t155Cred{user: t126PartitionUsername(token, t126ProfileA, t155SiteTwoOnion), token: token}
+		t155RunAxisPair(t, ctx, ctl, composeFile, envFile, target, "first-party site", base, site, forensics)
 	})
 }
 
@@ -708,7 +723,7 @@ func t126CircuitBuilt(ctx context.Context, ctl t126ControlFn, circID string) (bo
 // volume under compose's labels (so down --volumes reaps it), pre-create the
 // keys/ mountpoint, and write tokens.yaml (FR-017 shape) on stdin so the
 // token never reaches argv.
-func t126SeedToken(ctx context.Context, token string) error {
+func t126SeedToken(ctx context.Context, tokens ...string) error {
 	vol := t126Project + "_stargate-control-config"
 	create := exec.CommandContext(ctx, "docker", "volume", "create",
 		"--label", "com.docker.compose.project="+t126Project,
@@ -721,7 +736,12 @@ func t126SeedToken(ctx context.Context, token string) error {
 		"--entrypoint", "sh",
 		"-v", vol+":/tgt", "stargate/tor:local",
 		"-c", "mkdir -p /tgt/keys && cat > /tgt/tokens.yaml")
-	write.Stdin = strings.NewReader(fmt.Sprintf("tokens:\n  - label: t126-test\n    token: %s\n", token))
+	var yaml strings.Builder
+	yaml.WriteString("tokens:\n")
+	for i, token := range tokens {
+		fmt.Fprintf(&yaml, "  - label: t126-test-%d\n    token: %s\n", i+1, token)
+	}
+	write.Stdin = strings.NewReader(yaml.String())
 	if out, err := write.CombinedOutput(); err != nil {
 		return fmt.Errorf("write tokens.yaml into volume: %v: %s", err, out)
 	}

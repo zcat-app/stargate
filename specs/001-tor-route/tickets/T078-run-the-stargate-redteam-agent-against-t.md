@@ -7,7 +7,7 @@ last_updated: "2026-10-05"
 source: tasks.md#T078
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: ["T208", "T203", "T009", "T155", "T034a", "T034f", "T064", "T065", "T066", "T067", "T067a", "T067b", "T070", "T070a", "T070b", "T071", "T072", "T073", "T075", "T077", "T079a", "T080", "T081", "T109", "T110", "T111", "T112", "T114", "T119", "T120", "T121", "T123", "T124", "T126", "T132", "T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T157", "T158", "T159", "T161", "T189", "T190", "T191", "T196", "T197", "T198", "T199", "T200", "T201", "T204", "T205", "T206"]
+blocked_by: ["T208", "T203", "T009", "T155", "T034a", "T034f", "T064", "T065", "T066", "T067", "T067a", "T067b", "T070", "T070a", "T070b", "T071", "T072", "T073", "T075", "T077", "T079a", "T080", "T081", "T109", "T110", "T111", "T112", "T114", "T119", "T120", "T121", "T123", "T124", "T126", "T132", "T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T157", "T158", "T159", "T161", "T189", "T190", "T191", "T196", "T197", "T198", "T199", "T200", "T201", "T204", "T205", "T206", "T209"]
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: false
@@ -64,6 +64,12 @@ dismisses another's finding. Adding that cumulative dispatch path is in scope fo
 Decide whether the Tor sidecar counts as a "compromised application process" for the
 Constitution III actor/destination matrix (Tor's LAN/host reach through `stargate-egress`; T155
 attempt-4 redteam, area 3 M1, narrowed to disclosure residue, T197 item 5).
+
+This ticket owns release-cadence item R-7 of `specs/001-tor-route/live-e2e/README.md`
+section 4 (routed IPv6 egress, LAN and VPS profiles, physical NIC and hypervisor behaviour):
+it is either run on the release candidate and recorded with snapshot and evidence, or
+dispositioned by the maintainer here; it is never recorded as PASS without a run
+(maintainer, 2026-10-05, "R-7 to T078 (Recommended)"; T155 Acceptance 1 closure re-check).
 
 ## Out-of-scope
 

@@ -12,6 +12,8 @@
 //	status    — full mTLS GetStatus with correct §5 metadata (positive path;
 //	            after R9's key rotation this is also the per-handshake
 //	            pin-re-read proof: a running DP accepts the new CP identity)
+//	counters  — authenticated GetStatus response as JSON for T155's live
+//	            completed-hour publication assertions (test harness only)
 //	major     — GetStatus with x-stargate-proto-major=-major; exit 0 iff the
 //	            §5.2 rejection rule holds (FailedPrecondition unless major==1)
 //	minor     — GetStatus with minor=-minor, major=1; exit 0 iff accepted
@@ -31,6 +33,12 @@
 //	            observer accepted this CP identity
 //	observer-refused — the negative: exit 0 iff the observer greeted the
 //	            caller and then closed without accepting it (a stale pin)
+//	resume    — T155 (A-1): a TLS 1.3 session ticket offered across a CP
+//	            key rotation; exit 0 iff the running DP resumes the ticket
+//	            before the rotation (positive control) and, after it,
+//	            completes no RPC for the old identity, resumed or full, while
+//	            the rotated identity is accepted. Rotates cp.* itself (keys
+//	            volume RW, CP stopped: §6.2 rotation order). See probeResume.
 //
 // TLS is deliberately REIMPLEMENTED here instead of importing
 // data-plane/internal/controlclient: Go's internal-package rule already
@@ -55,6 +63,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -62,6 +71,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
 )
@@ -76,7 +86,7 @@ const (
 
 func main() {
 	if len(os.Args) < 2 {
-		fatal("usage: wireprobe <status|major|minor|nomajor|wrongkey|proxy|rotate|observer|observer-refused> [flags]")
+		fatal("usage: wireprobe <status|counters|major|minor|nomajor|wrongkey|proxy|rotate|resume|observer|observer-refused> [flags]")
 	}
 	mode := os.Args[1]
 	fs := flag.NewFlagSet(mode, flag.ExitOnError)
@@ -92,6 +102,8 @@ func main() {
 	switch mode {
 	case "status":
 		err = probeStatus(*socket, *keysDir, 1, 0, *timeout)
+	case "counters":
+		err = probeCounters(*socket, *keysDir, *timeout)
 	case "major":
 		err = probeMajor(*socket, *keysDir, *major, *timeout)
 	case "minor":
@@ -104,6 +116,8 @@ func main() {
 		err = probeProxy(*proxyAddr)
 	case "rotate":
 		err = rotateCPKeys(*keysDir)
+	case "resume":
+		err = probeResume(*socket, *keysDir, *timeout)
 	case "observer", "observer-refused":
 		path := *socket
 		if path == "/run/stargate/dp.sock" {
@@ -120,7 +134,9 @@ func main() {
 	if err != nil {
 		fatal("%s: %v", mode, err)
 	}
-	fmt.Printf("wireprobe: %s OK\n", mode)
+	if mode != "counters" {
+		fmt.Printf("wireprobe: %s OK\n", mode)
+	}
 }
 
 func fatal(format string, args ...any) {
@@ -247,6 +263,35 @@ func getStatus(ctx context.Context, cc grpcpb.ControlClient, major, minor string
 }
 
 // --- modes -------------------------------------------------------------------
+
+func probeCounters(socket, keysDir string, d time.Duration) error {
+	priv, err := loadSigner(keysDir + "/cp.priv")
+	if err != nil {
+		return err
+	}
+	cert, err := selfSigned(priv, "stargate-cp")
+	if err != nil {
+		return err
+	}
+	cc, closeFn, err := dialControl(socket, keysDir, cert)
+	if err != nil {
+		return err
+	}
+	defer closeFn()
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	defer cancel()
+	ctx = metadata.AppendToOutgoingContext(ctx, metaMajor, "1", metaMinor, "0", metaCaps, capsV1)
+	response, err := cc.GetStatus(ctx, &grpcpb.StatusRequest{})
+	if err != nil {
+		return fmt.Errorf("authenticated GetStatus counters: %w", err)
+	}
+	encoded, err := (protojson.MarshalOptions{EmitUnpopulated: true}).Marshal(response)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(os.Stdout, string(encoded))
+	return err
+}
 
 func probeStatus(socket, keysDir string, major, minor int, d time.Duration) error {
 	priv, err := loadSigner(keysDir + "/cp.priv")
@@ -531,6 +576,218 @@ func loadPublic(path string) (ed25519.PublicKey, error) {
 		return nil, fmt.Errorf("%s: %T, want ed25519", path, parsed)
 	}
 	return pub, nil
+}
+
+// --- resume: session tickets across a peer-pin rotation (T155 A-1) ---------
+
+// countingCache wraps the client session cache and counts lookups that return
+// a stored session, i.e. handshakes in which this client offered a ticket.
+type countingCache struct {
+	tls.ClientSessionCache
+	mu     sync.Mutex
+	offers int
+}
+
+func (c *countingCache) Get(key string) (*tls.ClientSessionState, bool) {
+	session, ok := c.ClientSessionCache.Get(key)
+	if ok && session != nil {
+		c.mu.Lock()
+		c.offers++
+		c.mu.Unlock()
+	}
+	return session, ok
+}
+
+func (c *countingCache) offered() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.offers
+}
+
+// handshakeRecord is what the client saw of one TLS handshake.
+type handshakeRecord struct {
+	peerVerified bool
+	resumed      bool
+	err          error
+}
+
+// recordingCreds records every client handshake gRPC performs, so a result
+// can name whether the server resumed the offered session.
+type recordingCreds struct {
+	credentials.TransportCredentials
+	config *tls.Config
+	mu     *sync.Mutex
+	log    *[]handshakeRecord
+}
+
+func (r recordingCreds) ClientHandshake(ctx context.Context, authority string, raw net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	// gRPC discards TLSInfo when Handshake fails. Observe this specific raw
+	// connection after the normal current-DP-pin check, including error paths.
+	// Go 1.26.3 validates selectedIdentity before DidResume; its callback runs
+	// before server Finished, so this witnesses selected PSK, not completed TLS.
+	cfg := r.config.Clone()
+	verify := cfg.VerifyConnection
+	var observed sync.Mutex
+	var rec handshakeRecord
+	cfg.VerifyConnection = func(state tls.ConnectionState) error {
+		if err := verify(state); err != nil {
+			return err
+		}
+		observed.Lock()
+		rec.peerVerified, rec.resumed = true, state.DidResume
+		observed.Unlock()
+		return nil
+	}
+	conn, info, err := credentials.NewTLS(cfg).ClientHandshake(ctx, authority, raw)
+	observed.Lock()
+	rec.err = err
+	r.mu.Lock()
+	*r.log = append(*r.log, rec)
+	r.mu.Unlock()
+	observed.Unlock()
+	return conn, info, err
+}
+
+func (r recordingCreds) Clone() credentials.TransportCredentials {
+	return recordingCreds{TransportCredentials: r.TransportCredentials.Clone(), config: r.config.Clone(), mu: r.mu, log: r.log}
+}
+
+// resumeAttempt is one fresh gRPC connection (one TLS handshake) and one
+// GetStatus with correct §5 metadata.
+type resumeAttempt struct {
+	handshakes []handshakeRecord
+	offered    bool  // the client offered a cached ticket
+	rpcErr     error // nil: the DP accepted the peer and answered
+}
+
+func (a resumeAttempt) String() string {
+	first := "none"
+	if len(a.handshakes) > 0 {
+		first = fmt.Sprintf("pin_verified=%v resumed=%v", a.handshakes[0].peerVerified, a.handshakes[0].resumed)
+		if a.handshakes[0].err != nil {
+			first += " failed: " + a.handshakes[0].err.Error()
+		}
+	}
+	rpc := "answered"
+	if a.rpcErr != nil {
+		rpc = "refused: " + status.Code(a.rpcErr).String()
+	}
+	return fmt.Sprintf("ticket_offered=%v handshakes=%d first_handshake=[%s] rpc=%s", a.offered, len(a.handshakes), first, rpc)
+}
+
+func attemptStatus(socket, keysDir string, cert tls.Certificate, cache *countingCache, d time.Duration) resumeAttempt {
+	cfg := clientConfig(cert, keysDir+"/dp.pub")
+	// The client verifier must also hold on resumption (the DP's dp.pub is
+	// not rotated here; VerifyPeerCertificate alone would be skipped).
+	cfg.VerifyPeerCertificate = nil
+	pin := pinVerifier(keysDir + "/dp.pub")
+	cfg.VerifyConnection = func(state tls.ConnectionState) error {
+		raw := make([][]byte, 0, len(state.PeerCertificates))
+		for _, cert := range state.PeerCertificates {
+			raw = append(raw, cert.Raw)
+		}
+		return pin(raw, nil)
+	}
+	// A fixed ServerName keys the session cache, so every attempt with the
+	// same cache looks up the same ticket.
+	cfg.ServerName = "stargate-dp"
+	before := 0
+	if cache != nil {
+		cfg.ClientSessionCache = cache
+		before = cache.offered()
+	}
+	var mu sync.Mutex
+	var log []handshakeRecord
+	creds := recordingCreds{TransportCredentials: credentials.NewTLS(cfg), config: cfg, mu: &mu, log: &log}
+	conn, err := grpc.NewClient("unix://"+socket, grpc.WithTransportCredentials(creds))
+	if err != nil {
+		return resumeAttempt{rpcErr: err}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), d)
+	_, rpcErr := getStatus(ctx, grpcpb.NewControlClient(conn), "1", "0")
+	cancel()
+	_ = conn.Close()
+	mu.Lock()
+	defer mu.Unlock()
+	return resumeAttempt{handshakes: append([]handshakeRecord(nil), log...), offered: cache != nil && cache.offered() > before, rpcErr: rpcErr}
+}
+
+// probeResume is T155's live A-1 check (wire-auth.md §2.4 "Revocation/
+// rotation"; Constitution II: identity rotation cannot become an auth bypass).
+// The Go DP keeps TLS 1.3 resumption and must re-check the CURRENT cp.pub on a
+// resumed handshake (VerifyConnection, T135). The sequence:
+//
+//  1. old CP identity, full handshake, GetStatus answered (a ticket is issued);
+//  2. same identity and cache: the DP resumed the session and answered.
+//     Positive control: the live DP issues and accepts tickets. Step 4 must
+//     independently witness selected PSK; its error does not prove a cause;
+//  3. rotate cp.priv/cp.pub in place (§6.2; the CP must be stopped);
+//  4. old identity offers the step-1 ticket: no RPC may be answered, and the
+//     handshake must show the resumed path (not a declined ticket). A DP that
+//     skipped the pin check on resumed handshakes (VerifyPeerCertificate only,
+//     the T135 defect) answers it, so this step is the falsifier;
+//  5. old identity, no cache (full handshake): no RPC may be answered;
+//  6. rotated identity, full handshake: answered (the DP re-read the pin and
+//     is serving, so steps 4-5 are refusals, not an outage).
+func probeResume(socket, keysDir string, d time.Duration) error {
+	oldPriv, err := loadSigner(keysDir + "/cp.priv")
+	if err != nil {
+		return err
+	}
+	oldCert, err := selfSigned(oldPriv, "stargate-cp")
+	if err != nil {
+		return err
+	}
+	cache := &countingCache{ClientSessionCache: tls.NewLRUClientSessionCache(4)}
+	report := func(step string, a resumeAttempt) { fmt.Printf("wireprobe: resume %s: %s\n", step, a) }
+
+	full := attemptStatus(socket, keysDir, oldCert, cache, d)
+	report("1-old-full", full)
+	if full.rpcErr != nil || len(full.handshakes) != 1 || !full.handshakes[0].peerVerified || full.handshakes[0].resumed {
+		return fmt.Errorf("step 1: the old identity's full handshake was not answered: %v", full.rpcErr)
+	}
+	resumed := attemptStatus(socket, keysDir, oldCert, cache, d)
+	report("2-old-resumed-before-rotation", resumed)
+	if resumed.rpcErr != nil || !resumed.offered || len(resumed.handshakes) != 1 || !resumed.handshakes[0].peerVerified || !resumed.handshakes[0].resumed {
+		return errors.New("step 2 (positive control): the DP did not resume the offered ticket before rotation; the post-rotation result would not test resumption")
+	}
+	if err := rotateCPKeys(keysDir); err != nil {
+		return fmt.Errorf("step 3: rotation: %w", err)
+	}
+	fmt.Println("wireprobe: resume 3-rotated: cp.priv/cp.pub replaced")
+	stale := attemptStatus(socket, keysDir, oldCert, cache, d)
+	report("4-old-ticket-after-rotation", stale)
+	if !stale.offered {
+		return errors.New("step 4: the client did not offer the cached ticket; the probe did not exercise resumption")
+	}
+	if stale.rpcErr == nil {
+		return errors.New("step 4: the DP answered the OLD CP identity on a resumed session after rotation — resumption bypassed the current pin (wire-auth.md §2.4, §3.1)")
+	}
+	// A cached ticket and an error cannot distinguish selected PSK from an
+	// abort or declined ticket. Require this raw attempt's pin-verified witness;
+	// neither prior success nor a later retry supplies it (Constitution VII).
+	if h := stale.handshakes; len(h) != 1 || !h[0].peerVerified || !h[0].resumed {
+		return errors.New("step 4: the DP did not take the resumed path with a current-DP-pin-verified witness (ticket declined, incomplete flight, abort or ambiguous retries); the refusal does not test resumption")
+	}
+	oldFull := attemptStatus(socket, keysDir, oldCert, nil, d)
+	report("5-old-full-after-rotation", oldFull)
+	if oldFull.rpcErr == nil {
+		return errors.New("step 5: the DP answered the OLD CP identity on a full handshake after rotation")
+	}
+	newPriv, err := loadSigner(keysDir + "/cp.priv")
+	if err != nil {
+		return err
+	}
+	newCert, err := selfSigned(newPriv, "stargate-cp")
+	if err != nil {
+		return err
+	}
+	rotated := attemptStatus(socket, keysDir, newCert, nil, d)
+	report("6-rotated-full", rotated)
+	if rotated.rpcErr != nil {
+		return fmt.Errorf("step 6: the rotated identity was not answered: %v", rotated.rpcErr)
+	}
+	return nil
 }
 
 // protomajor is the runtime-tier major under test (the proto package is

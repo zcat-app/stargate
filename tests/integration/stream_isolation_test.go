@@ -508,9 +508,9 @@ func t059ParallelConnect(t *testing.T, ctx context.Context, composeFile, envFile
 
 // t059ClassifyDialErr names the broken link the way the acceptance labels
 // it (auth / route / isolation), keyed on the observed error surfaces:
-// x/net's SOCKS5 auth rejection string, the RFC 1928 upstream-refusal
-// wrapper ("unknown error <rep>", the same surface forward/tor.go
-// classify keys on), dial-refused on the published port, and deadline
+// x/net's SOCKS5 auth rejection string, the DP's fixed RFC 1928 request-phase
+// reply surface ("unknown error <rep>", which does not identify the underlying
+// Tor/DP failure cause), dial-refused on the published port, and deadline
 // exhaustion (tor rendezvous/descriptor latency). Classification is
 // diagnostic only — the assertion above does not depend on it.
 func t059ClassifyDialErr(err error) string {
@@ -524,7 +524,7 @@ func t059ClassifyDialErr(err error) string {
 	case strings.Contains(msg, "connection refused"):
 		return "ROUTE: DP listener unreachable on the published port — is stargate-dp running? (see T125 for the compose-publish conflict)"
 	case strings.Contains(msg, "unknown error "):
-		return "ROUTE: upstream (tor sidecar) refused the CONNECT — see the tor log tail below"
+		return "ROUTE: DP reported a SOCKS CONNECT failure; the underlying cause is unknown"
 	case strings.Contains(msg, "context deadline exceeded") || strings.Contains(msg, "Client.Timeout"):
 		return "ROUTE: tor rendezvous/descriptor latency exceeded the window — see the tor log tail below"
 	default:

@@ -14,12 +14,12 @@
 | Status | Count |
 |---|---|
 | pending | 34 |
-| in-progress | 0 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 198 |
 | deferred | 6 |
-| **total** | **238** |
+| **total** | **239** |
 
 ---
 
@@ -29,7 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T155 | Validate repaired foundation before feature work | Foundation audit remediation | ✓ |  |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
@@ -37,12 +36,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
+| T209 | Bind DP AppArmor to the running DP; assert observer hardenin | Foundation audit remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T155 | Validate repaired foundation before feature work | in-progress | ✓ | Foundation audit remediation |
 
 ---
 
