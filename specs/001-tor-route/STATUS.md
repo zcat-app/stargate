@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-10-05
+**Last updated:** 2026-10-06
 
 ---
 
@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 35 |
+| pending | 37 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 199 |
-| deferred | 6 |
-| **total** | **240** |
+| deferred | 7 |
+| **total** | **243** |
 
 ---
 
@@ -44,9 +44,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | Foundation audit remediation | ✓ | ✓ |
 | T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
-| T202 | Add a scoped host-direct live runner and fresh VM overlays | Foundation test infrastructure | ✓ |  |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 | T209 | Bind DP AppArmor to the running DP; assert observer hardenin | Foundation audit remediation | ✓ |  |
+| T210 | Repair Tor verification transport and I/O deadlines | Foundation verification remediation | ✓ |  |
 
 ---
 
@@ -66,6 +66,7 @@ _(nothing in flight)_
 | T117 | Reconcile arch §14.4 hardening-record example with T091 | blocked-on-new-ticket | T205 |
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
+| T202 | Add a scoped host-direct live runner and fresh VM overlays | blocked-on-new-ticket | T212 |
 
 ---
 

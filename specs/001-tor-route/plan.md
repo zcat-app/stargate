@@ -31,6 +31,29 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 (Principle IV) blocks merges that break the Tor surface Stargate depends on;
 (4) the Go data plane build produces a byte-reproducible artefact.
 
+## Verification repair prerequisites — T202 deferred
+
+The maintainer authorized the reviewed repair plan's defer/prerequisite route after guest15's
+failed aggregate cadence. Pending serial tickets are [T210](tickets/T210-repair-tor-verification-transport-deadlines.md)
+for ordinary Tor verification transport/diagnostics/real I/O bounds,
+[T211](tickets/T211-repair-workflow-fixture-context-cleanup.md) for fixture tag boundaries and
+owned child cleanup, then [T212](tickets/T212-close-docker-verification-budgets-history-ci.md)
+for grounded aggregate budgets, authentic history and dependency-driven CI. T202 is deferred on
+all three, with T212 the final scalar prerequisite; ordinary repairs remain outside T202's scope.
+Their tracked evidence outputs and exact path inventories are declared in each ticket.
+
+Constitution Check: I/II runtime routing and plane behavior remain unchanged. III retains
+private Unix transport/isolation and disposable privileged capture boundaries; IV/VI retain
+pins, authentic history and source-bound tool/evidence identity. V distinguishes historical
+partial results, named ordinary CI DNS SKIPs and actual same-candidate disposable DNS acceptance.
+VII requires atomic spec-derived RED/fix/GREEN, finite existing operation windows and all mandatory
+controls. VIII preserves exact native independent implementation review; advisory Fable/Astra
+plan consultation is separate. This filing does not establish runtime compliance or GREEN.
+
+The linked prerequisite tickets define admission, independent source bootstrap, owned controls,
+verification and evidence acceptance. T202's [Verification prerequisite deferral](tickets/T202-scoped-live-runner-fresh-vm-overlays.md#verification-prerequisite-deferral)
+defines preservation and the reviewed reopen sequence. Historical guest15 aggregate remains FAILED.
+
 ## Technical Context
 
 **Language/Version**:

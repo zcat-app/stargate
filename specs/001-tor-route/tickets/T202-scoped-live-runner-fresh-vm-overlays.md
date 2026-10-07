@@ -1,13 +1,15 @@
 ---
 id: T202
 title: "Add a scoped host-direct live runner and fresh VM overlays"
-status: pending
+status: deferred
 created: 2026-10-05
-last_updated: 2026-10-05
+last_updated: 2026-10-06
 source: "Post-T155 preparation; exact v2 approved for filing and execution on 2026-10-05"
 phase: "Foundation test infrastructure"
 story: "-"
-blocked_by: [T155]
+blocked_by: [T155, T210, T211, T212]
+deferred_reason: blocked-on-new-ticket
+deferred_on: T212
 parallel: false
 files_budget: 30
 privacy_critical: true
@@ -338,3 +340,33 @@ That preparation is not implementation review or live qualification. Evidence re
 Filed between tickets with no ticket in flight. T200/T201 retain their reserved decisions. The
 previous 50-path and image-tag proposals are superseded suggestions. Acceptance, scope, cadence
 and the exact documentation paragraphs are preserved from the approved draft.
+
+## Verification prerequisite deferral
+
+The maintainer authorized implementation of the reviewed repair plan after guest15's failed
+aggregate cadence. The final plan is retained at
+`.scratch/tmp/T202/repair-plan-2026-10-07/plan-final.md`, SHA256
+`cd5fc2e88e255bab31bfe34d34cc5e01f8200244d29d91810f588d0d190b637c`.
+Its individual F1/F2 and nine cleanup rehearsals remain partial candidate10
+results; later cadence/standalones and host qualification were not completed. Ordinary helper,
+fixture and aggregate/CI repairs are outside this ticket's explicitly approved scope.
+T210 -> T211 -> T212 owns that work; all are blockers and T212 is the scalar final prerequisite.
+This administrative filing claims no T202 implementation approval, live GREEN or completion.
+
+The exact25-path candidate10 staged implementation, full793-file source/index/mode manifest,
+binary patches, authentic baseline bundle and original tests-first JSON were preserved in owned
+ignored storage and exact rollback/replay was proven before removing the owned changes.
+Retained disks, evidence, archives, current cache, backing inputs and unrelated worktrees remain.
+
+After prerequisites deliver, manually record blocker resolution, set pending and clear resolved
+defer fields; append a `reopens:` entry recording the date, resolved blockers T210 through T212
+and the guest15 deferral trigger. Run the documented reset to archive review/aborted-attempt history before the
+reviewed ordinary-GREEN metadata-only reopen commit, with regenerated STATUS. START then sees
+clean tracked pending metadata and records its new baseline. Restore/stage the preserved original
+T202 tests-first JSON before replaying/staging the original test-only RED patch and recording a
+fresh meaningful substituted-effects RED on that baseline. Keep earlier baseline/red/green in
+superseded; do not overwrite the newly captured JSON with the preserved copy. Only then restore
+and reconcile implementation, rerun identical GREEN, re-ground changed inputs/path budget and
+renew candidate-bound live qualification and native GLM/Astra implementation review. Reset does
+not erase stale green-code state; unchanged driver hashes must reject it rather than manually
+claiming freshness. Existing constants, assertions, coverage and live acceptance remain binding.
