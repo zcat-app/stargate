@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 35 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 200 |
+| done | 201 |
 | deferred | 7 |
 | **total** | **243** |
 
@@ -46,14 +46,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 | T209 | Bind DP AppArmor to the running DP; assert observer hardenin | Foundation audit remediation | ✓ |  |
+| T212 | Close Docker verification budgets, history and CI inputs | Foundation verification remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T211 | Repair workflow fixture context and owned child cleanup | in-progress | ✓ | Foundation verification remediation |
+_(nothing in flight)_
 
 ---
 
@@ -73,7 +72,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_200 ticket(s) done._
+_201 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -275,3 +274,4 @@ _200 ticket(s) done._
 - T205 — Remove persistent hardening failure events and reconcile the schema
 - T208 — Raise the Tor upstream deadline; align the onion-load gate
 - T210 — Repair Tor verification transport and I/O deadlines
+- T211 — Repair workflow fixture context and owned child cleanup

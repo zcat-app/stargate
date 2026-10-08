@@ -117,6 +117,9 @@ recorded under the widened allowlist.
 |---|---|---|---|---|
 | 2026-10-07 | T210 | 1 (partial invocation; no set imported) | REWORK (4 Major) | paused by maintainer; no verdict |
 | 2026-10-08 | T210 | 1 (fresh contexts after rework and lifecycle recovery) | APPROVE (0) | APPROVE (2 Minor, record-only) |
+| 2026-10-08 | T211 | 1 | REWORK (3 Major) | APPROVE (2 Minor) |
+| 2026-10-08 | T211 | 2 | REWORK (1 Major) | APPROVE (1 Minor) |
+| 2026-10-08 | T211 | 3 | APPROVE (0) | APPROVE (1 Minor) |
 
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
@@ -220,6 +223,15 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-10-07 | T210 | 1 (partial invocation) | Major | Measurement-to-review comparison was only a promised external pathname | found | unscored (paused; no verdict) | fixed | Tracked immutable historical and current receipts reconstruct both snapshot identities and full rows; final candidate differs only in declared generated evidence. |
 | 2026-10-08 | T210 | 1 (fresh invocation) | Minor | Evidence prose says four mutants are retained in tests-first JSON, but their records are ignored artifacts | missed | found | open (record-only) | Tracked JSON retains two RED captures and GREENs; four actual mutation failures are retained under `.scratch/tmp/T210/rework-astra/`, not per-mutant JSON fields. No claim of additional tracked mutant records. |
 | 2026-10-08 | T210 | 1 (fresh invocation) | Minor | `isoSocksConn.closed` remains unused after Close became session-idempotent | missed | found | open (record-only) | Harmless orphan field; approved executable candidate left unchanged. |
+| 2026-10-08 | T211 | 1 | Minor | Unreachable duplicate s14 readiness-miss guard | missed | found | fixed | Removed; the single live handler now checks cleanup receipt, exit status, lock, HEAD and residue. |
+| 2026-10-08 | T211 | 1 | Minor | Future RED/GREEN re-record can drop the archived probe-helper attachment | missed | found | open (record-only) | Prospective and outside this ticket's declared paths; archive bytes remain intact. |
+| 2026-10-08 | T211 | 2 | Minor | Future RED/GREEN re-record can drop the archived probe-helper attachment | found | found | open (record-only) | Astra explicitly acknowledged the carried GLM finding; preserving attachments is a separate follow-up. |
+| 2026-10-08 | T211 | 3 | Minor | Future RED/GREEN re-record can drop the archived probe-helper attachment | found | found | open (record-only) | Both verdicts identify the prospective limitation; no attachment was lost in this ticket. |
+| 2026-10-08 | T211 | 1 | Major | Outer fixture EXIT can leave the nested owner and foreign sleeper alive while deleting the sandbox | found | missed | fixed | Shared ownership registry covers both helpers; outer-TERM control proves bounded cleanup before deletion and preserves the independent sentinel. |
+| 2026-10-08 | T211 | 1 | Major | A shell-reaped marker can suppress failed-cleanup handling and allow sandbox deletion | found | missed | fixed | Shell reaping is distinct from cleanup-proved; the rejected-receipt control retains the sandbox and diagnostics. |
+| 2026-10-08 | T211 | 1 | Major | Delayed s13 readiness cases and the real bounded-wait control were absent from normal fixture execution | found | missed | fixed | Default fixture runs both >15 s normal/mutant controls and a real Popen timeout plus unconditional-wait mutation. |
+| 2026-10-08 | T211 | 1 | Major | TERM between supervisor spawn and ownership-row registration can bypass EXIT cleanup | missed | missed | fixed | Later Astra round-2 finding; the gap was present in round 1. The handoff now defers termination through registration and bounded reconciliation. |
+| 2026-10-08 | T211 | 2 | Major | TERM between supervisor spawn and ownership-row registration can bypass EXIT cleanup | found | missed | fixed | Round-3 RED/GREEN exercises driver, foreign-sleeper and nested-owner launch paths with identity-bound TERM. |
 
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
@@ -521,3 +533,13 @@ across the 100-identity corpus to the next performance milestone. GLM also
 suggested optional future per-mutant evidence fields and start-token hardening
 for process-group residue detection. No acceptance or model-matrix change was
 made for those suggestions.
+
+T211: round 1 was Astra REWORK (three Major) / GLM APPROVE (two Minor), round 2
+was Astra REWORK (one Major) / GLM APPROVE (one carried Minor), and round 3
+was APPROVE from both native reviewers (Astra no findings; GLM one prospective
+Minor). All four Major defects were repaired. The round-3 launch-to-registration
+interruption probe bound one RED/GREEN observer to the same candidate and tested
+the driver, foreign-sleeper and nested-owner launch paths. Canonical verification
+was GREEN, 38 PASS / 4 SKIP / 0 FAIL. The local implementation commit is
+`546558d`; reviewer verdicts are retained in `target/runs/T211-r1.verdict`,
+`target/runs/T211-r2.verdict`, and `target/runs/T211-r3.verdict`.

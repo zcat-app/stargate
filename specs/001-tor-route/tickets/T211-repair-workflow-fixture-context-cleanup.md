@@ -1,7 +1,7 @@
 ---
 id: T211
 title: "Repair workflow fixture context and owned child cleanup"
-status: in-progress
+status: done
 created: 2026-10-06
 last_updated: 2026-10-08
 source: "T202 guest15 verification stop; reviewed repair plan final SHA256 cd5fc2e88e255bab31bfe34d34cc5e01f8200244d29d91810f588d0d190b637c; maintainer authorized prerequisite implementation"
@@ -37,7 +37,7 @@ spec_refs:
 decision_refs:
   - "Final repair plan §5 R2a; final-document hash above is distinct from the two v3 READY advisory reports"
   - 'Maintainer: "ok so if you have a plan you can be again orchestrator of the implementation"; defer/prerequisite route authorized'
-reviews: {}
+reviews: { round: 3, date: 2026-10-08, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
