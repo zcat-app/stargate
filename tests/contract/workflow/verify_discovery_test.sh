@@ -131,10 +131,13 @@ use (
 EOF
 
 # --- run A1: hermetic (default) -------------------------------------------
-HERMETIC_OUT="$(python3 "$GATE" "$SANDBOX" 2>&1)"
-python3 "$GATE" "$SANDBOX" >/dev/null 2>&1; HERMETIC_RC=$?
+HERMETIC_OUT="$(env -u STARGATE_TEST_TAGS python3 "$GATE" "$SANDBOX" 2>&1)"
+HERMETIC_REPEAT_OUT="$(env -u STARGATE_TEST_TAGS python3 "$GATE" "$SANDBOX" 2>&1)"
+HERMETIC_RC=$?
 
 # Discovery: all five modules enumerated from go.work, by name.
+assert_nogrep "NAMED mode" "hermetic-not-named" "$HERMETIC_OUT"
+assert_nogrep "NAMED mode" "hermetic-repeat-not-named" "$HERMETIC_REPEAT_OUT"
 assert_grep "discovered 5 module\(s\) via go.work" "discover-count" "$HERMETIC_OUT"
 assert_grep "moda" "discover-moda" "$HERMETIC_OUT"
 assert_grep "modb" "discover-modb" "$HERMETIC_OUT"
@@ -198,7 +201,7 @@ use (
 	./mode
 )
 EOF
-BROKEN_OUT="$(python3 "$GATE" "$SANDBOX/broken" 2>&1)"
+BROKEN_OUT="$(env -u STARGATE_TEST_TAGS python3 "$GATE" "$SANDBOX/broken" 2>&1)"
 assert_grep "FAIL[[:space:]]+go-list:mode" "mode-is-fail" "$BROKEN_OUT"
 assert_nogrep "SKIP[[:space:]]+go:mode" "mode-not-skip" "$BROKEN_OUT"
 
@@ -207,6 +210,7 @@ if [ "${#errs[@]}" -gt 0 ]; then
   printf 'FAIL: verify_discovery_test.sh — %d assertion(s) failed:\n' "${#errs[@]}" >&2
   for e in "${errs[@]}"; do printf '  - %s\n' "$e" >&2; done
   printf '\n--- hermetic (A) gate output ---\n%s\n' "$HERMETIC_OUT" >&2
+  printf '\n--- hermetic repeat gate output ---\n%s\n' "$HERMETIC_REPEAT_OUT" >&2
   printf '\n--- named (A) gate output ---\n%s\n' "$NAMED_OUT" >&2
   printf '\n--- broken (B) gate output ---\n%s\n' "$BROKEN_OUT" >&2
   exit 1

@@ -1,9 +1,9 @@
 ---
 id: T211
 title: "Repair workflow fixture context and owned child cleanup"
-status: pending
+status: in-progress
 created: 2026-10-06
-last_updated: 2026-10-06
+last_updated: 2026-10-08
 source: "T202 guest15 verification stop; reviewed repair plan final SHA256 cd5fc2e88e255bab31bfe34d34cc5e01f8200244d29d91810f588d0d190b637c; maintainer authorized prerequisite implementation"
 phase: "Foundation verification remediation"
 story: "-"
