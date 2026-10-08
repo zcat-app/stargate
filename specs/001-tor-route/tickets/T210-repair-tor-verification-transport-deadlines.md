@@ -1,9 +1,9 @@
 ---
 id: T210
 title: "Repair Tor verification transport and I/O deadlines"
-status: in-review
+status: done
 created: 2026-10-06
-last_updated: 2026-10-07
+last_updated: 2026-10-08
 source: "T202 guest15 verification stop; reviewed repair plan final SHA256 cd5fc2e88e255bab31bfe34d34cc5e01f8200244d29d91810f588d0d190b637c; maintainer authorized prerequisite implementation"
 phase: "Foundation verification remediation"
 story: "-"
@@ -45,7 +45,7 @@ decision_refs:
   - "Final repair plan §5 R1; final-document hash above is distinct from the two v3 READY advisory reports"
   - 'Maintainer: "ok so if you have a plan you can be again orchestrator of the implementation"; defer/prerequisite route authorized'
   - 'Maintainer 2026-10-07: "Approve this scoped native Docker amendment" (call_6087c47ff3864eebbe2d3d334dba0365); approved plan §3 amendment for T210 six selected Tor-only suites/caller controls only, exact AC7/8 patch SHA256 cb8153fb994af4b8a10a40f70028b4dba3cb7fb9ca1fe63a5317074175af00cf; bounded exact-owned Docker build/runtime cleanup is explicitly daemon-dependent; all assertions/deadlines/evidence and native GLM/Astra review remain mandatory'
-reviews: {}
+reviews: { round: 1, date: 2026-10-08, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

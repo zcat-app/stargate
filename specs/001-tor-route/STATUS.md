@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-10-07
+**Last updated:** 2026-10-08
 
 ---
 
@@ -15,9 +15,9 @@
 |---|---|
 | pending | 36 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 199 |
+| done | 200 |
 | deferred | 7 |
 | **total** | **243** |
 
@@ -46,14 +46,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 | T209 | Bind DP AppArmor to the running DP; assert observer hardenin | Foundation audit remediation | ✓ |  |
+| T211 | Repair workflow fixture context and owned child cleanup | Foundation verification remediation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T210 | Repair Tor verification transport and I/O deadlines | in-review | ✓ | Foundation verification remediation |
+_(nothing in flight)_
 
 ---
 
@@ -73,7 +72,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_199 ticket(s) done._
+_200 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -274,3 +273,4 @@ _199 ticket(s) done._
 - T204 — Enforce control-plane HTTP listener boundary at startup
 - T205 — Remove persistent hardening failure events and reconcile the schema
 - T208 — Raise the Tor upstream deadline; align the onion-load gate
+- T210 — Repair Tor verification transport and I/O deadlines

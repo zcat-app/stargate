@@ -113,6 +113,11 @@ recorded under the widened allowlist.
 | 2026-10-05 | T155 | 2 | APPROVE (1 Minor) | APPROVE (1 Minor) |
 | 2026-10-05 | T155 | 2 (post-Minor-fix refresh) | APPROVE (0) | APPROVE (0) |
 
+| Date | Ticket | Round | astra | glm |
+|---|---|---|---|---|
+| 2026-10-07 | T210 | 1 (partial invocation; no set imported) | REWORK (4 Major) | paused by maintainer; no verdict |
+| 2026-10-08 | T210 | 1 (fresh contexts after rework and lifecycle recovery) | APPROVE (0) | APPROVE (2 Minor, record-only) |
+
 T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1 was not measured per reviewer; the review set took 15–19 min. GLM's review-role bash allowlist was git-only in every round, and its round-1 and round-2 verdicts both report most inspection commands rejected; see the allowlist change that follows T126.
 
 ### Findings
@@ -207,6 +212,14 @@ T126 durations are wall-clock from verdict-file and launcher-log mtimes. Round 1
 | 2026-10-05 | T155 | 1 (post-doc-fix refresh) | Major | `t155_stack.py` exited 0 on an interrupted or incomplete run (only `Exception` caught; no completion guard) | found | missed | fixed | GLM had walked every check call site in round 1 and approved twice. Mandatory-check completion guard with regression `test_t155_stack.py`; F2 carried forward by a mechanical comparison, no rerun. Present since attempt 3; earlier rounds of both reviewers missed it. |
 | 2026-10-05 | T155 | 2 | Minor | Non-zero `docker compose down` exit ignored by the repaired entrypoint | found | missed | fixed | Fixed before commit, red before green; both reviewers had returned APPROVE. |
 | 2026-10-05 | T155 | 2 | Minor | Mandatory-list drift guard did not cover a check recorded at module level | missed | found | fixed | Latent; test now requires none exists, with detector controls. |
+
+
+| 2026-10-07 | T210 | 1 (partial invocation) | Major | Fatal GETINFO circuit-capture failure bypassed SOCKS session close/reap | found | unscored (paused; no verdict) | fixed | Deferred capture-scope close; forced GETINFO-failure child regression fails before repair and passes afterward, proving reap before parent cancellation. |
+| 2026-10-07 | T210 | 1 (partial invocation) | Major | Docker deadline regression bypassed the live caller and opened a TCP fixture | found | unscored (paused; no verdict) | fixed | Actual shared Ping/List/Inspect callers exercised over a Unix fake daemon; retained failing caller-context mutants and positive phase order. |
+| 2026-10-07 | T210 | 1 (partial invocation) | Major | ISO regression omitted handshake I/O, early errors and child teardown | found | unscored (paused; no verdict) | fixed | Actual blocked read/write, cancellation, short/rejected replies, successful lifetime and early-error reap checks; handshake/error-close mutants fail. |
+| 2026-10-07 | T210 | 1 (partial invocation) | Major | Measurement-to-review comparison was only a promised external pathname | found | unscored (paused; no verdict) | fixed | Tracked immutable historical and current receipts reconstruct both snapshot identities and full rows; final candidate differs only in declared generated evidence. |
+| 2026-10-08 | T210 | 1 (fresh invocation) | Minor | Evidence prose says four mutants are retained in tests-first JSON, but their records are ignored artifacts | missed | found | open (record-only) | Tracked JSON retains two RED captures and GREENs; four actual mutation failures are retained under `.scratch/tmp/T210/rework-astra/`, not per-mutant JSON fields. No claim of additional tracked mutant records. |
+| 2026-10-08 | T210 | 1 (fresh invocation) | Minor | `isoSocksConn.closed` remains unused after Close became session-idempotent | missed | found | open (record-only) | Harmless orphan field; approved executable candidate left unchanged. |
 
 
 T182 round 1: both APPROVE, no findings. GLM recommended call-site shape
@@ -477,3 +490,34 @@ Not findings, recorded for the maintainer: GLM noted that README R-1 names
 runs, and that a reviewer or evaluator running `git write-tree` outside a
 read-only brief (it happened twice in this ticket's advisory passes) may merit
 a hardening note in the reviewer contract. No tickets were filed for these.
+
+
+T210: the first paired invocation was paused by the maintainer while GLM was
+active. Astra's four Major findings were preserved and repaired; no complete
+set from that invocation was imported, so its GLM column is unscored rather
+than a miss. The obsolete processes were retired without resuming them, and
+the maintainer authorized lifecycle recovery and current-source verification.
+The fresh canonical native set approved snapshot
+`cd5a448962d8246d1b2330423027c7077f5efdaec8a9871fb9d0a0e9c1c58caf`;
+both reviewers marked all four earlier items satisfied. The complete set took
+1089.645 seconds. Verdicts and identities are retained in the append-only
+`target/runs/T210.review-history`, with copied native artifacts under
+`.scratch/tmp/T210/completion-after-rework/fresh-review-complete/`.
+Observed active-session logs were copied before the normal launcher removed
+its private scratch; they are not represented as complete terminal logs.
+
+Current canonical verification was GREEN, 38 PASS / 4 documented optional
+SKIPs / 0 FAIL. Six selected Tor suites and all 30 required named tests passed
+on the reworked source. The first username-less onion timeout remains FAILED
+in evidence, alongside exactly one authorized passing retry with unchanged
+source, command and deadlines. Runtime variance is supported; exact remote
+causation is unproved. These measurements do not qualify the full Docker
+cadence or T202 guest tiers. The accidental overwrite of the historical
+preflight aggregate is explicitly disclosed; five original raw controls were
+recovered byte-exact, but the original aggregate metadata bytes were not.
+
+Not findings: both reviewers deferred the cost of graceful session close
+across the 100-identity corpus to the next performance milestone. GLM also
+suggested optional future per-mutant evidence fields and start-token hardening
+for process-group residue detection. No acceptance or model-matrix change was
+made for those suggestions.
