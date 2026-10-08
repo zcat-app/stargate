@@ -77,7 +77,6 @@
 package torrc
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -88,10 +87,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
-	"github.com/zcat-app/stargate/tests/contract/internal/compose"
 	"github.com/zcat-app/stargate/tests/contract/tor"
 )
 
@@ -147,15 +146,15 @@ const (
 //     control-port query contracts/torrc.md names. A shared circuit fails
 //     the test.
 func TestIsolateSOCKSAuthDistinctCircuits(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), isoOverallDeadline)
+	defer cancel()
+
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker CLI not on PATH: %v", err)
 	}
-	if out, err := exec.Command("docker", "info").CombinedOutput(); err != nil {
+	if out, err := tor.CommandOutput(ctx, exec.CommandContext(ctx, "docker", "info")); err != nil {
 		t.Skipf("docker daemon unreachable: %v\n%s", err, out)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), isoOverallDeadline)
-	defer cancel()
 
 	// Reuse the package-level findRepoRoot pinned by T029; the compose
 	// file + env live under compose/ at that same root (T032/T062's shape).
@@ -175,14 +174,14 @@ func TestIsolateSOCKSAuthDistinctCircuits(t *testing.T) {
 	t.Cleanup(func() {
 		downCtx, downCancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer downCancel()
-		if out, err := compose.Run(downCtx, isoComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
+		if out, err := tor.RunCompose(downCtx, isoComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
 			t.Logf("docker compose down (best-effort cleanup): %v\n%s", err, out)
 		}
 	})
 
 	upCtx, upCancel := context.WithTimeout(ctx, isoUpDeadline)
 	defer upCancel()
-	if out, err := compose.Run(upCtx, isoComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
+	if out, err := tor.RunCompose(upCtx, isoComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
 		t.Fatalf("docker compose up -d --build tor (cold volume, image-baked torrc): %v\n%s", err, out)
 	}
 
@@ -201,19 +200,20 @@ func TestIsolateSOCKSAuthDistinctCircuits(t *testing.T) {
 	// poll the session to PROGRESS=100 (T062's LiveBootstrapPollViaSession
 	// shape).
 	t.Run("SidecarBootstraps", func(t *testing.T) {
-		deadline := time.Now().Add(isoBootDeadline)
+		opCtx, opCancel := context.WithTimeout(ctx, isoBootDeadline)
+		defer opCancel()
 		var lastErr error
 		for {
-			if time.Now().After(deadline) {
+			if opCtx.Err() != nil {
 				t.Fatalf("no authenticated control session within %s (cookie read + connect + AUTHENTICATE): %v",
 					isoBootDeadline, lastErr)
 			}
-			cookie, err := tor.ReadCookie(ctx, cfg)
+			cookie, err := tor.ReadCookie(opCtx, cfg)
 			if err == nil {
 				var c *tor.ControlPort
 				c, err = tor.Connect(ctx, cfg)
 				if err == nil {
-					if err = c.Authenticate(cookie); err == nil {
+					if err = c.AuthenticateContext(opCtx, cookie); err == nil {
 						conn = c
 					} else {
 						_ = c.Close()
@@ -226,13 +226,14 @@ func TestIsolateSOCKSAuthDistinctCircuits(t *testing.T) {
 				break
 			}
 			lastErr = err
-			time.Sleep(isoPollEvery)
+			tor.Pause(opCtx, isoPollEvery)
 		}
 
-		bootDeadline := time.Now().Add(isoBootDeadline)
+		bootCtx, bootCancel := context.WithTimeout(ctx, isoBootDeadline)
+		defer bootCancel()
 		var last string
 		for {
-			lines, err := conn.Command("GETINFO status/bootstrap-phase")
+			lines, err := conn.CommandContext(bootCtx, "GETINFO status/bootstrap-phase")
 			if err != nil {
 				t.Fatalf("GETINFO status/bootstrap-phase mid-poll: %v (last: %s)", err, last)
 			}
@@ -241,10 +242,10 @@ func TestIsolateSOCKSAuthDistinctCircuits(t *testing.T) {
 				t.Logf("OK: Tor bootstrapped: %s", isoTruncate(last))
 				break
 			}
-			if time.Now().After(bootDeadline) {
+			if bootCtx.Err() != nil {
 				t.Fatalf("tor did not reach PROGRESS=100 within %s; last phase: %s", isoBootDeadline, isoTruncate(last))
 			}
-			time.Sleep(isoPollEvery)
+			tor.Pause(bootCtx, isoPollEvery)
 		}
 	})
 
@@ -281,10 +282,11 @@ func TestIsolateSOCKSAuthDistinctCircuits(t *testing.T) {
 		}
 		socksA = c
 
-		deadline := time.Now().Add(isoStreamGrace)
+		streamCtx, streamCancel := context.WithTimeout(ctx, isoStreamGrace)
+		defer streamCancel()
 		var raw []string
 		for {
-			lines, err := conn.Command("GETINFO stream-status")
+			lines, err := conn.CommandContext(streamCtx, "GETINFO stream-status")
 			if err != nil {
 				t.Fatalf("GETINFO stream-status: %v", err)
 			}
@@ -297,32 +299,33 @@ func TestIsolateSOCKSAuthDistinctCircuits(t *testing.T) {
 				snapshotA = snap
 				break
 			}
-			if time.Now().After(deadline) {
+			if streamCtx.Err() != nil {
 				t.Fatalf("expected exactly 1 attached stream for %s within %s of CONNECT, saw %d; "+
 					"stream-status raw reply:\n%s",
 					isoTarget, isoStreamGrace, len(snap), strings.Join(raw, "\n"))
 			}
-			time.Sleep(isoPollEvery)
+			tor.Pause(streamCtx, isoPollEvery)
 		}
 
 		// Identity-tag cross-check, run close to the event while circuit A
 		// certainly lives: its circuit-status entry must carry identity A.
-		tagDeadline := time.Now().Add(isoStreamGrace)
+		tagCtx, tagCancel := context.WithTimeout(ctx, isoStreamGrace)
+		defer tagCancel()
 		for {
-			lines, err := conn.Command("GETINFO circuit-status")
+			lines, err := conn.CommandContext(tagCtx, "GETINFO circuit-status")
 			if err != nil {
 				t.Fatalf("GETINFO circuit-status (identity check): %v", err)
 			}
 			if _, ok := isoCircuitStatusFor(lines, circuitA, isoAuthA); ok {
 				break
 			}
-			if time.Now().After(tagDeadline) {
+			if tagCtx.Err() != nil {
 				t.Fatalf("circuit %s (stream %s) never carried SOCKS_USERNAME=%q in circuit-status within %s — "+
 					"either the stream attached to a foreign circuit or tor stopped tagging circuits with their "+
 					"auth identity (recalibrate the wire shape); raw reply:\n%s",
 					circuitA, streamA, isoAuthA, isoStreamGrace, strings.Join(lines, "\n"))
 			}
-			time.Sleep(isoPollEvery)
+			tor.Pause(tagCtx, isoPollEvery)
 		}
 		t.Logf("OK: first stream attached: stream %s → circuit %s (tagged %q)", streamA, circuitA, isoAuthA)
 	})
@@ -345,10 +348,11 @@ func TestIsolateSOCKSAuthDistinctCircuits(t *testing.T) {
 		}
 		socksB = c
 
-		deadline := time.Now().Add(isoStreamGrace)
+		streamCtx, streamCancel := context.WithTimeout(ctx, isoStreamGrace)
+		defer streamCancel()
 		var raw []string
 		for {
-			lines, err := conn.Command("GETINFO stream-status")
+			lines, err := conn.CommandContext(streamCtx, "GETINFO stream-status")
 			if err != nil {
 				t.Fatalf("GETINFO stream-status: %v", err)
 			}
@@ -364,12 +368,12 @@ func TestIsolateSOCKSAuthDistinctCircuits(t *testing.T) {
 				streamB, circuitB = fresh[0], snap[fresh[0]]
 				break
 			}
-			if time.Now().After(deadline) {
+			if streamCtx.Err() != nil {
 				t.Fatalf("expected the identity-B stream for %s to appear within %s of the second CONNECT, "+
 					"saw %d stream(s) (%d fresh, need exactly 1 fresh); stream-status raw reply:\n%s",
 					isoTarget, isoStreamGrace, len(snap), len(fresh), strings.Join(raw, "\n"))
 			}
-			time.Sleep(isoPollEvery)
+			tor.Pause(streamCtx, isoPollEvery)
 		}
 		t.Logf("OK: second stream attached: stream %s → circuit %s", streamB, circuitB)
 	})
@@ -416,12 +420,13 @@ func TestIsolateSOCKSAuthDistinctCircuits(t *testing.T) {
 // inside the tor container (FR-012 — no host-side dial exists). The Go side
 // owns the protocol bytes; nc is a dumb pipe.
 type isoSocksConn struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
-	stderr *bytes.Buffer
-	cancel context.CancelFunc
-	closed bool
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	stdout  io.ReadCloser
+	stderr  *tor.DiagnosticBuffer
+	cancel  context.CancelFunc
+	closed  bool
+	session *tor.ProcessSession
 }
 
 // isoDialSocks performs the full SOCKS5 handshake — method negotiation
@@ -432,41 +437,28 @@ type isoSocksConn struct {
 // Principle III) — and leaves the session open with the stream attached.
 //
 // The handshake is bounded by isoDialDeadline via a process-kill watchdog
-// (exec pipes carry no read deadlines); on success the watchdog is stopped
+// (exec pipes carry no read deadlines); on success the operation watch is stopped
 // and the session lives until Close (or the parent context's expiry).
 func isoDialSocks(parent context.Context, cfg tor.ControlPortConfig, uname, passwd, target string) (*isoSocksConn, error) {
+	op, opCancel := context.WithTimeout(parent, isoDialDeadline)
+	defer opCancel()
+	return isoDialSocksContext(parent, op, cfg, uname, passwd, target)
+}
+
+func isoDialSocksContext(parent, op context.Context, cfg tor.ControlPortConfig, uname, passwd, target string) (*isoSocksConn, error) {
 	ctx, cancel := context.WithCancel(parent)
 	cmd := exec.CommandContext(ctx, "docker",
 		"compose", "-p", cfg.Project,
 		"-f", cfg.ComposeFile,
 		"--env-file", cfg.EnvFile,
 		"exec", "-T", "tor", "nc", "-U", "/run/tor-fabric/private/tor-socks.sock")
-	stdin, err := cmd.StdinPipe()
+	session, err := tor.StartProcess(ctx, cmd)
 	if err != nil {
 		cancel()
-		return nil, fmt.Errorf("socks session stdin pipe: %w", err)
+		return nil, fmt.Errorf("socks session start (private SOCKS): %w", err)
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("socks session stdout pipe: %w", err)
-	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
-		cancel()
-		return nil, fmt.Errorf("socks session start (docker compose exec tor nc -U private SOCKS): %w: %s",
-			err, strings.TrimSpace(stderr.String()))
-	}
-
-	c := &isoSocksConn{cmd: cmd, stdin: stdin, stdout: stdout, stderr: &stderr, cancel: cancel}
-	watch := time.AfterFunc(isoDialDeadline, func() {
-		if c.cmd.Process != nil {
-			_ = c.cmd.Process.Kill()
-		}
-	})
-	err = c.handshake(uname, passwd, target)
-	watch.Stop()
+	c := &isoSocksConn{cmd: cmd, stdin: session.Stdin, stdout: session.Stdout, stderr: session.Diagnostics, cancel: cancel, session: session}
+	err = c.operation(op, func() error { return c.handshake(uname, passwd, target) })
 	if err != nil {
 		_ = c.Close()
 		return nil, err
@@ -584,33 +576,19 @@ func (c *isoSocksConn) readFull(b []byte, what string) error {
 	return nil
 }
 
-// Close tears the session down. Observed behavior (calibration runs,
-// 2026-09-07): openbsd nc does NOT exit when its stdin hits EOF — it stays
-// in receive mode until the remote side closes, and tor holds the SOCKS
-// connection open. The kill grace is therefore the EXPECTED close path,
-// not an error path: stdin EOF (best-effort half-close), a 5s wait for an
-// nc that will not come, then Kill. The wait error (always "signal:
-// killed" on success) is returned so a genuinely broken transport still
-// surfaces at the caller; cleanup callers log it best-effort. Safe to call
-// twice (the handshake failure path closes first).
+// Failed operations discard their exec stream. Successful handshakes retain
+// the lifetime context until Close, which kills and joins the owned process
+// group because nc can remain in receive mode after stdin EOF.
+func (c *isoSocksConn) operation(ctx context.Context, fn func() error) error {
+	return c.session.Operation(ctx, fn)
+}
+
 func (c *isoSocksConn) Close() error {
-	if c == nil || c.closed {
+	if c == nil {
 		return nil
 	}
-	c.closed = true
-	_ = c.stdin.Close()
-	done := make(chan error, 1)
-	go func() { done <- c.cmd.Wait() }()
-	select {
-	case err := <-done:
-		c.cancel()
-		return err
-	case <-time.After(5 * time.Second):
-		_ = c.cmd.Process.Kill()
-		err := <-done
-		c.cancel()
-		return err
-	}
+	defer c.cancel()
+	return c.session.Close(nil)
 }
 
 // isoStripKeywordPrefix removes the keyword glue tor puts on single-value
@@ -716,4 +694,199 @@ func isoTruncate(s string) string {
 		return s[:200] + "…"
 	}
 	return s
+}
+
+// T210 uses the actual subprocess helper with successful dialogue before EOF.
+const t210isoTransport = `#!/usr/bin/python3 -B
+import os,sys,time,threading
+mode=os.environ.get("T210_SOCKS_MODE","dialogue")
+def read(n):
+ b=b""
+ while len(b)<n:
+  chunk=os.read(0,n-len(b))
+  if not chunk: sys.exit(0)
+  b+=chunk
+ return b
+def eof():
+ def diag():
+  end=time.monotonic()+1
+  while time.monotonic()<end: os.write(2,b"synthetic SOCKS transport diagnostic\n"*128)
+ thread=threading.Thread(target=diag);thread.start();os.close(1);thread.join()
+if os.environ.get("T210_REQUIRE_UNIX")=="1" and "nc -U /run/tor-fabric/private/tor-socks.sock" not in " ".join(sys.argv[1:]):
+ os.write(2,b"wrong SOCKS transport argv\n");sys.exit(64)
+if os.environ.get("T210_ISO_PID"):
+ open(os.environ["T210_ISO_PID"],"w").write(str(os.getpid()))
+greeting=read(3)
+if mode=="blocked-read":time.sleep(30);sys.exit(0)
+if mode=="short":os.write(1,b"\x05");os.close(1);time.sleep(30);sys.exit(0)
+if mode=="reject":os.write(1,b"\x05\xff");time.sleep(30);sys.exit(0)
+os.write(1,bytes([5,greeting[2]]))
+if mode=="blocked-write":time.sleep(30);sys.exit(0)
+if greeting[2]==2:
+ head=read(2);read(head[1]);plen=read(1);read(plen[0]);os.write(1,b"\x01\x00")
+if os.environ.get("T210_CONNECT")=="1":
+ head=read(5);read(head[4]+2);os.write(1,b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00")
+if mode=="dialogue":eof()
+else:
+ while os.read(0,4096):pass
+`
+
+func TestT210ISODiagnostics(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "docker"), []byte(t210isoTransport), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("T210_SOCKS_MODE", "dialogue")
+	t.Setenv("T210_CONNECT", "1")
+	cfg := tor.ControlPortConfig{Project: "t210-fixture", ComposeFile: "/fixture/compose.yml", EnvFile: "/fixture/local.env"}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c, err := isoDialSocks(ctx, cfg, "synthetic-user", "x", "synthetic.invalid:80")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	for i := 0; i < 256; i++ {
+		if err := c.readFull(make([]byte, 2), "synthetic EOF"); err == nil {
+			t.Fatal("EOF transport returned success")
+		}
+	}
+}
+
+func TestT210ISOOperationBounds(t *testing.T) {
+	for _, mode := range []string{"keep"} {
+		t.Run(mode, func(t *testing.T) {
+			tmp := t.TempDir()
+			if err := os.WriteFile(filepath.Join(tmp, "docker"), []byte(t210isoTransport), 0700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("T210_SOCKS_MODE", mode)
+			t.Setenv("T210_CONNECT", "1")
+			cfg := tor.ControlPortConfig{Project: "t210-fixture", ComposeFile: "/fixture/compose.yml", EnvFile: "/fixture/local.env"}
+			lifetime, cancelLifetime := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancelLifetime()
+			s, err := isoDialSocks(lifetime, cfg, "synthetic-user", "x", "synthetic.invalid:80")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			op, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() {
+				fn := func() error { return s.readFull(make([]byte, 2), "stalled reply") }
+				if bounded, ok := any(s).(interface {
+					operation(context.Context, func() error) error
+				}); ok {
+					done <- bounded.operation(op, fn)
+				} else {
+					done <- fn()
+				}
+			}()
+			select {
+			case err := <-done:
+				if err == nil {
+					t.Fatal("stalled operation returned success")
+				}
+			case <-time.After(700 * time.Millisecond):
+				cancelLifetime()
+				_ = s.cmd.Process.Kill()
+				_ = s.stdin.Close()
+				<-done
+				t.Error("helper ignored its operation context at real pipe I/O")
+			}
+		})
+	}
+}
+
+func TestT210ISOHandshakeBounds(t *testing.T) {
+	for _, mode := range []string{"blocked-read", "blocked-write", "cancel", "short", "reject", "keep"} {
+		t.Run(mode, func(t *testing.T) {
+			tmp := t.TempDir()
+			if err := os.WriteFile(filepath.Join(tmp, "docker"), []byte(t210isoTransport), 0700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+			fixtureMode := mode
+			if mode == "cancel" {
+				fixtureMode = "blocked-read"
+			}
+			t.Setenv("T210_SOCKS_MODE", fixtureMode)
+			t.Setenv("T210_CONNECT", "1")
+			pidPath := filepath.Join(tmp, "pid")
+			t.Setenv("T210_ISO_PID", pidPath)
+			lifetime, cancelLifetime := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancelLifetime()
+			op, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			if mode == "cancel" {
+				timer := time.AfterFunc(30*time.Millisecond, cancel)
+				defer timer.Stop()
+			}
+			uname := "synthetic-user"
+			if mode == "blocked-write" {
+				uname = strings.Repeat("x", 1<<20)
+			}
+			cfg := tor.ControlPortConfig{Project: "t210", ComposeFile: "/fixture/compose.yml", EnvFile: "/fixture/local.env"}
+			type result struct {
+				c   *isoSocksConn
+				err error
+			}
+			done := make(chan result, 1)
+			go func() {
+				c, err := isoDialSocksContext(lifetime, op, cfg, uname, "x", "synthetic.invalid:80")
+				done <- result{c, err}
+			}()
+			var got result
+			select {
+			case got = <-done:
+			case <-time.After(700 * time.Millisecond):
+				cancelLifetime()
+				got = <-done
+				if got.c != nil {
+					_ = got.c.Close()
+				}
+				t.Fatal("actual handshake ignored operation deadline/cancellation")
+			}
+			if got.c != nil {
+				defer got.c.Close()
+			}
+			if lifetime.Err() != nil {
+				t.Fatal("parent cancelled before handshake cleanup assertion")
+			}
+			if mode == "keep" {
+				if got.err != nil || got.c == nil {
+					t.Fatalf("positive handshake: %v", got.err)
+				}
+				cancel()
+				if err := syscall.Kill(got.c.cmd.Process.Pid, 0); err != nil {
+					t.Fatalf("successful operation cancellation killed reusable session: %v", err)
+				}
+				_ = got.c.Close()
+				if got.c.cmd.ProcessState == nil {
+					t.Fatal("successful session not reaped on close")
+				}
+				return
+			}
+			if got.err == nil || got.c != nil {
+				t.Fatalf("failed handshake returned session=%v err=%v", got.c, got.err)
+			}
+			raw, err := os.ReadFile(pidPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			pid, err := strconv.Atoi(strings.TrimSpace(string(raw)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := syscall.Kill(-pid, 0); err != syscall.ESRCH {
+				t.Fatalf("owned group survived early handshake failure: %v", err)
+			}
+			if _, err := os.Stat(fmt.Sprintf("/proc/%d", pid)); !os.IsNotExist(err) {
+				t.Fatalf("direct handshake child not reaped: %v", err)
+			}
+		})
+	}
 }

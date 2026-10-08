@@ -52,7 +52,6 @@ package tor
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -61,10 +60,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
-
-	"github.com/zcat-app/stargate/tests/contract/internal/compose"
 )
 
 // ulComposeProject namespaces every compose invocation this suite issues so
@@ -120,15 +118,15 @@ const (
 )
 
 func TestUsernameLessIsolation(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), ulOverallDeadline)
+	defer cancel()
+
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker CLI not on PATH: %v", err)
 	}
-	if out, err := exec.Command("docker", "info").CombinedOutput(); err != nil {
+	if out, err := CommandOutput(ctx, exec.CommandContext(ctx, "docker", "info")); err != nil {
 		t.Skipf("docker daemon unreachable: %v\n%s", err, out)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), ulOverallDeadline)
-	defer cancel()
 
 	repoRoot := findRepoRoot(t) // same package under -tags docker (port_exposure_test.go)
 	composeFile := filepath.Join(repoRoot, "compose", "docker-compose.local.yml")
@@ -145,14 +143,14 @@ func TestUsernameLessIsolation(t *testing.T) {
 	t.Cleanup(func() {
 		downCtx, downCancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer downCancel()
-		if out, err := compose.Run(downCtx, ulComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
+		if out, err := RunCompose(downCtx, ulComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
 			t.Logf("docker compose down (best-effort cleanup): %v\n%s", err, out)
 		}
 	})
 
 	upCtx, upCancel := context.WithTimeout(ctx, ulUpDeadline)
 	defer upCancel()
-	if out, err := compose.Run(upCtx, ulComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
+	if out, err := RunCompose(upCtx, ulComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
 		t.Fatalf("docker compose up -d --build tor: %v\n%s", err, out)
 	}
 
@@ -175,12 +173,14 @@ func TestUsernameLessIsolation(t *testing.T) {
 
 	// Subtest 1 — ticket assertion (a): tor accepts both NO_AUTH connections.
 	t.Run("NoAuthAcceptedBothConnections", func(t *testing.T) {
+		opCtx, opCancel := context.WithTimeout(ctx, ulConnectWait)
+		defer opCancel()
 		s1 := ulDialSocks(t, ctx, cfg)
-		if err := s1.greetingNoAuth(); err != nil {
+		if err := s1.operation(opCtx, s1.greetingNoAuth); err != nil {
 			t.Fatalf("SOCKS5 greeting (connection 1): %v", err)
 		}
 		s2 := ulDialSocks(t, ctx, cfg)
-		if err := s2.greetingNoAuth(); err != nil {
+		if err := s2.operation(opCtx, s2.greetingNoAuth); err != nil {
 			t.Fatalf("SOCKS5 greeting (connection 2): %v", err)
 		}
 		t.Logf("OK: tor accepted method 0x00 (NO_AUTH) on both connections")
@@ -267,23 +267,24 @@ func TestUsernameLessIsolation(t *testing.T) {
 func ulPairConnect(t *testing.T, ctx context.Context, cfg ControlPortConfig, target string,
 	greet func(s *ulSocksSession, idx int) error, wait time.Duration) (s1, s2 *ulSocksSession) {
 	t.Helper()
-	deadline := time.Now().Add(wait)
+	opCtx, opCancel := context.WithTimeout(ctx, wait)
+	defer opCancel()
 	var lastErr error
 	for {
-		if time.Now().After(deadline) {
+		if opCtx.Err() != nil {
 			t.Fatalf("no working SOCKS5 connection pair to %s within %s: %v (tor notice log tail: %s)",
 				target, wait, lastErr, ulTorLogTail(t, ctx, cfg))
 		}
 		lastErr = nil
 		s1, s2 = ulDialSocks(t, ctx, cfg), ulDialSocks(t, ctx, cfg)
 		for idx, s := range []*ulSocksSession{s1, s2} {
-			if err := greet(s, idx); err != nil && lastErr == nil {
+			if err := s.operation(opCtx, func() error { return greet(s, idx) }); err != nil && lastErr == nil {
 				lastErr = fmt.Errorf("greeting (connection %d): %w", idx+1, err)
 			}
 		}
 		if lastErr == nil {
 			for idx, s := range []*ulSocksSession{s1, s2} {
-				if err := s.connect(ulOnion); err != nil && lastErr == nil {
+				if err := s.operation(opCtx, func() error { return s.connect(ulOnion) }); err != nil && lastErr == nil {
 					lastErr = fmt.Errorf("CONNECT (connection %d): %w", idx+1, err)
 				}
 			}
@@ -293,7 +294,7 @@ func ulPairConnect(t *testing.T, ctx context.Context, cfg ControlPortConfig, tar
 		}
 		_ = s1.close()
 		_ = s2.close()
-		time.Sleep(ulPollEvery)
+		Pause(opCtx, ulPollEvery)
 	}
 }
 
@@ -303,7 +304,9 @@ func ulPairConnect(t *testing.T, ctx context.Context, cfg ControlPortConfig, tar
 // healthcheck and operators read), so addresses are scrubbed at the source.
 func ulTorLogTail(t *testing.T, ctx context.Context, cfg ControlPortConfig) string {
 	t.Helper()
-	out, err := compose.Run(ctx, cfg.Project, cfg.ComposeFile, cfg.EnvFile, "logs", "--tail", "15", "tor")
+	logCtx, logCancel := context.WithTimeout(ctx, 15*time.Second)
+	defer logCancel()
+	out, err := RunCompose(logCtx, cfg.Project, cfg.ComposeFile, cfg.EnvFile, "logs", "--tail", "15", "tor")
 	if err != nil {
 		return fmt.Sprintf("(logs unavailable: %v)", err)
 	}
@@ -314,19 +317,20 @@ func ulTorLogTail(t *testing.T, ctx context.Context, cfg ControlPortConfig) stri
 // accepting control sessions (T062's live bootstrap shape).
 func ulBootstrapControl(t *testing.T, ctx context.Context, cfg ControlPortConfig) *ControlPort {
 	t.Helper()
-	deadline := time.Now().Add(ulBootDeadline)
+	opCtx, opCancel := context.WithTimeout(ctx, ulBootDeadline)
+	defer opCancel()
 	var lastErr error
 	for {
-		if time.Now().After(deadline) {
+		if opCtx.Err() != nil {
 			t.Fatalf("no authenticated control session within %s: %v", ulBootDeadline, lastErr)
 		}
 		var err error
 		var c *ControlPort
-		cookie, cookieErr := ReadCookie(ctx, cfg)
+		cookie, cookieErr := ReadCookie(opCtx, cfg)
 		if cookieErr == nil {
 			c, err = Connect(ctx, cfg)
 			if err == nil {
-				err = c.Authenticate(cookie)
+				err = c.AuthenticateContext(opCtx, cookie)
 				if err == nil {
 					return c
 				}
@@ -338,7 +342,7 @@ func ulBootstrapControl(t *testing.T, ctx context.Context, cfg ControlPortConfig
 			_ = c.Close()
 		}
 		lastErr = err
-		time.Sleep(ulPollEvery)
+		Pause(opCtx, ulPollEvery)
 	}
 }
 
@@ -346,10 +350,11 @@ func ulBootstrapControl(t *testing.T, ctx context.Context, cfg ControlPortConfig
 // (the T062 shape; the SOCKS service is only useful after full bootstrap).
 func ulWaitBootstrapped(t *testing.T, conn *ControlPort) {
 	t.Helper()
-	deadline := time.Now().Add(ulBootDeadline)
+	opCtx, opCancel := context.WithTimeout(conn.Context(), ulBootDeadline)
+	defer opCancel()
 	var last string
 	for {
-		lines, err := conn.Command("GETINFO status/bootstrap-phase")
+		lines, err := conn.CommandContext(opCtx, "GETINFO status/bootstrap-phase")
 		if err != nil {
 			t.Fatalf("GETINFO status/bootstrap-phase mid-poll: %v (last: %s)", err, last)
 		}
@@ -358,10 +363,10 @@ func ulWaitBootstrapped(t *testing.T, conn *ControlPort) {
 			t.Logf("OK: tor bootstrapped: %s", truncate(last))
 			return
 		}
-		if time.Now().After(deadline) {
+		if opCtx.Err() != nil {
 			t.Fatalf("tor did not reach PROGRESS=100 within %s; last phase: %s", ulBootDeadline, truncate(last))
 		}
-		time.Sleep(ulPollEvery)
+		Pause(opCtx, ulPollEvery)
 	}
 }
 
@@ -370,10 +375,11 @@ func ulWaitBootstrapped(t *testing.T, conn *ControlPort) {
 // with the Go side owning the RFC 1928 wire bytes. Sequential,
 // single-goroutine: each step writes then reads its bounded reply.
 type ulSocksSession struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	r      *bufio.Reader
-	stderr *bytes.Buffer
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	r       *bufio.Reader
+	stderr  *DiagnosticBuffer
+	session *ProcessSession
 }
 
 // ulDialSocks opens the exec/nc session to Tor's private Unix SOCKS socket
@@ -383,22 +389,12 @@ type ulSocksSession struct {
 func ulDialSocks(t *testing.T, ctx context.Context, cfg ControlPortConfig) *ulSocksSession {
 	t.Helper()
 	cmd := exec.CommandContext(ctx, "docker", composeArgs(cfg,
-		"exec", "-T", "tor", "nc", "-U", "/run/tor-fabric/private/tor-socks.sock")...)
-	stdin, err := cmd.StdinPipe()
+		"exec", "-T", "tor", "nc", "-U", SocksSocketPath)...)
+	session, err := StartProcess(ctx, cmd)
 	if err != nil {
-		t.Fatalf("socks session stdin pipe: %v", err)
+		t.Fatalf("socks session start (private SOCKS): %v", err)
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatalf("socks session stdout pipe: %v", err)
-	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("socks session start (docker compose exec tor nc -U private SOCKS): %v: %s",
-			err, strings.TrimSpace(stderr.String()))
-	}
-	s := &ulSocksSession{cmd: cmd, stdin: stdin, r: bufio.NewReader(stdout), stderr: &stderr}
+	s := &ulSocksSession{cmd: cmd, stdin: session.Stdin, r: bufio.NewReader(session.Stdout), stderr: session.Diagnostics, session: session}
 	t.Cleanup(func() { _ = s.close() })
 	return s
 }
@@ -522,20 +518,15 @@ func (s *ulSocksSession) connect(host string) error {
 // close ends the session: stdin close (nc reads EOF and exits), then a
 // grace wait with kill backstop — the ControlPort.Close shape, minus QUIT
 // (SOCKS has no goodbye; the TCP close IS the stream teardown).
+func (s *ulSocksSession) operation(ctx context.Context, fn func() error) error {
+	return s.session.Operation(ctx, fn)
+}
+
 func (s *ulSocksSession) close() error {
-	if s == nil || s.cmd == nil {
+	if s == nil {
 		return nil
 	}
-	_ = s.stdin.Close()
-	done := make(chan error, 1)
-	go func() { done <- s.cmd.Wait() }()
-	select {
-	case err := <-done:
-		return err
-	case <-time.After(5 * time.Second):
-		_ = s.cmd.Process.Kill()
-		return <-done
-	}
+	return s.session.Close(nil)
 }
 
 // ulRepName names the RFC 1928 §6 reply codes used in error messages.
@@ -574,8 +565,8 @@ var ulStreamStatesTerminal = map[string]bool{
 // (<StreamID> <Status> <CircID> <Target>); shorter lines are skipped rather
 // than fatal because the exactly-N count assertion below — not this loop —
 // is what guards the pin.
-func ulStreamsAtTarget(conn *ControlPort, target string) (circIDs, states []string, err error) {
-	lines, err := conn.Command("GETINFO stream-status")
+func ulStreamsAtTarget(ctx context.Context, conn *ControlPort, target string) (circIDs, states []string, err error) {
+	lines, err := conn.CommandContext(ctx, "GETINFO stream-status")
 	if err != nil {
 		return nil, nil, fmt.Errorf("GETINFO stream-status: %w", err)
 	}
@@ -596,22 +587,23 @@ func ulStreamsAtTarget(conn *ControlPort, target string) (circIDs, states []stri
 // harness bug, and both must be loud.
 func ulWaitStreams(t *testing.T, conn *ControlPort, target string, want int, wait time.Duration) []string {
 	t.Helper()
-	deadline := time.Now().Add(wait)
+	opCtx, opCancel := context.WithTimeout(conn.Context(), wait)
+	defer opCancel()
 	var circIDs, states []string
 	for {
 		var err error
-		circIDs, states, err = ulStreamsAtTarget(conn, target)
+		circIDs, states, err = ulStreamsAtTarget(opCtx, conn, target)
 		if err != nil {
 			t.Fatalf("stream-status poll: %v", err)
 		}
 		if len(circIDs) == want {
 			return circIDs
 		}
-		if time.Now().After(deadline) {
+		if opCtx.Err() != nil {
 			t.Fatalf("expected exactly %d live stream(s) to %s within %s; saw %d (%s)",
 				want, target, wait, len(circIDs), truncate(strings.Join(states, ",")))
 		}
-		time.Sleep(ulPollEvery)
+		Pause(opCtx, ulPollEvery)
 	}
 }
 
@@ -632,4 +624,119 @@ func ulCircuitBuilt(t *testing.T, conn *ControlPort, circID string) bool {
 		}
 	}
 	return false
+}
+
+// T210 uses the actual subprocess helper with successful dialogue before EOF.
+const t210ulTransport = `#!/usr/bin/python3 -B
+import os,sys,time,threading
+mode=os.environ.get("T210_SOCKS_MODE","dialogue")
+def read(n):
+ b=b""
+ while len(b)<n:
+  chunk=os.read(0,n-len(b))
+  if not chunk: sys.exit(0)
+  b+=chunk
+ return b
+def eof():
+ def diag():
+  end=time.monotonic()+1
+  while time.monotonic()<end: os.write(2,b"synthetic SOCKS transport diagnostic\n"*128)
+ thread=threading.Thread(target=diag);thread.start();os.close(1);thread.join()
+if os.environ.get("T210_REQUIRE_UNIX")=="1" and "nc -U /run/tor-fabric/private/tor-socks.sock" not in " ".join(sys.argv[1:]):
+ os.write(2,b"wrong SOCKS transport argv\n");sys.exit(64)
+if mode=="blocked-write":time.sleep(30);sys.exit(0)
+greeting=read(3)
+if mode=="blocked-read":time.sleep(30);sys.exit(0)
+os.write(1,bytes([5,greeting[2]]))
+if greeting[2]==2:
+ head=read(2);read(head[1]);plen=read(1);read(plen[0]);os.write(1,b"\x01\x00")
+if os.environ.get("T210_CONNECT")=="1":
+ head=read(5);read(head[4]+2);os.write(1,b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00")
+if mode=="dialogue":eof()
+else:
+ while os.read(0,4096):pass
+`
+
+func TestT210ULDiagnostics(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "docker"), []byte(t210ulTransport), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("T210_SOCKS_MODE", "dialogue")
+	t.Setenv("T210_CONNECT", "0")
+	cfg := ControlPortConfig{Project: "t210-fixture", ComposeFile: "/fixture/compose.yml", EnvFile: "/fixture/local.env"}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	s := ulDialSocks(t, ctx, cfg)
+	if err := s.greetingNoAuth(); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 256; i++ {
+		if _, err := s.readFull(2); err == nil {
+			t.Fatal("EOF transport returned success")
+		}
+	}
+}
+
+func TestT210ULOperationBounds(t *testing.T) {
+	for _, mode := range []string{"blocked-read", "blocked-write"} {
+		t.Run(mode, func(t *testing.T) {
+			tmp := t.TempDir()
+			if err := os.WriteFile(filepath.Join(tmp, "docker"), []byte(t210ulTransport), 0700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("T210_SOCKS_MODE", mode)
+			t.Setenv("T210_CONNECT", "0")
+			cfg := ControlPortConfig{Project: "t210-fixture", ComposeFile: "/fixture/compose.yml", EnvFile: "/fixture/local.env"}
+			lifetime, cancelLifetime := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancelLifetime()
+			s := ulDialSocks(t, lifetime, cfg)
+			defer s.close()
+			if mode == "blocked-write" {
+				fd := int(s.stdin.(*os.File).Fd())
+				if err := syscall.SetNonblock(fd, true); err != nil {
+					t.Fatal(err)
+				}
+				for {
+					_, err := syscall.Write(fd, make([]byte, 4096))
+					if err == syscall.EAGAIN {
+						break
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := syscall.SetNonblock(fd, false); err != nil {
+					t.Fatal(err)
+				}
+			}
+			op, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() {
+				fn := func() error { return s.greetingNoAuth() }
+				if bounded, ok := any(s).(interface {
+					operation(context.Context, func() error) error
+				}); ok {
+					done <- bounded.operation(op, fn)
+				} else {
+					done <- fn()
+				}
+			}()
+			select {
+			case err := <-done:
+				if err == nil {
+					t.Fatal("stalled operation returned success")
+				}
+			case <-time.After(700 * time.Millisecond):
+				cancelLifetime()
+				_ = s.cmd.Process.Kill()
+				_ = s.stdin.Close()
+				<-done
+				t.Error("helper ignored its operation context at real pipe I/O")
+			}
+		})
+	}
 }

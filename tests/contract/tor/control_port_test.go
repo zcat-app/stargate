@@ -18,10 +18,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // newTestConn wires a ControlPort to in-memory pipes: commands written to
@@ -289,5 +294,252 @@ func TestCloseOnSessionlessConn(t *testing.T) {
 	var nilP *ControlPort
 	if err := nilP.Close(); err != nil {
 		t.Fatalf("Close on nil conn: %v", err)
+	}
+}
+
+// T210 challenges the real subprocess transport; synthetic diagnostics contain no
+// cookie, command, destination or production state (Constitution VII).
+const t210Transport = `#!/usr/bin/python3 -B
+import os,sys,time,threading,subprocess
+mode=os.environ.get("T210_MODE", "control")
+if mode == "held-descriptor":
+ child=subprocess.Popen([sys.executable,"-B","-c","import time;time.sleep(30)"])
+ open(os.environ["T210_CHILD_PID"],"w").write(str(child.pid))
+ os._exit(0)
+if mode == "blocked-write":
+ open(os.environ["T210_READY"],"w").write("ready")
+ time.sleep(30)
+ sys.exit(0)
+def diagnostics():
+ end=time.monotonic()+1
+ while time.monotonic()<end:
+  os.write(2,b"synthetic transport diagnostic\n"*128)
+def eof():
+ thread=threading.Thread(target=diagnostics)
+ thread.start()
+ os.close(1)
+ thread.join()
+for line in sys.stdin.buffer:
+ if line.startswith(b"QUIT"):
+  sys.exit(0)
+ if mode == "blocked-read":
+  time.sleep(30)
+  sys.exit(0)
+ if line.startswith(b"EOF"):
+  eof()
+  sys.exit(0)
+ os.write(1,b"250 OK\r\n")
+`
+
+func t210Fixture(t *testing.T, mode string) ControlPortConfig {
+	t.Helper()
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "docker"), []byte(t210Transport), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("T210_MODE", mode)
+	t.Setenv("T210_READY", filepath.Join(tmp, "ready"))
+	t.Setenv("T210_CHILD_PID", filepath.Join(tmp, "child-pid"))
+	return ControlPortConfig{Project: "t210-fixture", ComposeFile: "/fixture/compose.yml", EnvFile: "/fixture/local.env"}
+}
+
+func t210Command(ctx context.Context, p *ControlPort, command string) ([]string, error) {
+	// Compile and exercise the old exported API before the additive operation
+	// exists, so RED demonstrates missing cancellation rather than missing code.
+	if c, ok := any(p).(interface {
+		CommandContext(context.Context, string) ([]string, error)
+	}); ok {
+		return c.CommandContext(ctx, command)
+	}
+	return p.Command(command)
+}
+
+func t210Kill(t *testing.T, p *ControlPort) {
+	t.Helper()
+	if p != nil && p.cmd != nil && p.cmd.Process != nil {
+		_ = p.cmd.Process.Kill()
+	}
+	if p != nil && p.stdin != nil {
+		_ = p.stdin.Close()
+	}
+}
+
+func TestT210ControlDiagnostics(t *testing.T) {
+	cfg := t210Fixture(t, "control")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	p, err := Connect(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer p.Close()
+	if err := p.Authenticate([]byte("synthetic-cookie")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Command("GETINFO version"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 256; i++ {
+		if _, err := p.Command("EOF"); err == nil {
+			t.Fatal("EOF transport returned success")
+		}
+	}
+}
+
+func TestT210ControlOperationBounds(t *testing.T) {
+	for _, mode := range []string{"blocked-read", "blocked-write"} {
+		t.Run(mode, func(t *testing.T) {
+			cfg := t210Fixture(t, mode)
+			lifetime, cancelLifetime := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancelLifetime()
+			p, err := Connect(lifetime, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer p.Close()
+			op, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			command := "GETINFO version"
+			if mode == "blocked-write" {
+				command = strings.Repeat("x", 1<<20)
+			}
+			done := make(chan error, 1)
+			go func() { _, err := t210Command(op, p, command); done <- err }()
+			select {
+			case err := <-done:
+				if err == nil {
+					t.Fatal("blocked operation returned success")
+				}
+			case <-time.After(700 * time.Millisecond):
+				t210Kill(t, p)
+				<-done
+				t.Error("operation ignored its 100ms deadline at actual pipe I/O")
+			}
+		})
+	}
+	t.Run("AlreadyCancelled", func(t *testing.T) {
+		cfg := t210Fixture(t, "control")
+		p, err := Connect(context.Background(), cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer p.Close()
+		op, cancel := context.WithCancel(context.Background())
+		cancel()
+		if _, err := t210Command(op, p, "GETINFO version"); err == nil {
+			t.Fatal("cancelled operation was admitted")
+		}
+	})
+	t.Run("SuccessfulOperationRetainsSession", func(t *testing.T) {
+		cfg := t210Fixture(t, "control")
+		p, err := Connect(context.Background(), cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer p.Close()
+		op, cancel := context.WithTimeout(context.Background(), time.Second)
+		_, err = t210Command(op, p, "GETINFO version")
+		cancel()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := p.Command("GETINFO version"); err != nil {
+			t.Fatalf("successful phase cancellation killed reusable session: %v", err)
+		}
+	})
+}
+
+func TestT210ControlCloseBounds(t *testing.T) {
+	t.Run("TimerPrecedesFlush", func(t *testing.T) {
+		cfg := t210Fixture(t, "blocked-write")
+		p, err := Connect(context.Background(), cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { t210Kill(t, p); _ = p.Close() }()
+		deadline := time.Now().Add(time.Second)
+		for {
+			if _, err := os.Stat(os.Getenv("T210_READY")); err == nil {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("child never ready")
+			}
+			time.Sleep(time.Millisecond)
+		}
+		f := p.stdin.(*os.File)
+		fd := int(f.Fd())
+		if err := syscall.SetNonblock(fd, true); err != nil {
+			t.Fatal(err)
+		}
+		for {
+			_, err := syscall.Write(fd, make([]byte, 4096))
+			if errors.Is(err, syscall.EAGAIN) {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := syscall.SetNonblock(fd, false); err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		start := time.Now()
+		go func() { done <- p.Close() }()
+		select {
+		case <-done:
+			if time.Since(start) > 5500*time.Millisecond {
+				t.Error("Close exceeded its existing 5s teardown plus scheduling allowance")
+			}
+		case <-time.After(6 * time.Second):
+			t210Kill(t, p)
+			<-done
+			t.Error("Close blocked before arming its 5s timer")
+		}
+	})
+	t.Run("InheritedDiagnosticDescriptor", func(t *testing.T) {
+		cfg := t210Fixture(t, "held-descriptor")
+		p, err := Connect(context.Background(), cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		childPath := os.Getenv("T210_CHILD_PID")
+		deadline := time.Now().Add(time.Second)
+		var child int
+		for {
+			raw, err := os.ReadFile(childPath)
+			if err == nil {
+				_, _ = fmt.Sscanf(string(raw), "%d", &child)
+				if child > 0 {
+					break
+				}
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("child identity absent")
+			}
+			time.Sleep(time.Millisecond)
+		}
+		t.Cleanup(func() { _ = syscall.Kill(child, syscall.SIGKILL) })
+		done := make(chan error, 1)
+		go func() { done <- p.Close() }()
+		select {
+		case <-done:
+		case <-time.After(6 * time.Second):
+			_ = syscall.Kill(child, syscall.SIGKILL)
+			<-done
+			t.Error("Wait remained blocked on an inherited diagnostic descriptor")
+		}
+		if raw, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", child)); err == nil && !strings.Contains(string(raw), ") Z ") {
+			t.Error("owned descriptor-holding child survived Close")
+		}
+	})
+}
+
+// Pin the selected test executable's prerequisite without contacting Docker.
+func TestT210FixtureTool(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Fatal(err)
 	}
 }

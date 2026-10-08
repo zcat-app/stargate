@@ -40,8 +40,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/zcat-app/stargate/tests/contract/internal/compose"
@@ -56,6 +61,8 @@ import (
 const CookieAuthPath = "/var/lib/tor/control_auth_cookie"
 
 const ControlSocketPath = "/var/lib/tor/control/tor-control.sock"
+
+const SocksSocketPath = "/run/tor-fabric/private/tor-socks.sock"
 
 // Bounds for the external-input side of the protocol (validate at the edge;
 // tor's control protocol publishes no reply-size contract). Generous enough
@@ -109,10 +116,11 @@ func ReadCookie(ctx context.Context, cfg ControlPortConfig) ([]byte, error) {
 	}
 	cmd := exec.CommandContext(ctx, "docker", composeArgs(cfg,
 		"exec", "-T", "tor", "cat", CookieAuthPath)...)
+	cmd.WaitDelay = 250 * time.Millisecond
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errOut
-	if err := cmd.Run(); err != nil {
+	if err := RunCommand(ctx, cmd); err != nil {
 		return nil, fmt.Errorf("read control cookie (docker compose exec tor cat %s failed): %w: %s",
 			CookieAuthPath, err, strings.TrimSpace(errOut.String()))
 	}
@@ -125,6 +133,216 @@ func ReadCookie(ctx context.Context, cfg ControlPortConfig) ([]byte, error) {
 	return out.Bytes(), nil
 }
 
+// DiagnosticBuffer synchronizes os/exec's copier with best-effort EOF snapshots.
+// Keep the buffer private: embedding it would promote ReaderFrom and bypass Write.
+// Until the sole Wait finishes, a snapshot need not contain the final diagnostics.
+type DiagnosticBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *DiagnosticBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+func (b *DiagnosticBuffer) String() string { b.mu.Lock(); defer b.mu.Unlock(); return b.buf.String() }
+
+// ProcessSession owns the local exec pipes and a private process group. Operation
+// cancellation discards the stream; success keeps its lifetime context reusable.
+// The five-second teardown starts before any best-effort protocol goodbye (T210).
+type ProcessSession struct {
+	Cmd         *exec.Cmd
+	Stdin       io.WriteCloser
+	Stdout      io.ReadCloser
+	Diagnostics *DiagnosticBuffer
+	ctx         context.Context
+	abortOnce   sync.Once
+	closeOnce   sync.Once
+	closeErr    error
+}
+
+func StartProcess(ctx context.Context, cmd *exec.Cmd) (*ProcessSession, error) {
+	s := &ProcessSession{Cmd: cmd, ctx: ctx, Diagnostics: &DiagnosticBuffer{}}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Killing the direct child alone cannot release a descendant's inherited
+	// diagnostic descriptor. The private group and bounded copier join cover both.
+	cmd.WaitDelay = 250 * time.Millisecond
+	var err error
+	if s.Stdin, err = cmd.StdinPipe(); err != nil {
+		return nil, err
+	}
+	if s.Stdout, err = cmd.StdoutPipe(); err != nil {
+		_ = s.Stdin.Close()
+		return nil, err
+	}
+	cmd.Stderr = s.Diagnostics
+	cmd.Cancel = func() error { s.Abort(); return nil }
+	if err = cmd.Start(); err != nil {
+		_ = s.Stdin.Close()
+		_ = s.Stdout.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+func (s *ProcessSession) Context() context.Context { return s.ctx }
+func (s *ProcessSession) Abort() {
+	s.abortOnce.Do(func() {
+		_ = s.Stdin.Close()
+		_ = s.Stdout.Close()
+		if s.Cmd.Process != nil {
+			_ = syscall.Kill(-s.Cmd.Process.Pid, syscall.SIGKILL)
+		}
+	})
+}
+func (s *ProcessSession) Operation(ctx context.Context, fn func() error) error {
+	if err := ctx.Err(); err != nil {
+		s.Abort()
+		_ = s.Close(nil)
+		return err
+	}
+	joined := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() { s.Abort(); close(joined) })
+	err := fn()
+	if !stop() {
+		<-joined
+	}
+	if ctx.Err() != nil {
+		err = errors.Join(err, ctx.Err())
+	}
+	if err != nil {
+		s.Abort()
+		_ = s.Close(nil)
+	}
+	return err
+}
+func (s *ProcessSession) Close(goodbye func()) error {
+	s.closeOnce.Do(func() {
+		deadline := time.Now().Add(5 * time.Second)
+		timer := time.AfterFunc(time.Until(deadline), s.Abort)
+		if goodbye != nil {
+			goodbye()
+		}
+		// Give QUIT/EOF a chance to reach the child. nc may stay in receive
+		// mode, so the already-armed timer owns the five-second kill bound.
+		_ = s.Stdin.Close()
+		s.closeErr = s.Cmd.Wait()
+		// WaitDelay ends copier waits, but a descendant may still hold an
+		// inherited descriptor. Terminate and join the exact private group.
+		s.Abort()
+		s.closeErr = errors.Join(s.closeErr, s.waitGroup(deadline.Add(250*time.Millisecond)))
+		timer.Stop()
+	})
+	return s.closeErr
+}
+
+// waitGroup joins signal delivery to descendants before reporting teardown.
+// The direct child is reaped by exactly one Wait; dead orphan zombies are not
+// executing residue. /proc metadata is an OS input, scoped to our UID and group.
+func (s *ProcessSession) waitGroup(deadline time.Time) error {
+	for {
+		entries, err := os.ReadDir("/proc")
+		if err != nil {
+			return err
+		}
+		alive := false
+		for _, entry := range entries {
+			if _, err := strconv.Atoi(entry.Name()); err != nil {
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			if info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()) {
+				continue
+			}
+			raw, err := os.ReadFile(filepath.Join("/proc", entry.Name(), "stat"))
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			end := strings.LastIndexByte(string(raw), ')')
+			if end < 0 {
+				return errors.New("malformed process ownership metadata")
+			}
+			fields := strings.Fields(string(raw)[end+1:])
+			if len(fields) < 3 {
+				return errors.New("truncated process ownership metadata")
+			}
+			group, err := strconv.Atoi(fields[2])
+			if err != nil {
+				return err
+			}
+			if group == s.Cmd.Process.Pid && fields[0] != "Z" && fields[0] != "X" {
+				alive = true
+				break
+			}
+		}
+		if !alive {
+			return nil
+		}
+		if !time.Now().Before(deadline) {
+			return errors.New("owned exec process group did not exit within teardown bound")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// Pause clips polling to its phase deadline, so sleep cannot extend a bound.
+func Pause(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// RunCommand bounds one-shot Docker plumbing, including inherited output
+// descriptors. The caller supplies the phase context and output writers.
+func RunCommand(ctx context.Context, cmd *exec.Cmd) error {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.WaitDelay = 250 * time.Millisecond
+	cmd.Cancel = func() error {
+		if cmd.Process != nil {
+			return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		}
+		return nil
+	}
+	err := cmd.Run()
+	if cmd.Process == nil {
+		return err
+	}
+	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	owner := ProcessSession{Cmd: cmd}
+	err = errors.Join(err, owner.waitGroup(time.Now().Add(5*time.Second)))
+	if ctx.Err() != nil {
+		err = errors.Join(err, ctx.Err())
+	}
+	return err
+}
+
+// CommandOutput retains the suites' combined diagnostic output convention.
+func CommandOutput(ctx context.Context, cmd *exec.Cmd) ([]byte, error) {
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err := RunCommand(ctx, cmd)
+	return out.Bytes(), err
+}
+
+// RunCompose keeps the T121 argv builder and project ownership while bounding
+// copier joins; the generic compose helper's other consumers are outside T210.
+func RunCompose(ctx context.Context, project, composeFile, envFile string, args ...string) ([]byte, error) {
+	return CommandOutput(ctx, exec.CommandContext(ctx, "docker", compose.Args(project, composeFile, envFile, args...)...))
+}
+
 // ControlPort is one authenticated-or-not control-port session through the
 // in-container nc transport. Sequential, single-goroutine: each Command
 // writes one request then reads its full reply (interleaved, never
@@ -132,11 +350,12 @@ func ReadCookie(ctx context.Context, cfg ControlPortConfig) ([]byte, error) {
 // circuit-status would deadlock a write-everything-first caller; T062
 // §Analysis M3). Not safe for concurrent use.
 type ControlPort struct {
-	w      *bufio.Writer  // command sink (the exec stdin when live)
-	r      *bufio.Reader  // reply source (the exec stdout when live)
-	stdin  io.WriteCloser // non-nil live: closed by Close
-	cmd    *exec.Cmd      // non-nil live: waited/killed by Close
-	stderr *bytes.Buffer  // non-nil live: nc/docker diagnostics for Close errors
+	w       *bufio.Writer     // command sink (the exec stdin when live)
+	r       *bufio.Reader     // reply source (the exec stdout when live)
+	stdin   io.WriteCloser    // non-nil live: closed by Close
+	cmd     *exec.Cmd         // non-nil live: waited/killed by Close
+	stderr  *DiagnosticBuffer // non-nil live: nc/docker diagnostics for Close errors
+	session *ProcessSession
 }
 
 // Connect opens a control-port session: it spawns
@@ -153,27 +372,11 @@ func Connect(ctx context.Context, cfg ControlPortConfig) (*ControlPort, error) {
 	}
 	cmd := exec.CommandContext(ctx, "docker", composeArgs(cfg,
 		"exec", "-T", "tor", "nc", "-U", ControlSocketPath)...)
-	stdin, err := cmd.StdinPipe()
+	session, err := StartProcess(ctx, cmd)
 	if err != nil {
-		return nil, fmt.Errorf("control session stdin pipe: %w", err)
+		return nil, fmt.Errorf("control session start (docker compose exec tor nc -U %s): %w", ControlSocketPath, err)
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("control session stdout pipe: %w", err)
-	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("control session start (docker compose exec tor nc -U %s): %w: %s",
-			ControlSocketPath, err, strings.TrimSpace(stderr.String()))
-	}
-	return &ControlPort{
-		w:      bufio.NewWriter(stdin),
-		r:      bufio.NewReader(stdout),
-		stdin:  stdin,
-		cmd:    cmd,
-		stderr: &stderr,
-	}, nil
+	return &ControlPort{w: bufio.NewWriter(session.Stdin), r: bufio.NewReader(session.Stdout), stdin: session.Stdin, cmd: cmd, stderr: session.Diagnostics, session: session}, nil
 }
 
 // Authenticate sends the COOKIE-method handshake: `AUTHENTICATE <hex>` with
@@ -182,12 +385,16 @@ func Connect(ctx context.Context, cfg ControlPortConfig) (*ControlPort, error) {
 // the cookie's authority. On failure the session is dead (tor rejects and
 // typically closes) — reconnect rather than retry.
 func (p *ControlPort) Authenticate(cookie []byte) error {
+	return p.AuthenticateContext(p.operationContext(), cookie)
+}
+
+func (p *ControlPort) AuthenticateContext(ctx context.Context, cookie []byte) error {
 	if len(cookie) == 0 {
 		return errors.New("authenticate: empty cookie")
 	}
 	// The command string embeds the cookie; roundTrip's errors never echo
 	// the command (M5), so the hex cannot leak through the error path.
-	if _, err := p.Command("AUTHENTICATE " + hex.EncodeToString(cookie)); err != nil {
+	if _, err := p.CommandContext(ctx, "AUTHENTICATE "+hex.EncodeToString(cookie)); err != nil {
 		return fmt.Errorf("authenticate: %w", err)
 	}
 	return nil
@@ -206,7 +413,32 @@ func (p *ControlPort) Authenticate(cookie []byte) error {
 // next response. The same discard-after-error rule is what makes the
 // interleaved write→read pairing in Command safe to document: a fresh
 // session always starts at a clean reply boundary.
+func (p *ControlPort) Context() context.Context { return p.operationContext() }
+
+func (p *ControlPort) operationContext() context.Context {
+	if p.session != nil {
+		return p.session.Context()
+	}
+	return context.Background() // in-memory parser connections have no child lifetime
+}
+
 func (p *ControlPort) Command(command string) ([]string, error) {
+	return p.CommandContext(p.operationContext(), command)
+}
+
+func (p *ControlPort) CommandContext(ctx context.Context, command string) ([]string, error) {
+	var lines []string
+	fn := func() error { var err error; lines, err = p.command(command); return err }
+	var err error
+	if p.session != nil {
+		err = p.session.Operation(ctx, fn)
+	} else if err = ctx.Err(); err == nil {
+		err = fn()
+	}
+	return lines, err
+}
+
+func (p *ControlPort) command(command string) ([]string, error) {
 	if strings.ContainsAny(command, "\r\n") {
 		return nil, errors.New("control command contains a line break")
 	}
@@ -227,34 +459,23 @@ func (p *ControlPort) Close() error {
 	if p == nil {
 		return nil
 	}
-	if p.w != nil {
-		// Best-effort QUIT; the reply (if any) is never parsed — nc exits
-		// when tor closes the socket.
-		_, _ = p.w.WriteString("QUIT\r\n")
-		_ = p.w.Flush()
-	}
-	var waitErr error
-	if p.cmd != nil && p.cmd.Process != nil {
-		// Wait blocks until nc exits; exec.CommandContext's deadline (the
-		// caller's ctx) is the backstop, but do not rely on it alone —
-		// Close is also the deferred-cleanup path for tests that bound
-		// their ctx on the happy path only.
-		done := make(chan error, 1)
-		go func() { done <- p.cmd.Wait() }()
-		select {
-		case waitErr = <-done:
-		case <-time.After(5 * time.Second):
-			_ = p.cmd.Process.Kill()
-			waitErr = <-done
+	goodbye := func() {
+		if p.w != nil {
+			_, _ = p.w.WriteString("QUIT\r\n")
+			_ = p.w.Flush()
 		}
-	} else if p.stdin != nil {
-		_ = p.stdin.Close()
 	}
-	if waitErr != nil {
-		waitErr = fmt.Errorf("control session close: %w: %s",
-			waitErr, strings.TrimSpace(p.stderrString()))
+	if p.session == nil {
+		goodbye()
+		if p.stdin != nil {
+			return p.stdin.Close()
+		}
+		return nil
 	}
-	return waitErr
+	if err := p.session.Close(goodbye); err != nil {
+		return fmt.Errorf("control session close: %w: %s", err, strings.TrimSpace(p.stderrString()))
+	}
+	return nil
 }
 
 func (p *ControlPort) stderrString() string {

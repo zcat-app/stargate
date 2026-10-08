@@ -45,14 +45,17 @@
 // compile-checks it via `go vet -tags docker` and accounts it SKIP[docker]
 // in the hermetic PR run. The named Docker job executes it via
 // `STARGATE_TEST_TAGS=docker scripts/verify.sh`, or manually:
-// `cd tests/contract && go test -tags docker ./torrc/ -run TestLiveSidecarGETCONFSocksPort -v -timeout 15m`.
+// `cd tests/contract && go test -tags docker ./torrc/ -run TestLiveSidecarGETCONFSocksPort -v -timeout 17m`.
 // The sibling torrc tests (invariants, no_bridges, render_byte_match) are
 // hermetic and run in the PR gate. Same self-invocation model as T029/T030/T031.
 package torrc
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -63,8 +66,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
-
-	"github.com/zcat-app/stargate/tests/contract/internal/compose"
+	"github.com/zcat-app/stargate/tests/contract/tor"
 )
 
 // liveComposeProject namespaces every compose invocation this test issues so
@@ -82,6 +84,9 @@ const liveComposeProject = "stargate-t032-test"
 // reasons (network partition, slow guards) — the bootstrap-phase response is
 // surfaced in the failure message for diagnosis.
 const bootstrapDeadline = 5 * time.Minute
+
+// 17m package alarm covers 15m foreground + 90s cleanup + 30s scheduling margin.
+const liveForegroundDeadline = 15 * time.Minute
 
 // bootstrapPollInterval paces the control-port bootstrap-phase poll. Tor's
 // bootstrap is observable as a PROGRESS=N counter on
@@ -148,14 +153,15 @@ var getconfCases = []struct {
 // Self-skips when the docker daemon is unreachable or the docker CLI is not
 // on PATH (mirrors T019b's skip conditions).
 func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
-	ctx := context.Background()
+	ctx, cancelForeground := context.WithTimeout(context.Background(), liveForegroundDeadline)
+	defer cancelForeground()
 
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		t.Skipf("docker SDK client init failed (daemon unreachable?): %v", err)
 	}
 	defer cli.Close()
-	if _, err := cli.Ping(ctx); err != nil {
+	if err := liveDockerPing(ctx, cli); err != nil {
 		t.Skipf("docker daemon ping failed (daemon unreachable?): %v", err)
 	}
 	if _, err := exec.LookPath("docker"); err != nil {
@@ -184,7 +190,7 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 	t.Cleanup(func() {
 		downCtx, dcancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer dcancel()
-		if out, err := compose.Run(downCtx, liveComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
+		if out, err := tor.RunCompose(downCtx, liveComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
 			t.Logf("docker compose down (best-effort cleanup): %v\n%s", err, out)
 		}
 	})
@@ -199,7 +205,7 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 	// sol-review B2).
 	upCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	if out, err := compose.Run(upCtx, liveComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
+	if out, err := tor.RunCompose(upCtx, liveComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
 		t.Fatalf("docker compose up -d --build tor (cold volume, image-baked torrc): %v\n%s", err, out)
 	}
 
@@ -225,14 +231,7 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 	// The live authenticated bootstrap probe above retains the cold-volume
 	// cookie-path regression. Docker must not retain timestamped probe history.
 	t.Run("ColdVolumeHasNoDockerHealthHistory", func(t *testing.T) {
-		f := filters.NewArgs()
-		f.Add("label", "com.docker.compose.project="+liveComposeProject)
-		f.Add("label", "com.docker.compose.service=tor")
-		list, err := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: f})
-		if err != nil || len(list) != 1 {
-			t.Fatal("expected one Tor container", err)
-		}
-		inspected, err := cli.ContainerInspect(ctx, list[0].ID)
+		inspected, err := liveDockerContainer(ctx, cli)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -254,7 +253,7 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 	// T087's §Analysis §Residue promised and render_byte_match_test.go
 	// documents (redteam M1).
 	t.Run("ImageBakedTorrcMatchesGolden", func(t *testing.T) {
-		out, err := compose.Run(ctx, liveComposeProject, composeFile, envFile,
+		out, err := tor.RunCompose(ctx, liveComposeProject, composeFile, envFile,
 			"exec", "-T", "tor", "cat", "/etc/tor/torrc")
 		if err != nil {
 			t.Fatalf("docker compose exec tor cat /etc/tor/torrc: %v\n%s", err, out)
@@ -279,7 +278,7 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 	// exactly this regression — the deterministic path assertion below is
 	// what catches a DataDirectory regression going forward.
 	t.Run("CookieAtAuthoritativePath", func(t *testing.T) {
-		if out, err := compose.Run(ctx, liveComposeProject, composeFile, envFile,
+		if out, err := tor.RunCompose(ctx, liveComposeProject, composeFile, envFile,
 			"exec", "-T", "tor", "test", "-f", "/var/lib/tor/control_auth_cookie"); err != nil {
 			t.Errorf("control cookie NOT at /var/lib/tor/control_auth_cookie "+
 				"(invariant #11 — DataDirectory /var/lib/tor):\n"+
@@ -291,7 +290,7 @@ func TestLiveSidecarGETCONFSocksPort(t *testing.T) {
 		}
 		// The wrong path must NOT exist — its presence would mean Tor fell
 		// back to $HOME/.tor despite the explicit DataDirectory.
-		if _, err := compose.Run(ctx, liveComposeProject, composeFile, envFile,
+		if _, err := tor.RunCompose(ctx, liveComposeProject, composeFile, envFile,
 			"exec", "-T", "tor", "test", "-f", "/var/lib/tor/.tor/control_auth_cookie"); err == nil {
 			// test -f exited 0 → the wrong-path cookie EXISTS → regression.
 			t.Errorf("control cookie ALSO at /var/lib/tor/.tor/control_auth_cookie — " +
@@ -502,6 +501,124 @@ func liveTorControl(ctx context.Context, composeFile, envFile, command string) (
 		"sh", "-c", script, "torctrl", command,
 	}
 	cmd := exec.CommandContext(ctx, "docker", args...)
-	out, err := cmd.CombinedOutput()
+	cmd.WaitDelay = 250 * time.Millisecond
+	out, err := tor.CommandOutput(ctx, cmd)
 	return string(out), err
+}
+
+// Both the live suite and Unix-daemon controls use this caller orchestration.
+func liveDockerPing(ctx context.Context, cli *client.Client) error {
+	_, err := cli.Ping(ctx)
+	return err
+}
+
+func liveDockerContainer(ctx context.Context, cli *client.Client) (container.InspectResponse, error) {
+	f := filters.NewArgs()
+	f.Add("label", "com.docker.compose.project="+liveComposeProject)
+	f.Add("label", "com.docker.compose.service=tor")
+	list, err := cli.ContainerList(ctx, container.ListOptions{All: true, Filters: f})
+	if err != nil {
+		return container.InspectResponse{}, err
+	}
+	if len(list) != 1 {
+		return container.InspectResponse{}, fmt.Errorf("expected one Tor container, got %d", len(list))
+	}
+	return cli.ContainerInspect(ctx, list[0].ID)
+}
+
+func TestT210DockerAPIBounds(t *testing.T) {
+	for _, name := range []string{"Ping", "List", "Inspect", "Positive"} {
+		t.Run(name, func(t *testing.T) {
+			done := make(chan struct{})
+			seen := make(chan string, 8)
+			socket := filepath.Join(t.TempDir(), "docker.sock")
+			listener, err := net.Listen("unix", socket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				phase := "Inspect"
+				if strings.HasSuffix(r.URL.Path, "/_ping") {
+					phase = "Ping"
+				} else if strings.HasSuffix(r.URL.Path, "/containers/json") {
+					phase = "List"
+				}
+				seen <- phase
+				if phase == name {
+					select {
+					case <-r.Context().Done():
+					case <-done:
+					}
+					return
+				}
+				w.Header().Set("Content-Type", "application/json")
+				switch phase {
+				case "Ping":
+					w.Header().Set("API-Version", "1.51")
+					_, _ = w.Write([]byte("OK"))
+				case "List":
+					_, _ = w.Write([]byte(`[{"Id":"synthetic"}]`))
+				case "Inspect":
+					_, _ = w.Write([]byte(`{"State":{"Running":true}}`))
+				}
+			})}
+			served := make(chan struct{})
+			go func() { defer close(served); _ = server.Serve(listener) }()
+			defer func() { close(done); _ = server.Close(); <-served }()
+			cli, err := client.NewClientWithOpts(client.WithHost("unix://"+socket), client.WithVersion("1.51"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cli.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			finished := make(chan error, 1)
+			go func() {
+				if err := liveDockerPing(ctx, cli); err != nil {
+					finished <- err
+					return
+				}
+				_, err := liveDockerContainer(ctx, cli)
+				finished <- err
+			}()
+			select {
+			case err = <-finished:
+			case <-time.After(700 * time.Millisecond):
+				_ = server.Close()
+				<-finished
+				t.Fatal("live caller ignored its supplied phase context")
+			}
+			if name == "Positive" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, want := range []string{"Ping", "List", "Inspect"} {
+					if got := <-seen; got != want {
+						t.Fatalf("actual caller phase %s, want %s", got, want)
+					}
+				}
+			} else if err == nil || !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("stalled %s did not honor live caller context: %v", name, err)
+			}
+		})
+	}
+}
+
+func TestT210GETCONFOperationBound(t *testing.T) {
+	tmp := t.TempDir()
+	script := "#!/bin/sh\nexec sleep 30\n"
+	if err := os.WriteFile(filepath.Join(tmp, "docker"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err := liveTorControl(ctx, "/fixture/compose.yml", "/fixture/local.env", "GETCONF SocksPort")
+	if err == nil {
+		t.Fatal("stalled GETCONF returned success")
+	}
+	if time.Since(start) > 700*time.Millisecond {
+		t.Fatal("GETCONF ignored operation context")
+	}
 }

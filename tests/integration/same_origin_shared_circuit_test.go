@@ -25,7 +25,7 @@
 // FR-012 forbids publishing and no suite may fabricate; the harness's only
 // sanctioned channel into the compose-internal sidecar is the exec/nc
 // transport T032/T058a/T062 established. The sessions below therefore ride
-// `docker compose exec -T tor nc 127.0.0.1 9050` with the Go side owning
+// `docker compose exec -T tor nc -U /run/tor-fabric/private/tor-socks.sock` with the Go side owning
 // the RFC 1928/1929 wire bytes — the T058a machinery, aimed at the
 // same-credential case. The control side (cookie auth, circuit reads) is
 // the landed T062 helper, consumed unmodified.
@@ -59,7 +59,6 @@ package integration
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -128,15 +127,15 @@ const (
 )
 
 func TestSameOriginSharedCircuit(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), soOverallDead)
+	defer cancel()
+
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker CLI not on PATH: %v", err)
 	}
-	if out, err := exec.Command("docker", "info").CombinedOutput(); err != nil {
+	if out, err := tor.CommandOutput(ctx, exec.CommandContext(ctx, "docker", "info")); err != nil {
 		t.Skipf("docker daemon unreachable: %v\n%s", err, out)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), soOverallDead)
-	defer cancel()
 
 	repoRoot := t033FindRepoRoot(t) // same package, untagged (onion_load_test.go)
 	composeFile := filepath.Join(repoRoot, "compose", "docker-compose.local.yml")
@@ -265,7 +264,7 @@ func soCompose(ctx context.Context, composeFile, envFile string, args ...string)
 		"-f", composeFile,
 		"--env-file", envFile,
 	}, args...)
-	return exec.CommandContext(ctx, "docker", full...).CombinedOutput()
+	return tor.CommandOutput(ctx, exec.CommandContext(ctx, "docker", full...))
 }
 
 // soPairConnect dials and greets two fresh SOCKS sessions, CONNECTs both to
@@ -284,23 +283,24 @@ func soCompose(ctx context.Context, composeFile, envFile string, args ...string)
 func soPairConnect(t *testing.T, ctx context.Context, cfg tor.ControlPortConfig, target string,
 	greet func(s *soSocksSession, idx int) error, wait time.Duration) (s1, s2 *soSocksSession) {
 	t.Helper()
-	deadline := time.Now().Add(wait)
+	opCtx, opCancel := context.WithTimeout(ctx, wait)
+	defer opCancel()
 	var lastErr error
 	for {
-		if time.Now().After(deadline) {
+		if opCtx.Err() != nil {
 			t.Fatalf("no working SOCKS5 connection pair to %s within %s: %v (tor notice log tail: %s)",
 				target, wait, lastErr, soTorLogTail(t, ctx, cfg))
 		}
 		lastErr = nil
 		s1, s2 = soDialSocks(t, ctx, cfg), soDialSocks(t, ctx, cfg)
 		for idx, s := range []*soSocksSession{s1, s2} {
-			if err := greet(s, idx); err != nil && lastErr == nil {
+			if err := s.operation(opCtx, func() error { return greet(s, idx) }); err != nil && lastErr == nil {
 				lastErr = fmt.Errorf("greeting (connection %d): %w", idx+1, err)
 			}
 		}
 		if lastErr == nil {
 			for idx, s := range []*soSocksSession{s1, s2} {
-				if err := s.connect(soOnion); err != nil && lastErr == nil {
+				if err := s.operation(opCtx, func() error { return s.connect(soOnion) }); err != nil && lastErr == nil {
 					lastErr = fmt.Errorf("CONNECT (connection %d): %w", idx+1, err)
 				}
 			}
@@ -310,7 +310,7 @@ func soPairConnect(t *testing.T, ctx context.Context, cfg tor.ControlPortConfig,
 		}
 		_ = s1.close()
 		_ = s2.close()
-		time.Sleep(soPollEvery)
+		tor.Pause(opCtx, soPollEvery)
 	}
 }
 
@@ -333,19 +333,20 @@ func soTorLogTail(t *testing.T, ctx context.Context, cfg tor.ControlPortConfig) 
 // accepting control sessions (T062's live bootstrap shape).
 func soBootstrapControl(t *testing.T, ctx context.Context, cfg tor.ControlPortConfig) *tor.ControlPort {
 	t.Helper()
-	deadline := time.Now().Add(soBootDeadline)
+	opCtx, opCancel := context.WithTimeout(ctx, soBootDeadline)
+	defer opCancel()
 	var lastErr error
 	for {
-		if time.Now().After(deadline) {
+		if opCtx.Err() != nil {
 			t.Fatalf("no authenticated control session within %s: %v", soBootDeadline, lastErr)
 		}
 		var err error
 		var c *tor.ControlPort
-		cookie, cookieErr := tor.ReadCookie(ctx, cfg)
+		cookie, cookieErr := tor.ReadCookie(opCtx, cfg)
 		if cookieErr == nil {
 			c, err = tor.Connect(ctx, cfg)
 			if err == nil {
-				err = c.Authenticate(cookie)
+				err = c.AuthenticateContext(opCtx, cookie)
 				if err == nil {
 					return c
 				}
@@ -357,7 +358,7 @@ func soBootstrapControl(t *testing.T, ctx context.Context, cfg tor.ControlPortCo
 			_ = c.Close()
 		}
 		lastErr = err
-		time.Sleep(soPollEvery)
+		tor.Pause(opCtx, soPollEvery)
 	}
 }
 
@@ -365,10 +366,11 @@ func soBootstrapControl(t *testing.T, ctx context.Context, cfg tor.ControlPortCo
 // (the T062 shape; the SOCKS service is only useful after full bootstrap).
 func soWaitBootstrapped(t *testing.T, conn *tor.ControlPort) {
 	t.Helper()
-	deadline := time.Now().Add(soBootDeadline)
+	opCtx, opCancel := context.WithTimeout(conn.Context(), soBootDeadline)
+	defer opCancel()
 	var last string
 	for {
-		lines, err := conn.Command("GETINFO status/bootstrap-phase")
+		lines, err := conn.CommandContext(opCtx, "GETINFO status/bootstrap-phase")
 		if err != nil {
 			t.Fatalf("GETINFO status/bootstrap-phase mid-poll: %v (last: %s)", err, last)
 		}
@@ -377,26 +379,27 @@ func soWaitBootstrapped(t *testing.T, conn *tor.ControlPort) {
 			t.Logf("OK: tor bootstrapped: %s", soTruncate(last))
 			return
 		}
-		if time.Now().After(deadline) {
+		if opCtx.Err() != nil {
 			t.Fatalf("tor did not reach PROGRESS=100 within %s; last phase: %s", soBootDeadline, soTruncate(last))
 		}
-		time.Sleep(soPollEvery)
+		tor.Pause(opCtx, soPollEvery)
 	}
 }
 
 // soSocksSession is one SOCKS5 connection to the tor SocksPort over the
 // in-container exec/nc transport — the T062 ControlPort pattern aimed at
-// 9050 with the Go side owning the RFC 1928/1929 wire bytes (T058a's
+// the private Unix socket with the Go side owning the RFC 1928/1929 wire bytes (T058a's
 // session shape). Sequential, single-goroutine: each step writes then reads
 // its bounded reply.
 type soSocksSession struct {
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	r      *bufio.Reader
-	stderr *bytes.Buffer
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	r       *bufio.Reader
+	stderr  *tor.DiagnosticBuffer
+	session *tor.ProcessSession
 }
 
-// soDialSocks opens the exec/nc session to 127.0.0.1:9050 inside the tor
+// soDialSocks opens the exec/nc session to the Tor-private Unix socket inside the tor
 // container. Failures name the transport; the SOCKS dialogue itself starts
 // only after Start succeeds. The session lives until close or until ctx is
 // cancelled (CommandContext backstop).
@@ -404,22 +407,12 @@ func soDialSocks(t *testing.T, ctx context.Context, cfg tor.ControlPortConfig) *
 	t.Helper()
 	cmd := exec.CommandContext(ctx, "docker", "compose", "-p", soComposeProject,
 		"-f", cfg.ComposeFile, "--env-file", cfg.EnvFile,
-		"exec", "-T", "tor", "nc", "127.0.0.1", "9050")
-	stdin, err := cmd.StdinPipe()
+		"exec", "-T", "tor", "nc", "-U", tor.SocksSocketPath)
+	session, err := tor.StartProcess(ctx, cmd)
 	if err != nil {
-		t.Fatalf("socks session stdin pipe: %v", err)
+		t.Fatalf("socks session start (private SOCKS): %v", err)
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatalf("socks session stdout pipe: %v", err)
-	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("socks session start (docker compose exec tor nc 127.0.0.1 9050): %v: %s",
-			err, strings.TrimSpace(stderr.String()))
-	}
-	s := &soSocksSession{cmd: cmd, stdin: stdin, r: bufio.NewReader(stdout), stderr: &stderr}
+	s := &soSocksSession{cmd: cmd, stdin: session.Stdin, r: bufio.NewReader(session.Stdout), stderr: session.Diagnostics, session: session}
 	t.Cleanup(func() { _ = s.close() })
 	return s
 }
@@ -523,20 +516,15 @@ func (s *soSocksSession) connect(host string) error {
 // close ends the session: stdin close (nc reads EOF and exits), then a
 // grace wait with kill backstop — the ControlPort.Close shape, minus QUIT
 // (SOCKS has no goodbye; the TCP close IS the stream teardown).
+func (s *soSocksSession) operation(ctx context.Context, fn func() error) error {
+	return s.session.Operation(ctx, fn)
+}
+
 func (s *soSocksSession) close() error {
-	if s == nil || s.cmd == nil {
+	if s == nil {
 		return nil
 	}
-	_ = s.stdin.Close()
-	done := make(chan error, 1)
-	go func() { done <- s.cmd.Wait() }()
-	select {
-	case err := <-done:
-		return err
-	case <-time.After(5 * time.Second):
-		_ = s.cmd.Process.Kill()
-		return <-done
-	}
+	return s.session.Close(nil)
 }
 
 // soRepName names the RFC 1928 §6 reply codes used in error messages.
@@ -575,8 +563,8 @@ var soStreamStatesTerminal = map[string]bool{
 // (<StreamID> <Status> <CircID> <Target>); shorter lines are skipped rather
 // than fatal because the exactly-N count assertion below — not this loop —
 // is what guards the pin (T058a's parsing rule).
-func soStreamsAtTarget(conn *tor.ControlPort, target string) (circIDs, states []string, err error) {
-	lines, err := conn.Command("GETINFO stream-status")
+func soStreamsAtTarget(ctx context.Context, conn *tor.ControlPort, target string) (circIDs, states []string, err error) {
+	lines, err := conn.CommandContext(ctx, "GETINFO stream-status")
 	if err != nil {
 		return nil, nil, fmt.Errorf("GETINFO stream-status: %w", err)
 	}
@@ -597,22 +585,23 @@ func soStreamsAtTarget(conn *tor.ControlPort, target string) (circIDs, states []
 // harness bug, and both must be loud.
 func soWaitStreams(t *testing.T, conn *tor.ControlPort, target string, want int, wait time.Duration) []string {
 	t.Helper()
-	deadline := time.Now().Add(wait)
+	opCtx, opCancel := context.WithTimeout(conn.Context(), wait)
+	defer opCancel()
 	var circIDs, states []string
 	for {
 		var err error
-		circIDs, states, err = soStreamsAtTarget(conn, target)
+		circIDs, states, err = soStreamsAtTarget(opCtx, conn, target)
 		if err != nil {
 			t.Fatalf("stream-status poll: %v", err)
 		}
 		if len(circIDs) == want {
 			return circIDs
 		}
-		if time.Now().After(deadline) {
+		if opCtx.Err() != nil {
 			t.Fatalf("expected exactly %d live stream(s) to %s within %s; saw %d (%s)",
 				want, target, wait, len(circIDs), soTruncate(strings.Join(states, ",")))
 		}
-		time.Sleep(soPollEvery)
+		tor.Pause(opCtx, soPollEvery)
 	}
 }
 
@@ -642,4 +631,136 @@ func soTruncate(s string) string {
 		return s[:64] + "…"
 	}
 	return s
+}
+
+// T210 uses the actual subprocess helper with successful dialogue before EOF.
+const t210soTransport = `#!/usr/bin/python3 -B
+import os,sys,time,threading
+mode=os.environ.get("T210_SOCKS_MODE","dialogue")
+def read(n):
+ b=b""
+ while len(b)<n:
+  chunk=os.read(0,n-len(b))
+  if not chunk: sys.exit(0)
+  b+=chunk
+ return b
+def eof():
+ def diag():
+  end=time.monotonic()+1
+  while time.monotonic()<end: os.write(2,b"synthetic SOCKS transport diagnostic\n"*128)
+ thread=threading.Thread(target=diag);thread.start();os.close(1);thread.join()
+if os.environ.get("T210_REQUIRE_UNIX")=="1" and "nc -U /run/tor-fabric/private/tor-socks.sock" not in " ".join(sys.argv[1:]):
+ os.write(2,b"wrong SOCKS transport argv\n");sys.exit(64)
+if mode=="blocked-write":time.sleep(30);sys.exit(0)
+greeting=read(3)
+if mode=="blocked-read":time.sleep(30);sys.exit(0)
+os.write(1,bytes([5,greeting[2]]))
+if greeting[2]==2:
+ head=read(2);read(head[1]);plen=read(1);read(plen[0]);os.write(1,b"\x01\x00")
+if os.environ.get("T210_CONNECT")=="1":
+ head=read(5);read(head[4]+2);os.write(1,b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00")
+if mode=="dialogue":eof()
+else:
+ while os.read(0,4096):pass
+`
+
+func TestT210SODiagnostics(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "docker"), []byte(t210soTransport), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("T210_SOCKS_MODE", "dialogue")
+	t.Setenv("T210_CONNECT", "0")
+	cfg := tor.ControlPortConfig{Project: "t210-fixture", ComposeFile: "/fixture/compose.yml", EnvFile: "/fixture/local.env"}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	s := soDialSocks(t, ctx, cfg)
+	if err := s.greetingUserPass("synthetic-user"); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 256; i++ {
+		if _, err := s.readFull(2); err == nil {
+			t.Fatal("EOF transport returned success")
+		}
+	}
+}
+
+func TestT210SOOperationBounds(t *testing.T) {
+	for _, mode := range []string{"blocked-read", "blocked-write"} {
+		t.Run(mode, func(t *testing.T) {
+			tmp := t.TempDir()
+			if err := os.WriteFile(filepath.Join(tmp, "docker"), []byte(t210soTransport), 0700); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("T210_SOCKS_MODE", mode)
+			t.Setenv("T210_CONNECT", "0")
+			cfg := tor.ControlPortConfig{Project: "t210-fixture", ComposeFile: "/fixture/compose.yml", EnvFile: "/fixture/local.env"}
+			lifetime, cancelLifetime := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancelLifetime()
+			s := soDialSocks(t, lifetime, cfg)
+			defer s.close()
+			if mode == "blocked-write" {
+				fd := int(s.stdin.(*os.File).Fd())
+				if err := syscall.SetNonblock(fd, true); err != nil {
+					t.Fatal(err)
+				}
+				for {
+					_, err := syscall.Write(fd, make([]byte, 4096))
+					if err == syscall.EAGAIN {
+						break
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := syscall.SetNonblock(fd, false); err != nil {
+					t.Fatal(err)
+				}
+			}
+			op, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			done := make(chan error, 1)
+			go func() {
+				fn := func() error { return s.greetingUserPass("synthetic-user") }
+				if bounded, ok := any(s).(interface {
+					operation(context.Context, func() error) error
+				}); ok {
+					done <- bounded.operation(op, fn)
+				} else {
+					done <- fn()
+				}
+			}()
+			select {
+			case err := <-done:
+				if err == nil {
+					t.Fatal("stalled operation returned success")
+				}
+			case <-time.After(700 * time.Millisecond):
+				cancelLifetime()
+				_ = s.cmd.Process.Kill()
+				_ = s.stdin.Close()
+				<-done
+				t.Error("helper ignored its operation context at real pipe I/O")
+			}
+		})
+	}
+}
+
+func TestT210SOUnixTransport(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "docker"), []byte(t210soTransport), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", tmp+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("T210_SOCKS_MODE", "dialogue")
+	t.Setenv("T210_REQUIRE_UNIX", "1")
+	t.Setenv("T210_CONNECT", "0")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	s := soDialSocks(t, ctx, tor.ControlPortConfig{Project: "t210", ComposeFile: "/fixture/compose.yml", EnvFile: "/fixture/local.env"})
+	if err := s.greetingUserPass("synthetic-user"); err != nil {
+		t.Fatalf("private Unix SOCKS negotiation: %v", err)
+	}
 }

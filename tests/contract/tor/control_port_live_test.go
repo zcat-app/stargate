@@ -35,8 +35,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/zcat-app/stargate/tests/contract/internal/compose"
 )
 
 // cpComposeProject namespaces every compose invocation this suite issues so
@@ -56,15 +54,15 @@ const (
 // TestControlPortLive — see the file header for what each subtest pins
 // (T062 §Acceptance #3, cases (a)–(e)).
 func TestControlPortLive(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), cpOverallDeadline)
+	defer cancel()
+
 	if _, err := exec.LookPath("docker"); err != nil {
 		t.Skipf("docker CLI not on PATH: %v", err)
 	}
-	if out, err := exec.Command("docker", "info").CombinedOutput(); err != nil {
+	if out, err := CommandOutput(ctx, exec.CommandContext(ctx, "docker", "info")); err != nil {
 		t.Skipf("docker daemon unreachable: %v\n%s", err, out)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), cpOverallDeadline)
-	defer cancel()
 
 	repoRoot := findRepoRoot(t) // same package under -tags docker (port_exposure_test.go)
 	composeFile := filepath.Join(repoRoot, "compose", "docker-compose.local.yml")
@@ -80,14 +78,14 @@ func TestControlPortLive(t *testing.T) {
 	t.Cleanup(func() {
 		downCtx, downCancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer downCancel()
-		if out, err := compose.Run(downCtx, cpComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
+		if out, err := RunCompose(downCtx, cpComposeProject, composeFile, envFile, "down", "--volumes", "--remove-orphans"); err != nil {
 			t.Logf("docker compose down (best-effort cleanup): %v\n%s", err, out)
 		}
 	})
 
 	upCtx, upCancel := context.WithTimeout(ctx, cpUpDeadline)
 	defer upCancel()
-	if out, err := compose.Run(upCtx, cpComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
+	if out, err := RunCompose(upCtx, cpComposeProject, composeFile, envFile, "up", "-d", "--build", "tor"); err != nil {
 		t.Fatalf("docker compose up -d --build tor: %v\n%s", err, out)
 	}
 
@@ -112,20 +110,21 @@ func TestControlPortLive(t *testing.T) {
 	// weakening the assertion (anything still failing at the deadline is a
 	// hard failure with the last error attached).
 	t.Run("LiveAuthenticatesWithCookieFromVolume", func(t *testing.T) {
-		deadline := time.Now().Add(cpBootDeadline)
+		opCtx, opCancel := context.WithTimeout(ctx, cpBootDeadline)
+		defer opCancel()
 		var lastErr error
 		for {
-			if time.Now().After(deadline) {
+			if opCtx.Err() != nil {
 				t.Fatalf("no authenticated control session within %s (cookie read + connect + AUTHENTICATE): %v",
 					cpBootDeadline, lastErr)
 			}
 			var err error
 			var c *ControlPort
-			cookie, err = ReadCookie(ctx, cfg)
+			cookie, err = ReadCookie(opCtx, cfg)
 			if err == nil {
 				c, err = Connect(ctx, cfg)
 				if err == nil {
-					err = c.Authenticate(cookie)
+					err = c.AuthenticateContext(opCtx, cookie)
 					if err == nil {
 						conn = c
 						break
@@ -136,7 +135,7 @@ func TestControlPortLive(t *testing.T) {
 				}
 			}
 			lastErr = err
-			time.Sleep(cpPollEvery)
+			Pause(opCtx, cpPollEvery)
 		}
 		if len(cookie) == 0 {
 			t.Fatal("authenticated session but cookie empty — impossible state")
@@ -173,10 +172,11 @@ func TestControlPortLive(t *testing.T) {
 	// here, and the subtest deadline turns it into a named failure.
 	t.Run("LiveBootstrapPollViaSession", func(t *testing.T) {
 		authed(t)
-		deadline := time.Now().Add(cpBootDeadline)
+		opCtx, opCancel := context.WithTimeout(ctx, cpBootDeadline)
+		defer opCancel()
 		var last string
 		for {
-			lines, err := conn.Command("GETINFO status/bootstrap-phase")
+			lines, err := conn.CommandContext(opCtx, "GETINFO status/bootstrap-phase")
 			if err != nil {
 				t.Fatalf("GETINFO status/bootstrap-phase mid-poll: %v (last: %s)", err, last)
 			}
@@ -185,10 +185,10 @@ func TestControlPortLive(t *testing.T) {
 				t.Logf("OK: bootstrapped: %s", truncate(last))
 				break
 			}
-			if time.Now().After(deadline) {
+			if opCtx.Err() != nil {
 				t.Fatalf("tor did not reach PROGRESS=100 within %s; last phase: %s", cpBootDeadline, truncate(last))
 			}
-			time.Sleep(cpPollEvery)
+			Pause(opCtx, cpPollEvery)
 		}
 	})
 
@@ -199,12 +199,13 @@ func TestControlPortLive(t *testing.T) {
 	// must appear within the grace window.
 	t.Run("LiveCircuitStatusParses", func(t *testing.T) {
 		authed(t)
-		deadline := time.Now().Add(cpCircuitGrace)
+		opCtx, opCancel := context.WithTimeout(ctx, cpCircuitGrace)
+		defer opCancel()
 		var lines []string
 		var err error
 		built := false
 		for {
-			lines, err = conn.Command("GETINFO circuit-status")
+			lines, err = conn.CommandContext(opCtx, "GETINFO circuit-status")
 			if err != nil {
 				t.Fatalf("GETINFO circuit-status: %v", err)
 			}
@@ -214,10 +215,10 @@ func TestControlPortLive(t *testing.T) {
 					break
 				}
 			}
-			if built || time.Now().After(deadline) {
+			if built || opCtx.Err() != nil {
 				break
 			}
-			time.Sleep(cpPollEvery)
+			Pause(opCtx, cpPollEvery)
 		}
 		if !built {
 			t.Errorf("no BUILT circuit in circuit-status within %s of bootstrap (%d reply lines) — "+

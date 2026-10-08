@@ -1,9 +1,9 @@
 ---
 id: T210
 title: "Repair Tor verification transport and I/O deadlines"
-status: pending
+status: in-review
 created: 2026-10-06
-last_updated: 2026-10-06
+last_updated: 2026-10-07
 source: "T202 guest15 verification stop; reviewed repair plan final SHA256 cd5fc2e88e255bab31bfe34d34cc5e01f8200244d29d91810f588d0d190b637c; maintainer authorized prerequisite implementation"
 phase: "Foundation verification remediation"
 story: "-"
@@ -44,6 +44,7 @@ spec_refs:
 decision_refs:
   - "Final repair plan §5 R1; final-document hash above is distinct from the two v3 READY advisory reports"
   - 'Maintainer: "ok so if you have a plan you can be again orchestrator of the implementation"; defer/prerequisite route authorized'
+  - 'Maintainer 2026-10-07: "Approve this scoped native Docker amendment" (call_6087c47ff3864eebbe2d3d334dba0365); approved plan §3 amendment for T210 six selected Tor-only suites/caller controls only, exact AC7/8 patch SHA256 cb8153fb994af4b8a10a40f70028b4dba3cb7fb9ca1fe63a5317074175af00cf; bounded exact-owned Docker build/runtime cleanup is explicitly daemon-dependent; all assertions/deadlines/evidence and native GLM/Astra review remain mandatory'
 reviews: {}
 overrides: []
 aborted_attempts: []
@@ -146,11 +147,21 @@ This ticket is an atomic regression-and-fix unit; there is no done red-only prer
    without widening assertion windows or automatically retrying a VM. Admit machine identity,
    ordinary user/HOME/cache/groups/sudo, daemon locality, kernel/capabilities, exact source/tool
    manifest, process ownership, tested stop interface, retention and both storage projections.
+   For this ticket's six selected Tor-only suites and caller controls, the admitted boundary
+   may be the existing persistent VPS with disposable, exclusively owned Docker Compose projects
+   and separate owned candidate/control directories. Record actual sudo availability; these
+   selected bodies require no host sudo. This scoped substitution does not admit the later full
+   Docker cadence, privileged DNS, host fault probes or T202 guest-only tiers.
    An adapter requiring maintained source changes is its own reviewed prerequisite before live
    execution. No concurrent ticket/runtime gate/live/build; six-hour hard cap, disk-floor polling,
-   bounded owned TERM/KILL/reap, artifact collection and independent stop/cleanup apply.
+   bounded owned CLI/process TERM/KILL/reap and artifact collection apply. Owned Docker build and
+   runtime cleanup uses bounded commands against the verified local daemon and exact owned
+   resources. It is daemon-dependent: there is no claim of an independently disposable whole
+   machine or daemon-independent build/container termination. Failed, incomplete or unverified
+   cleanup blocks acceptance and further live work; preserve evidence and report the exact
+   residue without stopping the shared daemon or unrelated processes/resources.
 
-8. In that admitted disposable boundary, execute sequentially, preserving existing documented
+8. In that admitted disposable project boundary, execute sequentially, preserving existing documented
    manual outer allowances and all positive/negative controls: TestControlPortLive,
    TestUsernameLessIsolation, TestIsolateSOCKSAuthDistinctCircuits,
    TestLiveSidecarGETCONFSocksPort, TestCircuitIsolationCorpus and
