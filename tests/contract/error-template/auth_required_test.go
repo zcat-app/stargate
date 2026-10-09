@@ -87,6 +87,7 @@ func TestAUTHRequired(t *testing.T) {
 		assertStatusShape(t, "direct renderer", resp)
 		assertBodyTemplate(t, "direct renderer", resp)
 		loginvariants.AssertNoSecrets(t, string(resp), []byte("t027-dest.example.onion"), []byte(malformedToken), []byte(authRequiredPlaintext))
+		assertResponseCorpus(t, "AUTH_REQUIRED", resp, "t027-dest.example.onion", malformedToken, authRequiredPlaintext)
 		if i == 1 && bytes.Equal(first, resp) {
 			t.Error("reference ID was reused")
 		}

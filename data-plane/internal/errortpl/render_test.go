@@ -1,7 +1,7 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// render_test.go — unit gate for the T048 AUTH_REQUIRED renderer
+// render_test.go — direct unit gate for the future HTTP renderer
 // (contracts/error-template.md §"Wire format"). The byte-level contract
 // tests are T027 (tests/contract/error-template/auth_required_test.go)
 // and T068a (header_set_test.go), which drive the whole DP process; this
@@ -15,7 +15,7 @@
 //     {LOCAL_REFERENCE_ID}=16 lowercase hex);
 //   - the ref-ID slot the ONLY render-to-render variable bytes
 //     (T027's structural-equality property at unit altitude);
-//   - route codes write nothing (T071's lift point — deliberate).
+//   - the route-code formats and unknown-code fail-closed behavior.
 package errortpl
 
 import (
@@ -36,6 +36,15 @@ func renderAuthRequired(t *testing.T) []byte {
 	r := &Renderer{}
 	if err := r.WriteFailure(&buf, CodeAuthRequired); err != nil {
 		t.Fatalf("WriteFailure(AUTH_REQUIRED): %v", err)
+	}
+	return buf.Bytes()
+}
+
+func renderFailure(t *testing.T, code ErrorCode) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := (&Renderer{}).WriteFailure(&buf, code); err != nil {
+		t.Fatalf("WriteFailure(%s): %v", code, err)
 	}
 	return buf.Bytes()
 }
@@ -108,10 +117,8 @@ func TestWriteFailureAuthRequiredShape(t *testing.T) {
 	}
 }
 
-// TestWriteFailureRefIDIsFreshLowercaseHex pins freshness: two renders
-// of the same request shape carry DIFFERENT ref-IDs (the property
-// T027's structural-equality check leans on — the slot is the only
-// allowed variance). Distribution/uniqueness at volume is T069's scope.
+// TestWriteFailureRefIDIsFreshLowercaseHex pins AUTH_REQUIRED call freshness;
+// the all-code sample test below checks repeated-call uniqueness at volume.
 func TestWriteFailureRefIDIsFreshLowercaseHex(t *testing.T) {
 	id1 := extractRefID(t, renderAuthRequired(t))
 	id2 := extractRefID(t, renderAuthRequired(t))
@@ -137,29 +144,104 @@ func TestWriteFailureRefIDIsOnlyVariableBytes(t *testing.T) {
 	}
 }
 
-// TestWriteFailureRouteCodesWriteNothing pins the T048/T071 scope
-// boundary: route codes are T071's wire shape; until that lands the
-// renderer writes ZERO bytes rather than
-// inventing a response outside the contract-review loop.
-func TestWriteFailureRouteCodesWriteNothing(t *testing.T) {
-	for _, code := range []ErrorCode{
-		CodeRouteDown,
-		CodeRouteRefused,
-		CodeRouteTimeout,
-	} {
-		var buf bytes.Buffer
-		r := &Renderer{}
-		err := r.WriteFailure(&buf, code)
-		if buf.Len() != 0 {
-			t.Errorf("%s: renderer wrote %d bytes — route codes must "+
-				"write nothing until T071 lands (scope boundary)",
-				code, buf.Len())
-		}
-		if err == nil {
-			t.Errorf("%s: renderer returned nil error — must report the "+
-				"unrendered code instead of a silent partial response", code)
-		}
+func TestWriteFailureRouteCodes(t *testing.T) {
+	cases := []struct {
+		code   ErrorCode
+		status string
+	}{
+		{CodeRouteDown, "502 Bad Gateway"},
+		{CodeRouteRefused, "502 Bad Gateway"},
+		{CodeRouteTimeout, "504 Gateway Timeout"},
 	}
+	for _, tc := range cases {
+		t.Run(string(tc.code), func(t *testing.T) {
+			resp := renderFailure(t, tc.code)
+			refID := extractRefIDForCode(t, resp, tc.code)
+			if !refIDPattern.MatchString(refID) {
+				t.Fatalf("LOCAL_REFERENCE_ID is not 16 lowercase hex chars")
+			}
+			body := strings.NewReplacer(
+				"{ROUTE_LABEL}", "Tor",
+				"{CODE}", string(tc.code),
+				"{LOCAL_REFERENCE_ID}", refID,
+			).Replace(Template)
+			want := "HTTP/1.1 " + tc.status + "\r\n" +
+				"Content-Type: text/html; charset=utf-8\r\n" +
+				"Content-Length: " + itoa(len(body)) + "\r\n" +
+				"Cache-Control: no-store\r\n" +
+				"X-Stargate-Error: " + string(tc.code) + "\r\n\r\n" + body
+			if !bytes.Equal(resp, []byte(want)) {
+				t.Errorf("%s response differs from the byte-exact contract format (got %d bytes, want %d)", tc.code, len(resp), len(want))
+			}
+		})
+	}
+}
+
+func TestWriteFailureReferenceIDsDistributed(t *testing.T) {
+	// This 1,000-sample bound is a coarse detector for gross per-position
+	// bias: every digit must occur 10–150 times at each of 16 positions.
+	// It does not prove independence or unlinkability; crypto/rand remains the
+	// implementation guarantee under test/review.
+	codes := []ErrorCode{CodeAuthRequired, CodeRouteDown, CodeRouteRefused, CodeRouteTimeout}
+	for _, code := range codes {
+		t.Run(string(code), func(t *testing.T) {
+			const samples = 1000
+			seen := make(map[string]struct{}, samples)
+			var counts [16][16]int
+			for i := 0; i < samples; i++ {
+				id := extractRefIDForCode(t, renderFailure(t, code), code)
+				if !refIDPattern.MatchString(id) {
+					t.Fatalf("sample %d: LOCAL_REFERENCE_ID is not 16 lowercase hex chars", i)
+				}
+				if _, exists := seen[id]; exists {
+					t.Fatalf("sample %d: duplicate LOCAL_REFERENCE_ID", i)
+				}
+				seen[id] = struct{}{}
+				for pos, digit := range id {
+					counts[pos][hexDigitIndex(digit)]++
+				}
+			}
+			for pos, digitCounts := range counts {
+				for digit, count := range digitCounts {
+					if count < 10 || count > 150 {
+						t.Errorf("position %d digit %x appeared %d times; want 10–150 in %d samples", pos, digit, count, samples)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestWriteFailureUnknownCode(t *testing.T) {
+	var buf bytes.Buffer
+	err := (&Renderer{}).WriteFailure(&buf, ErrorCode("UNKNOWN"))
+	if err == nil {
+		t.Fatal("unknown code returned nil error")
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("unknown code wrote %d bytes", buf.Len())
+	}
+}
+
+func extractRefIDForCode(t *testing.T, resp []byte, code ErrorCode) string {
+	t.Helper()
+	marker := "Code: " + string(code) + " · Reference: "
+	i := bytes.Index(resp, []byte(marker))
+	if i < 0 {
+		t.Fatalf("ref-ID marker for %s not found", code)
+	}
+	start := i + len(marker)
+	if start+16 > len(resp) {
+		t.Fatalf("%s ref-ID slot truncated", code)
+	}
+	return string(resp[start : start+16])
+}
+
+func hexDigitIndex(digit rune) int {
+	if digit >= '0' && digit <= '9' {
+		return int(digit - '0')
+	}
+	return int(digit-'a') + 10
 }
 
 // itoa is a tiny ASCII decimal formatter keeping this test free of

@@ -1955,10 +1955,15 @@ claim is made. Bearer credentials, valid auth snapshots, fixed route binding and
 configuration need no schema change and remain usable for SOCKS under normal generation
 rules. LAN/VPS and post-repair browser/circuit evidence remain T126/T155 obligations.
 
-The unused future HTTP renderer currently implements only AUTH_REQUIRED. T173 preserves
-its direct format/leak assertions and explicit unsupported-code errors; T071 owns the
-three route renderers with their positive tests in an atomic tests-first change. No HTML
-error response is reachable from Tor port 8881.
+The future HTTP renderer supports direct calls for AUTH_REQUIRED, ROUTE_DOWN,
+ROUTE_REFUSED and ROUTE_TIMEOUT with fixed status/reason, headers, template body and a
+fresh 64-bit random reference ID. Direct tests pin all four formats, scan the full response
+against the checked-in leak corpus (allowing its `Tor` token only at the validated route-label
+position), and sample 1,000 IDs per code with coarse per-position digit bounds. That finite
+sample can detect gross bias but cannot establish independence or unlinkability; the renderer
+has no request inputs and uses `crypto/rand`. The egress-IP and Tor control-event corpus inputs
+require live-stack evidence and are outside these direct calls. No HTML error response is
+reachable from Tor port 8881.
 
 T157 now supplies identity-unavailable browser cancellation and Alpha-candidate no-fallback
 captures rather than inferring safety from a non-SOCKS descriptor; T186 makes the blocked proxy

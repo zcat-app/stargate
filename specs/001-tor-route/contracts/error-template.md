@@ -115,24 +115,29 @@ corpus for this feature includes at minimum:
     test).
   - Every SOCKS5 control-port event captured during the test.
 
-The contract test scans the response — every byte of the status line,
-every byte of every header, every byte of the body, and the
-`X-Stargate-Error` header value — for any substring from the corpus. Any
-hit fails the test.
+Renderer contract tests scan every byte of the complete response — the
+status line, headers and body — for every checked-in corpus entry and each
+case's synthetic destination/token values. The literal `Tor` corpus entry
+has one narrow exception: exactly one occurrence is required at the fixed
+`{ROUTE_LABEL}` position in the body (`The Tor route`); any other occurrence
+fails. All other corpus hits fail. The egress IP and captured Tor control-port
+events are live-stack-only inputs because direct renderer tests create neither
+an egress path nor a Tor control connection; they remain inputs to the live
+stack corpus/evidence, not omissions from renderer coverage.
 
 ---
 
 ## Renderer tests (`tests/contract/error-template/`)
 
-T173 converts the implemented AUTH_REQUIRED ingress-driven tests to direct production-renderer
-calls. Preserve byte-exact status, four-header order/absence/length, body substitution,
-reference-ID shape/freshness/only-variable-bytes and full response leak scans. For the three
-currently unsupported route codes, require an error and zero output without skip gates;
-that is current-behavior coverage, not positive rendering coverage.
+T173 converts the AUTH_REQUIRED ingress-driven tests to direct production-renderer calls.
+Preserve byte-exact status, four-header order/absence/length, body substitution,
+reference-ID shape/freshness/only-variable-bytes and full response leak scans.
 
-T071 owns the three route renderers and positive format assertions for all four codes,
+T071 implements the three route renderers and positive format assertions for all four codes,
 including T068's byte-exact body cases and T069's reference-ID uniqueness/distribution and
-repeated-input checks. Those tests and implementation are one atomic red-before-green
+repeated-call freshness checks. Each code receives 1,000 sequential samples; the coarse
+per-position digit bound detects gross bias but is stochastic evidence, not proof of
+independence or unlinkability. These tests and implementation are one atomic red-before-green
 change; T068/T069 are superseded deferred records, not prerequisites that must pass first.
 This maintainer-authorized T173 refinement supersedes T172's all-four-code migration row
 without changing its historical approval or weakening the future format contract.

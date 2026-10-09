@@ -26,9 +26,20 @@ const (
 // Renderer takes no request data. Only its random reference ID varies.
 type Renderer struct{}
 
-// authRequiredStatusLine is the contract §"Status line" AUTH_REQUIRED
-// row, byte-exact (T027's wantStatusLine pins it from the test side).
-const authRequiredStatusLine = "HTTP/1.1 407 Proxy Authentication Required\r\n"
+// statusReason returns the fixed status/reason vocabulary in contract
+// §"Status line". Unknown codes stay outside the render path.
+func statusReason(code ErrorCode) (string, bool) {
+	switch code {
+	case CodeAuthRequired:
+		return "407 Proxy Authentication Required", true
+	case CodeRouteDown, CodeRouteRefused:
+		return "502 Bad Gateway", true
+	case CodeRouteTimeout:
+		return "504 Gateway Timeout", true
+	default:
+		return "", false
+	}
+}
 
 // header lines fixed by contract §"Response headers" — exactly these
 // four, in this order, no others (T068a pins order and byte shape).
@@ -39,12 +50,12 @@ const (
 	headerCacheControl = "Cache-Control: no-store\r\n"
 )
 
-// WriteFailure renders code's response onto w. AUTH_REQUIRED is the
-// T048 scope; a route code writes nothing and returns an error —
-// T071 owns their atomic tests-first implementation; T173 preserves this boundary.
+// WriteFailure renders one fixed future-format response onto w. It accepts no
+// request data and remains disconnected from Tor port 8881.
 func (r *Renderer) WriteFailure(w io.Writer, code ErrorCode) error {
-	if code != CodeAuthRequired {
-		return fmt.Errorf("errortpl: code %q has no renderer yet (T071)", code)
+	reason, ok := statusReason(code)
+	if !ok {
+		return fmt.Errorf("errortpl: unsupported failure code %q", code)
 	}
 
 	// The §"Response body" LOCAL_REFERENCE_ID is 16 lowercase hex chars
@@ -55,21 +66,23 @@ func (r *Renderer) WriteFailure(w io.Writer, code ErrorCode) error {
 	}
 	body := strings.NewReplacer(
 		"{ROUTE_LABEL}", "Tor",
-		"{CODE}", string(CodeAuthRequired),
+		"{CODE}", string(code),
 		"{LOCAL_REFERENCE_ID}", hex.EncodeToString(refID[:]),
 	).Replace(Template)
 
 	// Content-Length is the body byte length (T068a (d) gates the
 	// equality on the wire); strconv appends plain ASCII digits.
 	var buf strings.Builder
-	buf.WriteString(authRequiredStatusLine)
+	buf.WriteString("HTTP/1.1 ")
+	buf.WriteString(reason)
+	buf.WriteString("\r\n")
 	buf.WriteString(headerContentType)
 	buf.WriteString("Content-Length: ")
 	buf.WriteString(strconv.Itoa(len(body)))
 	buf.WriteString("\r\n")
 	buf.WriteString(headerCacheControl)
 	buf.WriteString("X-Stargate-Error: ")
-	buf.WriteString(string(CodeAuthRequired))
+	buf.WriteString(string(code))
 	buf.WriteString("\r\n\r\n")
 	buf.WriteString(body)
 

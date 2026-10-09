@@ -1,15 +1,14 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// Direct production-renderer header assertions. T173 retains AUTH_REQUIRED's
-// positive format and unsupported-code zero-output/error behavior. T071 owns
-// all four codes' positive format tests with its implementation, without skips.
+// Direct production-renderer contract assertions for all four formats.
 package errortemplate
 
 import (
 	"bytes"
 	"errors"
-	"os/exec"
+	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -61,19 +60,97 @@ func TestHeaderSet(t *testing.T) {
 	assertHeaderBlock(t, "AUTH_REQUIRED", "t068a-auth.example.onion", response)
 }
 
-func TestUnsupportedRouteRenderers(t *testing.T) {
-	for _, code := range []string{"ROUTE_DOWN", "ROUTE_REFUSED", "ROUTE_TIMEOUT"} {
+func TestRouteRenderers(t *testing.T) {
+	cases := []struct {
+		code   string
+		status string
+	}{
+		{"ROUTE_DOWN", "502 Bad Gateway"},
+		{"ROUTE_REFUSED", "502 Bad Gateway"},
+		{"ROUTE_TIMEOUT", "504 Gateway Timeout"},
+	}
+	for _, tc := range cases {
+		code := tc.code
 		t.Run(code, func(t *testing.T) {
 			response, err := renderCode(t, code)
-			var exit *exec.ExitError
-			if !errors.As(err, &exit) || exit.ExitCode() != 2 {
-				t.Fatalf("expected renderer's unsupported-code error; got %v", err)
+			if err != nil {
+				t.Fatalf("direct renderer rejected supported route code: %v", err)
 			}
-			if len(response) != 0 {
-				t.Fatal("unsupported renderer emitted bytes")
-			}
+			assertRouteResponse(t, code, tc.status, "t071-dest.example.onion", response)
 		})
 	}
+}
+
+func assertRouteResponse(t *testing.T, code, status, dest string, resp []byte) {
+	t.Helper()
+	refIDPrefix := []byte("Code: " + code + " · Reference: ")
+	body := bodyAfterHeaderBlock(t, code, resp)
+	i := bytes.Index(body, refIDPrefix)
+	if i < 0 || i+len(refIDPrefix)+16 > len(body) {
+		t.Fatalf("%s response has no complete reference-ID slot; body withheld", code)
+	}
+	refID := body[i+len(refIDPrefix) : i+len(refIDPrefix)+16]
+	if !regexp.MustCompile(`^[0-9a-f]{16}$`).Match(refID) {
+		t.Errorf("%s LOCAL_REFERENCE_ID is not 16 lowercase hex chars", code)
+	}
+	wantBody := "<!doctype html><meta charset=utf-8>\n" +
+		"<title>Stargate: route unavailable</title>\n" +
+		"<h1>Route unavailable</h1>\n" +
+		"<p>The Tor route is currently not serving requests.</p>\n" +
+		"<p>Code: " + code + " · Reference: " + string(refID) + "</p>\n" +
+		"<p>See the admin dashboard for details.</p>"
+	want := "HTTP/1.1 " + status + "\r\n" +
+		"Content-Type: text/html; charset=utf-8\r\n" +
+		"Content-Length: " + strconv.Itoa(len(wantBody)) + "\r\n" +
+		"Cache-Control: no-store\r\n" +
+		"X-Stargate-Error: " + code + "\r\n\r\n" + wantBody
+	if !bytes.Equal(resp, []byte(want)) {
+		t.Errorf("%s response differs from byte-exact status, header, or template format (got %d bytes, want %d); response withheld", code, len(resp), len(want))
+	}
+
+	loginvariants.AssertNoSecrets(t, string(resp), []byte(dest), []byte(headerSetPlaintext))
+	assertResponseCorpus(t, code, resp, dest, headerSetPlaintext)
+}
+
+func assertResponseCorpus(t *testing.T, code string, resp []byte, extra ...string) {
+	t.Helper()
+	body := bodyAfterHeaderBlock(t, "response", resp)
+	// The checked-in corpus deliberately retains "Tor": its one permitted
+	// hit is the contract's fixed route label at this independently checked
+	// template position. Every other corpus value is forbidden everywhere.
+	label := []byte("The Tor route")
+	wantAt := bytes.Index(body, label) + len("The ")
+	if wantAt < len("The ") || bytes.Count(resp, []byte("Tor")) != 1 || bytes.Index(resp, []byte("Tor")) != bytes.Index(resp, []byte("\r\n\r\n"))+4+wantAt {
+		t.Errorf("response has a Tor occurrence outside the single fixed route-label position")
+	}
+	corpusBytes, err := os.ReadFile("leak-corpus.txt")
+	if err != nil {
+		t.Fatalf("read checked-in leak corpus: %v", err)
+	}
+	corpus := strings.Split(strings.TrimSpace(string(corpusBytes)), "\n")
+	for _, item := range extra {
+		corpus = append(corpus, item)
+	}
+	for _, fragment := range corpus {
+		if fragment == "" {
+			continue
+		}
+		if fragment == "Tor" {
+			continue
+		}
+		if bytes.Contains(resp, []byte(fragment)) {
+			t.Errorf("%s response contains a checked-in leak-corpus item (length %d); response withheld", code, len(fragment))
+		}
+	}
+}
+
+func bodyAfterHeaderBlock(t *testing.T, code string, resp []byte) []byte {
+	t.Helper()
+	idx := bytes.Index(resp, []byte("\r\n\r\n"))
+	if idx < 0 {
+		t.Fatalf("%s response has no header terminator; response withheld", code)
+	}
+	return resp[idx+4:]
 }
 
 func splitHeaderBlock(t *testing.T, code string, resp []byte) (block, body []byte) {
