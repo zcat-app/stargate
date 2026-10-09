@@ -63,6 +63,7 @@ type Server struct {
 	mu       sync.Mutex
 	listen   net.Listener
 	circuits map[string]struct{} // observed SOCKS5 USERNAMEs (M3 stream-isolation mimicry)
+	connects int                 // fully parsed SOCKS5 CONNECT requests; request data is discarded
 	wg       sync.WaitGroup      // in-flight handler goroutines
 
 	closeMu sync.Mutex
@@ -203,6 +204,14 @@ func (s *Server) CircuitIDs() []string {
 	return out
 }
 
+// ConnectCount reports the number of complete SOCKS5 CONNECT requests the
+// fake has parsed. The counter stores no target or other request data.
+func (s *Server) ConnectCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.connects
+}
+
 // serve handles one inbound SOCKS5 connection end-to-end. The exact
 // behavior depends on the configured Mode.
 func (s *Server) serve(c net.Conn) {
@@ -250,6 +259,9 @@ func (s *Server) serve(c net.Conn) {
 		writeReply(c, 0x07) // Command not supported / general failure
 		return
 	}
+	s.mu.Lock()
+	s.connects++
+	s.mu.Unlock()
 
 	// Slow mode: delay the BND reply (the success reply below) past
 	// the data plane's dial-and-handshake deadline. contracts/socks5-

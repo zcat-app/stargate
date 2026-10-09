@@ -1,7 +1,7 @@
 ---
 id: T067
 title: "Test SOCKS5 ROUTE_TIMEOUT failure reply"
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: "2026-10-09"
 source: tasks.md#T067
@@ -9,7 +9,7 @@ phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)
 story: 'US3'
 blocked_by: ["T009", "T155", "T064", "T156"]
 parallel: true
-files_budget: 3   # route_timeout_test.go, this ticket, generated STATUS
+files_budget: 4   # route_timeout_test.go, fake_socks5_tor.go, this ticket, generated STATUS
 privacy_critical: true
 complexity: low
 risk: low
@@ -21,7 +21,7 @@ spec_refs:
 decision_refs:
   - 'T172 selected acceptance: the dial-and-handshake deadline maps to fixed SOCKS5 REP 0x06; no post-handshake idle deadline'
   - 'T019a: slow fake SOCKS backend delays its BND reply before handshake completion'
-reviews: {}
+reviews: { round: 2, date: 2026-10-09, verdict: APPROVE, findings: 0 }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -50,20 +50,32 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
   upstream detail (Principles I and III).
 - **Gated:** use the existing T019a `Slow` mode with its delay set beyond 250
   seconds. Preserve the production deadline; do not add an environment override
-  or test-only production control. The targeted contract test may take about
-  250 seconds, and its socket deadline/test timeout must exceed that bound.
+  or test-only production control. The fake must expose a thread-safe count of
+  fully consumed CONNECT requests, incremented only after `readConnectRequest`
+  succeeds; retain no target or request data. Assert exactly one consumed
+  request after the timeout reply. `CircuitIDs()` separately proves upstream
+  authentication and is not evidence that CONNECT was received. The targeted
+  contract test may take about 250 seconds, and its socket deadline/test timeout
+  must exceed that bound.
 - **Residue:** the slow fake proves behavior at the deployed process boundary,
   not the timing of real Tor. It does not test post-success idle behavior;
   T025b/T070a own long-lived connection behavior.
 
 ## Acceptance
 
-1. Add `tests/contract/socks5/route_timeout_test.go`. Start the T019a fake
+1. Extend `tests/integration/fake_socks5_tor.go` with a concurrency-safe
+   `ConnectCount()` observation. Increment it only after the existing parser
+   consumes a complete CONNECT request; store no destination or request bytes.
+   Add `tests/contract/socks5/route_timeout_test.go`. Start the T019a fake
    backend in `Slow` mode with latency just beyond 250 seconds, boot the data
    plane with `dpharness.WithUpstream`, load a valid token, and issue one
    authenticated SOCKS5 CONNECT to a fixed target. Confirm the fake accepted
    the SOCKS5 request; read exactly
    `05 06 00 01 00 00 00 00 00 00`, then EOF, with no HTML or extra bytes.
+   After the timeout response and clean EOF, assert `slow.ConnectCount() == 1`
+   to prove the fake consumed the complete CONNECT request. Keep the existing
+   identity assertion as separate evidence that upstream authentication
+   completed; do not describe it as proof that CONNECT arrived.
 2. Scan the full reply and request-time diagnostics against the T064 static
    corpus plus the run's token and destination. Use a client deadline and Go
    test timeout longer than the 250-second contract deadline; do not shorten or
