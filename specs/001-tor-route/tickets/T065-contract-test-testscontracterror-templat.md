@@ -1,7 +1,7 @@
 ---
 id: T065
 title: "Test SOCKS5 ROUTE_DOWN failure reply"
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: "2026-10-09"
 source: tasks.md#T065
@@ -21,7 +21,7 @@ spec_refs:
 decision_refs:
   - 'T172 selected acceptance: Tor-route failures use authenticated SOCKS5 replies; no HTML is reachable on port 8881'
   - 'T064: static leak corpus is the shared source; per-run token and destination are added in memory'
-reviews: {}
+reviews: { round: 2, date: 2026-10-09, verdict: APPROVE, findings: 0 }
 overrides: []
 aborted_attempts: []
 reopens: []
