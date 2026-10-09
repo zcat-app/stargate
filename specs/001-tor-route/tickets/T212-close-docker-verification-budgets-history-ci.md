@@ -90,20 +90,32 @@ same-candidate disposable DNS complement before T202 can be reopened.
    only two test modules and includes helpers/optional cases; it is not all-live coverage or the
    whole workspace. Store sanitized inventory, cold/hot timing and the adopted equations in the
    declared T212 live-results record; ignored raw diagnostics alone are insufficient acceptance.
+   Distinguish natural declared operation-window sums, selected enforced failure deadlines, and
+   measured cold/hot successful-completion allowances; none is interchangeable with another or
+   a guarantee of successful completion.
 
 3. Preserve one `go test -json -count=1 -race ... ./...` per module, existing default package
    concurrency/-p, workspace discovery, classification, tagged vet/scanners and all-SKIP refusal.
-   Keep hermetic10m. In named Docker mode use a module-level explicit per-binary timeout equal
-   to its largest grounded package envelope. Derive contract/tor from44m contexts+5m cleanup;
+   Keep hermetic10m. In named Docker mode use one explicit module-level per-binary failure
+   timeout, grounded in the module’s largest mandatory long-suite context/cleanup envelope plus
+   measured allowance for its remaining required tests. That timeout applies to every test binary
+   in the module; do not claim an overridden shorter package alarm remains enforced.
+   Derive contract/tor from44m contexts+5m cleanup;
    torrc from T210's finite33m contexts+3m cleanup; integration from106m primary contexts plus
    diagnostic/down6m and connection/session cleanup; each needs measured short-test/build margin.
    Independently inventory compose and other packages; no automatic other10m assumption. Retain
   10m where verified adequate. Real shorter-operation contexts and forced-stall falsifiers remain
    enforced; a larger package alarm does not replace them. No new opt-in hides required suites.
+   Retain every shorter source-enforced operation context. Operations without their own bounds
+   inherit the actual test-binary alarm where applicable; compilation, listing, vet and scanners
+   inherit the independently enforced containing Go-gate deadline.
 
-4. Compute upper jobs from pre-gate/setup plus sequential-module build/vet/scanner work and
-   concurrently scheduled package envelopes adjusted for -p/resource contention, then extension,
-   Maven, shell contracts (including T162 Docker tier), artifact and cleanup margin. Inspect
+4. Compute the hard whole-job failure ceiling from separately enforced setup, containing-gate,
+   artifact and cleanup deadlines. Separately derive successful-completion projections from
+   measured cold/hot build/vet/scanner costs and complete default-p package schedules, including
+   resource contention and required serialization. Record natural operation-window sums without
+   promising their simultaneous worst-case successful exhaustion. Include extension, Maven, shell
+   contracts (including T162 Docker tier), artifact and cleanup in both accounts. Inspect
    global firewall/confinement effects before co-running suites; explicitly serialize unsafe
    coexistence and recompute the sum. Disposable executor adds its narrow DNS tier. P3 and
    renewed O2 each require one complete canonical Docker verify invocation, not split standalones.
