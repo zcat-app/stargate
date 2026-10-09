@@ -1,21 +1,26 @@
 ---
 id: T064
-title: 'Author the curated leak corpus `tests/contract/error-template/leak-cor'
+title: 'Author the curated leak corpus for shared error scans'
 status: pending
 created: 2026-07-04
-last_updated: "2026-09-12"
+last_updated: "2026-10-09"
 source: tasks.md#T064
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
 blocked_by: ["T009", "T063", "T155", "T156"]
 parallel: true
-files_budget: 8   # TODO: tighten per task
+files_budget: 3   # leak-corpus.txt, this ticket, generated STATUS
 privacy_critical: true
-complexity: low   # TODO: set per task
+complexity: low
 risk: low
 round_cap: 2
-spec_refs: []   # TODO: cite spec.md § at /start
-decision_refs: []
+spec_refs:
+  - 'specs/001-tor-route/spec.md SC-004 and User Story 3 (fixed privacy-safe failure surfaces)'
+  - 'specs/001-tor-route/contracts/error-template.md §"Leak-corpus invariant"'
+  - 'specs/001-tor-route/contracts/socks5-auth.md §"Invariants enforced by the contract test"'
+decision_refs:
+  - 'T063 completed synthetic corpus at tests/integration/synthetic_onion_corpus.txt; copy entries byte-for-byte'
+  - 'T172 selected acceptance: shared scanner input for SOCKS failure replies, logs, and renderer-only HTTP format; runtime values injected by tests'
 reviews: {}
 overrides: []
 aborted_attempts: []
@@ -24,7 +29,7 @@ redteam_findings: []
 clarity_check: {}
 ---
 
-# T064: Author the curated leak corpus `tests/contract/error-template/leak-cor
+# T064: Author the curated leak corpus for shared error scans
 
 ## Context
 
@@ -38,17 +43,50 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 
 ## Analysis
 
-*(Required — `privacy_critical: true`. Fill at `/start` per
-`docs/process/analysis.md`.)*
+- **Must hold:** the static corpus contains the reference onion, all 100
+  checksum-valid synthetic onion strings from T063 copied verbatim, and every
+  stable version/header/backtrace substring required by
+  `contracts/error-template.md`. Entries remain plain substrings, one per LF
+  line, with no blank lines, comments, or duplicates.
+- **Gated:** a focused Python check compares the file byte-for-byte with the
+  expected sequence derived from T063 plus the pinned static entries; it checks
+  count, order, uniqueness, LF-only encoding, and one trailing newline.
+- **Residue:** runtime egress/exit IPs, offered tokens, destinations, and
+  control-port events vary per test. Consumers append those values to their
+  in-memory scan set; this ticket must not persist run-specific values in the
+  shared file. Existing consumers do not yet all load this file; T065–T073
+  own their respective scanner wiring and behavior.
 
 ## Acceptance
 
-*(Derive from the spec at `/start` — see `docs/process/ticket-template.md`
-for the preferred shapes: named test, behavioral assertion, runnable command.)*
+1. Add only `tests/contract/error-template/leak-corpus.txt` as the implementation
+   artifact. It contains exactly, in this order: the SC-001/SC-002 reference
+   onion; the 100 lines from `tests/integration/synthetic_onion_corpus.txt`
+   copied byte-for-byte and in source order; then the stable entries
+   `Server: tor/`, `Tor`, `Tor Browser`, `Mandrel`, `Quarkus`, `Hibernate`,
+   `SQLite`, `panic:`, `goroutine`, `stack trace`, and `at line`. Do not
+   regenerate, retype, normalize, or alter the synthetic addresses.
+2. The file is plain UTF-8/ASCII data with LF line endings, exactly 112
+   non-empty unique lines, and one final newline. It contains no comments,
+   whitespace padding, runtime placeholders, host-specific addresses,
+   credentials, or test-run data. Tests inject actual egress/exit IPs, tokens,
+   destinations, and captured control-port events into their per-run scan set;
+   those values are never written to this shared file.
+3. Verify only this artifact with a focused Python assertion that reconstructs
+   the expected line sequence from the reference string, the committed T063
+   source file, and the pinned static fragments, then compares the expected
+   bytes exactly with `leak-corpus.txt`. The check must fail on a missing,
+   changed, reordered, duplicated, blank, CRLF, or extra entry. Run the same
+   check after any correction. Do not run unrelated language suites or the
+   repository-wide verification gate for this data-only ticket.
 
 ## Out-of-scope
 
-*(Fill at `/start` if the task body references exclusions or other tickets' work.)*
+- No Go/Java implementation or scanner/test rewiring; T065–T073 own their
+  consumers under the T172/T173 refinements.
+- No live Tor, Docker, network, IP discovery, or host-specific data capture.
+- No renderer or HTTP-ingress claim on Tor port 8881; HTTP format remains
+  renderer-only under the selected contract.
 
 ## Notes
 
