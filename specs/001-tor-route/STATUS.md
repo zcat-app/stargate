@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 29 |
-| in-progress | 0 |
+| pending | 28 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 209 |
@@ -29,7 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T067a | Contract test for SOCKS5 request-phase failure replies (FR-0 | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T070 | Test integrated SOCKS5 Tor failure response | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T070a | Integration test for mid-request Tor circuit drop (Principle | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T071 | Extend future HTTP error renderer only | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
@@ -54,7 +53,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T067a | Retain SOCKS5 failure privacy assertions | in-progress | ✓ | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |
 
 ---
 
