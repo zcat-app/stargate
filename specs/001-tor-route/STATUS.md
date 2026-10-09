@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 28 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 209 |
+| done | 210 |
 | deferred | 8 |
 | **total** | **246** |
 
@@ -53,9 +53,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T067a | Retain SOCKS5 failure privacy assertions | in-progress | ✓ | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |
+_(nothing in flight)_
 
 ---
 
@@ -76,7 +74,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_209 ticket(s) done._
+_210 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -163,6 +161,7 @@ _209 ticket(s) done._
 - T065 — Test SOCKS5 ROUTE_DOWN failure reply
 - T066 — Test SOCKS5 ROUTE_REFUSED failure reply
 - T067 — Test SOCKS5 ROUTE_TIMEOUT failure reply
+- T067a — Retain SOCKS5 failure privacy assertions
 - T067b — Contract test for the auth-pass + route-failure counter-increment asym
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T070b — Test WatchEvents failure transitions remain advisory

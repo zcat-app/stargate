@@ -1,7 +1,7 @@
 ---
 id: T067a
 title: 'Retain SOCKS5 failure privacy assertions'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: "2026-10-09"
 source: tasks.md#T067a
@@ -22,7 +22,7 @@ decision_refs:
   - 'T172 selected acceptance: preserve the three exact SOCKS5 replies, EOF, no HTML/upstream text, and leak scans without duplicate fixtures'
   - 'T025a shared log allowlist applies to route-failure request windows; historical T067a task invariant (g) remains in force'
   - 'T065, T066, and T067 own the isolated route-failure fixtures; T067a fills the missing shared log-allowlist assertion'
-reviews: {}
+reviews: { round: 1, date: 2026-10-09, verdict: APPROVE, findings: 0 }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -30,7 +30,7 @@ redteam_findings: []
 clarity_check: {}
 ---
 
-# T067a: Contract test for SOCKS5 request-phase failure replies (FR-009 SOCKS5 
+# T067a: Retain SOCKS5 failure privacy assertions
 
 ## Context
 
@@ -69,10 +69,9 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 
 ## Acceptance
 
-1. Add `loginvariants.AssertOnlyAllowedLines(t, journalDelta)` to each of
-   `tests/contract/socks5/route_down_test.go`,
-   `tests/contract/socks5/route_refused_test.go`, and
-   `tests/contract/socks5/route_timeout_test.go`, using each test's existing
+1. The three existing tests (`route_down_test.go`, `route_refused_test.go`,
+   and `route_timeout_test.go`) each call
+   `loginvariants.AssertOnlyAllowedLines(t, journalDelta)` with their existing
    request-window journal delta. Preserve the fixtures and all current exact
    reply, EOF, and leak-corpus assertions.
 2. Do not add another route-failure fixture. The three existing tests jointly

@@ -88,6 +88,7 @@ func TestRouteDownSOCKS5Reply(t *testing.T) {
 	secrets := append(corpus, []byte(t065RouteDownToken), []byte(t065RouteDownDestination))
 	loginvariants.AssertNoSecrets(t, string(got), secrets...)
 	loginvariants.AssertNoSecrets(t, journalDelta, secrets...)
+	loginvariants.AssertOnlyAllowedLines(t, journalDelta)
 }
 
 func t065LoadLeakCorpus(t *testing.T, path string) [][]byte {

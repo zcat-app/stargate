@@ -100,6 +100,7 @@ func TestRouteTimeoutSOCKS5Reply(t *testing.T) {
 	secrets := append(corpus, []byte(t067RouteTimeoutToken), []byte(t067RouteTimeoutDestination))
 	loginvariants.AssertNoSecrets(t, string(fullReply), secrets...)
 	loginvariants.AssertNoSecrets(t, journalDelta, secrets...)
+	loginvariants.AssertOnlyAllowedLines(t, journalDelta)
 }
 
 func t067LoadLeakCorpus(t *testing.T, path string) [][]byte {

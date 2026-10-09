@@ -245,6 +245,7 @@ func TestRouteRefusedSOCKS5Reply(t *testing.T) {
 	}
 	loginvariants.AssertNoSecrets(t, string(fullReply), secrets...)
 	loginvariants.AssertNoSecrets(t, journalDelta, secrets...)
+	loginvariants.AssertOnlyAllowedLines(t, journalDelta)
 	for label, capture := range map[string]string{"reply": string(fullReply), "journal delta": journalDelta} {
 		lower := strings.ToLower(capture)
 		if strings.Contains(lower, "<html") || strings.Contains(lower, "<!doctype html") || strings.Contains(lower, "content-type: text/html") {
