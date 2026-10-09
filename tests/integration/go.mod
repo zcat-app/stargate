@@ -12,6 +12,7 @@ require golang.org/x/net v0.55.0
 require (
 	github.com/google/gopacket v1.1.19
 	github.com/zcat-app/stargate/tests/contract v0.0.0
+	github.com/zcat-app/stargate/tests/internal/loginvariants v0.0.0
 	golang.org/x/crypto v0.51.0
 	golang.org/x/sys v0.45.0 // indirect
 )
@@ -24,3 +25,7 @@ require (
 // entry. (T061 adds golang.org/x/crypto for the corpus checksum
 // validation's SHA3-256.)
 replace github.com/zcat-app/stargate/tests/contract => ../contract
+
+// The integration route-failure test shares T025a's no-secret and diagnostic
+// policy oracle; resolve the unpublished internal package within this workspace.
+replace github.com/zcat-app/stargate/tests/internal/loginvariants => ../internal/loginvariants
