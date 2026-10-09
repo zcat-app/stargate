@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 23 |
+| pending | 22 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 216 |
+| done | 217 |
 | deferred | 8 |
 | **total** | **247** |
 
@@ -32,7 +32,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
-| T079a | Gate SC-005 SOCKS pool and memory | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T109 | Cross-host JVM reproducibility assertion at release cadence | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T110 | Hermetic digest-agreement assertion for alpine:3.20 pins | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T111 | BUILD-DIFFS: document extension zip binary as build input | 6: Polish & Cross-Cutting Concerns |  | ✓ |
@@ -73,7 +72,7 @@ _(nothing in flight)_
 
 ## Done
 
-_216 ticket(s) done._
+_217 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -172,6 +171,7 @@ _216 ticket(s) done._
 - T074 — Extend `control-plane/core/src/main/java/.../SidecarMonitor.java` (fro
 - T075b — Author `tests/reproducibility/extension_test.sh`
 - T076 — Run every test module in the single green gate
+- T079a — Gate SC-005 SOCKS pool and memory
 - T082 — Reconcile the threat model with the local stack
 - T083 — Sweep stale SECURITY-DECISIONS.md prose + V001 sidecar_restart
 - T084 — Pin validation-image refs by digest across ticket prose

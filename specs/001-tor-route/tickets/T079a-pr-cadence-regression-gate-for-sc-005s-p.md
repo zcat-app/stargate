@@ -1,23 +1,34 @@
 ---
 id: T079a
 title: "Gate SC-005 SOCKS pool and memory"
-status: pending
+status: done
 created: 2026-07-04
-last_updated: "2026-09-12"
+last_updated: "2026-10-09"
 source: tasks.md#T079a
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
 blocked_by: ["T019a", "T044", "T047", "T049", "T050", "T092", "T093", "T155", "T072", "T156"]
 parallel: true
-files_budget: 8   # TODO: tighten per task
+files_budget: 4
 privacy_critical: true
-complexity: low   # TODO: set per task
+constitution_refs:
+  - "III: Privacy-preserving by construction"
+  - "VII: Tests-first for privacy-critical and contract code"
+complexity: low
 risk: low
 round_cap: 2
-spec_refs: []   # TODO: cite spec.md § at /start
-decision_refs: []
-reviews: {}
-overrides: []
+spec_refs:
+  - "specs/001-tor-route/spec.md §SC-005"
+  - "specs/001-tor-route/plan.md §Performance Goals — SC-005 measurement model"
+  - "specs/001-tor-route/data-model.md §1.5"
+decision_refs:
+  - "specs/001-tor-route/tickets/T092-amend-token-verifier-lifecycle.md"
+  - "specs/001-tor-route/tickets/T093-test-token-verifier-lifecycle.md"
+  - "specs/001-tor-route/tickets/T172-reconcile-connect-refusal-contracts.md"
+  - "specs/001-tor-route/tickets/T173-refuse-unpartitioned-http-connect.md"
+  - "specs/001-tor-route/tickets/T076-wire-all-six-v1-contract-test-directorie.md"
+reviews: { round: 2, date: 2026-10-09, verdict: APPROVE, findings: 0, candidate: "bc2e44b704bb28bee561b4e51ae20a39520ed18205e55f37dbb5f3a017bafdff", base: "49abbeef5732290fb2261dfdcded182a26f88752", reviewers: "Astra (Codex; gpt-6-astra; high; APPROVE); Luna (Codex; gpt-6-luna; high; APPROVE)" }
+overrides: [{"date":"2026-10-09","by":"user","decision":"Limit verification to the affected Go selector and ticket/status/diff checks","reason":"The user directed testing only the parts changed and affected; Java and repository-wide verify.sh were excluded."}]
 aborted_attempts: []
 reopens: []
 redteam_findings: []
@@ -28,104 +39,46 @@ clarity_check: {}
 
 ## Context
 
-Derived from `specs/001-tor-route/tasks.md` — see the full task body there. This
-ticket is the executable work unit; the tasks.md entry is the
-spec-kit plan that survives `/speckit-tasks` regeneration.
-
-> **Historical tasks.md body (superseded where conflicting by T172 acceptance below):**
->
-> PR-cadence regression gate for SC-005's pool-fill + steady-state property in `tests/integration/concurrent_connects_test.go`. Uses `fake_socks5_tor.go` (T019a) in `accept-and-relay` mode as the upstream — same backend T079 uses, so the two tasks measure consistent surfaces. The test (a) brings up the data plane with a one-token in-memory generation; (b) opens 200 concurrent authenticated CONNECTs through port 8881 (mix of SOCKS5 and HTTP CONNECT inbound framing to exercise both surfaces); (c) asserts the pool reaches 200 established connections within 30 s wall-clock (the fill-time floor from plan.md §"Performance Goals" measurement model, with the upper bound chosen to absorb argon2id-auth latency at N=1 and reasonable CI hardware variance); (d) holds all 200 connections open for ≥60 s while exchanging interleaved frames in both directions; (e) asserts none of the 200 connections dropped, were starved, or hit a deadline during that hold window; (f) asserts the T025a shared log allowlist applies — no per-connection log line is emitted during fill or hold. Scope boundary: this task **does NOT** verify the zero-retained-allocation property (that requires heap profiling and stays with the milestone `stargate-perf` agent run, T079) — it is a PR-cadence regression line against bottlenecks, deadlocks, or accidental serialization in the listener/auth/forward path, complementing rather than replacing T079. CI runs this test on every PR touching `data-plane/` (gated alongside the six contract-test directories per T076's glob, by adding `tests/integration/` to the same workflow path filter). Depends on T019a (synthetic backend), T044 (auth), T047 (forward), T049 (counters), T050 (main).
+This ticket adds a focused regression gate for SC-005's authenticated SOCKS5 pool fill, 60-second bidirectional hold, and T093's invalid-auth HMAC memory falsifier. T172 selects SOCKS5-only success load; T173 owns HTTP refusal under load. The contract module is already discovered by T076's Go workspace gate, so no workflow path-filter change is required.
 
 ## Analysis
 
-*(Required — `privacy_critical: true`. Fill at `/start` per
-`docs/process/analysis.md`.)*
+This test protects Constitution Principle III by checking that well-formed invalid credentials reach HMAC verification without producing an unbounded memory spike, and that the child's captured output remains unchanged under load. Principle VII requires these properties to be established by the test before implementation. The test measures the actual DP child through Linux `/proc` and skips before boot on other operating systems.
+
+- **Must hold:** The invalid-auth fixture is exactly 32 lowercase hexadecimal characters and differs from the installed token. Synchronized canary cohorts at concurrency 1, 2, 4, 8, 16, 32, 64 and 128 precede a final barrier-released cohort of 200. Every request receives exactly `01 FF`. A sampler checks `VmRSS` and `VmHWM`; a ceiling breach immediately kills the DP and closes active clients. The relative ceiling is idle `VmHWM` + 200 × 64 KiB; the absolute ceiling is 512 MiB. The first green run must support these proposed ceilings. If it does not, stop for plan re-evaluation rather than silently raising either ceiling.
+- **Must hold:** 200 authenticated SOCKS5 CONNECT sessions receive exact success replies within 30 seconds, reach the synthetic upstream, and each exchange unique bidirectional frames throughout a 60-second hold without starvation, early close or deadline.
+- **Must hold:** Captured child output is byte-for-byte unchanged after invalid-auth load, pool fill and hold. Failures report only the changed-byte count. The test opts into `WithSuppressFailureJournal` so startup-timeout and cleanup failure paths also suppress raw child output; other harness callers retain the default diagnostics.
+- **Gated:** The focused Go selector, ticket lint, STATUS regeneration/check and `git diff --check` cover this candidate. Verification is authorized to remain selector-only; Java and repository-wide `scripts/verify.sh` are not run.
+- **Residue:** The fake backend proves the DP's SOCKS5 accept/relay behavior, not live Tor circuits, production-network load, heap profiling or zero-retained-allocation. T079 and T034f/T077–T079 retain those measurements and release evidence.
 
 ## Acceptance
 
-*(Derived by T093 acceptance #4 from `plan.md` SC-005 + the T092 HMAC
-amendment. T079a implements the test; this section pins its design so
-the impl ticket has executable acceptance, not just the Notes intent.)*
+The test `TestSC005ConcurrentSOCKS5Load` in `tests/contract/socks5/sc005_load_test.go` MUST:
 
-1. **Peak-RSS-under-flood assertion (the sol-review B5 falsifier).** The
-   SC-005 probe opens **200 concurrent unauthenticated CONNECTs** through
-   port 8881 (the flood surface a local process reaches over loopback).
-   Under the retired Argon2id verifier this allocated ~`200 × 64 MiB ≈
-   12.8 GiB`; under the HMAC-SHA-256 verifier (data-model.md §1.5) each
-   auth allocates O(1) — one 32-byte tag + the per-connection buffer. The
-   test asserts the DP's **peak RSS stays inside a documented ceiling**
-   during the flood, reported as a separate number from the steady-state
-   pool-fill timing. **Ceiling methodology (pinned at first green run,
-   not invented here):** establish the idle baseline (DP RSS with 0
-   inbound connections) and assert peak-RSS-under-flood ≤ `baseline +
-   200 × connDeltaCeiling`, where `connDeltaCeiling` is the documented
-   per-connection memory budget (a single SOCKS5/CONNECT conn's read +
-   write buffers; ~64 KiB/order-of-magnitude, pinned from the first
-   run's measurement). An absolute floor of **512 MiB** is the
-   coarse-grained backstop (a Go proxy serving 200 idle loopback
-   connections with HMAC auth sits well under this); the
-   baseline-relative bound is the precise gate. A run that exceeds
-   either FAILS — that is the B5 regression line.
-
-2. **Steady-state pool-fill + 60 s hold (unchanged SC-005 core).** The
-   probe fills 200 authenticated CONNECTs within 30 s wall-clock, holds
-   them ≥60 s exchanging interleaved frames in both directions, and
-   asserts none dropped / starved / deadline-hit. Reported as a SEPARATE
-   number from peak-RSS — pool-fill timing alone does NOT falsify B5
-   (the RSS-under-flood bound does); both must be present.
-
-3. **No per-request log line during fill or hold** (T025a shared log
-   allowlist applies). The flood must not trigger a per-connection log
-   line — a logger activated per-auth would itself be a resource leak
-   under flood and a Principle III side channel.
-
-4. **HMAC-auth latency floor.** Under the prior Argon2id design each
-   stored token cost ~50 ms of hash work; under HMAC the candidate's tag
-   is computed once and compared (constant-time) against all verifiers
-   (§1.5). The probe reports auth-decision latency as a separate number;
-   no hard assertion (HMAC compare is sub-microsecond and dominated by
-   loopback jitter), but the reported number is the falsifier-input for a
-   future regression ceiling and confirms the flood is not
-   auth-bottlenecked.
-
-5. **CI path filter.** `tests/integration/` runs under the same
-   `scripts/verify.sh` entrypoint (T076), `STARGATE_TEST_TAGS` unchanged
-   — this is a hermetic PR-cadence test, not a Docker/live suite. It
-   content-gates on T044/T047/T049/T050 (self-skips until they land).
+1. Capture idle `VmRSS` and `VmHWM` after DP boot, installation of one valid token generation, and control-channel settling. Report both values. Set the relative ceiling to idle `VmHWM` + 200 × 64 KiB and the absolute ceiling to 512 MiB.
+2. Run synchronized invalid-auth cohorts at concurrency 1, 2, 4, 8, 16, 32, 64 and 128, then 200 concurrent attempts. Each attempt uses the same distinct, well-formed 32-character lowercase-hex password and requires exactly `01 FF`. Continuously sample RSS/HWM, kill the child and close all active clients immediately on a ceiling breach, and bound the complete flood phase to 30 seconds.
+3. Report attempt count, maximum concurrency, auth response latency, idle RSS/HWM, peak RSS/HWM, HWM delta and both ceilings. Keep these figures separate from pool-fill wall time. Close all flood sockets before filling the authenticated pool.
+4. Open 200 authenticated SOCKS5 CONNECT sessions behind one start barrier, using unique test UNAMEs and inert `.onion` targets. Require exact method, auth and CONNECT success framing, exactly 200 synthetic-upstream CONNECTs, and completion within 30 seconds.
+5. Hold all sessions open for 60 seconds. Each client sends unique frames on a bounded ticker and verifies the exact echo. Every session must complete round trips throughout the hold without a lost reply, close, starvation or deadline. Report pool-fill time independently from flood metrics.
+6. Assert child output is byte-for-byte unchanged after flood, fill and hold; never print child output, credentials, username, destination or frame content. Use `dpharness.WithSuppressFailureJournal()` so startup-timeout and cleanup failure paths suppress the raw journal while other harness callers retain default diagnostics.
+7. Run only the authorized affected-part checks from `tests/contract`: `timeout 240s go test -v ./socks5 -run '^TestSC005ConcurrentSOCKS5Load$' -count=1 -timeout 180s`, ticket lint, STATUS regeneration/check and `git diff --check`. Do not run Java, a VM, push or repository-wide `scripts/verify.sh`.
 
 ## Out-of-scope
 
-The **zero-retained-allocation** property (heap profiling) stays with
-the milestone `stargate-perf` agent run (T079) — this ticket is a
-PR-cadence regression line against bottlenecks, deadlocks, accidental
-serialization, and the B5 memory-DoS, NOT a heap-profiling gate. Live
-Tor-network behaviour is release-cadence (T034f / T077–T079).
+The zero-retained-allocation property (heap profiling) remains with the T079 performance run. Live Tor-network behavior remains release-cadence evidence (T034f/T077–T079); this synthetic test makes no claim about circuits or external network behavior.
 
 ## Notes
 
-Derived by `scripts/bootstrap-tickets.sh` on 2026-07-04.
+T076's existing workspace gate discovers `tests/contract`; adding `tests/integration/` to a workflow path filter would duplicate the existing discovery mechanism. The 64 KiB per-connection value is a proposed ceiling pending the first green run. If observed HWM cannot support it, stop and re-evaluate the plan; do not tune the ceiling to fit the measurement.
 
-**T092 amendment (2026-07-15) — the B5 falsifier is in scope here.** The
-sol-review B5 finding (per-request Argon2id → ~12.8 GiB allocation under
-200 concurrent auths) is fixed by the HMAC-SHA-256 verifier (O(1)
-per-request allocation regardless of N or flood size; `data-model.md`
-§1.5). **This ticket's gate is the falsifier for that fix**: extend the
-SC-005 probe to assert (a) **peak RSS stays inside a documented memory
-ceiling** under a 200-connection unauthenticated flood, and (b) the
-steady-state pool-fill + 60s stability, reported as separate numbers
-(`plan.md` SC-005 measurement model, T092 amendment). Pool-fill timing
-alone does NOT falsify B5 — the RSS-under-flood bound does. T093
-(blocked_by T092) pins the unit-level properties; this ticket is the
-release-cadence perf gate.
-
-**T093 design extension (2026-07-15).** T093 acceptance #4 fleshed out
-the §Acceptance above (peak-RSS ceiling methodology, steady-state
-separation, HMAC-auth latency floor, CI path filter). The concrete
-ceiling numbers are pinned at first green run, not invented here — the
-methodology (baseline-relative + a 512 MiB absolute floor) is the gate.
-T079a remains `pending` (blocked_by T019a, T044, T047, T049, T050, T092,
-T093); it implements the test described above once its blockers land.
-
-## T172 selected acceptance (supersedes conflicting historical task text)
-
-Measure 200 simultaneous authenticated SOCKS5 CONNECT tunnels through port 8881, 30 s fill, 60 s bidirectional hold, no drops/starvation, shared log allowlist and bounded peak RSS under an unauthenticated flood. Remove historical mixed HTTP success load; T173 owns HTTP refusal under load.
+**Selector evidence (2026-10-09, final revised candidate):** The authorized
+focused selector passed in 61.23 seconds. Idle DP RSS/HWM were each
+13,631,488 bytes; invalid-auth peak RSS/HWM were each 15,298,560 bytes,
+for a 1,667,072-byte HWM increase. The baseline-relative ceiling was
+26,738,688 bytes and the absolute ceiling was 536,870,912 bytes. The run
+reached maximum concurrency 200 across 455 invalid-auth attempts; the final
+200-request cohort's mean auth response latency was 3.154987 ms and its
+maximum was 3.517884 ms. Flood wall time was 159.003607 ms, authenticated
+pool fill was 69.560938 ms, and every client echoed in each one-second hold
+window within the 60-second hold. The proposed memory ceilings passed
+unchanged.

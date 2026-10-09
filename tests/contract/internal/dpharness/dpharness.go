@@ -75,11 +75,12 @@ type Harness struct {
 type Option func(*startConfig)
 
 type startConfig struct {
-	counterClock     *time.Time
-	countersDisabled bool
-	beforeBoot       func(ipcDir string)
-	upstream         string // empty = use production default (tor:9050)
-	controlPlane     bool   // seed inter-plane keys + host the TLS fake CP
+	counterClock           *time.Time
+	countersDisabled       bool
+	beforeBoot             func(ipcDir string)
+	upstream               string // empty = use production default (tor:9050)
+	controlPlane           bool   // seed inter-plane keys + host the TLS fake CP
+	suppressFailureJournal bool
 }
 
 // WithCounterClock selects a test binary using production runWithCounters wiring.
@@ -145,6 +146,14 @@ func WithUpstream(addr string) Option {
 // more.
 func WithControlPlane() Option {
 	return func(c *startConfig) { c.controlPlane = true }
+}
+
+// WithSuppressFailureJournal prevents raw child output from being printed
+// when Start's boot waits or process cleanup fail. Privacy-sensitive load
+// probes use this because the child's complete output is an unfiltered
+// diagnostic channel; ordinary callers retain the default journal behavior.
+func WithSuppressFailureJournal() Option {
+	return func(c *startConfig) { c.suppressFailureJournal = true }
 }
 
 // Start content-gates, builds, boots, and waits for the proxy listener
@@ -252,7 +261,7 @@ func Start(t *testing.T, opts ...Option) *Harness {
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("starting data-plane process: %v", err)
 	}
-	t.Cleanup(func() { stop(t, cmd, journal) })
+	t.Cleanup(func() { stop(t, cmd, journal, cfg.suppressFailureJournal) })
 
 	// dp.sock is the gRPC surface T045 hosts; waiting on it ensures the
 	// DP finished its boot sequence past the control-plane client init.
@@ -263,7 +272,7 @@ func Start(t *testing.T, opts ...Option) *Harness {
 	WaitFor(t, "dp.sock to appear", 20*time.Second, journal, func() bool {
 		_, err := os.Stat(sockPath)
 		return err == nil
-	})
+	}, cfg.suppressFailureJournal)
 	WaitFor(t, "proxy listener to accept", 20*time.Second, journal, func() bool {
 		c, err := net.DialTimeout("tcp", proxyAddr, 250*time.Millisecond)
 		if err != nil {
@@ -271,7 +280,7 @@ func Start(t *testing.T, opts ...Option) *Harness {
 		}
 		c.Close()
 		return true
-	})
+	}, cfg.suppressFailureJournal)
 
 	return &Harness{
 		CounterTime:      counterTime,
@@ -350,7 +359,7 @@ func buildDPOnce(t *testing.T, clock bool) string {
 // stop terminates the DP process: SIGINT first (exercising whatever
 // graceful path T050 wires), SIGKILL after a bounded grace window so a
 // hung process can never wedge the test run.
-func stop(t *testing.T, cmd *exec.Cmd, journal *LockedBuffer) {
+func stop(t *testing.T, cmd *exec.Cmd, journal *LockedBuffer, suppressFailureJournal bool) {
 	t.Helper()
 	if cmd.Process == nil {
 		return
@@ -364,7 +373,7 @@ func stop(t *testing.T, cmd *exec.Cmd, journal *LockedBuffer) {
 		_ = cmd.Process.Kill()
 		<-done
 	}
-	if t.Failed() {
+	if t.Failed() && !suppressFailureJournal {
 		t.Logf("data-plane journal:\n%s", journal.String())
 	}
 }
@@ -385,9 +394,8 @@ func FreeLoopbackAddr(t *testing.T) string {
 }
 
 // WaitFor polls until cond is true or the deadline passes; on timeout
-// it fails with the DP journal so boot problems are diagnosable from CI
-// logs.
-func WaitFor(t *testing.T, what string, timeout time.Duration, journal *LockedBuffer, cond func() bool) {
+// it fails with the DP journal unless suppression was requested.
+func WaitFor(t *testing.T, what string, timeout time.Duration, journal *LockedBuffer, cond func() bool, suppressFailureJournal bool) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
@@ -395,6 +403,9 @@ func WaitFor(t *testing.T, what string, timeout time.Duration, journal *LockedBu
 			return
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+	if suppressFailureJournal {
+		t.Fatalf("timed out after %s waiting for %s", timeout, what)
 	}
 	t.Fatalf("timed out after %s waiting for %s\ndata-plane journal:\n%s", timeout, what, journal.String())
 }
