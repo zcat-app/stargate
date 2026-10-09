@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 35 |
-| in-progress | 0 |
+| pending | 33 |
+| in-progress | 2 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 203 |
@@ -29,9 +29,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T064 | Author the curated leak corpus for shared error scans | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T067b | Contract test for the auth-pass + route-failure counter-incr | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T070b | Test WatchEvents failure transitions remain advisory | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T109 | Cross-host JVM reproducibility assertion at release cadence | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T110 | Hermetic digest-agreement assertion for alpine:3.20 pins | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
@@ -52,7 +50,10 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T064 | Author the curated leak corpus for shared error scans | in-progress | ✓ | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |
+| T070b | Test WatchEvents failure transitions remain advisory | in-progress | ✓ | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |
 
 ---
 

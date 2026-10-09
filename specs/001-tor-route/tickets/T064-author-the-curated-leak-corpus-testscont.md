@@ -1,7 +1,7 @@
 ---
 id: T064
 title: 'Author the curated leak corpus for shared error scans'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: "2026-10-09"
 source: tasks.md#T064

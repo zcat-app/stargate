@@ -1,7 +1,7 @@
 ---
 id: T070b
 title: 'Test WatchEvents failure transitions remain advisory'
-status: pending
+status: in-progress
 created: 2026-07-04
 last_updated: "2026-10-09"
 source: tasks.md#T070b
