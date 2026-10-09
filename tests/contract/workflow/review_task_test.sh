@@ -463,6 +463,29 @@ PY
 
 errs=()
 bail() { errs+=("$*"); }
+T214_DELAYED_REPAIRED=1
+
+record_t214_outer_event() {
+  local directory="$1" name="$2" pid="$3"
+  python3 - "$directory" "$name" "$pid" <<'EVENT'
+import json, os, pathlib, sys, time
+directory, name, pid = sys.argv[1:]
+raw = pathlib.Path(f"/proc/{pid}/stat").read_text()
+start = int(raw[raw.rfind(")") + 2:].split()[19])
+pathlib.Path(directory).mkdir(parents=True, exist_ok=True)
+path = pathlib.Path(directory) / f"{name}.json"
+tmp = path.with_suffix(".json.tmp")
+tmp.write_text(json.dumps({"event": name, "monotonic": time.monotonic(),
+                           "pid": int(pid), "start": int(start)}, sort_keys=True) + "\n")
+os.replace(tmp, path)
+EVENT
+}
+
+emit_case_pass() {
+  local marker="$1"
+  [ "${#errs[@]}" -eq 0 ] || return 1
+  printf '%s\n' "$marker"
+}
 
 request_fixture_exit() {
   local requested=143
@@ -543,6 +566,7 @@ wait_fixture_supervisor() {
   fi
   if [ "$direct" = yes ]; then
     wait "$pid"; wait_status=$?
+    FIXTURE_SUPERVISOR_PROCESS_RC="$wait_status"
     : > "$control/shell-reaped"
     if [ "${STARGATE_T211_INVALID_REAP_RECEIPT:-0}" = 1 ]; then
       python3 - "$control/reap.json" <<'INVALID_RECEIPT'
@@ -682,8 +706,17 @@ ACK
 cleanup_owned_session() {
   local case_dir="$1" control="$2" supervisor="$3" supervisor_start="$4" direct="${5:-yes}"
   if [ -d "$case_dir/target" ]; then
+    if [ -n "${T214_CURRENT_EVENT_DIR:-}" ]; then
+      record_t214_outer_event "$T214_CURRENT_EVENT_DIR" cleanup-start "$$"
+    fi
     : > "$case_dir/target/abort-commit"
+    if [ -n "${T214_CURRENT_EVENT_DIR:-}" ]; then
+      record_t214_outer_event "$T214_CURRENT_EVENT_DIR" abort-written "$$"
+    fi
     : > "$case_dir/target/release-commit"
+    if [ -n "${T214_CURRENT_EVENT_DIR:-}" ]; then
+      record_t214_outer_event "$T214_CURRENT_EVENT_DIR" release-written "$$"
+    fi
   fi
   : > "$control/cleanup.request"
   wait_fixture_supervisor "owned cleanup" "$control" "$supervisor" "$supervisor_start" "$direct"
@@ -797,6 +830,32 @@ DELETE_ORDER
 trap 'CLEANUP_ORIGINAL_RC=$?; CLEANUP_IN_PROGRESS=1; cleanup' EXIT
 trap 'request_fixture_exit INT' INT
 trap 'request_fixture_exit TERM' TERM
+
+if [ "${STARGATE_T214_PASS_OUTPUT_PROBE:-0}" = 1 ]; then
+  bail "T214 injected assertion failure for PASS-output falsifier"
+  if emit_case_pass 'T214_CONTROL_PASS injected-failure-case'; then
+    echo "FAIL: T214 PASS-output falsifier emitted a case PASS after assertion failure" >&2
+    exit 2
+  fi
+  if [ "${#errs[@]}" -gt 0 ]; then
+    echo "FAIL: T214 PASS-output falsifier (${#errs[@]} finding(s))" >&2
+    exit 1
+  fi
+  echo "PASS: T142 single-gate review boundary"
+  exit 0
+fi
+
+t214_pass_output_failure_falsifier() {
+  local output rc
+  output="$(STARGATE_T214_PASS_OUTPUT_PROBE=1 bash "$0" 2>&1)"; rc=$?
+  [ "$rc" -ne 0 ] || { bail "T214 PASS-output probe accepted its injected assertion failure"; return; }
+  [[ "$output" != *'T214_CONTROL_PASS injected-failure-case'* ]] ||
+    bail "T214 PASS-output probe emitted a case marker after assertion failure"
+  [[ "$output" != *'PASS: T142 single-gate review boundary'* ]] ||
+    bail "T214 PASS-output probe emitted a suite marker after assertion failure"
+  [[ "$output" = *'T214 PASS-output falsifier'* ]] ||
+    bail "T214 PASS-output probe did not report its injected assertion failure"
+}
 
 t211_pause_before_registration() {
   local kind="$1" control="$2" ready_file="$3" i
@@ -1041,8 +1100,29 @@ write_hold_gitshim() {
   mkdir -p "$shim_dir"
   cat > "$shim_dir/git" <<'SHIM'
 #!/usr/bin/env bash
+record_t214_event() {
+  [ -n "${STARGATE_FIXTURE_T214_EVENTS:-}" ] || return 0
+  python3 - "$STARGATE_FIXTURE_T214_EVENTS" "$1" "$$" <<'EVENT'
+import json, os, pathlib, sys, time
+directory, name, pid = sys.argv[1:]
+pathlib.Path(directory).mkdir(parents=True, exist_ok=True)
+try:
+    raw = pathlib.Path(f"/proc/{pid}/stat").read_text()
+    start = int(raw[raw.rfind(")") + 2:].split()[19])
+except FileNotFoundError:
+    start = None
+path = pathlib.Path(directory) / f"{name}.json"
+tmp = path.with_suffix(".json.tmp")
+tmp.write_text(json.dumps({"event": name, "monotonic": time.monotonic(),
+                           "pid": int(pid), "start": start,
+                           "review_lock_exists": os.path.isdir("target/runs/T900.review.lock")},
+                          sort_keys=True) + "\n")
+os.replace(tmp, path)
+EVENT
+}
 if [ "${1:-}" = commit ]; then
   mkdir -p target
+  record_t214_event commit-entered
   python3 - target/commit-entered <<'ENTERED'
 import os, sys, time
 with open(sys.argv[1], "w") as stream:
@@ -1055,8 +1135,29 @@ ENTERED
     printf '%s\n' "$!" > "$STARGATE_FIXTURE_ESCAPE_PID_FILE"
   fi
   if [ "${STARGATE_FIXTURE_COMMIT_DELAY:-0}" -gt 0 ]; then
-    sleep "$STARGATE_FIXTURE_COMMIT_DELAY"
+    if [ -n "${STARGATE_FIXTURE_T214_DELAYED_MODE:-}" ]; then
+      trap '
+        record_t214_event descendant-term
+        if [ -e target/abort-commit ] && [ -e target/release-commit ]; then
+        record_t214_event abort-release-observed
+          if [ "$STARGATE_FIXTURE_T214_DELAYED_MODE" = legacy ]; then
+            : > target/committing
+            record_t214_event delayed-marker-published
+          else
+            record_t214_event delayed-marker-suppressed
+          fi
+        else
+          record_t214_event term-before-abort-release
+        fi
+        exit 130
+      ' TERM
+      record_t214_event delayed-marker-held
+      while [ ! -e target/t214-release-delayed-marker ]; do sleep 0.05; done
+    else
+      sleep "$STARGATE_FIXTURE_COMMIT_DELAY"
+    fi
   fi
+  record_t214_event commit-marker-published
   : > target/committing
   while [ ! -e target/release-commit ]; do sleep 0.05; done
   if [ -e target/abort-commit ]; then exit 130; fi
@@ -1071,14 +1172,18 @@ SHIM
 # the session so a timeout signal still reaches the Git shim.
 launch_fixture_driver() {
   local case_dir="$1" shim_dir="$2" fake_bin="$3" log="$4" delay="${5:-0}" use_timeout="${6:-yes}"
-  local escape_child="${7:-0}" escape_pid_file="${8:-}"
+  local escape_child="${7:-0}" escape_pid_file="${8:-}" t214_mode="${9:-}"
   local identity_file i
   local -a command=(env "PATH=$shim_dir:$fake_bin:$PATH" ZAI_API_KEY=dummy OPENAI_API_KEY=dummy
     "STARGATE_FIXTURE_COMMIT_DELAY=$delay" "STARGATE_FIXTURE_ESCAPE_CHILD=$escape_child"
-    "STARGATE_FIXTURE_ESCAPE_PID_FILE=$escape_pid_file" bash scripts/run-task.sh T900)
+    "STARGATE_FIXTURE_ESCAPE_PID_FILE=$escape_pid_file"
+    "STARGATE_FIXTURE_T214_DELAYED_MODE=$t214_mode"
+    "STARGATE_FIXTURE_T214_EVENTS=$case_dir/target/t214-events" bash scripts/run-task.sh T900)
   if [ "$use_timeout" = yes ]; then command=(env "PATH=$shim_dir:$fake_bin:$PATH" ZAI_API_KEY=dummy OPENAI_API_KEY=dummy
     "STARGATE_FIXTURE_COMMIT_DELAY=$delay" "STARGATE_FIXTURE_ESCAPE_CHILD=$escape_child"
-    "STARGATE_FIXTURE_ESCAPE_PID_FILE=$escape_pid_file" timeout 60 bash scripts/run-task.sh T900); fi
+    "STARGATE_FIXTURE_ESCAPE_PID_FILE=$escape_pid_file"
+    "STARGATE_FIXTURE_T214_DELAYED_MODE=$t214_mode"
+    "STARGATE_FIXTURE_T214_EVENTS=$case_dir/target/t214-events" timeout 60 bash scripts/run-task.sh T900); fi
   FIXTURE_CONTROL_DIR="$log.owned"
   mkdir -p "$FIXTURE_CONTROL_DIR"
   identity_file="$FIXTURE_CONTROL_DIR/ready.json"
@@ -1612,15 +1717,30 @@ MUT
      PATH="$ACTUAL/fake-bin:$PATH" ZAI_API_KEY=dummy OPENAI_API_KEY=dummy \
        bash scripts/review-task.sh T900 >/dev/null 2>&1) || bail "$tag: mutant re-approval failed"
   fi
+  local t214_mode=""
+  if [ "$delay" -gt 15 ]; then
+    t214_mode=legacy
+    if { [ "$tag" = s13-delayed-normal ] || [ "$tag" = s13-delayed-early-unlock ]; } &&
+       [ "$T214_DELAYED_REPAIRED" -eq 1 ]; then
+      t214_mode=repaired
+    fi
+  fi
   if [ "$tag" = s13-hold ]; then
     launch_fixture_driver "$case_dir" "$SANDBOX/$tag-gitshim" "$ACTUAL/fake-bin" \
       "$SANDBOX/$tag-driver.log" "$delay" yes 1 "$escape_pid_file"
+  elif [ "$delay" -gt 15 ]; then
+    launch_fixture_driver "$case_dir" "$SANDBOX/$tag-gitshim" "$ACTUAL/fake-bin" \
+      "$SANDBOX/$tag-driver.log" "$delay" no 0 "" "$t214_mode"
   else
     launch_fixture_driver "$case_dir" "$SANDBOX/$tag-gitshim" "$ACTUAL/fake-bin" \
       "$SANDBOX/$tag-driver.log" "$delay"
   fi
   local drv="$FIXTURE_PID"
   local i
+  local t214_events_dir="$case_dir/target/t214-events"
+  if [ "$delay" -gt 15 ]; then
+    record_t214_outer_event "$t214_events_dir" driver-started "$drv"
+  fi
   if [ "$delay" -gt 15 ]; then
     for i in $(seq 1 100); do [ -s "$case_dir/target/commit-entered" ] && break; sleep 0.05; done
     [ -s "$case_dir/target/commit-entered" ] || {
@@ -1632,20 +1752,121 @@ MUT
   fi
   for i in $(seq 1 300); do [ -f "$case_dir/target/committing" ] && break; sleep 0.05; done
   if [ "$delay" -gt 15 ] && [ ! -f "$case_dir/target/committing" ]; then
-    local before_head rc
+    local before_head rc lock_before events_dir expected_marker_failure failure residue
+    local -a t214_failures=()
     before_head="$(git -C "$case_dir" rev-parse HEAD)"
+    events_dir="$t214_events_dir"
+    T214_CURRENT_EVENT_DIR="$events_dir"
+    record_t214_outer_event "$events_dir" readiness-timeout "$$"
+    lock_before=no
+    [ -d "$case_dir/target/runs/T900.review.lock" ] && lock_before=yes
+    if [ "$driver" = normal ]; then
+      [ "$lock_before" = yes ] || t214_failures+=("normal review lock missing before cleanup")
+    else
+      [ "$lock_before" = no ] || t214_failures+=("early-unlock mutant still held lock before cleanup")
+    fi
     cleanup_owned_session "$case_dir" "$FIXTURE_CONTROL_DIR" \
       "$FIXTURE_SUPERVISOR_PID" "$FIXTURE_SUPERVISOR_START" yes ||
-      bail "$tag: bounded cleanup failed after the expected 15s readiness miss"
+      t214_failures+=("bounded cleanup failed after readiness miss")
     rc="$FIXTURE_SUPERVISOR_RC"
-    [ "$rc" -ne 0 ] || bail "$tag: readiness miss reported success"
-    [ ! -d "$case_dir/target/runs/T900.review.lock" ] || bail "$tag: readiness miss stranded review lock"
-    [ "$(git -C "$case_dir" rev-parse HEAD)" = "$before_head" ] || bail "$tag: readiness miss committed"
-    [ ! -e "$case_dir/target/committing" ] || bail "$tag: delayed readiness marker appeared unexpectedly"
-    local residue
+    python3 - "$events_dir/completion.json" "$drv" "$FIXTURE_START" "$rc" \
+      "$FIXTURE_SUPERVISOR_PID" "$FIXTURE_SUPERVISOR_START" "$FIXTURE_SUPERVISOR_PROCESS_RC" \
+      "$case_dir" <<'T214_COMPLETION'
+import json, os, sys, time
+path, driver_pid, driver_start, driver_exit, supervisor_pid, supervisor_start, supervisor_exit, case_dir = sys.argv[1:]
+tmp = path + ".tmp"
+with open(tmp, "w") as stream:
+    json.dump({"driver_pid": int(driver_pid), "driver_start": int(driver_start),
+               "driver_exit": int(driver_exit), "supervisor_pid": int(supervisor_pid),
+               "supervisor_start": int(supervisor_start), "supervisor_exit": int(supervisor_exit),
+               "review_lock_exists_after_cleanup": os.path.isdir(os.path.join(case_dir, "target/runs/T900.review.lock")),
+               "monotonic": time.monotonic()}, stream, sort_keys=True)
+    stream.write("\n")
+os.replace(tmp, path)
+T214_COMPLETION
+    [ "$rc" -ne 0 ] || t214_failures+=("direct driver exit was successful after readiness miss")
+    [ ! -d "$case_dir/target/runs/T900.review.lock" ] || t214_failures+=("readiness miss stranded review lock")
+    [ "$(git -C "$case_dir" rev-parse HEAD)" = "$before_head" ] || t214_failures+=("readiness miss committed")
+    [ ! -e "$case_dir/target/committing" ] || t214_failures+=("late committing marker appeared after cleanup TERM")
+    python3 - "$FIXTURE_CONTROL_DIR/done.json" "$FIXTURE_CONTROL_DIR/reap.json" "$drv" "$FIXTURE_START" \
+      "$events_dir" "$case_dir" "$driver" <<'T214_RECEIPT'
+import json, pathlib, sys
+done_path, reap_path, pid, start, events_dir, case_dir, driver = sys.argv[1:]
+pid, start = int(pid), int(start)
+done = json.load(open(done_path)); reap = json.load(open(reap_path))
+completion = json.load(open(pathlib.Path(events_dir) / "completion.json"))
+assert (reap["child_pid"], reap["child_start"]) == (pid, start), "reap receipt is not the direct bash driver"
+assert done["child_exit"] != 0, "direct bash driver exit was successful"
+assert (completion["driver_pid"], completion["driver_start"], completion["driver_exit"]) == (pid, start, done["child_exit"]), "direct Bash identity/exit differs from the supervisor completion record"
+assert completion["supervisor_exit"] == completion["driver_exit"], "supervisor process exit differs from its direct child result"
+assert reap["direct_wait"]["owner"] == "Popen.wait" and not reap["remaining"], "direct child/reap evidence is incomplete"
+assert any(row.get("pid") == pid and row.get("start") == start and row.get("signal") == 15 and row.get("result") == "sent" for row in reap["signals"]), "supervisor did not record direct-driver TERM"
+assert not any(row.get("signal") == 9 for row in reap["signals"]), "cleanup required SIGKILL"
+term_path = pathlib.Path(events_dir) / "descendant-term.json"
+assert term_path.is_file(), "delayed shim did not receive supervisor descendant TERM"
+term = json.load(open(term_path))
+expected_lock_at_term = driver == "normal"
+assert term["review_lock_exists"] is expected_lock_at_term, "review-lock state at descendant TERM does not match the normal/mutant control"
+assert any(row.get("pid") == term["pid"] and row.get("start") == term["start"] and row.get("signal") == 15 and row.get("result") == "sent" for row in reap["signals"]), "supervisor did not record descendant-shim TERM"
+assert completion["review_lock_exists_after_cleanup"] is False, "review lock survived TERM cleanup"
+assert term["monotonic"] < completion["monotonic"], "lock cleanup was not observed after descendant TERM"
+cleanup = [json.load(open(pathlib.Path(events_dir) / f"{name}.json"))["monotonic"]
+           for name in ("cleanup-start", "abort-written", "release-written")]
+assert cleanup == sorted(cleanup) and cleanup[-1] < term["monotonic"], "TERM did not follow abort then release"
+if pathlib.Path(events_dir, "delayed-marker-published.json").exists():
+    marker = json.load(open(pathlib.Path(events_dir) / "delayed-marker-published.json"))
+    assert marker["monotonic"] > term["monotonic"], "legacy marker did not follow TERM"
+T214_RECEIPT
+    [ "$?" -eq 0 ] || t214_failures+=("direct-child identity/TERM/reap receipt assertions failed")
+    python3 - "$events_dir" "$FIXTURE_CONTROL_DIR/reap.json" <<'T214_TRACE'
+import json, pathlib, sys
+directory = pathlib.Path(sys.argv[1])
+reap = json.load(open(sys.argv[2]))
+completion = json.load(open(directory / "completion.json"))
+events = sorted((json.load(open(path)) for path in directory.glob("*.json")
+                 if path.name != "completion.json"), key=lambda row: row["monotonic"])
+term = next(row for row in events if row["event"] == "descendant-term")
+driver_term = next(row for row in reap["signals"]
+                   if row.get("pid") == completion["driver_pid"] and row.get("start") == completion["driver_start"]
+                   and row.get("signal") == 15)
+shim_term = next(row for row in reap["signals"]
+                 if row.get("pid") == term["pid"] and row.get("start") == term["start"]
+                 and row.get("signal") == 15)
+print("T214_TIMEOUT_TRACE " + json.dumps({
+    "events": [{"name": row["event"], "monotonic": row["monotonic"]} for row in events],
+    "direct_bash": {"pid": completion["driver_pid"], "start": completion["driver_start"],
+                    "exit": completion["driver_exit"]},
+    "supervisor": {"pid": completion["supervisor_pid"], "start": completion["supervisor_start"],
+                   "process_exit": completion["supervisor_exit"]},
+    "shim_term": {"pid": term["pid"], "start": term["start"], "result": shim_term["result"]},
+    "direct_term": driver_term["result"], "sigkill_count": sum(row.get("signal") == 9 for row in reap["signals"]),
+    "remaining": reap["remaining"]}, sort_keys=True))
+T214_TRACE
     residue="$(python3 "$PROC_CONTROL" snapshot "$drv" "$drv" "$FIXTURE_START" 2>&1)"
-    [ "$residue" = "[]" ] || bail "$tag: readiness cleanup left process residue: $residue"
-    printf 'T211_CONTROL_PASS %s exceeded the 15s readiness window and left no commit, lock, or process residue\n' "$tag"
+    [ "$residue" = "[]" ] || t214_failures+=("readiness cleanup left process residue: $residue")
+    t214_pass_output_failure_falsifier
+    if [ "$tag" = s13-delayed-legacy-mutant ]; then
+      expected_marker_failure=no
+      for failure in "${t214_failures[@]}"; do
+        if [ "$failure" = "late committing marker appeared after cleanup TERM" ]; then
+          expected_marker_failure=yes
+        else
+          bail "$tag: $failure"
+        fi
+      done
+      [ "$expected_marker_failure" = yes ] || bail "$tag: always-legacy mutant did not trigger the late-marker falsifier"
+      if [ "${#errs[@]}" -eq 0 ]; then
+        emit_case_pass "T214_CONTROL_PASS $tag: invariant set rejected always-legacy late-marker mutant" ||
+          bail "$tag: mutant falsifier checks failed"
+      fi
+    else
+      for failure in "${t214_failures[@]}"; do bail "$tag: $failure"; done
+      if [ "${#t214_failures[@]}" -eq 0 ] && [ "${#errs[@]}" -eq 0 ]; then
+        emit_case_pass "T214_CONTROL_PASS $tag exceeded readiness bound; direct Bash TERM cleanup left no commit, lock, KILL, or process residue" ||
+          bail "$tag: case failure emitted a PASS marker"
+      fi
+    fi
+    T214_CURRENT_EVENT_DIR=""
     return
   fi
   [ -f "$case_dir/target/committing" ] || {
@@ -1653,6 +1874,22 @@ MUT
     cleanup_owned_session "$case_dir" "$FIXTURE_CONTROL_DIR" "$FIXTURE_SUPERVISOR_PID" "$FIXTURE_SUPERVISOR_START" yes || :
     return
   }
+  if [ "$delay" -gt 0 ]; then
+    python3 - "$case_dir/target/commit-entered" "$t214_events_dir/commit-marker-published.json" \
+      "$delay" "$driver" "$tag" <<'T214_BOUNDARY_DELAY'
+import json, pathlib, sys
+entered_path, marker_path, delay, driver, tag = sys.argv[1:]
+entered = float(pathlib.Path(entered_path).read_text().strip())
+marker = json.load(open(marker_path))
+elapsed = marker["monotonic"] - entered
+minimum = float(delay) * 0.95
+expected_lock = driver == "normal"
+assert elapsed >= minimum, f"successful boundary was not delayed: {elapsed:.3f}s < {minimum:.3f}s"
+assert marker["review_lock_exists"] is expected_lock, f"{tag}: lock state at delayed marker does not match normal/mutant control"
+print(f"T214_BOUNDARY_DELAY_PASS {tag} elapsed={elapsed:.3f}s lock={marker['review_lock_exists']}")
+T214_BOUNDARY_DELAY
+    [ "$?" -eq 0 ] || bail "$tag: successful boundary delay/lock evidence failed"
+  fi
   local result rc
   result="$(
     cd "$case_dir" || exit 1
@@ -1706,10 +1943,11 @@ ESCAPED_REAP
   fi
 }
 if [ "$T211_S14_LATE_ONLY" -eq 0 ]; then
-  commit_boundary_case s13-hold normal
-  commit_boundary_case s13-early-unlock-mutant mutated
+  commit_boundary_case s13-hold normal 1
+  commit_boundary_case s13-early-unlock-mutant mutated 1
   commit_boundary_case s13-delayed-normal normal 16
-  commit_boundary_case s13-delayed-mutant mutated 16
+  commit_boundary_case s13-delayed-early-unlock mutated 16
+  commit_boundary_case s13-delayed-legacy-mutant mutated 16
 fi
 
 # Interrupt a self-invocation of this fixture at the actual s13 boundary. It
