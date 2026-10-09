@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 25 |
+| pending | 24 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 214 |
+| done | 215 |
 | deferred | 8 |
 | **total** | **247** |
 
@@ -29,9 +29,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T072 | Extend `data-plane/internal/forward/tor.go` (from T047) to m | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T073 | In `data-plane/internal/controlclient/client.go` (from T045) | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
 | T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
+| T079a | Gate SC-005 SOCKS pool and memory | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T109 | Cross-host JVM reproducibility assertion at release cadence | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T110 | Hermetic digest-agreement assertion for alpine:3.20 pins | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T111 | BUILD-DIFFS: document extension zip binary as build input | 6: Polish & Cross-Cutting Concerns |  | ✓ |
@@ -72,7 +72,7 @@ _(nothing in flight)_
 
 ## Done
 
-_214 ticket(s) done._
+_215 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -166,6 +166,7 @@ _214 ticket(s) done._
 - T070a — Prove Tor circuit drop closes an in-flight SOCKS tunnel
 - T070b — Test WatchEvents failure transitions remain advisory
 - T071 — Extend future HTTP error renderer only
+- T072 — Extend `data-plane/internal/forward/tor.go` (from T047) to map upstrea
 - T074 — Extend `control-plane/core/src/main/java/.../SidecarMonitor.java` (fro
 - T075b — Author `tests/reproducibility/extension_test.sh`
 - T076 — Run every test module in the single green gate
