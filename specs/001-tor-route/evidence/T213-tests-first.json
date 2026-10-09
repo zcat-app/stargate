@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "ticket": "T213",
+  "baseline": "efcc7b7841957c18382294af0bf06e113e89268b",
+  "red": {
+    "patch": "diff --git a/tests/contract/security-decisions/tor_package_integrity_test.sh b/tests/contract/security-decisions/tor_package_integrity_test.sh\nindex 9ed9a0c..39cd587 100644\n--- a/tests/contract/security-decisions/tor_package_integrity_test.sh\n+++ b/tests/contract/security-decisions/tor_package_integrity_test.sh\n@@ -16,7 +16,7 @@ import shutil\n import tempfile\n import sys\n \n-version = \"0.4.9.13-1~d12.bookworm+1\"\n+version = \"0.4.9.14-1~d12.bookworm+1\"\n root = Path.cwd()\n dockerfile = (root / \"sidecars/tor/Dockerfile\").read_text()\n commands = re.sub(r\"\\\\\\n\\s*\", \" \", dockerfile)\n@@ -24,7 +24,7 @@ installer = root / \"sidecars/tor/install-tor.sh\"\n pins = root / \"sidecars/tor/tor-packages.sha256\"\n errors = []\n if version not in commands:\n-    errors.append(\"Tor security release 0.4.9.13 is not selected\")\n+    errors.append(\"Tor package version 0.4.9.14 is not selected\")\n if re.search(r\"apt-get install [^&\\n]*\\btor=\", commands):\n     errors.append(\"Tor is installed directly from mutable metadata without a checked local artifact\")\n if f\"/tmp/install-tor.sh {version} /tmp/tor-packages.sha256\" not in commands:\n@@ -174,5 +174,5 @@ else:\n         assert record.exists(), \"snapshot dependency selection did not reach checked installation\"\n         print(f\"OK: {name} dependency control selected the Debian snapshot\")\n \n-print(\"OK: T160/T177 repository isolation, security version, checked local installation, amd64/arm64 and four rejection controls\")\n+print(\"OK: T160/T177 repository isolation, package version, checked local installation, amd64/arm64 and four rejection controls\")\n PY\n",
+    "snapshot_sha256": "9660759415aa16cb4810815ad76addd1cd07d05ca3fee2d0d2a0f46715cdcbef",
+    "command": [
+      "bash",
+      "tests/contract/security-decisions/tor_package_integrity_test.sh"
+    ],
+    "exit_code": 1,
+    "output": "FAIL: Tor package version 0.4.9.14 is not selected\nFAIL: Dockerfile does not invoke the content-checked Tor installer\n"
+  },
+  "green": {
+    "snapshot_sha256": "0e5a3f4aee1897c2790976e8a913201236e37292ed2080808b4a8b400890fffb",
+    "command": [
+      "bash",
+      "tests/contract/security-decisions/tor_package_integrity_test.sh"
+    ],
+    "exit_code": 0,
+    "output": "OK: higher-version dependency control selected the Debian snapshot\nOK: same-version dependency control selected the Debian snapshot\nOK: T160/T177 repository isolation, package version, checked local installation, amd64/arm64 and four rejection controls\n"
+  }
+}

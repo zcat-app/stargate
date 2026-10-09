@@ -41,6 +41,62 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-10-09 — Promote Tor 0.4.9.14 after the pinned package left the index (T213)
+
+**Decision and authorization.** T212's cold T162 build fetched genuine Tor
+InRelease and amd64 Packages metadata, then failed closed because the pinned
+0.4.9.13 package was no longer listed. The old pool artifact returned 404.
+Under the maintainer-authorized T213 prerequisite, select
+`0.4.9.14-1~d12.bookworm+1` from the same official Bookworm repository. The Tor
+Project's [2026-10-08 security release announcement](https://forum.torproject.org/t/security-release-0-4-9-14/22241)
+recommends updating and withholds issue-level details for at least a week; this
+decision makes no claim about specific fixes or absence of defects. It
+supersedes only T177's selected package identity. It does not deploy or publish
+an image, and T212/T202 integrated route qualification remains pending.
+
+**Authenticated inputs (resolved 2026-10-09 06:04 UTC).** The freshly fetched
+official key contained exactly one primary key matching the existing pin
+`A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89`; its GnuPG status was not revoked,
+expired or disabled. `gpgv` validated the newly fetched Bookworm InRelease with
+one `VALIDSIG` from subkey `2265EB4CB2BF88D900AE8D1B74A941BA219EC810` under
+that primary fingerprint. The signed Release is dated 2026-10-08 02:49:12 UTC
+and valid until 2026-11-17 02:49:12 UTC. Its SHA-256 is
+`1d11ca86ef5a6d5fa5f8bc432f652f5eb29bdc63f41a1cb34e74b8c55e006a51`.
+The amd64 Packages index SHA-256 is
+`ab76f7f2a4044c12081b869dcac14168f7f762709c930bad13ae2cbe5e4bfcfa`; the arm64
+index SHA-256 is
+`9ce5cb181938ae402601c8551d7b0954e5139dad28bec54ce0cc3cc9e7cc5d7a`. Both
+indexes and artifact identities were checked against that same signed
+metadata. Downloaded artifacts matched its exact size and SHA-256 rows:
+
+| Architecture | Package filename | Size | SHA-256 |
+|---|---|---:|---|
+| amd64 | `tor_0.4.9.14-1~d12.bookworm+1_amd64.deb` | 2100568 | `dfc862fec4100422bf62e18b25278b769662701c9c081f992b51c9d9024976c4` |
+| arm64 | `tor_0.4.9.14-1~d12.bookworm+1_arm64.deb` | 2013456 | `f079056fe7db6708ee83981de6c08f8a983b56ccd23f7798ddd14573390907ff` |
+
+**Native measurement outcome.** The bounded `--no-cache` amd64 BuildKit action
+exited 0 and emitted a retained OCI archive, but the initial composite caller
+exited 1 because its copied cleanup helper still referenced T212's prior unit.
+A separately reviewed T213-only cleanup stopped that exact empty unit and
+verified foreign-resource sentinels. The archive was imported offline under a
+unique local inspection tag; one corrected no-network observation checked the
+installed Tor version, amd64 package identities and baked torrc. These results,
+the retained initial cleanup failure, first pre-start runtime-harness failure,
+and action-ledger limitation are detailed in `reviews/T213/README.md`. They are
+not integrated route qualification and do not make the initial composite caller
+a pass.
+
+The native amd64 image build and installed-package checks, including their
+limits, are recorded in `reviews/T213/README.md`. Authenticated arm64 package
+bytes do not establish arm64 build or runtime behavior. Package identity does
+not establish Tor network availability, unchanged circuit behavior or
+integrated route readiness. The Tor index remains mutable and may drop this
+version with a later release; a clean build then fails closed until another
+manual reviewed promotion. No archive, cache bypass or validity waiver is
+added. The T160 checked local-file installer, signing-key and revocation checks,
+Debian-only dependency source, no-download installation, and all other pins
+remain unchanged.
+
 ## 2026-10-02 — Tor observer image identity is a checked local build, not published provenance (T191)
 
 **Context.** T138 ("Packaging and identity") required the observer's "immutable digest and

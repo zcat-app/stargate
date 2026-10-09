@@ -219,6 +219,25 @@ arm64 runtime behavior or unchanged circuit-isolation behavior follows solely fr
 this package promotion. See the dated T177 decision in `SECURITY-DECISIONS.md` and the
 [Tor release announcement](https://forum.torproject.org/t/security-release-0-4-9-13/22178).
 
+**T213 package availability update (2026-10-09).** The selected Bookworm Tor
+package is now `0.4.9.14-1~d12.bookworm+1`, after the pinned 0.4.9.13 artifact
+was removed from the moving upstream index and a clean T212 build failed closed.
+The amd64 and arm64 artifact bytes were each checked against their architecture's
+Packages index, with both indexes bound to one currently valid signature from the
+existing pinned Tor key. Only the native amd64 image is built and runtime-checked
+by T213; authenticated arm64 package bytes do not establish arm64 behavior. The
+Tor Project's [2026-10-08 security announcement](https://forum.torproject.org/t/security-release-0-4-9-14/22241)
+recommends updating, but the issue-level account is not yet public, and package
+identity does not establish absence of defects or integrated route readiness.
+The amd64 package/version/closure/torrc observations, plus the initial
+build-wrapper cleanup failure and its separately audited recovery, are recorded
+in `reviews/T213/README.md`; this does not claim the first composite caller
+passed. T212/T202 live closure remains pending. Because the repository index is
+mutable and may remove this version on its next build, clean builds can again
+fail closed pending a manual reviewed promotion; T213 adds no archival or cache
+bypass policy. See the dated T213 decision in `SECURITY-DECISIONS.md` and the
+provenance and build limits in `reviews/T213/README.md`.
+
 ### 2.7 Malicious browser extension
 
 An extension running alongside the Stargate WebExtension in the same

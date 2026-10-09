@@ -61,17 +61,24 @@ manifests alone cannot establish publisher identity; a skipped release job makes
 byte-equality claim. Publisher and shared finite-record source, module locks, Dockerfile
 and launcher belong to the candidate's executable closure.
 
-**Tor package content — independently checked (T160/T177).** A package-name/version
+**Tor package content — independently checked (T160/T177/T213).** A package-name/version
 manifest alone cannot detect same-version replacement. The upgraded Tor
-`0.4.9.13-1~d12.bookworm+1` also has reviewed amd64/arm64 `.deb` hashes in
+`0.4.9.14-1~d12.bookworm+1` also has reviewed amd64/arm64 `.deb` hashes in
 `sidecars/tor/tor-packages.sha256`. The build downloads into a private apt cache,
 checks the Tor artifact, resolves dependencies with only the Debian snapshot
 source enabled, and disables downloads during installation. Repository priorities
 alone do not isolate the source of same-version packages. Audit both
 the package-manifest comparison and that pre-install content check; the negative
 controls in `tests/contract/security-decisions/tor_package_integrity_test.sh`
-must reject substituted bytes. Ground future locks against signed metadata and
-actual packages as recorded in the dated T177 SECURITY-DECISIONS entry.
+must reject substituted bytes. T213 grounded both architecture artifacts in the
+same currently signed official metadata; only amd64 was built and runtime-checked,
+and package identity alone does not establish Tor behavior or route readiness.
+The native image identity, exact build-wrapper/cleanup outcomes and bounded
+package/torrc observation are recorded in `reviews/T213/README.md`.
+Ground future locks against signed metadata and actual packages as recorded in
+the dated T213 SECURITY-DECISIONS entry. The moving upstream index can still
+remove this pin; subsequent clean builds then fail closed until another reviewed
+manual promotion.
 
 **Expected variance — final image DIGEST is NOT byte-stable.** Two cold
 rebuilds of the same source commit produce different image IDs (config

@@ -16,7 +16,7 @@ import shutil
 import tempfile
 import sys
 
-version = "0.4.9.13-1~d12.bookworm+1"
+version = "0.4.9.14-1~d12.bookworm+1"
 root = Path.cwd()
 dockerfile = (root / "sidecars/tor/Dockerfile").read_text()
 commands = re.sub(r"\\\n\s*", " ", dockerfile)
@@ -24,7 +24,7 @@ installer = root / "sidecars/tor/install-tor.sh"
 pins = root / "sidecars/tor/tor-packages.sha256"
 errors = []
 if version not in commands:
-    errors.append("Tor security release 0.4.9.13 is not selected")
+    errors.append("Tor package version 0.4.9.14 is not selected")
 if re.search(r"apt-get install [^&\n]*\btor=", commands):
     errors.append("Tor is installed directly from mutable metadata without a checked local artifact")
 if f"/tmp/install-tor.sh {version} /tmp/tor-packages.sha256" not in commands:
@@ -174,5 +174,5 @@ else:
         assert record.exists(), "snapshot dependency selection did not reach checked installation"
         print(f"OK: {name} dependency control selected the Debian snapshot")
 
-print("OK: T160/T177 repository isolation, security version, checked local installation, amd64/arm64 and four rejection controls")
+print("OK: T160/T177 repository isolation, package version, checked local installation, amd64/arm64 and four rejection controls")
 PY

@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 35 |
-| in-progress | 0 |
+| pending | 34 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 202 |
@@ -46,13 +46,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 | T209 | Bind DP AppArmor to the running DP; assert observer hardenin | Foundation audit remediation | ✓ |  |
-| T213 | Restore fresh Tor builds with reviewed 0.4.9.14 package prom | Foundation dependency availability | ✓ |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T213 | Restore fresh Tor builds with reviewed 0.4.9.14 package prom | in-progress | ✓ | Foundation dependency availability |
 
 ---
 
