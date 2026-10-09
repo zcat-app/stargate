@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 34 |
+| pending | 35 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 201 |
 | deferred | 9 |
-| **total** | **244** |
+| **total** | **245** |
 
 ---
 
@@ -46,6 +46,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 | T209 | Bind DP AppArmor to the running DP; assert observer hardenin | Foundation audit remediation | ✓ |  |
+| T214 | Make delayed review-boundary controls deterministic | Foundation verification remediation | ✓ |  |
 
 ---
 
