@@ -11,6 +11,8 @@ import (
 	"net"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -386,6 +388,165 @@ func TestForwardSendsDomainTargetUnresolved(t *testing.T) {
 		t.Fatalf("upstream target = %q:%d, want verbatim host from %q", host, port, target)
 	}
 }
+
+// T070a / Constitution I: once the production inbound listener has emitted
+// SOCKS5 success, an upstream EOF ends the byte pipe. It must not be
+// reclassified into a second SOCKS reply or any replacement bytes.
+func TestCircuitDropMidstreamClosesWithoutSynthesizedBytes(t *testing.T) {
+	upstream, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("upstream listen: %v", err)
+	}
+	defer upstream.Close()
+
+	const payload = "opaque-upstream-frame\x00\xff"
+	var accepted atomic.Int32
+	serveDone := make(chan struct{})
+	go func() {
+		defer close(serveDone)
+		conn, err := upstream.Accept()
+		if err != nil {
+			return
+		}
+		accepted.Add(1)
+		defer conn.Close()
+		br := bufio.NewReader(conn)
+		var greeting [2]byte
+		if _, err := io.ReadFull(br, greeting[:]); err != nil {
+			return
+		}
+		methods := make([]byte, greeting[1])
+		if _, err := io.ReadFull(br, methods); err != nil {
+			return
+		}
+		if _, err := conn.Write([]byte{0x05, 0x02}); err != nil {
+			return
+		}
+		var authHeader [2]byte
+		if _, err := io.ReadFull(br, authHeader[:]); err != nil {
+			return
+		}
+		uname := make([]byte, authHeader[1])
+		if _, err := io.ReadFull(br, uname); err != nil {
+			return
+		}
+		var plen [1]byte
+		if _, err := io.ReadFull(br, plen[:]); err != nil {
+			return
+		}
+		passwd := make([]byte, plen[0])
+		if _, err := io.ReadFull(br, passwd); err != nil {
+			return
+		}
+		if _, err := conn.Write([]byte{0x01, 0x00}); err != nil {
+			return
+		}
+		var request [5]byte
+		if _, err := io.ReadFull(br, request[:]); err != nil || request[0] != 0x05 || request[3] != 0x03 {
+			return
+		}
+		domain := make([]byte, int(request[4])+2)
+		if _, err := io.ReadFull(br, domain); err != nil {
+			return
+		}
+		if _, err := conn.Write([]byte{0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); err != nil {
+			return
+		}
+		_, _ = io.WriteString(conn, payload)
+		_ = conn.Close()
+		for {
+			conn, err = upstream.Accept()
+			if err != nil {
+				return
+			}
+			accepted.Add(1)
+			_ = conn.Close()
+		}
+	}()
+
+	f := New(upstream.Addr().String(), &stubCounter{})
+	deps := &listener.Deps{
+		Auth:    acceptEveryPassword{},
+		Forward: f,
+		Audit:   testAudit{},
+	}
+	inbound, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("inbound listen: %v", err)
+	}
+	defer inbound.Close()
+	go func() {
+		conn, err := inbound.Accept()
+		if err == nil {
+			listener.HandleConn(conn, deps)
+		}
+	}()
+
+	client, err := net.DialTimeout("tcp", inbound.Addr().String(), time.Second)
+	if err != nil {
+		t.Fatalf("client dial: %v", err)
+	}
+	defer client.Close()
+	if err := client.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatalf("client deadline: %v", err)
+	}
+	if _, err := client.Write([]byte{0x05, 0x01, 0x02}); err != nil {
+		t.Fatalf("write SOCKS greeting: %v", err)
+	}
+	var methodReply [2]byte
+	if _, err := io.ReadFull(client, methodReply[:]); err != nil || methodReply != [2]byte{0x05, 0x02} {
+		t.Fatalf("SOCKS method reply = %x, err=%v", methodReply, err)
+	}
+	uname, password, host := []byte("sg1:test-partition"), []byte("test-bearer"), []byte("example.invalid")
+	auth := []byte{0x01, byte(len(uname))}
+	auth = append(auth, uname...)
+	auth = append(auth, byte(len(password)))
+	auth = append(auth, password...)
+	if _, err := client.Write(auth); err != nil {
+		t.Fatalf("write SOCKS auth: %v", err)
+	}
+	var authReply [2]byte
+	if _, err := io.ReadFull(client, authReply[:]); err != nil || authReply != [2]byte{0x01, 0x00} {
+		t.Fatalf("SOCKS auth reply = %x, err=%v", authReply, err)
+	}
+	request := []byte{0x05, 0x01, 0x00, 0x03, byte(len(host))}
+	request = append(request, host...)
+	request = append(request, 0x01, 0xbb)
+	if _, err := client.Write(request); err != nil {
+		t.Fatalf("write SOCKS CONNECT: %v", err)
+	}
+	var gotSuccessReply [10]byte
+	if _, err := io.ReadFull(client, gotSuccessReply[:]); err != nil || gotSuccessReply != successReply {
+		t.Fatalf("SOCKS success reply = %x, err=%v", gotSuccessReply, err)
+	}
+	got, readErr := io.ReadAll(client)
+	if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, syscall.ECONNRESET) {
+		t.Fatalf("client tunnel did not end with EOF/RST: %v", readErr)
+	}
+	if !bytes.Equal(got, []byte(payload)) {
+		t.Fatalf("post-success client bytes length=%d, want exactly the %d upstream payload bytes", len(got), len(payload))
+	}
+	if err := upstream.(*net.TCPListener).SetDeadline(time.Now().Add(100 * time.Millisecond)); err != nil {
+		t.Fatalf("bound the upstream retry observation: %v", err)
+	}
+	select {
+	case <-serveDone:
+	case <-time.After(time.Second):
+		t.Fatal("upstream response server did not finish after closing its stream")
+	}
+	time.Sleep(100 * time.Millisecond)
+	if got := accepted.Load(); got != 1 {
+		t.Fatalf("upstream TCP accepts = %d, want exactly one", got)
+	}
+}
+
+type acceptEveryPassword struct{}
+
+func (acceptEveryPassword) VerifyPassword([]byte) bool { return true }
+
+type testAudit struct{}
+
+func (testAudit) AuthPassedRequest() {}
 
 // T162 / Constitution I and III: changing the transport to AF_UNIX must not
 // change the SOCKS5h target or send the inbound bearer to Tor.

@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -39,6 +40,174 @@ func newTestConn(replies string) (*ControlPort, *bytes.Buffer) {
 		r: bufio.NewReader(strings.NewReader(replies)),
 	}
 	return p, sent
+}
+
+type postFlushCommander interface {
+	CommandContextAfterFlush(context.Context, string, func(time.Time) error) ([]string, error)
+}
+
+func TestControlPortPostFlushHook(t *testing.T) {
+	p, sent := newTestConn("250 OK\r\n")
+	readProbe := &controlReadProbe{reader: strings.NewReader("250 OK\r\n")}
+	p.r = bufio.NewReader(readProbe)
+	commander, ok := any(p).(postFlushCommander)
+	if !ok {
+		t.Fatal("ControlPort does not implement CommandContextAfterFlush")
+	}
+	t.Run("AfterFlushBeforeReplyExactlyOnce", func(t *testing.T) {
+		calls := 0
+		lines, err := commander.CommandContextAfterFlush(context.Background(), "GETINFO version", func(at time.Time) error {
+			calls++
+			if at.IsZero() {
+				t.Error("post-flush hook received zero timestamp")
+			}
+			if got := sent.String(); got != "GETINFO version\r\n" {
+				t.Errorf("post-flush hook saw wire bytes %q", got)
+			}
+			if readProbe.started {
+				t.Error("reply reading started before the post-flush hook")
+			}
+			return nil
+		})
+		if err != nil || strings.Join(lines, "\x00") != "OK" {
+			t.Fatalf("CommandContextAfterFlush = %q, %v; want [OK], nil", lines, err)
+		}
+		if calls != 1 {
+			t.Fatalf("post-flush hook called %d times, want exactly once", calls)
+		}
+		if !readProbe.started {
+			t.Fatal("reply reading did not start after the post-flush hook")
+		}
+	})
+	t.Run("FlushFailureDoesNotCallHook", func(t *testing.T) {
+		p := &ControlPort{w: bufio.NewWriter(controlFailWriter{}), r: bufio.NewReader(strings.NewReader("250 OK\r\n"))}
+		calls := 0
+		_, err := commanderFor(t, p).CommandContextAfterFlush(context.Background(), "GETINFO version", func(time.Time) error {
+			calls++
+			return nil
+		})
+		if err == nil || calls != 0 {
+			t.Fatalf("failed flush returned %v and invoked hook %d times; want error, zero calls", err, calls)
+		}
+	})
+	t.Run("WriteStringFailureDoesNotCallHook", func(t *testing.T) {
+		p := &ControlPort{w: bufio.NewWriter(controlFailWriter{}), r: bufio.NewReader(strings.NewReader("250 OK\r\n"))}
+		if _, err := p.w.WriteString("seed"); err != nil {
+			t.Fatalf("buffer synthetic payload: %v", err)
+		}
+		if err := p.w.Flush(); err == nil { // latch the writer error so the next WriteString itself fails
+			t.Fatal("synthetic preflush unexpectedly succeeded")
+		}
+		calls := 0
+		_, err := commanderFor(t, p).CommandContextAfterFlush(context.Background(), "GETINFO version", func(time.Time) error {
+			calls++
+			return nil
+		})
+		if err == nil || calls != 0 {
+			t.Fatalf("failed WriteString returned %v and invoked hook %d times; want error, zero calls", err, calls)
+		}
+	})
+	t.Run("PreCanceledContextDoesNotCallHook", func(t *testing.T) {
+		p, sent := newTestConn("250 OK\r\n")
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		calls := 0
+		_, err := commanderFor(t, p).CommandContextAfterFlush(ctx, "GETINFO version", func(time.Time) error {
+			calls++
+			return nil
+		})
+		if !errors.Is(err, context.Canceled) || calls != 0 || sent.Len() != 0 {
+			t.Fatalf("pre-canceled operation returned %v, calls=%d, wrote=%q", err, calls, sent.String())
+		}
+	})
+	t.Run("CallbackErrorDoesNotReadReply", func(t *testing.T) {
+		p, sent := newTestConn("250 OK\r\n")
+		wantErr := errors.New("test hook failure")
+		calls := 0
+		_, err := commanderFor(t, p).CommandContextAfterFlush(context.Background(), "GETINFO version", func(time.Time) error {
+			calls++
+			return wantErr
+		})
+		if !errors.Is(err, wantErr) || calls != 1 || sent.String() != "GETINFO version\r\n" || p.r.Buffered() != 0 {
+			t.Fatalf("callback failure returned %v, calls=%d, wire=%q, buffered reply=%d", err, calls, sent.String(), p.r.Buffered())
+		}
+	})
+	t.Run("LiveCallbackErrorDiscardsSession", func(t *testing.T) {
+		cfg := t210Fixture(t, "blocked-read")
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		p, err := Connect(ctx, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer p.Close()
+		wantErr := errors.New("test hook failure")
+		_, err = commanderFor(t, p).CommandContextAfterFlush(ctx, "GETINFO version", func(time.Time) error {
+			return wantErr
+		})
+		if !errors.Is(err, wantErr) {
+			t.Fatalf("callback failure = %v, want wrapped hook error", err)
+		}
+		if p.cmd.ProcessState == nil {
+			t.Fatal("callback failure left the control process unreaped")
+		}
+	})
+	t.Run("LiveHookRunsInsideSessionOperation", func(t *testing.T) {
+		cfg := t210Fixture(t, "control")
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		p, err := Connect(ctx, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer p.Close()
+		calls := 0
+		lines, err := commanderFor(t, p).CommandContextAfterFlush(ctx, "GETINFO version", func(at time.Time) error {
+			calls++
+			if at.IsZero() {
+				t.Error("live post-flush hook received zero timestamp")
+			}
+			return nil
+		})
+		if err != nil || strings.Join(lines, "\x00") != "OK" || calls != 1 {
+			t.Fatalf("live post-flush command = %q, %v, hook calls=%d", lines, err, calls)
+		}
+	})
+	t.Run("NilHookAndExistingAPIs", func(t *testing.T) {
+		p, sent := newTestConn("250 OK\r\n250 OK\r\n")
+		if lines, err := p.CommandContext(context.Background(), "GETINFO version"); err != nil || strings.Join(lines, "\x00") != "OK" {
+			t.Fatalf("CommandContext compatibility = %q, %v", lines, err)
+		}
+		if lines, err := p.Command("GETINFO version"); err != nil || strings.Join(lines, "\x00") != "OK" {
+			t.Fatalf("Command compatibility = %q, %v", lines, err)
+		}
+		if got := sent.String(); got != "GETINFO version\r\nGETINFO version\r\n" {
+			t.Fatalf("existing API wire bytes = %q", got)
+		}
+	})
+}
+
+type controlFailWriter struct{}
+
+func (controlFailWriter) Write([]byte) (int, error) { return 0, errors.New("synthetic flush failure") }
+
+type controlReadProbe struct {
+	reader  io.Reader
+	started bool
+}
+
+func (p *controlReadProbe) Read(b []byte) (int, error) {
+	p.started = true
+	return p.reader.Read(b)
+}
+
+func commanderFor(t *testing.T, p *ControlPort) postFlushCommander {
+	t.Helper()
+	commander, ok := any(p).(postFlushCommander)
+	if !ok {
+		t.Fatal("ControlPort does not implement CommandContextAfterFlush")
+	}
+	return commander
 }
 
 func TestControlSessionUsesTorPrivateUnixSocket(t *testing.T) {

@@ -427,8 +427,19 @@ func (p *ControlPort) Command(command string) ([]string, error) {
 }
 
 func (p *ControlPort) CommandContext(ctx context.Context, command string) ([]string, error) {
+	return p.CommandContextAfterFlush(ctx, command, nil)
+}
+
+// CommandContextAfterFlush sends one control command and invokes hook exactly
+// once after its bytes have been flushed to the local transport and immediately
+// before reading the reply. For a live ControlPort this is the local Docker-exec
+// stdin pipe; it does not establish that Tor received or acted on the command.
+// The hook runs synchronously inside the serialized session operation, so it
+// must be short and must not call back into this ControlPort. If it returns an
+// error, the session is discarded without reading a reply.
+func (p *ControlPort) CommandContextAfterFlush(ctx context.Context, command string, hook func(time.Time) error) ([]string, error) {
 	var lines []string
-	fn := func() error { var err error; lines, err = p.command(command); return err }
+	fn := func() error { var err error; lines, err = p.commandAfterFlush(command, hook); return err }
 	var err error
 	if p.session != nil {
 		err = p.session.Operation(ctx, fn)
@@ -439,6 +450,10 @@ func (p *ControlPort) CommandContext(ctx context.Context, command string) ([]str
 }
 
 func (p *ControlPort) command(command string) ([]string, error) {
+	return p.commandAfterFlush(command, nil)
+}
+
+func (p *ControlPort) commandAfterFlush(command string, hook func(time.Time) error) ([]string, error) {
 	if strings.ContainsAny(command, "\r\n") {
 		return nil, errors.New("control command contains a line break")
 	}
@@ -447,6 +462,11 @@ func (p *ControlPort) command(command string) ([]string, error) {
 	}
 	if err := p.w.Flush(); err != nil {
 		return nil, fmt.Errorf("control write: %w", err)
+	}
+	if hook != nil {
+		if err := hook(time.Now()); err != nil {
+			return nil, err
+		}
 	}
 	return p.readReply()
 }
