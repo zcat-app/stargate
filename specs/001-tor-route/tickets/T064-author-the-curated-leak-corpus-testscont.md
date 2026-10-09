@@ -1,7 +1,7 @@
 ---
 id: T064
 title: 'Author the curated leak corpus for shared error scans'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: "2026-10-09"
 source: tasks.md#T064
@@ -21,7 +21,7 @@ spec_refs:
 decision_refs:
   - 'T063 completed synthetic corpus at tests/integration/synthetic_onion_corpus.txt; copy entries byte-for-byte'
   - 'T172 selected acceptance: shared scanner input for SOCKS failure replies, logs, and renderer-only HTTP format; runtime values injected by tests'
-reviews: {}
+reviews: { round: 1, date: 2026-10-09, verdict: APPROVE, findings: [], diff_stats: "1 file, 112 lines" }
 overrides: []
 aborted_attempts: []
 reopens: []

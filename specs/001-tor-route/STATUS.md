@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 33 |
-| in-progress | 2 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 203 |
+| done | 204 |
 | deferred | 8 |
 | **total** | **246** |
 
@@ -29,7 +29,13 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
+| T065 | Test SOCKS5 ROUTE_DOWN failure reply | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
+| T066 | Test SOCKS5 ROUTE_REFUSED failure reply | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
+| T067 | Test SOCKS5 ROUTE_TIMEOUT failure reply | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
+| T067a | Contract test for SOCKS5 request-phase failure replies (FR-0 | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T067b | Contract test for the auth-pass + route-failure counter-incr | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
+| T070 | Test integrated SOCKS5 Tor failure response | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
+| T070a | Integration test for mid-request Tor circuit drop (Principle | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T109 | Cross-host JVM reproducibility assertion at release cadence | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T110 | Hermetic digest-agreement assertion for alpine:3.20 pins | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
@@ -52,7 +58,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
-| T064 | Author the curated leak corpus for shared error scans | in-progress | ✓ | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |
 | T070b | Test WatchEvents failure transitions remain advisory | in-progress | ✓ | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |
 
 ---
@@ -74,7 +79,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_203 ticket(s) done._
+_204 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -157,6 +162,7 @@ _203 ticket(s) done._
 - T061 — Integration test in `tests/integration/circuit_isolation_corpus_test.g
 - T062 — Author `tests/contract/tor/control_port.go`
 - T063 — Author `tests/integration/synthetic_onion_corpus.txt`
+- T064 — Author the curated leak corpus for shared error scans
 - T068a — Contract test for the **response-header invariants** of the privacy-sa
 - T074 — Extend `control-plane/core/src/main/java/.../SidecarMonitor.java` (fro
 - T075b — Author `tests/reproducibility/extension_test.sh`
