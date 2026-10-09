@@ -1,7 +1,7 @@
 ---
 id: T066
 title: "Test SOCKS5 ROUTE_REFUSED failure reply"
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: "2026-10-09"
 source: tasks.md#T066
@@ -21,7 +21,7 @@ spec_refs:
 decision_refs:
   - 'T172 selected acceptance: a sidecar SOCKS refusal maps to fixed REP 0x04 without upstream reason text'
   - 'T064: static leak corpus is the shared source; per-run token and destination are added in memory'
-reviews: {}
+reviews: { round: 2, date: 2026-10-09, verdict: APPROVE, findings: 0, diff_stats: "1 Go test file" } # Astra and Luna approved after round-1 fixes.
 overrides: []
 aborted_attempts: []
 reopens: []
