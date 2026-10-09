@@ -1,7 +1,7 @@
 ---
 id: T214
 title: "Make delayed review-boundary controls deterministic"
-status: in-progress
+status: done
 created: 2026-10-09
 last_updated: 2026-10-09
 source: "T213 round-2 verification failure; focused evidence in target/runs/T213.verify.log and .scratch/tmp/T213/review-task-focused-repeat.transcript.txt"
@@ -31,7 +31,7 @@ decision_refs:
   - "T211 acceptance: retain delayed s13 normal/mutant controls and prove bounded cleanup"
   - "T213 verification RED: target/runs/T213.verify.log, review_task_test.sh"
 remediates: T211
-reviews: {}
+reviews: { round: 2, date: 2026-10-09, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
