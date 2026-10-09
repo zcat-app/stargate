@@ -1,13 +1,15 @@
 ---
 id: T212
 title: "Close Docker verification budgets, history and CI inputs"
-status: pending
+status: deferred
 created: 2026-10-06
-last_updated: 2026-10-06
+last_updated: 2026-10-09
 source: "T202 guest15 verification stop; reviewed repair plan final SHA256 cd5fc2e88e255bab31bfe34d34cc5e01f8200244d29d91810f588d0d190b637c; maintainer authorized prerequisite implementation"
 phase: "Foundation verification remediation"
 story: "-"
-blocked_by: [T211]
+blocked_by: [T211, T213]
+deferred_on: T213
+deferred_reason: blocked-on-new-ticket
 parallel: false
 files_budget: 10
 files_scope:
@@ -41,6 +43,8 @@ spec_refs:
 decision_refs:
   - "Final repair plan §5 R2b; final-document hash above is distinct from the two v3 READY advisory reports"
   - 'Maintainer: "ok so if you have a plan you can be again orchestrator of the implementation"; defer/prerequisite route authorized'
+  - "Maintainer authorization 2026-10-09: T213 plan v2 SHA256 5a04c840e8a213274e1cba09085b7337e2608cf21527a3fe3281dbe612761d31 and frozen ticket SHA256 774ab8da6e0f479584c27bcf62f3ee79acf1cb72051dc0946198504f3226b0a3"
+  - "Approved lifecycle clarification: after T213 delivery, metadata-only reopen commit precedes a fresh driver-owned T212 START; this supersedes the earlier original-START transfer for the reopened attempt only. Preserve old evidence as history; restore original tests-first JSON before new RED."
 reviews: {}
 overrides: []
 aborted_attempts: []

@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-10-08
+**Last updated:** 2026-10-09
 
 ---
 
@@ -18,8 +18,8 @@
 | in-review | 0 |
 | escalated | 0 |
 | done | 201 |
-| deferred | 7 |
-| **total** | **243** |
+| deferred | 8 |
+| **total** | **244** |
 
 ---
 
@@ -46,7 +46,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 | T209 | Bind DP AppArmor to the running DP; assert observer hardenin | Foundation audit remediation | ✓ |  |
-| T212 | Close Docker verification budgets, history and CI inputs | Foundation verification remediation | ✓ |  |
+| T213 | Restore fresh Tor builds with reviewed 0.4.9.14 package prom | Foundation dependency availability | ✓ |  |
 
 ---
 
@@ -67,6 +67,7 @@ _(nothing in flight)_
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
 | T202 | Add a scoped host-direct live runner and fresh VM overlays | blocked-on-new-ticket | T212 |
+| T212 | Close Docker verification budgets, history and CI inputs | blocked-on-new-ticket | T213 |
 
 ---
 
