@@ -68,16 +68,23 @@ type fakeEventsServer struct {
 // test-initiated close, or stream-context cancel); closeSig lets the test
 // end the stream from the server side (row 3's disconnect scenario).
 type controlledStream struct {
-	push     chan *grpcpb.SidecarEvent
+	push     chan eventDelivery
 	done     chan struct{}
 	closeSig chan struct{}
+}
+
+// eventDelivery lets the test observe completion of the fake server's
+// stream.Send; WatchEvents has no application-level acknowledgment.
+type eventDelivery struct {
+	event *grpcpb.SidecarEvent
+	sent  chan error
 }
 
 func (f *fakeEventsServer) WatchEvents(_ *grpcpb.WatchEventsRequest, stream grpcpb.Events_WatchEventsServer) error {
 	f.mu.Lock()
 	f.dials++
 	cs := &controlledStream{
-		push:     make(chan *grpcpb.SidecarEvent, 16),
+		push:     make(chan eventDelivery, 16),
 		done:     make(chan struct{}),
 		closeSig: make(chan struct{}),
 	}
@@ -87,8 +94,10 @@ func (f *fakeEventsServer) WatchEvents(_ *grpcpb.WatchEventsRequest, stream grpc
 	defer close(cs.done)
 	for {
 		select {
-		case ev := <-cs.push:
-			if err := stream.Send(ev); err != nil {
+		case delivery := <-cs.push:
+			err := stream.Send(delivery.event)
+			delivery.sent <- err
+			if err != nil {
 				return err
 			}
 		case <-cs.closeSig:
@@ -122,11 +131,31 @@ func (f *fakeEventsServer) send(ev *grpcpb.SidecarEvent) error {
 	if cs == nil {
 		return errors.New("no active WatchEvents stream")
 	}
+	return f.sendTo(cs, ev)
+}
+
+// sendTo waits until stream.Send completes, proving the event entered the
+// stream before it is closed. The client must receive prior messages before
+// it can observe EOF and reconnect, which orders consumption before probes.
+func (f *fakeEventsServer) sendTo(cs *controlledStream, ev *grpcpb.SidecarEvent) error {
+	delivery := eventDelivery{event: ev, sent: make(chan error, 1)}
 	select {
-	case cs.push <- ev:
-		return nil
+	case cs.push <- delivery:
 	case <-cs.done:
 		return errors.New("stream already ended")
+	}
+	select {
+	case err := <-delivery.sent:
+		return err
+	case <-cs.done:
+		select {
+		case err := <-delivery.sent:
+			return err
+		default:
+			return errors.New("stream ended before event delivery was acknowledged")
+		}
+	case <-time.After(10 * time.Second):
+		return errors.New("timed out waiting for server stream.Send acknowledgment")
 	}
 }
 
@@ -134,7 +163,10 @@ func (f *fakeEventsServer) send(ev *grpcpb.SidecarEvent) error {
 // disconnect scenario). Safe to call multiple times; a no-op on streams
 // already closed.
 func (f *fakeEventsServer) closeFromServer() {
-	cs := f.latestStream()
+	f.closeStream(f.latestStream())
+}
+
+func (f *fakeEventsServer) closeStream(cs *controlledStream) {
 	if cs == nil {
 		return
 	}
@@ -308,19 +340,38 @@ func (h *dpHarness) socks5ConnectReply(t *testing.T, plaintext string) []byte {
 	return rep
 }
 
-// assertForwards probes the SOCKS5 request phase and asserts the reply is
-// a forward success (REP != 0x03) — i.e. the DP dialled the upstream and
-// the upstream accepted. A ROUTE_DOWN (0x03) here means either the
-// upstream was unreachable OR (under the pre-T090 design) an admission
-// gate short-circuited the dial. Post-T090 there is no admission gate
-// (data-model.md §2; Principle II; sol-review B3), so with a reachable
-// fake upstream a 0x03 reply is a FAIL: the DP did not attempt the dial.
+// assertForwards probes the SOCKS5 request phase and asserts exact success
+// (REP == 0x00). The reachable fake upstream must accept each dial.
 func assertForwards(t *testing.T, h *dpHarness, plaintext, why string) {
 	t.Helper()
 	rep := h.socks5ConnectReply(t, plaintext)
-	if len(rep) < 2 || rep[1] == 0x03 {
-		t.Fatalf("forward reply REP=0x03 (ROUTE_DOWN) %s — admission is gated on a SidecarEvent (want forward success; Principle II; data-model.md §2; T090). reply=% x\njournal:\n%s", why, rep, h.journal.String())
+	if len(rep) < 2 || rep[1] != 0x00 {
+		got := byte(0xff)
+		if len(rep) >= 2 {
+			got = rep[1]
+		}
+		t.Fatalf("forward reply REP=%#02x %s — reachable fake upstream must produce SOCKS5 success 0x00 (Principle II; data-model.md §2; T090). reply=% x\njournal:\n%s", got, why, rep, h.journal.String())
 	}
+}
+
+// sendFailureEventAndReconnect establishes event-consumption order before a
+// forwarding probe: the server acknowledges stream.Send, closes that stream,
+// and waits for the DP's next WatchEvents dial. The client cannot observe EOF
+// before receiving prior messages on the same ordered stream.
+func sendFailureEventAndReconnect(t *testing.T, h *dpHarness, fakeCP *fakeEventsServer, ev *grpcpb.SidecarEvent, name string) {
+	t.Helper()
+	cs := fakeCP.latestStream()
+	if cs == nil {
+		t.Fatalf("no active WatchEvents stream to send %s", name)
+	}
+	priorDials := fakeCP.dialCount()
+	if err := fakeCP.sendTo(cs, ev); err != nil {
+		t.Fatalf("send %s: %v", name, err)
+	}
+	fakeCP.closeStream(cs)
+	waitFor(t, "DP WatchEvents reconnect after "+name, 35*time.Second, h.journal, func() bool {
+		return fakeCP.dialCount() > priorDials
+	})
 }
 
 // --- shared helper (reused by T070b sub-test (e)) -------------------------
@@ -342,13 +393,12 @@ func assertDetailRejected(t *testing.T, h *dpHarness, fakeCP *fakeEventsServer, 
 		Kind:    grpcpb.EventKind_EVENT_KIND_STARTED,
 		Detail:  detail,
 	}
-	// Send directly to the CAPTURED stream's push channel, not via
-	// fakeCP.send (which re-resolves latestStream internally and could
-	// race with a reconnect between the capture above and the send —
-	// relevant for T070b's failure-transition reuse where reconnects are
-	// part of the scenario under test).
+	// Enqueue on the captured stream so a concurrent reconnect cannot redirect
+	// the event. Do not wait for stream.Send: the intended rejection cancels
+	// this client stream, so its send result can race with that cancellation.
+	delivery := eventDelivery{event: ev, sent: make(chan error, 1)}
 	select {
-	case cs.push <- ev:
+	case cs.push <- delivery:
 	case <-cs.done:
 		t.Fatalf("stream ended before forbidden-detail event could be sent")
 	}
@@ -451,7 +501,7 @@ func TestWatchEvents(t *testing.T) {
 		}
 		assertForwards(t, h, plaintext, "after HEALTHY (advisory; admission unchanged)")
 
-		// Send STOPPED then CRASHED with the upstream STILL REACHABLE.
+		// Send the failure-state events with the upstream STILL REACHABLE.
 		// Admission MUST be invariant (Principle II; data-model.md §2
 		// "Advisory consumption": events MUST NOT short-circuit the
 		// dial). A stale or forged failure-event cannot suppress a dial
@@ -459,22 +509,31 @@ func TestWatchEvents(t *testing.T) {
 		// truth. This leg is the regression gate against re-introducing
 		// a CP-driven admission gate under the "short-circuit on
 		// STOPPED/CRASHED" shape (stargate-redteam 20260712-001).
-		eventStopped := &grpcpb.SidecarEvent{
+		stale := timestamppb.New(time.Now().Add(-2 * time.Hour))
+		eventUnhealthy := &grpcpb.SidecarEvent{
 			Ts: timestamppb.Now(), Sidecar: "tor",
+			Kind: grpcpb.EventKind_EVENT_KIND_UNHEALTHY, Detail: "healthcheck_fail",
+		}
+		eventStopped := &grpcpb.SidecarEvent{
+			Ts: stale, Sidecar: "tor",
 			Kind: grpcpb.EventKind_EVENT_KIND_STOPPED, Detail: "container_exit",
 		}
 		eventCrashed := &grpcpb.SidecarEvent{
-			Ts: timestamppb.Now(), Sidecar: "tor",
+			Ts: stale, Sidecar: "tor",
 			Kind: grpcpb.EventKind_EVENT_KIND_CRASHED, Detail: "container_exit",
 		}
-		if err := fakeCP.send(eventStopped); err != nil {
-			t.Fatalf("send STOPPED: %v", err)
+		eventRestarted := &grpcpb.SidecarEvent{
+			Ts: stale, Sidecar: "tor",
+			Kind: grpcpb.EventKind_EVENT_KIND_RESTARTED, Detail: "container_start",
 		}
+		sendFailureEventAndReconnect(t, h, fakeCP, eventUnhealthy, "UNHEALTHY")
+		assertForwards(t, h, plaintext, "after UNHEALTHY with reachable upstream (advisory; admission unchanged)")
+		sendFailureEventAndReconnect(t, h, fakeCP, eventStopped, "stale STOPPED")
 		assertForwards(t, h, plaintext, "after STOPPED with reachable upstream (advisory; admission unchanged)")
-		if err := fakeCP.send(eventCrashed); err != nil {
-			t.Fatalf("send CRASHED: %v", err)
-		}
+		sendFailureEventAndReconnect(t, h, fakeCP, eventCrashed, "stale CRASHED")
 		assertForwards(t, h, plaintext, "after CRASHED with reachable upstream (advisory; admission unchanged)")
+		sendFailureEventAndReconnect(t, h, fakeCP, eventRestarted, "stale RESTARTED")
+		assertForwards(t, h, plaintext, "after stale RESTARTED with reachable upstream (advisory; admission unchanged)")
 
 		assertNoSecretLeak(t, h, tok.GetVerifier(), []byte(plaintext))
 	})

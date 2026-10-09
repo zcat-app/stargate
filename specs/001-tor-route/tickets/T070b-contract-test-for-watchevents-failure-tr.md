@@ -1,7 +1,7 @@
 ---
 id: T070b
 title: 'Test WatchEvents failure transitions remain advisory'
-status: in-progress
+status: done
 created: 2026-07-04
 last_updated: "2026-10-09"
 source: tasks.md#T070b
@@ -20,7 +20,7 @@ spec_refs:
 decision_refs:
   - 'T172 selected acceptance: keep WatchEvents advisory; stale events and CP disconnect cannot suppress an authenticated SOCKS5 dial'
   - 'T090: sidecar events never gate admission; upstream dial is the ground truth'
-reviews: { round: 1, date: 2026-10-09, verdict: REWORK, findings: "Astra: require REP=0; synchronize event consumption before probes. Luna: synchronize event delivery before probes.", diff_stats: "1 file" }
+reviews: { round: 2, date: 2026-10-09, verdict: APPROVE, findings: [], diff_stats: "1 Go test file" }
 overrides: []
 aborted_attempts: []
 reopens: []
