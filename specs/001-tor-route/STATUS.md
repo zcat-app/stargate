@@ -17,9 +17,9 @@
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 210 |
+| done | 211 |
 | deferred | 8 |
-| **total** | **246** |
+| **total** | **247** |
 
 ---
 
@@ -74,7 +74,7 @@ _(nothing in flight)_
 
 ## Done
 
-_210 ticket(s) done._
+_211 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -286,3 +286,4 @@ _210 ticket(s) done._
 - T211 — Repair workflow fixture context and owned child cleanup
 - T213 — Restore fresh Tor builds with reviewed 0.4.9.14 package promotion
 - T214 — Make delayed review-boundary controls deterministic
+- T216 — Exclude generated files from the root Docker context
