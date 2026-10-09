@@ -53,7 +53,7 @@ clarity_check: {}
 
 # T213: Restore fresh Tor builds with reviewed 0.4.9.14 package promotion
 
-## Context and analysis
+## Context
 
 T212's actual cold Docker-tier T162 build fetched genuine Tor InRelease and amd64
 Packages metadata, then failed because the selected0.4.9.13 package is no longer
@@ -126,6 +126,44 @@ require meaningful tests-first plus native GLM/Astra implementation approval.
    complement; this ticket does not claim those integrated results or repeat the
    previously delivered T210 standalones separately.
 
+## Analysis
+
+- **Must hold:**
+  - Only the selected Tor artifact/version changes; both architecture artifacts
+    are independently bound to currently signed official metadata and the
+    unchanged Tor signing identity (FR-015; Constitution IV).
+  - Existing source isolation, exact local artifact hash checks,
+    `--no-download` installation, dependency closure, non-root runtime,
+    diagnostics policy and torrc invariants remain intact (T160/T177/T191;
+    `contracts/torrc.md`; Constitution V/VI).
+  - Build and runtime claims identify their exact inputs and limits; amd64
+    native runtime evidence does not imply arm64 runtime qualification
+    (Constitution V/VI).
+  - The changed integrity expectation fails before implementation and passes
+    after it; both matching independent reviewers approve the final candidate
+    (Constitution VII/VIII).
+- **Gated:**
+  - `tor_package_integrity_test.sh` covers both architecture pins, same-version
+    substitution, missing pin, failed download, unsupported architecture and
+    hostile dependency metadata; `tor_build_inputs_test.sh` and
+    `tor_entry_test.sh` protect repository isolation, installer and runtime
+    identity controls.
+  - `scripts/verify.sh` runs the shell contract suite and Go torrc contracts;
+    the bounded native build/runtime observation separately checks installed
+    package identity, the complete amd64 closure, torrc bytes and owned cleanup.
+- **Residue:**
+  - Upstream can remove or replace these artifacts after verification. The
+    ticket therefore records dated signed-index and package hashes and retains
+    fail-closed behavior (Acceptance #2 and #5); future clean builds still
+    require a reviewed refresh.
+  - The arm64 artifact is authenticated against its index but is not built or
+    run here (Acceptance #4). Its runtime behavior remains unmeasured and must
+    not be inferred from amd64 evidence.
+  - Native build/runtime and system cleanup evidence is environment-specific;
+    exact candidate, image, package closure and cleanup receipts must remain
+    bound to the recorded run, with failures preserved rather than relabeled
+    (Acceptance #4 and #6).
+
 ## Out of scope
 
 No automatic version promotion, security-fix assertion without evidence, dependency
@@ -136,7 +174,8 @@ new opt-out/SKIP or reused local-cache claim of clean-CI success. Stop on drift.
 
 ## Filing and resumed batch
 
-This is a PROPOSED ticket until explicit authorization. Filing also records T212's
+This ticket is filed and authorized under the plan-v2 and frozen-proposal
+decisions recorded in its frontmatter. Filing also records T212's
 new prerequisite after exact staged/unstaged preservation and replay proof. T212's
 first attempt, START, RED, successful109cold rows, failedT162 and cleanup evidence
 remain historical. After T213 delivery, T212 is manually reopened/reset under the
