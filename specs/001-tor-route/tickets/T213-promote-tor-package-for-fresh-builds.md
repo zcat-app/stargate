@@ -1,7 +1,7 @@
 ---
 id: T213
 title: "Restore fresh Tor builds with reviewed 0.4.9.14 package promotion"
-status: in-progress
+status: done
 created: 2026-10-09
 last_updated: 2026-10-09
 source: "Maintainer-authorized prerequisite: T212 cold T162 failed after genuine Tor index retrieval; pinned 0.4.9.13 removed upstream. Authorization: 2026-10-09, plan v2 and frozen T213 proposal hashes recorded below."
@@ -43,7 +43,7 @@ decision_refs:
   - "SECURITY-DECISIONS.md: removed Tor artifacts fail closed and require manual refresh; T160/T177"
   - "Maintainer authorization 2026-10-09: plan v2 SHA256 5a04c840e8a213274e1cba09085b7337e2608cf21527a3fe3281dbe612761d31; frozen proposal SHA256 774ab8da6e0f479584c27bcf62f3ee79acf1cb72051dc0946198504f3226b0a3"
   - "Independent Astra plan evaluation v2 SHA256 de831c443860f71b9b11f11f48015ae56f0f48feb8fb0de034b1aa260c93a73c: READY, no must-fix; plan review only, not implementation approval"
-reviews: {}
+reviews: { round: 2, date: 2026-10-09, verdict: APPROVE }
 overrides: []
 aborted_attempts: [{ date: 2026-10-09, round: 2, reason: "run-task --reset", history: target/runs/T213.review-history }]
 reopens: [{ date: 2026-10-09, blocker: T214, resolved_by: 81f10aaedb5710b42745bb2485457c4081fb33cd, prior_deferral_commit: 83e247b0e5b35bcd9b85e638eeb567f955e3cef3, prior_deferral_reason: blocked-on-new-ticket }]

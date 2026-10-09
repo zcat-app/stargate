@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 34 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 202 |
+| done | 203 |
 | deferred | 8 |
 | **total** | **245** |
 
@@ -51,9 +51,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T213 | Restore fresh Tor builds with reviewed 0.4.9.14 package prom | in-progress | ✓ | Foundation dependency availability |
+_(nothing in flight)_
 
 ---
 
@@ -74,7 +72,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_202 ticket(s) done._
+_203 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -277,4 +275,5 @@ _202 ticket(s) done._
 - T208 — Raise the Tor upstream deadline; align the onion-load gate
 - T210 — Repair Tor verification transport and I/O deadlines
 - T211 — Repair workflow fixture context and owned child cleanup
+- T213 — Restore fresh Tor builds with reviewed 0.4.9.14 package promotion
 - T214 — Make delayed review-boundary controls deterministic
