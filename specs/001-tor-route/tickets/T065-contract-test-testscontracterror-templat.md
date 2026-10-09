@@ -1,21 +1,26 @@
 ---
 id: T065
 title: "Test SOCKS5 ROUTE_DOWN failure reply"
-status: pending
+status: in-progress
 created: 2026-07-04
-last_updated: "2026-09-12"
+last_updated: "2026-10-09"
 source: tasks.md#T065
 phase: "5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3)"
 story: 'US3'
 blocked_by: ["T009", "T155", "T064", "T156"]
 parallel: true
-files_budget: 8   # TODO: tighten per task
+files_budget: 3   # route_down_test.go, this ticket, generated STATUS
 privacy_critical: true
-complexity: low   # TODO: set per task
+complexity: low
 risk: low
 round_cap: 2
-spec_refs: []   # TODO: cite spec.md § at /start
-decision_refs: []
+spec_refs:
+  - 'specs/001-tor-route/spec.md SC-004 and US3 acceptance scenario 1'
+  - 'specs/001-tor-route/contracts/socks5-auth.md §"SOCKS5 request-phase failures (post-auth)" and §"Invariants enforced by the contract test"'
+  - 'specs/001-tor-route/contracts/error-template.md §"Leak-corpus invariant"'
+decision_refs:
+  - 'T172 selected acceptance: Tor-route failures use authenticated SOCKS5 replies; no HTML is reachable on port 8881'
+  - 'T064: static leak corpus is the shared source; per-run token and destination are added in memory'
 reviews: {}
 overrides: []
 aborted_attempts: []
@@ -38,17 +43,41 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
 
 ## Analysis
 
-*(Required — `privacy_critical: true`. Fill at `/start` per
-`docs/process/analysis.md`.)*
+- **Must hold:** a valid token passes RFC 1929 authentication before the
+  request-phase failure. A deliberately absent Unix upstream socket yields
+  exactly `05 03 00 01 00 00 00 00 00 00`, followed by connection close and no
+  additional bytes. The data plane does not inspect a `SidecarEvent` to decide
+  whether to admit the request (Principle II).
+- **Gated:** run one authenticated SOCKS5 CONNECT against a known-missing
+  `unix://` socket configured through `dpharness.WithUpstream`; scan the full
+  reply and post-boot journal delta against the committed T064 corpus plus the
+  test's token and destination. Assert no HTML marker or private value appears.
+- **Residue:** this process-harness test proves the fixed failure surface for
+  an unavailable local SOCKS endpoint. It does not prove real Tor health,
+  Docker lifecycle reporting, or remote reachability; those are out of scope.
 
 ## Acceptance
 
-*(Derive from the spec at `/start` — see `docs/process/ticket-template.md`
-for the preferred shapes: named test, behavioral assertion, runnable command.)*
+1. Add `tests/contract/socks5/route_down_test.go`. Load a valid token, confirm
+   auth succeeds, then issue one CONNECT to a fixed `.onion` target while the
+   configured upstream is a Unix socket path verified absent before the
+   request. Assert the reply is byte-exactly `05 03 00 01 00 00 00 00 00 00`
+   and then EOF; reject trailing bytes, HTML, any T064 corpus match, or the
+   token/destination in the reply or request-time journal delta.
+2. The test uses only the existing process-backed `dpharness`, loopback proxy
+   listener, and absent local Unix socket. It neither needs a control-plane
+   event nor treats an unhealthy/withheld event as a route failure.
+3. Run only
+   `cd tests/contract && go test ./socks5 -run '^TestRouteDownSOCKS5Reply$'`.
+   Re-run after any correction; do not run Java, Docker, VM, or repository-wide
+   verification for this contract test.
 
 ## Out-of-scope
 
-*(Fill at `/start` if the task body references exclusions or other tickets' work.)*
+- No HTTP status, template, renderer, or header assertion; the HTTP format is
+  renderer-only and port 8881 rejects HTTP framing.
+- No counter assertion (T067b), remote Tor, container lifecycle, or production
+  code change.
 
 ## Notes
 

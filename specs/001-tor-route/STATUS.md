@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 33 |
-| in-progress | 0 |
+| pending | 30 |
+| in-progress | 3 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 205 |
@@ -29,9 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T065 | Test SOCKS5 ROUTE_DOWN failure reply | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T066 | Test SOCKS5 ROUTE_REFUSED failure reply | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
-| T067 | Test SOCKS5 ROUTE_TIMEOUT failure reply | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T067a | Contract test for SOCKS5 request-phase failure replies (FR-0 | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T067b | Contract test for the auth-pass + route-failure counter-incr | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
 | T070 | Test integrated SOCKS5 Tor failure response | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ | ✓ |
@@ -57,7 +54,11 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T065 | Test SOCKS5 ROUTE_DOWN failure reply | in-progress | ✓ | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |
+| T066 | Test SOCKS5 ROUTE_REFUSED failure reply | in-progress | ✓ | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |
+| T067 | Test SOCKS5 ROUTE_TIMEOUT failure reply | in-progress | ✓ | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) |
 
 ---
 
