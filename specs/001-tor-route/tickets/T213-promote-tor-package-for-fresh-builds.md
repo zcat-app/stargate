@@ -45,8 +45,8 @@ decision_refs:
   - "Independent Astra plan evaluation v2 SHA256 de831c443860f71b9b11f11f48015ae56f0f48feb8fb0de034b1aa260c93a73c: READY, no must-fix; plan review only, not implementation approval"
 reviews: {}
 overrides: []
-aborted_attempts: []
-reopens: []
+aborted_attempts: [{ date: 2026-10-09, round: 2, reason: "run-task --reset", history: target/runs/T213.review-history }]
+reopens: [{ date: 2026-10-09, blocker: T214, resolved_by: 81f10aaedb5710b42745bb2485457c4081fb33cd, prior_deferral_commit: 83e247b0e5b35bcd9b85e638eeb567f955e3cef3, prior_deferral_reason: blocked-on-new-ticket }]
 redteam_findings: []
 clarity_check: {}
 ---
