@@ -13,12 +13,12 @@
 
 | Status | Count |
 |---|---|
-| pending | 35 |
+| pending | 34 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 201 |
-| deferred | 8 |
+| deferred | 9 |
 | **total** | **244** |
 
 ---
@@ -46,7 +46,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 | T209 | Bind DP AppArmor to the running DP; assert observer hardenin | Foundation audit remediation | ✓ |  |
-| T213 | Restore fresh Tor builds with reviewed 0.4.9.14 package prom | Foundation dependency availability | ✓ |  |
 
 ---
 
@@ -68,6 +67,7 @@ _(nothing in flight)_
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
 | T202 | Add a scoped host-direct live runner and fresh VM overlays | blocked-on-new-ticket | T212 |
 | T212 | Close Docker verification budgets, history and CI inputs | blocked-on-new-ticket | T213 |
+| T213 | Restore fresh Tor builds with reviewed 0.4.9.14 package prom | blocked-on-new-ticket | T214 |
 
 ---
 

@@ -1,13 +1,15 @@
 ---
 id: T213
 title: "Restore fresh Tor builds with reviewed 0.4.9.14 package promotion"
-status: pending
+status: deferred
 created: 2026-10-09
 last_updated: 2026-10-09
 source: "Maintainer-authorized prerequisite: T212 cold T162 failed after genuine Tor index retrieval; pinned 0.4.9.13 removed upstream. Authorization: 2026-10-09, plan v2 and frozen T213 proposal hashes recorded below."
 phase: "Foundation dependency availability"
 story: "-"
 blocked_by: [T211]
+deferred_on: T214
+deferred_reason: blocked-on-new-ticket
 parallel: false
 files_budget: 12
 files_scope:
