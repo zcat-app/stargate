@@ -20,7 +20,7 @@ spec_refs:
 decision_refs:
   - 'T172 selected acceptance: keep WatchEvents advisory; stale events and CP disconnect cannot suppress an authenticated SOCKS5 dial'
   - 'T090: sidecar events never gate admission; upstream dial is the ground truth'
-reviews: {}
+reviews: { round: 1, date: 2026-10-09, verdict: REWORK, findings: "Astra: require REP=0; synchronize event consumption before probes. Luna: synchronize event delivery before probes.", diff_stats: "1 file" }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -50,7 +50,13 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
   forged advisory inputs for the regression.
 - **Gated:** one focused Go contract test exercises the failure-event matrix,
   forwarding before/after events, and forwarding across disconnect/reconnect.
-  Existing forbidden-detail coverage remains intact.
+  Every positive forwarding probe requires SOCKS5 REP `0x00`. Because the
+  WatchEvents wire contract has no client acknowledgement, each fake failure
+  event is sent on its stream, the server closes that stream, and the test
+  waits (bounded by the existing reconnect cap) for the DP to reconnect before
+  probing. The client can reach that reconnect only after its receive loop has
+  consumed all preceding stream messages. Existing forbidden-detail coverage
+  remains intact.
 - **Residue:** this fake-backed test cannot establish real container lifecycle
   reporting or Tor reachability; those are outside this ticket and do not
   justify Docker, Java, VM, or host mutation here.
@@ -66,7 +72,10 @@ spec-kit plan that survives `/speckit-tasks` regeneration.
    production lifecycle source emits them. Send `UNHEALTHY/healthcheck_fail`
    as an advisory event. After each event, prove that a valid token still
    completes an authenticated SOCKS5 CONNECT through the reachable fake
-   upstream. No HTTP request is part of this test.
+   upstream with REP `0x00`. To establish consumption order without changing
+   the server-stream protocol, close that event's stream after sending and wait
+   for the DP's bounded reconnect before the corresponding probe. No HTTP
+   request is part of this test.
 2. Preserve the existing bounded stream reconnect and authenticated forwarding
    assertions before and after control-plane disconnect, plus forbidden-detail
    rejection. Do not add event logs, expose event payloads, weaken the fixed
