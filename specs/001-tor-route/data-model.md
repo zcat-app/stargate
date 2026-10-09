@@ -370,15 +370,7 @@ clean separation the ticket asks for.
 
 ## 2. Tor route admission
 
-There is **no control-plane-driven admission gate** for the Tor route. The
-data plane attempts the fixed upstream (`unix:///run/stargate-tor/tor-socks.sock`) on every admitted
-request; the upstream dial/handshake result alone decides success or the
-privacy-safe route error (`ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`
-per FR-009). A control-plane `SidecarEvent` (`HEALTHY`, `UNHEALTHY`,
-`STOPPED`, `CRASHED`, `RESTARTED`, `STARTED`) is an **advisory local
-status/audit hint** — it MUST NOT be a mandatory precondition for
-listening, authenticating, dialing, or forwarding (Constitution Principle
-II; sol-review B3).
+There is **no control-plane-driven admission gate** for the Tor route. The data plane attempts the fixed upstream (`unix:///run/stargate-tor/tor-socks.sock`) on every admitted request; the upstream dial/handshake result alone decides success or the privacy-safe route error (`ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT` per FR-009). A control-plane `SidecarEvent` is delivered to the data plane as an advisory routing signal only. Receipt does not create a data-plane operational aggregate or sidecar status, and MUST NOT be a precondition for listening, authenticating, dialing, or forwarding (Constitution Principle II; sol-review B3).
 
 **Why no mask.** A cold-start mask that begins DISABLED and waits for the
 first `HEALTHY` event makes routing availability depend on the advisor
@@ -390,19 +382,7 @@ fabric socket, forward
 on success, return the protocol-safe route failure on connect/handshake
 failure. Absence or staleness of a sidecar event can never deny admission.
 
-**Advisory consumption (audit + status only).** The data plane MUST
-always attempt the upstream dial on every admitted request.
-`SidecarEvent`s feed volatile operational counters (`sidecar_healthy` /
-`sidecar_unhealthy` rows per §4) and may drive status reporting; they
-MUST NOT influence the admission decision or short-circuit the dial.
-A `STOPPED` / `CRASHED` event may update a completed-hour category and may
-surface "sidecar unhealthy" in status, but the data plane still dials
-the DP-only Tor SOCKS fabric socket — a stale or forged event cannot suppress a dial that would
-succeed (Constitution Principle II: "a compromise of the management UI
-cannot silently corrupt routing decisions"). The upstream dial result
-is the sole input to `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`
-selection. Advisory consumption MUST NOT log destination, token, or
-per-request metadata (Principle III).
+**Advisory consumption (control-plane aggregates; data-plane routing only).** The control plane records its own source-observed Tor sidecar `HEALTHY` / `UNHEALTHY` transitions in the corresponding `sidecar_healthy` / `sidecar_unhealthy` completed-hour operational aggregate through the sole writer in §4. Those counts describe control-plane observations while it runs, not data-plane event receipts. Receipt of any `SidecarEvent`—including `STARTED`, `HEALTHY`, `UNHEALTHY`, `STOPPED`, `CRASHED`, or `RESTARTED`—does not create a data-plane operational counter or sidecar status. The data plane validates and delivers matching Tor `SidecarEvent`s to its advisory sink only; its `GetStatus` exposes traffic route counters, not sidecar state. For every admitted request, the data plane MUST attempt the fixed upstream dial. A stale or forged event cannot suppress a dial that would succeed; only the upstream dial result selects `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`. Advisory event handling MUST NOT log destination, token, or per-request metadata (Principle III).
 
 **No persisted admission state.** The snapshot at §1.4 carries token
 hashes only; there is no per-route enable bit to persist. Cold start

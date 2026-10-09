@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 24 |
+| pending | 23 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 215 |
+| done | 216 |
 | deferred | 8 |
 | **total** | **247** |
 
@@ -29,7 +29,8 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T073 | In `data-plane/internal/controlclient/client.go` (from T045) | 5: User Story 3 — Privacy-safe failure when Tor is down (Priority: P3) | ✓ |  |
+| T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T079a | Gate SC-005 SOCKS pool and memory | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T109 | Cross-host JVM reproducibility assertion at release cadence | 6: Polish & Cross-Cutting Concerns |  | ✓ |
@@ -72,7 +73,7 @@ _(nothing in flight)_
 
 ## Done
 
-_215 ticket(s) done._
+_216 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -167,6 +168,7 @@ _215 ticket(s) done._
 - T070b — Test WatchEvents failure transitions remain advisory
 - T071 — Extend future HTTP error renderer only
 - T072 — Extend `data-plane/internal/forward/tor.go` (from T047) to map upstrea
+- T073 — In `data-plane/internal/controlclient/client.go` (from T045), wire the
 - T074 — Extend `control-plane/core/src/main/java/.../SidecarMonitor.java` (fro
 - T075b — Author `tests/reproducibility/extension_test.sh`
 - T076 — Run every test module in the single green gate

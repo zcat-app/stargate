@@ -5,8 +5,8 @@
 // contracts/control-grpc.md §"WatchEvents" — the bounded backoff (initial
 // 1s, cap 30s, jitter ±20%), the advisory-only event application
 // (data-model.md §2; Principle II), and the closed-vocabulary detail gate
-// (violation closes the stream and is journaled WITHOUT the offending
-// value). The fake control plane here serves mTLS with the package's own
+// (invalid events are rejected or ignored without logging offending
+// detail). The fake control plane here serves mTLS with the package's own
 // configs, so the full gRPC-over-TLS dial path is exercised in-process;
 // the process-level tier is T021 (tests/contract/control-grpc), which pins
 // the reconnect band end-to-end once T050 lands.
@@ -113,9 +113,9 @@ func TestBackoffResetOnHealthyStream(t *testing.T) {
 
 // --- in-process fake control plane over mTLS ---------------------------------
 
-// recordingSink is the EventSink seam (T073's advisory-application point):
-// it records applied events. Application is structurally admission-free —
-// the listener never consults the sink; the client only feeds it.
+// recordingSink is a test seam for observing validated event delivery.
+// It is not the production audit or status application; the listener never
+// consults the sink, and validated delivery creates no diagnostic record.
 type recordingSink struct {
 	mu     sync.Mutex
 	events []*grpcpb.SidecarEvent
@@ -273,9 +273,8 @@ func waitDial(t *testing.T, f *fakeCP, n int) *fakeStream {
 // --- the consumer loop -------------------------------------------------------
 
 func TestClientConsumesEventsAdvisory(t *testing.T) {
-	// Contract: events reach the sink (advisory status/audit hints) without
-	// diagnostic receipts; nothing in the path gates anything else — the
-	// consumer only ever calls the sink (T073 wires the audit application).
+	// Contract: validated events reach the recording test seam without a
+	// diagnostic record; the consumer only delivers events to the sink.
 	dp, cp := newKeyFixture(t), newKeyFixture(t)
 	keysDir := writeKeysDir(t, dp, cp)
 	fake := &fakeCP{}
@@ -337,7 +336,7 @@ func TestClientIgnoresForeignSidecars(t *testing.T) {
 
 func TestClientRejectsOutOfVocabularyDetail(t *testing.T) {
 	// Contract row 2 / closed-vocabulary clause: an out-of-vocabulary detail
-	// is a violation — the DP closes the stream without recording or
+	// is rejected — the DP closes the stream without logging or
 	// echoing the offending value (Principle III; T021's
 	// assertDetailRejected asserts the process-level shape of this).
 	dp, cp := newKeyFixture(t), newKeyFixture(t)
@@ -366,7 +365,7 @@ func TestClientRejectsOutOfVocabularyDetail(t *testing.T) {
 	if logBuf.Len() != 0 {
 		t.Error("operational action emitted a journal record")
 	}
-	// Neither the violation nor the offending free text may enter a journal.
+	// Neither the rejection nor the offending free text may be logged.
 	if bytes.Contains(logBuf.Bytes(), []byte(freeText)) {
 		t.Errorf("journal echoes the forbidden detail verbatim (Principle III); journal:\n%s", logged)
 	}

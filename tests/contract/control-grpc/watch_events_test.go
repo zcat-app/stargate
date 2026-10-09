@@ -40,7 +40,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
@@ -58,9 +60,12 @@ import (
 type fakeEventsServer struct {
 	grpcpb.UnimplementedEventsServer
 
-	mu      sync.Mutex
-	dials   int
-	streams []*controlledStream
+	mu          sync.Mutex
+	dials       int
+	streams     []*controlledStream
+	unavailable bool
+	rejected    int
+	firstReject time.Time
 }
 
 // controlledStream is one WatchEvents RPC invocation. push feeds events
@@ -82,6 +87,14 @@ type eventDelivery struct {
 
 func (f *fakeEventsServer) WatchEvents(_ *grpcpb.WatchEventsRequest, stream grpcpb.Events_WatchEventsServer) error {
 	f.mu.Lock()
+	if f.unavailable {
+		f.rejected++
+		if f.firstReject.IsZero() {
+			f.firstReject = time.Now()
+		}
+		f.mu.Unlock()
+		return status.Error(codes.Unavailable, "temporarily unavailable")
+	}
 	f.dials++
 	cs := &controlledStream{
 		push:     make(chan eventDelivery, 16),
@@ -106,6 +119,24 @@ func (f *fakeEventsServer) WatchEvents(_ *grpcpb.WatchEventsRequest, stream grpc
 			return nil
 		}
 	}
+}
+
+func (f *fakeEventsServer) setUnavailable(unavailable bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.unavailable = unavailable
+}
+
+func (f *fakeEventsServer) rejectedCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.rejected
+}
+
+func (f *fakeEventsServer) firstRejectedAt() time.Time {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.firstReject
 }
 
 func (f *fakeEventsServer) dialCount() int {
@@ -600,11 +631,12 @@ func TestWatchEvents(t *testing.T) {
 		requireForwardPath(t)
 		assertForwards(t, h, plaintext, "before disconnect (baseline)")
 
-		// Send STARTED on the first stream, then close from the server
-		// side (simulates CP crash / restart / network blip).
+		// Send STARTED on the first stream, reject replacement RPCs, then
+		// close from the server side to establish a CP outage interval.
 		if err := fakeCP.send(eventStarted); err != nil {
 			t.Fatalf("send STARTED on first stream: %v", err)
 		}
+		fakeCP.setUnavailable(true)
 		fakeCP.closeFromServer()
 		// Wait for the handler to actually return so the timing
 		// measurement starts from a confirmed stream termination.
@@ -618,15 +650,14 @@ func TestWatchEvents(t *testing.T) {
 		}
 		streamEndTime := time.Now()
 
-		// The DP reconnects with bounded backoff (initial 1s, ±20% jitter,
-		// cap 30s per contracts/control-grpc.md §"WatchEvents"). The
-		// waitFor timeout is 35s — strictly above the 30s cap — so the
-		// upper-bound assertion below is reachable rather than dead code
-		// (waitFor.Fatalf would fire first at a 30s timeout).
-		waitFor(t, "DP to reconnect after server-side stream close", 35*time.Second, h.journal, func() bool {
-			return fakeCP.dialCount() >= 2
+		// A rejected replacement RPC proves the DP observed the ended
+		// stream and entered reconnect handling. Keep rejection enabled
+		// through the forwarding probe so the route check happens during
+		// the confirmed outage, before a replacement stream is accepted.
+		waitFor(t, "DP replacement WatchEvents RPC rejected during outage", 35*time.Second, h.journal, func() bool {
+			return fakeCP.rejectedCount() >= 1
 		})
-		elapsed := time.Since(streamEndTime)
+		elapsed := fakeCP.firstRejectedAt().Sub(streamEndTime)
 
 		// Lower bound (0.8s): proves backoff, not immediate retry. The
 		// contract's initial backoff is 1s ± 20% → [0.8s, 1.2s].
@@ -641,12 +672,19 @@ func TestWatchEvents(t *testing.T) {
 			t.Errorf("reconnect after %v — want ≤ 30s (backoff cap per contracts/control-grpc.md §WatchEvents)", elapsed)
 		}
 
-		// Route observation on the second stream. Admission is invariant
-		// across the disconnect (Principle II): the forward still succeeds
-		// without needing HEALTHY (post-T090 there is no admission gate;
-		// data-model.md §2). The HEALTHY send exercises event consumption
-		// on the reconnected stream; the forward-success assertion proves
-		// admission was not disrupted by the disconnect.
+		assertForwards(t, h, plaintext, "during rejected WatchEvents retries (upstream remains reachable)")
+		if got := fakeCP.dialCount(); got != 1 {
+			t.Fatalf("accepted WatchEvents streams during outage = %d, want only the original stream", got)
+		}
+
+		fakeCP.setUnavailable(false)
+		waitFor(t, "DP to reconnect after WatchEvents service returns", 35*time.Second, h.journal, func() bool {
+			return fakeCP.dialCount() >= 2
+		})
+
+		// Route observation after reconnect. HEALTHY exercises event
+		// delivery on the replacement stream; forwarding remains based on
+		// the upstream dial (Principle II; data-model.md §2).
 		if err := fakeCP.send(eventHealthy); err != nil {
 			t.Fatalf("send HEALTHY on reconnected stream: %v", err)
 		}

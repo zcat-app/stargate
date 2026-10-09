@@ -264,12 +264,7 @@ enum EventKind {
   during the bridges-feature rollout window.
 - The control plane MUST NOT include log lines, version strings, or
   any other free text from the sidecar in `detail` (arch §5.2).
-- The stream is long-lived. On disconnect, the data plane reconnects
-  with exponential backoff (initial 1 s, cap 30 s, jitter ±20%).
-  During disconnect the data plane keeps routing — `SidecarEvent`s are
-  advisory status/audit hints and MUST NOT gate admission (Constitution
-  Principle II; data-model.md §2; sol-review B3). The upstream dial is
-  the ground truth on every reconnect, just as it is on cold start.
+- The stream is long-lived. On disconnect, the data plane reconnects with exponential backoff (initial 1 s, cap 30 s, jitter ±20%). During disconnect the data plane keeps routing; events delivered after reconnection are validated and delivered to the advisory sink. Event receipt does not create a data-plane operational aggregate or sidecar status and MUST NOT gate admission or short-circuit a dial (Constitution Principle II; data-model.md §2). The upstream dial remains the ground truth on cold start, during disconnect, and after reconnect.
 
 **Tests** (`tests/contract/control-grpc/watch_events_test.go`):
 
@@ -286,7 +281,12 @@ enum EventKind {
 3. Disconnect/reconnect: the data plane retries the stream with
    bounded backoff; events delivered after reconnect are applied
    normally. Admission is unchanged across the disconnect (the data
-   plane keeps routing per Principle II).
+   plane keeps routing per Principle II). After the server closes the
+   first stream, the fake server rejects replacement WatchEvents RPCs
+   with `Unavailable`. The test waits for at least one rejected retry,
+   proves an authenticated SOCKS5 request still forwards while rejection
+   remains enabled, then re-enables WatchEvents and proves forwarding
+   after reconnect. It retains the bounded first-retry backoff assertion.
 
 ### `GetStatus` (minimum subset)
 

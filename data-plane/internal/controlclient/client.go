@@ -1,14 +1,11 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// client.go — the DP's WatchEvents consumer (T045): a long-lived gRPC
-// client on /run/stargate/control.sock (contracts/control-grpc.md
-// §"Socket topology" — the DP dials only control.sock; role separation via
-// bind(2)) that applies SidecarEvents as ADVISORY status/audit hints.
-// Events MUST NOT gate admission, listening, authenticating, dialing, or
-// forwarding — the upstream dial is the sole ground truth (data-model.md
-// §2; Constitution Principle II; sol-review B3; T090; T073 wires the
-// advisory application).
+// The DP WatchEvents client validates the Tor selector/detail and delivers
+// matching events to an advisory sink only. Event receipt creates no DP
+// operational aggregate or reported sidecar status. Events MUST NOT gate
+// admission, listening, authenticating, dialing, or forwarding; the upstream
+// dial is the sole ground truth (data-model.md §2; Constitution Principle II).
 //
 // Reconnect policy per §"WatchEvents": exponential backoff, initial 1s,
 // cap 30s, jitter ±20%; a CP that is unreachable or fails the TLS
@@ -54,10 +51,8 @@ const torSidecar = "tor"
 // detail. The stream closes without retaining the rejected event.
 var errDetailViolation = errors.New("sidecar event rejected: detail outside closed vocabulary")
 
-// EventSink is the advisory-application seam (T073 wires the aggregate
-// and status reporting application). The client guarantees the sink only
-// ever sees in-vocabulary tor events; nothing the sink does can gate
-// admission, because nothing in the forwarding path consults it.
+// EventSink is the advisory event-delivery seam. The forwarding path never
+// consults it, so it cannot create a route gate.
 type EventSink interface {
 	HandleSidecarEvent(*grpcpb.SidecarEvent)
 }

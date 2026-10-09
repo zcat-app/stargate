@@ -472,21 +472,7 @@ tests-first suite (Principle VII) before implementation lands.
   a control-plane event (data-model.md §2; sol-review B3): a request
   that authenticates against the last-known list reaches the upstream
   dial regardless of `SidecarEvent` state.
-- **FR-014**: The control plane MUST emit a `SidecarEvent` with kind
-  `STARTED` / `HEALTHY` / `UNHEALTHY` / `STOPPED` / `CRASHED` /
-  `RESTARTED` for the Tor sidecar (architecture spec §5.2 events). The
-  `detail` field MUST be a fixed-vocabulary token from the enum, not
-  free text from Tor logs. The data plane consumes these events as
-  **advisory local status/aggregate inputs** (data-model.md §2; Constitution
-  Principle II): they MUST NOT be a mandatory precondition for listening,
-  authenticating, dialing, or forwarding, and they MUST NOT
-  short-circuit the upstream dial. The data plane MUST always attempt
-  the fixed Tor fabric dial on every admitted request; the dial result
-  alone selects `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`.
-  `SidecarEvent`s feed operational counts (completed-hour operational categories under data-model.md §4) and status reporting only — a stale or
-  forged event cannot suppress a dial that would succeed (Principle II:
-  a compromise of the management UI cannot silently corrupt routing
-  decisions). `RESTARTED` is informational.
+- **FR-014**: The control plane MUST emit a Tor `SidecarEvent` only for a source observation it can substantiate, with a fixed-vocabulary `detail` token and no free text from Tor logs. In this feature's authenticated health channel it emits `STARTED`, `HEALTHY`, and `UNHEALTHY` as specified in `contracts/control-grpc.md`; it does not emit `STOPPED`, `CRASHED`, or `RESTARTED` because health observations cannot establish those lifecycle events. The data plane validates and delivers matching Tor events to an advisory sink. Receipt of an event MUST NOT create a data-plane operational aggregate or sidecar status, gate listening/authentication/dialing/forwarding, or short-circuit the upstream dial. The control plane records its own source-observed `HEALTHY` / `UNHEALTHY` transitions in the corresponding completed-hour operational categories through the sole writer in data-model.md §4. The data plane MUST attempt the fixed Tor fabric dial for every admitted request; its result alone selects `ROUTE_DOWN` / `ROUTE_REFUSED` / `ROUTE_TIMEOUT`. Stale or forged events cannot suppress a dial that would succeed.
 
 #### Build and contract testing
 

@@ -208,7 +208,7 @@ func runWithCounters(newCounters func() *audit.Counters) int {
 	// fatal (Principle II). With no TLS material the boot already
 	// degraded above and the client never starts.
 	if clientTLS != nil {
-		sink := advisorySink{} // T073 wires the audit/status application
+		sink := advisorySink{} // SidecarEvent delivery is advisory; CP owns operational aggregates.
 		client, err := controlclient.NewClient(controlclient.ClientConfig{
 			ControlSocket: filepath.Join(ipcDir, "control.sock"),
 			TLS:           clientTLS,
@@ -278,9 +278,8 @@ func grpcGracefulStop(srv *grpc.Server) {
 	}
 }
 
-// advisorySink is the T050 placeholder for T073's advisory-event
-// application. Nothing in the forwarding path consults the sink, so a
-// no-op cannot gate admission (Principle II).
+// advisorySink is a no-op event-delivery sink. The CP owns operational
+// aggregates; forwarding never consults this sink (Principle II).
 type advisorySink struct{}
 
 func (advisorySink) HandleSidecarEvent(*grpcpb.SidecarEvent) {}
