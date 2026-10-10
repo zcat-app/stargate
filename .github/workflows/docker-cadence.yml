@@ -3,9 +3,10 @@
 #
 # T191 item 4: the Docker cadence of scripts/verify.sh for changes the
 # hermetic PR gate cannot exercise — sidecar sources and Dockerfiles, plus the
-# Compose topology and DP AppArmor profile those images run under. It runs the
-# SAME entrypoint with STARGATE_TEST_TAGS=docker (the docker-tagged Go suites
-# and the docker tiers of the contract tests), never a divergent command list.
+# Compose topology and DP AppArmor profile those images run under. T075 adds
+# the selected Gate 5 binary comparison for data-plane build inputs. It runs
+# the SAME entrypoint with STARGATE_TEST_TAGS=docker (the docker-tagged Go
+# suites and the docker tiers of the contract tests), never a divergent list.
 #
 # Why a separate workflow: GitHub path filters apply per workflow, not per
 # job. verify.yml stays fast and runs on every push; this one runs when its
@@ -24,12 +25,24 @@ on:
       - 'sidecars/**'
       - '**/Dockerfile'
       - 'compose/**'
+      - 'data-plane/**'
+      - 'proto/**'
+      - '.dockerignore'
+      - 'tests/reproducibility/data_plane_test.sh'
+      - 'tests/contract/workflow/data_plane_repro_gate_test.sh'
+      - 'scripts/verify.sh'
       - '.github/workflows/docker-cadence.yml'
   pull_request:
     paths:
       - 'sidecars/**'
       - '**/Dockerfile'
       - 'compose/**'
+      - 'data-plane/**'
+      - 'proto/**'
+      - '.dockerignore'
+      - 'tests/reproducibility/data_plane_test.sh'
+      - 'tests/contract/workflow/data_plane_repro_gate_test.sh'
+      - 'scripts/verify.sh'
       - '.github/workflows/docker-cadence.yml'
   workflow_dispatch:
 
@@ -56,6 +69,8 @@ jobs:
         env:
           STARGATE_TEST_TAGS: docker
           STARGATE_GROUND_ONLINE: '0'
+          STARGATE_VERIFY_REPRO: '1'
+          STARGATE_VERIFY_REPRO_ONLY: data_plane_test.sh
         run: |
           bash scripts/verify.sh
 

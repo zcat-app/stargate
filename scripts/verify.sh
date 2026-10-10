@@ -35,6 +35,9 @@
 # Opt-outs (for fast inner loops): STARGATE_SKIP_CP=1 skips the Maven gate
 # (slow, network); STARGATE_VERIFY_REPRO=1 opts INTO the release-cadence
 # reproducibility gate (off by default — it builds twice and is slow);
+# STARGATE_VERIFY_REPRO_ONLY=<exact-script-basename> narrows that enabled
+# gate to one named script (used by path-gated CI; never implies a full
+# release reproducibility pass);
 # STARGATE_SKIP_GROUND=1 skips the external-pin grounding gate;
 # STARGATE_GROUND_ONLINE=1 deepens grounding to resolve digests + check EOL
 # online (needs curl/docker) — recommended before a release tag.
@@ -236,13 +239,35 @@ fi
 
 # === Gate 5: reproducibility (release cadence; opt-in) ====================
 if [ "${STARGATE_VERIFY_REPRO:-0}" = "1" ]; then
-  repro=$(find tests/reproducibility -name '*.sh' 2>/dev/null | wc -l | tr -d ' ')
-  if [ "${repro:-0}" -gt 0 ]; then
+  _repro_scripts=()
+  mapfile -t _repro_scripts < <(find tests/reproducibility -type f -name '*.sh' -print 2>/dev/null | sort)
+  if [ "${STARGATE_VERIFY_REPRO_ONLY+x}" = x ]; then
+    _repro_only="$STARGATE_VERIFY_REPRO_ONLY"
+    if [ -z "$_repro_only" ] || [[ "$_repro_only" == */* ]] || [[ ! "$_repro_only" =~ ^[A-Za-z0-9._-]+\.sh$ ]]; then
+      record "reproducibility-selection" FAIL "STARGATE_VERIFY_REPRO_ONLY must be one exact .sh basename"
+    else
+      _repro_match=""
+      for _repro_script in "${_repro_scripts[@]}"; do
+        if [ "$(basename "$_repro_script")" = "$_repro_only" ]; then
+          _repro_match="$_repro_script"
+          break
+        fi
+      done
+      if [ -z "$_repro_match" ]; then
+        record "reproducibility-selection" FAIL "no matching script: $_repro_only"
+      else
+        say "Gate 5 selection: $_repro_only only; sibling reproducibility gates excluded (not a release-wide reproducibility pass)."
+        run_cmd "repro:$_repro_only" -- bash "$_repro_match"
+      fi
+    fi
+  elif [ "${#_repro_scripts[@]}" -gt 0 ]; then
     while IFS= read -r t; do run_cmd "repro:$(basename "$t")" -- bash "$t"; done \
-      < <(find tests/reproducibility -name '*.sh' 2>/dev/null)
+      < <(printf '%s\n' "${_repro_scripts[@]}")
   else
     record "reproducibility" SKIP "no scripts yet"
   fi
+elif [ "${STARGATE_VERIFY_REPRO_ONLY+x}" = x ]; then
+  record "reproducibility-selection" FAIL "STARGATE_VERIFY_REPRO_ONLY requires STARGATE_VERIFY_REPRO=1"
 else
   record "reproducibility" SKIP "release-cadence; set STARGATE_VERIFY_REPRO=1 to run"
 fi
