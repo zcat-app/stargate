@@ -43,7 +43,7 @@ diagram</a> for the visual layout.</p>
   <tbody>
     <tr><td><strong>Data plane</strong></td><td>Go (<code>data-plane/</code>)</td>
         <td>Network transport, sidecar coordination, per-port routing. The "dumb router". Privacy-critical hot path.</td></tr>
-    <tr><td><strong>Control plane</strong></td><td>Quarkus 3.33 LTS on JDK 25 LTS (<code>control-plane/</code>)</td>
+    <tr><td><strong>Control plane</strong></td><td>Quarkus 3.40 LTS on JDK 25 LTS (<code>control-plane/</code>)</td>
         <td>Admin UI, settings, sidecar lifecycle commands, audit. SQLite for state.</td></tr>
     <tr><td><strong>Extension</strong></td><td>JS/TS (<code>extension/</code>)</td>
         <td>Per-request route selection. First-class target: Mullvad Browser.</td></tr>
@@ -175,7 +175,7 @@ written <em>first</em> (Principle VII, no AI exception) and where
   <code>staticcheck</code>, <code>gosec</code> — all wired into
   <code>scripts/verify.sh</code>.</dd>
 
-  <dt>Quarkus 3.33 LTS on JDK 25 LTS (control plane)</dt>
+  <dt>Quarkus 3.40 LTS on JDK 25 LTS (control plane)</dt>
   <dd>Pinned via <code>&lt;maven.compiler.release&gt;25</code> and the
   Quarkus platform BOM. LTS-to-LTS upgrades follow the same documented
   process as sidecar image bumps (Constitution Principle IV). Native-image

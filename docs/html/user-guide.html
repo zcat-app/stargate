@@ -76,7 +76,7 @@ cd stargate
 # 2. data plane (Go 1.26)
 cd data-plane &amp;&amp; go mod download &amp;&amp; go build ./... &amp;&amp; cd ..
 
-# 3. control plane (JDK 25 + Quarkus 3.33 LTS)
+# 3. control plane (JDK 25 + Quarkus 3.40 LTS)
 cd control-plane &amp;&amp; ./mvnw -B verify -DskipTests &amp;&amp; cd ..
 
 # 4. verify the tree is green

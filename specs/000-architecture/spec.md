@@ -773,7 +773,7 @@ X") before the user confirms.
   distribution (Temurin / Liberica / Zulu / Corretto) is interchangeable
   for bytecode reproducibility; the CI build pins one for the release
   artefact.
-- **Quarkus 3.33 LTS** pinned in the parent POM via the
+- **Quarkus 3.40 LTS** pinned in the parent POM via the
   `<quarkus.platform.version>` property; managed by the Quarkus platform
   BOM. Subsequent Quarkus upgrades follow the same digest-promoted flow
   as sidecar image updates (Principle IV).
@@ -782,7 +782,7 @@ X") before the user confirms.
 - Native-image build via `mvn package -Pnative`, with
   `-Dquarkus.native.reproducible-build=true` and a pinned
   `quay.io/quarkus/ubi-quarkus-mandrel-builder-image` digest for the
-  **Mandrel 25** (JDK 25) builder, matching the Quarkus 3.33 LTS
+  **Mandrel 25** (JDK 25) builder, matching the Quarkus 3.40 LTS
   compatibility matrix.
 - Reproducibility tier: **JVM bytecode = byte-reproducible**; **native-image
   = best-effort** with expected variations enumerated in `BUILD-DIFFS.md`
@@ -1204,9 +1204,9 @@ relies on it can be planned.
    warning text pinned in `data-model.md` §5.1. §14.4 amended in lock-
    step; see that section for the cross-reference.
 9. **§12.2 Quarkus / JDK / Mandrel compatibility matrix** — Confirm
-    Quarkus 3.33 LTS officially targets JDK 25 as a runtime, and pin the
+    Quarkus 3.40 LTS officially targets JDK 25 as a runtime, and pin the
     matching Mandrel 25 builder image digest at first release tag. If
-    Quarkus 3.33 LTS lags JDK 25 support, fall back to the highest Quarkus
+    Quarkus 3.40 LTS lags JDK 25 support, fall back to the highest Quarkus
     LTS that does and reopen the constitution amendment that introduced
     these pins (constitution v1.0.0 pre-release JDK-pin note; no version bump).
 

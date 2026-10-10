@@ -34,7 +34,7 @@ Two processes, distinct lifecycles, gRPC over Unix socket between them:
 | Plane | Language | Responsibility |
 |---|---|---|
 | **Data plane** | Go (`data-plane/`) | Network transport, sidecar coordination, per-port routing. Privacy-critical hot path. |
-| **Control plane** | Quarkus 3.33 LTS on JDK 25 LTS (`control-plane/`) | Admin UI, settings, sidecar lifecycle commands, audit. SQLite for state. |
+| **Control plane** | Quarkus 3.40 LTS on JDK 25 LTS (`control-plane/`) | Admin UI, settings, sidecar lifecycle commands, audit. SQLite for state. |
 | **Extension** | JS/TS (`extension/`) | Per-request route selection. First-class target: Mullvad Browser. |
 
 The **data plane is a dumb router** (Constitution Principle I): no payload

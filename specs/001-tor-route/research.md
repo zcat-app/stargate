@@ -13,7 +13,7 @@ section number is referenced from `plan.md`.
 available at the time the scaffolding task lands (`go.mod` `go 1.26` +
 `toolchain go1.26.3` as of 2026-05-18). Pin the control-plane to JDK 25 LTS via
 `<maven.compiler.release>25` plus Temurin 25 in the CI build matrix. Pin
-Quarkus to the 3.33 LTS line (`quarkus.platform.version` property in the
+Quarkus to the 3.40 LTS line (`quarkus.platform.version` property in the
 parent POM, managed by the Quarkus BOM). Defer the concrete Mandrel 25
 builder image digest pin until the first release tag — the JVM-mode build
 is what this feature exercises.
@@ -28,8 +28,8 @@ is what this feature exercises.
   primitives (needed for `auth.token`, FR-006), the `slog` package, and
   the `-trimpath` + `-buildvcs=false` byte-reproducible build flags
   (arch §12.1) all continue to work in 1.26.
-- JDK 25 LTS + Quarkus 3.33 LTS is the pin set by constitution v1.1.0
-  (Sync Impact Report). Quarkus 3.33's platform BOM officially supports
+- JDK 25 LTS + Quarkus 3.40 LTS is the pin promoted by T217 under the
+  dependency-promotion process. Quarkus 3.40's platform BOM officially supports
   JDK 25 as a runtime target.
 - Temurin is the CI artefact distribution for reproducibility; the
   bytecode-reproducibility property does not depend on a specific

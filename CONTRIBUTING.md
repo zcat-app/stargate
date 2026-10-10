@@ -88,7 +88,7 @@ it through the same channel.
   `<maven.compiler.release>25`. Any JDK 25 distribution (Temurin,
   Liberica, Zulu, Corretto) works for local development; the release
   artefact pins one specific distribution for byte-reproducible builds.
-- **Quarkus 3.33 LTS** — pinned in `control-plane/pom.xml` via the
+- **Quarkus 3.40 LTS** — pinned in `control-plane/pom.xml` via the
   `<quarkus.platform.version>` property and managed by the Quarkus
   platform BOM. Do not bump this casually; LTS-to-LTS upgrades follow
   the same documented process as sidecar image bumps (constitution

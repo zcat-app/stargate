@@ -7,7 +7,7 @@
 #   1. builder stage uses maven:3.9-eclipse-temurin-25 (Maven 3.9.x
 #      bundled with Eclipse Temurin 25 LTS — research.md §1,
 #      constitution v1.1.0) to run `mvn -B -DskipTests package` against
-#      the multi-module reactor from T003. Quarkus 3.33 emits the
+#      the multi-module reactor from T003. Quarkus 3.40 emits the
 #      fast-jar layout at runtime/target/quarkus-app/.
 #   2. runtime stage is eclipse-temurin:25-jre-noble — official
 #      Temurin 25 LTS JRE on Ubuntu Noble. The runtime user
@@ -113,7 +113,7 @@ COPY proto/                        /proto/
 # JVM-mode package. Byte-reproducibility is the POM's responsibility
 # (reproducible-build-maven-plugin, arch §12.2); no Dockerfile flags
 # are needed for byte-stable bytecode.
-RUN mvn -B -DskipTests package
+RUN mvn -B -DskipTests -Dmaven.repo.local=/src/.m2 package
 
 # -----------------------------------------------------------------------------
 
@@ -132,7 +132,7 @@ RUN groupadd --gid 5100 stargate-ipc \
              --no-create-home \
              stargate-cp
 
-# Quarkus 3.33 fast-jar layout: quarkus-run.jar is a thin launcher
+# Quarkus 3.40 fast-jar layout: quarkus-run.jar is a thin launcher
 # that resolves app/, lib/, and quarkus/ as siblings, so the entire
 # quarkus-app/ directory must travel together.
 COPY --from=builder --chown=stargate-cp:stargate-ipc \

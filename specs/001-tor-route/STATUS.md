@@ -13,8 +13,8 @@
 
 | Status | Count |
 |---|---|
-| pending | 17 |
-| in-progress | 0 |
+| pending | 16 |
+| in-progress | 1 |
 | in-review | 0 |
 | escalated | 0 |
 | done | 222 |
@@ -40,13 +40,14 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T206 | Reject degraded DNS capture evidence | Foundation audit remediation | ✓ |  |
 | T209 | Bind DP AppArmor to the running DP; assert observer hardenin | Foundation audit remediation | ✓ |  |
 | T215 | Instrument Docker cadence resource ownership | Integration | ✓ |  |
-| T217 | Make shipped Quarkus artifacts byte-reproducible | 6: Polish & Cross-Cutting Concerns |  |  |
 
 ---
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T217 | Make shipped Quarkus artifacts byte-reproducible | in-progress |  | 6: Polish & Cross-Cutting Concerns |
 
 ---
 

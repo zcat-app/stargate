@@ -59,7 +59,7 @@ defines preservation and the reviewed reopen sequence. Historical guest15 aggreg
 **Language/Version**:
 
 - **Data plane**: Go (toolchain pinned via `go.mod` `go` + `toolchain` directives — concrete patch fixed during scaffold task; v1.26.x line per research.md §1).
-- **Control plane**: JDK 25 LTS + Quarkus 3.33 LTS (constitution Tech Stack pin). This feature builds the *JVM-mode* artefact; native-image is not load-bearing for this slice (spec Assumption "Reproducibility holds for the Go data plane in this feature").
+- **Control plane**: JDK 25 LTS + Quarkus 3.40 LTS, promoted by T217 under the dependency-promotion process. This feature builds the *JVM-mode* artefact; native-image is not load-bearing for this slice (spec Assumption "Reproducibility holds for the Go data plane in this feature").
 - **Extension**: WebExtensions MV2, vanilla JavaScript (ES2022), no build step (arch §12.3, Principle VI — avoid npm supply chain on a privacy-critical component). **Node 20 LTS** is pinned as a *CI-only* dependency for extension JS unit tests (`node:test` runner, see research.md §10); no Node deps ship to the user.
 - **Sidecar**: Tor (from `deb.torproject.org`) on pinned `debian:12-slim` base, built by Stargate's Dockerfile at `sidecars/tor/`.
 
@@ -441,7 +441,7 @@ the resolutions deliberately rather than accepting them implicitly.
    admin-credential generation — there is no admin UI to enroll
    against). research.md §8.
 
-9. **Quarkus 3.33 LTS / JDK 25 / Mandrel 25 compatibility** (arch §15 #9
+9. **Quarkus 3.40 LTS / JDK 25 / Mandrel 25 compatibility** (arch §15 #9
    / constitution pre-release JDK-pin note). The JVM
    build is exercised by this feature; the native-image build is not
    load-bearing for SC-1 through SC-5. The constitution amendment that

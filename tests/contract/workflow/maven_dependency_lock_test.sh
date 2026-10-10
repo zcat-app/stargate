@@ -82,9 +82,15 @@ for name, text in (('Dockerfile', dockerfile), ('verify.sh', (root / 'scripts/ve
     for line in text.splitlines():
         invocation = re.search(r'(?:^|[\s;&|(])(?:\S*/)?mvnw?(\s.*|$)', line)
         if invocation and not line.lstrip().startswith('#'):
+            if name == 'Dockerfile' and line.strip() == \
+                    'RUN mvn -B -DskipTests -Dmaven.repo.local=/src/.m2 package':
+                continue
             # Only the Maven arguments: `sh -c '... mvnw ...'` wraps it legitimately.
             check(not OVERRIDE.search(invocation.group(1)),
                   f'{name} overrides the resolver policy: {line.strip()}')
+docker_repo = 'RUN mvn -B -DskipTests -Dmaven.repo.local=/src/.m2 package'
+check(sum(line.strip() == docker_repo for line in dockerfile.splitlines()) == 1,
+      'Dockerfile must use exactly one Maven repo override: -Dmaven.repo.local=/src/.m2')
 
 entries = {}
 LINE = re.compile(r'^([0-9a-f]{64})  (\S+)$')
@@ -95,8 +101,8 @@ for number, line in enumerate(lock.read_text().splitlines() if lock.is_file() el
         check(match.group(2) not in entries, f'lock lists {match.group(2)} twice')
         entries[match.group(2)] = match.group(1)
 ANCHORS = [
-    'io/quarkus/platform/quarkus-bom/3.33.1/quarkus-bom-3.33.1.pom',
-    'io/quarkus/platform/quarkus-maven-plugin/3.33.1/quarkus-maven-plugin-3.33.1.jar',
+    'io/quarkus/platform/quarkus-bom/3.40.1/quarkus-bom-3.40.1.pom',
+    'io/quarkus/platform/quarkus-maven-plugin/3.40.1/quarkus-maven-plugin-3.40.1.jar',
     'org/apache/maven/plugins/maven-compiler-plugin/3.15.0/maven-compiler-plugin-3.15.0.jar',
     'com/google/errorprone/error_prone_core/2.50.0/error_prone_core-2.50.0.jar',
     'com/uber/nullaway/nullaway/0.14.1/nullaway-0.14.1.jar',
@@ -112,10 +118,10 @@ for anchor in ANCHORS:
 # resolve only the host's closure, so every supported Linux platform's
 # selected native must be locked explicitly, or an arm64 build fails closed.
 PLATFORM_SELECTED = (
-    'com/aayushatharva/brotli4j/native-linux-{brotli}/1.16.0/native-linux-{brotli}-1.16.0.jar',
-    'com/aayushatharva/brotli4j/native-linux-{brotli}/1.16.0/native-linux-{brotli}-1.16.0.pom',
-    'com/google/protobuf/protoc/4.33.2/protoc-4.33.2-linux-{protoc}.exe',
-    'io/grpc/protoc-gen-grpc-java/1.79.0/protoc-gen-grpc-java-1.79.0-linux-{protoc}.exe',
+    'com/aayushatharva/brotli4j/native-linux-{brotli}/1.23.0/native-linux-{brotli}-1.23.0.jar',
+    'com/aayushatharva/brotli4j/native-linux-{brotli}/1.23.0/native-linux-{brotli}-1.23.0.pom',
+    'com/google/protobuf/protoc/4.35.0/protoc-4.35.0-linux-{protoc}.exe',
+    'io/grpc/protoc-gen-grpc-java/1.81.0/protoc-gen-grpc-java-1.81.0-linux-{protoc}.exe',
 )
 for template in PLATFORM_SELECTED:
     for brotli, protoc in (('x86_64', 'x86_64'), ('aarch64', 'aarch_64')):
@@ -130,10 +136,10 @@ for template in PLATFORM_SELECTED:
 # later change to them fail here, not first on an arm64 host.
 # A lock refresh that changes them must update these values in the same review.
 ARM64_ONLY = {
-    'com/aayushatharva/brotli4j/native-linux-aarch64/1.16.0/native-linux-aarch64-1.16.0.jar':
-        '0f4cf2ea3dfb361daa3393f4dc345fabfb1a99e31d8b0bb6ed91dac56a38c11a',
-    'com/aayushatharva/brotli4j/native-linux-aarch64/1.16.0/native-linux-aarch64-1.16.0.pom':
-        '5e77f056fc2efbac4c75532b060aea5b3836a18dbdd17a444e9a1f0d5d3043b5',
+    'com/aayushatharva/brotli4j/native-linux-aarch64/1.23.0/native-linux-aarch64-1.23.0.jar':
+        '900c73dac7330ebe966071c770d2d4357c4de3f9417262ed4408dc08f2b573b6',
+    'com/aayushatharva/brotli4j/native-linux-aarch64/1.23.0/native-linux-aarch64-1.23.0.pom':
+        '4448378836320c50909c7770435c0c3bdafb60bb7d255359e468104a59f695fc',
 }
 for path, digest in ARM64_ONLY.items():
     check(entries.get(path) == digest,
@@ -150,7 +156,7 @@ runnable = shutil.which('java') is not None
 if not runnable:
     failures.append('java is required for the hermetic lock cases')
 tail = pathlib.Path(os.environ.get('HOME', '/nonexistent')) / '.m2/repository'
-POM = 'io/quarkus/platform/quarkus-bom/3.33.1/quarkus-bom-3.33.1.pom'
+POM = 'io/quarkus/platform/quarkus-bom/3.40.1/quarkus-bom-3.40.1.pom'
 PLUGIN = 'org/apache/maven/plugins/maven-compiler-plugin/3.15.0/maven-compiler-plugin-3.15.0.jar'
 PROCESSOR = 'com/google/errorprone/error_prone_core/2.50.0/error_prone_core-2.50.0.jar'
 for rel in (POM, PLUGIN, PROCESSOR):
@@ -202,7 +208,7 @@ def drop_lock_line(rel):
 
 CASES = [
     ('tampered import POM', lambda head: plant(head, POM, append_comment), None,
-     'io.quarkus.platform:quarkus-bom:pom:3.33.1 trusted checksum mismatch'),
+     'io.quarkus.platform:quarkus-bom:pom:3.40.1 trusted checksum mismatch'),
     ('tampered plugin jar', lambda head: plant(head, PLUGIN, add_entry), None,
      'org.apache.maven.plugins:maven-compiler-plugin:jar:3.15.0 trusted checksum mismatch'),
     ('unlisted processor jar', lambda head: None, drop_lock_line(PROCESSOR),

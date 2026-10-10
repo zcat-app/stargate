@@ -313,7 +313,7 @@ alone, `STARGATE_IN_CONTAINER` and no-masquerade are insufficient evidence.
 **T204 CP HTTP mechanism:** the headless control plane retains a bodyless
 `GET /healthz` application endpoint. When HTTP is enabled, its effective host
 must be the literal IPv4 loopback address `127.0.0.1` in the CP's own network
-namespace. With the pinned Quarkus 3.33.1 framework, the application guard checks
+namespace. With the pinned Quarkus 3.40.1 framework, the application guard checks
 the effective options before HTTP server deployment and refuses other host
 values without resolving them. IPv6 HTTP host values, HTTPS activation and HTTP domain sockets are unsupported;
 the separate framework management interface is also unsupported. HTTP may be

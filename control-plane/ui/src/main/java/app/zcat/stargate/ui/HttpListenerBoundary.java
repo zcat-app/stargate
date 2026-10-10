@@ -11,7 +11,7 @@ import jakarta.enterprise.event.Observes;
 
 /**
  * Deployment Model / foundation-boundaries: configuration precedence cannot
- * turn the Local health stub into a wildcard listener. Quarkus 3.33.1 calls
+ * turn the Local health stub into a wildcard listener. Quarkus 3.40.1 calls
  * these customizers before deploying its HTTP server, and fires the separate
  * management Router event before publishing that router to server startup.
  */
@@ -27,7 +27,7 @@ public class HttpListenerBoundary implements HttpServerOptionsCustomizer {
 
     @Override
     public void customizeHttpsServer(HttpServerOptions options) {
-        // Quarkus 3.33.1 discards the HTTPS placeholder when no key/cert is set.
+        // Quarkus 3.40.1 discards the HTTPS placeholder when no key/cert is set.
         if (options.getKeyCertOptions() != null) {
             throw refused();
         }

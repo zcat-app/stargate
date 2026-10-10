@@ -20,7 +20,7 @@ import jakarta.enterprise.event.Observes;
  * liveness, not Tor readiness, authenticated IPC or forwarding success.
  * The handler reads no payload, headers or mutable state.</p>
  *
- * <p>Quarkus 3.33 has no declarative route annotation for plain
+ * <p>Quarkus 3.40 has no declarative route annotation for plain
  * vertx-http; the documented registration mechanism is observing the
  * {@link Router} before the server accepts traffic. The route is bound to
  * GET only, so any other method or any other path 404s by default.</p>

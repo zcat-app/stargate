@@ -34,10 +34,10 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.release>25</maven.compiler.release>
 
-        <!-- Quarkus 3.33 LTS — constitution v1.1.0 / research.md §1 -->
+        <!-- Quarkus 3.40 LTS — T217 promotion for reproducible JVM artifacts. -->
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
-        <quarkus.platform.version>3.33.1</quarkus.platform.version>
+        <quarkus.platform.version>3.40.1</quarkus.platform.version>
 
         <!-- Quarkiverse JDBC SQLite — independent versioning from Quarkus BOM -->
         <quarkus-jdbc-sqlite.version>3.0.11</quarkus-jdbc-sqlite.version>
