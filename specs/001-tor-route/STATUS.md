@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 19 |
+| pending | 18 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 220 |
+| done | 221 |
 | deferred | 8 |
 | **total** | **247** |
 
@@ -33,7 +33,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T075 | Author `tests/reproducibility/data_plane_test.sh` | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T109 | Cross-host JVM reproducibility assertion at release cadence | 6: Polish & Cross-Cutting Concerns |  | ✓ |
-| T112 | Wire the stale-prose regression guard as a contract test | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
@@ -69,7 +68,7 @@ _(nothing in flight)_
 
 ## Done
 
-_220 ticket(s) done._
+_221 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -202,6 +201,7 @@ _220 ticket(s) done._
 - T108 — verify.sh must record repro-test SKIP as SKIP, not PASS
 - T110 — Hermetic digest-agreement assertion for alpine:3.20 pins
 - T111 — BUILD-DIFFS: document extension zip binary as build input
+- T112 — Wire the stale-prose regression guard as a contract test
 - T113 — Drop the inert PostConstruct token from ExcludedFieldAnnotations
 - T114 — Wire staticcheck + gosec into the Go workspace gate (data-plane TCB)
 - T115 — Fix the wire gate's comment-sensitive impl-detection probe

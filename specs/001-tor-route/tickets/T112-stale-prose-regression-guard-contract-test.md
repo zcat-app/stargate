@@ -1,9 +1,9 @@
 ---
 id: T112
 title: 'Wire the stale-prose regression guard as a contract test'
-status: pending
+status: done
 created: 2026-09-02
-last_updated: "2026-09-12"
+last_updated: "2026-10-10"
 source: T083 review round 1 RECOMMENDED-FOLLOW-UP #1
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
@@ -18,8 +18,8 @@ spec_refs: []
 decision_refs: []
 constitution_refs:
   - "VI: Open and auditable"
-reviews: {}
-overrides: []
+reviews: { round: 1, date: 2026-10-10, verdict: APPROVE, candidate: d20cba4f16b0981a7c200a60d696890fff51605aeedeb23abc81f711a8f9c7a6, reviewers: "gpt-6-astra/high and gpt-6-luna/high", findings: "Both approved; no findings." }
+overrides: [{"date":"2026-10-10","by":"user","decision":"Limit verification to the new doc-hygiene guard and affected ticket/status/diff checks; do not run the full verify gate or unrelated suites","reason":"The user authorized affected-only testing and expressly excluded full verify, unrelated suites, VM, push, and merge."}]
 aborted_attempts: []
 reopens: []
 redteam_findings: []
@@ -63,10 +63,24 @@ the same regression-guard shape the repo uses everywhere else.
    removal.
 4. verify.sh Gate 4 discovers and passes it on the clean tree; no
    changes to scripts/verify.sh itself are needed (discovery is
-   automatic).
+   automatic). Gate 4 inclusion is verified by inspecting its discovery
+   command; the authorized run exercises this script directly.
 
 ## Out-of-scope
 
 Generalized prose-quality or NLP-ish checks; re-editing T083's landed
 content; adding phrases beyond the three verified ones (later sweeps
 extend the list via acceptance #2's mechanism).
+
+## Implementation evidence
+
+- `bash tests/contract/doc_hygiene_test.sh` passes on the clean tree.
+- A temporary living-doc probe containing `outstanding follow-up` made the
+  guard exit nonzero and report the probe's exact path and line; after removal,
+  the direct run passed again.
+- Gate 4's `find tests/contract` command matches `*_test.sh`; inclusion was
+  confirmed by inspection without running the full verification gate, per the
+  user-authorized affected-only scope.
+- Verification is limited to the guard, ticket lint/frontmatter, regenerated
+  STATUS consistency, shell syntax, and diff checks. The user explicitly
+  excluded full `scripts/verify.sh`, unrelated suites, VM, push, and merge.
