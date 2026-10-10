@@ -52,6 +52,8 @@
 //     session and once after it (so a capture that died mid-session fails);
 //  4. forwarding exercised: every CONNECT round-tripped bytes through the DP
 //     to the fake upstream, and the fake saw every distinct partition.
+//  5. capture integrity: both interfaces have final readable packet-socket
+//     stats, no non-timeout read errors, zero drops, and zero queue freezes.
 //
 // Falsifier: TestDNSLeakDetectsSimulatedDPQuery runs the same harness and
 // verdict while a resolver query for a routed hostname — what a DP that
@@ -152,6 +154,7 @@ var t034Targets = []string{
 }
 
 var errT034Leak = errors.New("DNS LEAK DETECTED")
+var errT034CaptureIntegrity = errors.New("DNS CAPTURE INTEGRITY FAILURE")
 
 // TestDNSLeak is the T034 / SC-003 per-PR DNS-leak regression gate: a
 // 60-second routed session through the real DP emits zero DNS for any
@@ -159,6 +162,7 @@ var errT034Leak = errors.New("DNS LEAK DETECTED")
 // controls and forwarding guards holding.
 func TestDNSLeak(t *testing.T) {
 	res := t034RunSession(t, t034SessionWin, nil)
+	t034LogCaptureStats(t, res)
 	if err := t034Verdict(res); err != nil {
 		t.Fatalf("T034: %v", err)
 	}
@@ -175,6 +179,7 @@ func TestDNSLeakDetectsSimulatedDPQuery(t *testing.T) {
 	res := t034RunSession(t, t034FalsifierWin, func() error {
 		return t034SendQuery(t034SystemResolver(), injected)
 	})
+	t034LogCaptureStats(t, res)
 	err := t034Verdict(res)
 	if !errors.Is(err, errT034Leak) {
 		t.Fatalf("simulated DP-side query for %s was not reported as a leak; verdict = %v", injected, err)
@@ -197,6 +202,15 @@ func TestDNSLeakDetectsSimulatedDPQuery(t *testing.T) {
 	t.Logf("OK: falsifier — verdict failed as required: %v", err)
 }
 
+func t034LogCaptureStats(t *testing.T, res t034Result) {
+	t.Helper()
+	for _, iface := range res.ifaces {
+		health := res.captureHealth[iface]
+		t.Logf("T206 AF_PACKET final stats iface=%s known=%t packets=%d drops=%d queue_freezes=%d read_errors=%d first_read_error=%q",
+			iface, health.statsKnown, health.packets, health.drops, health.queueFreezes, health.readErrorCount, health.firstReadError)
+	}
+}
+
 // t034Record is one parsed DNS name observed on a captured interface.
 type t034Record struct {
 	Iface     string
@@ -209,6 +223,31 @@ type t034Record struct {
 	Direction string // "query" or "response"
 }
 
+// t034CaptureHealth is the integrity evidence for one required AF_PACKET
+// capture. It is carried separately from DNS records so a clean-looking
+// packet set cannot hide a failed read or an incomplete kernel packet ring.
+type t034CaptureHealth struct {
+	readErrorCount uint64
+	firstReadError string
+	statsKnown     bool
+	packets        uint64
+	drops          uint64
+	queueFreezes   uint64
+}
+
+const t034MaxReadErrorDiagnosticBytes = 256
+
+func (h *t034CaptureHealth) recordReadError(message string) {
+	h.readErrorCount++
+	if h.firstReadError != "" {
+		return
+	}
+	if len(message) > t034MaxReadErrorDiagnosticBytes {
+		message = message[:t034MaxReadErrorDiagnosticBytes]
+	}
+	h.firstReadError = message
+}
+
 func (r t034Record) String() string {
 	return fmt.Sprintf("[%s] %s %s:%d → %s:%d qname=%s qtype=%s",
 		r.Iface, r.Direction, r.SrcIP, r.SrcPort, r.DstIP, r.DstPort, r.Name, r.QType)
@@ -218,6 +257,7 @@ func (r t034Record) String() string {
 type t034Result struct {
 	ifaces             []string
 	started            int32
+	captureHealth      map[string]t034CaptureHealth
 	controls           map[string][]string // control name -> interface it must appear on
 	records            []t034Record
 	issued, completed  int
@@ -247,6 +287,24 @@ func t034Verdict(res t034Result) error {
 	if len(leaks) > 0 {
 		return fmt.Errorf("%w — FR-003/FR-007 regression (a routed target was resolved locally): %d packet(s):\n  %s",
 			errT034Leak, len(leaks), strings.Join(leaks, "\n  "))
+	}
+	for _, iface := range res.ifaces {
+		health, ok := res.captureHealth[iface]
+		if !ok {
+			return fmt.Errorf("%w — no final capture health recorded for %s", errT034CaptureIntegrity, iface)
+		}
+		if health.readErrorCount != 0 {
+			return fmt.Errorf("%w — packet read failed %d time(s) on %s; first error: %s", errT034CaptureIntegrity, health.readErrorCount, iface, health.firstReadError)
+		}
+		if !health.statsKnown {
+			return fmt.Errorf("%w — final packet-socket statistics unavailable on %s", errT034CaptureIntegrity, iface)
+		}
+		if health.drops != 0 {
+			return fmt.Errorf("%w — packet socket dropped %d packet(s) on %s", errT034CaptureIntegrity, health.drops, iface)
+		}
+		if health.queueFreezes != 0 {
+			return fmt.Errorf("%w — packet socket queue froze %d time(s) on %s", errT034CaptureIntegrity, health.queueFreezes, iface)
+		}
 	}
 	if int(res.started) != len(res.ifaces) {
 		return fmt.Errorf("capture started on %d of %d interfaces (%v); zero-DNS would be vacuous",
@@ -285,8 +343,19 @@ func t034Verdict(res t034Result) error {
 // mid-session when non-nil), proves the capture is still live, and
 // returns the observations. Skips — never passes — without CAP_NET_RAW.
 func t034RunSession(t *testing.T, window time.Duration, inject func() error) t034Result {
+	return t034RunSessionWithCaptureFault(t, window, inject, "")
+}
+
+// t034RunSessionWithCaptureFault runs the same real-DP/fake-SOCKS session as
+// T034. A nonempty fault selects an in-memory capture source for deterministic
+// integrity regressions; the real AF_PACKET implementation remains the
+// default path and is the only path used by TestDNSLeak.
+func t034RunSessionWithCaptureFault(t *testing.T, window time.Duration, inject func() error, fault string) t034Result {
 	t.Helper()
-	t034RequireCapture(t)
+	syntheticCapture := fault != ""
+	if !syntheticCapture {
+		t034RequireCapture(t)
+	}
 	egressNIC, err := t034DefaultEgressNIC()
 	if err != nil {
 		t.Fatalf("could not determine default egress NIC: %v", err)
@@ -351,31 +420,42 @@ func t034RunSession(t *testing.T, window time.Duration, inject func() error) t03
 
 	// --- capture on both interfaces; every UDP/53 name is recorded.
 	var (
-		mu      sync.Mutex
-		records []t034Record
-		started atomic.Int32
-		wg      sync.WaitGroup
+		mu            sync.Mutex
+		records       []t034Record
+		started       atomic.Int32
+		wg            sync.WaitGroup
+		captureHealth = make(map[string]t034CaptureHealth, len(ifaces))
 	)
 	captureCtx, captureCancel := context.WithCancel(context.Background())
 	defer captureCancel()
-	ready := make(chan struct{}, len(ifaces))
-	for _, iface := range ifaces {
-		wg.Add(1)
-		go func(iface string) {
-			defer wg.Done()
-			t034Capture(captureCtx, iface, &started, ready, func(r t034Record) {
+	if syntheticCapture {
+		started.Store(int32(len(ifaces)))
+		for _, iface := range ifaces {
+			captureHealth[iface] = t034CaptureHealth{statsKnown: true, packets: 4}
+		}
+	} else {
+		ready := make(chan struct{}, len(ifaces))
+		for _, iface := range ifaces {
+			wg.Add(1)
+			go func(iface string) {
+				defer wg.Done()
+				health := t034Capture(captureCtx, iface, &started, ready, func(r t034Record) {
+					mu.Lock()
+					if len(records) < t034MaxRecords {
+						records = append(records, r)
+					}
+					mu.Unlock()
+				}, t.Logf)
 				mu.Lock()
-				if len(records) < t034MaxRecords {
-					records = append(records, r)
-				}
+				captureHealth[iface] = health
 				mu.Unlock()
-			}, t.Logf)
-		}(iface)
-	}
-	for range ifaces {
-		select {
-		case <-ready:
-		case <-time.After(5 * time.Second):
+			}(iface)
+		}
+		for range ifaces {
+			select {
+			case <-ready:
+			case <-time.After(5 * time.Second):
+			}
 		}
 	}
 
@@ -404,6 +484,18 @@ func t034RunSession(t *testing.T, window time.Duration, inject func() error) t03
 		return true
 	}
 	sendControls := func(name string) {
+		if syntheticCapture {
+			for _, iface := range ifaces {
+				if err := t034SendQuery(controlAddrs[iface], name); err != nil {
+					t.Logf("control query %s via %s: %v", name, iface, err)
+					continue
+				}
+				mu.Lock()
+				records = append(records, t034Record{Iface: iface, Name: name})
+				mu.Unlock()
+			}
+			return
+		}
 		deadline := time.Now().Add(t034ControlWait)
 		for !sawControl(name) && time.Now().Before(deadline) {
 			for _, iface := range ifaces {
@@ -419,7 +511,7 @@ func t034RunSession(t *testing.T, window time.Duration, inject func() error) t03
 	}
 
 	// --- the routed session.
-	res := t034Result{ifaces: ifaces, controls: map[string][]string{ctlPre: ifaces, ctlPost: ifaces}}
+	res := t034Result{ifaces: ifaces, captureHealth: captureHealth, controls: map[string][]string{ctlPre: ifaces, ctlPost: ifaces}}
 	partitions := map[string]bool{}
 	var connMu sync.Mutex
 	var connWG sync.WaitGroup
@@ -428,6 +520,20 @@ func t034RunSession(t *testing.T, window time.Duration, inject func() error) t03
 	injectAt := time.Now().Add(window / 2)
 	for i := 0; time.Now().Before(deadline); i++ {
 		<-ticker.C
+		if syntheticCapture && i == 1 {
+			for _, iface := range ifaces {
+				health := captureHealth[iface]
+				switch fault {
+				case "read-error":
+					health.recordReadError("injected non-timeout packet read error")
+				case "drop":
+					if iface == ifaces[len(ifaces)-1] {
+						health.drops = 1
+					}
+				}
+				captureHealth[iface] = health
+			}
+		}
 		if inject != nil && !time.Now().Before(injectAt) {
 			if err := inject(); err != nil {
 				t.Fatalf("inject simulated DP-side query: %v", err)
@@ -469,6 +575,7 @@ func t034RunSession(t *testing.T, window time.Duration, inject func() error) t03
 	}
 
 	res.started = started.Load()
+	res.captureHealth = captureHealth
 	mu.Lock()
 	res.records = append([]t034Record(nil), records...)
 	mu.Unlock()
@@ -492,9 +599,11 @@ func t034RequireCapture(t *testing.T) {
 }
 
 // t034Capture records every DNS name in UDP/53 packets on iface until ctx
-// ends. started is incremented only after the handle opened; ready is
-// signalled either way so the caller never waits on a dead goroutine.
-func t034Capture(ctx context.Context, iface string, started *atomic.Int32, ready chan<- struct{}, record func(t034Record), log func(string, ...any)) {
+// ends, then reads final packet-socket stats before closing the handle.
+// started is incremented only after the handle opened; ready is signalled
+// either way so the caller never waits on a dead goroutine.
+func t034Capture(ctx context.Context, iface string, started *atomic.Int32, ready chan<- struct{}, record func(t034Record), log func(string, ...any)) t034CaptureHealth {
+	health := t034CaptureHealth{}
 	handle, err := afpacket.NewTPacket(
 		afpacket.OptInterface(iface),
 		afpacket.OptBlockTimeout(t034CaptureBlockTimeout),
@@ -503,7 +612,8 @@ func t034Capture(ctx context.Context, iface string, started *atomic.Int32, ready
 	if err != nil {
 		log("t034: afpacket.NewTPacket(%s): %v — capture NOT started", iface, err)
 		ready <- struct{}{}
-		return
+		health.recordReadError(err.Error())
+		return health
 	}
 	defer handle.Close()
 	started.Add(1)
@@ -514,18 +624,19 @@ func t034Capture(ctx context.Context, iface string, started *atomic.Int32, ready
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			goto stopped
 		default:
 		}
 		packet, err := src.NextPacket()
 		if err != nil {
 			if ctx.Err() != nil {
-				return
+				goto stopped
 			}
 			// ErrTimeout is the benign block retirement; anything else is
 			// surfaced (a silently dead capture is caught by the post control).
 			if !errors.Is(err, afpacket.ErrTimeout) {
 				log("t034: NextPacket on %s: %v (continuing)", iface, err)
+				health.recordReadError(err.Error())
 			}
 			continue
 		}
@@ -533,6 +644,21 @@ func t034Capture(ctx context.Context, iface string, started *atomic.Int32, ready
 			record(r)
 		}
 	}
+
+stopped:
+	legacy, v3, statsErr := handle.SocketStats()
+	if statsErr != nil {
+		log("t034: final SocketStats on %s: %v — capture integrity unknown", iface, statsErr)
+		return health
+	}
+	health.statsKnown = true
+	// Exactly one counter family is active for a TPacket handle; summing
+	// keeps zero-packet/drop-only and V1/V2 fallback cases visible without
+	// needing to inspect gopacket's private negotiated-version field.
+	health.packets = uint64(legacy.Packets()) + uint64(v3.Packets())
+	health.drops = uint64(legacy.Drops()) + uint64(v3.Drops())
+	health.queueFreezes = uint64(v3.QueueFreezes())
+	return health
 }
 
 // t034ParseDNS returns every question and answer name of a UDP/53 DNS packet.

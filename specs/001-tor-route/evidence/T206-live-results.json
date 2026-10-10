@@ -1,0 +1,79 @@
+{
+  "schema": 1,
+  "ticket": "T206",
+  "captured_at_utc": "2026-10-10",
+  "candidate": {
+    "baseline_commit": "31ee7e2744b8cc320f12c2b45fce64d5fb466fb6",
+    "tests_first_red_source_sha256": "72e31768791a65ce89ec4f83b16458de499d89bd1ea10c3c4c3c408123efe103",
+    "live_test_source_sha256": "98982236fb536a95fbeed5ecf8ace4c5894260aec4bab21e378206e54e5e1370",
+    "live_test_binary_sha256": "000b9227391276906800b9a2aa04da7e98f7b90e5529917d6f3341f1d70bf894",
+    "final_focused_test_binary_sha256": "e8b9c3df53de7b0306c45f411b1eea35e1dcf5bb31798280ef8cdc701b834cc1",
+    "post_live_source_change": "Comment-only clarification of the already-tested capture-integrity verdict and statistics; no executable statements changed. The exact focused tests-first command passed again on the final source."
+  },
+  "environment": {
+    "kind": "disposable Docker container on the existing host; no VM",
+    "docker_engine": "29.1.3",
+    "image": "stargate-t217-builder:local",
+    "image_id": "sha256:97b49db138480fa2fded3a6c7535ce00f7a566e00c81b8a5e41d5deed1bb4f7b",
+    "image_os": "Ubuntu 24.04.4 LTS, linux/amd64",
+    "network_mode": "bridge",
+    "capabilities": ["NET_RAW"],
+    "repository_mount": "read-only, at the same absolute path used when the test binary was built",
+    "go_root_mount": "read-only",
+    "module_cache_mount": "read-only",
+    "container_cleanup": "docker run --rm; container removed after exit"
+  },
+  "command": {
+    "test_binary": "<repo>/target/runs/T206-integration.test",
+    "args": [
+      "-test.v",
+      "-test.run=^(TestDNSLeak|TestDNSLeakDetectsSimulatedDPQuery)$",
+      "-test.count=1"
+    ],
+    "toolchain": "go1.26.0 linux/amd64",
+    "docker_options": ["--network bridge", "--cap-drop ALL", "--cap-add NET_RAW", "--rm"]
+  },
+  "verification": {
+    "scripts/verify.sh": "NOT RUN; the maintainer explicitly limited verification to affected-part tests.",
+    "run-task.sh final whole-tree gate": "NOT RUN; no unrelated language suites were executed."
+  },
+  "scope": {
+    "interfaces": ["lo", "eth0 (default route in the disposable container namespace)"],
+    "protocol": "UDP/53",
+    "limitations": [
+      "Observes this disposable container namespace only.",
+      "Does not establish browser-wide, host physical-NIC, TCP/53, DoT, or DoH coverage."
+    ]
+  },
+  "results": {
+    "TestDNSLeak": {
+      "status": "PASS",
+      "duration_seconds": 77.73,
+      "routed_connects_completed": 60,
+      "routed_connects_issued": 60,
+      "upstream_partitions": 17,
+      "positive_controls": {
+        "before_session": {"status": "PASS", "observed_on": ["lo", "eth0"]},
+        "after_session": {"status": "PASS", "observed_on": ["lo", "eth0"]}
+      },
+      "routed_target_dns_packets": 0,
+      "final_packet_socket_stats": {
+        "lo": {"known": true, "packets": 1928, "drops": 0, "queue_freezes": 0, "read_errors": 0},
+        "eth0": {"known": true, "packets": 6, "drops": 0, "queue_freezes": 0, "read_errors": 0}
+      }
+    },
+    "TestDNSLeakDetectsSimulatedDPQuery": {
+      "status": "PASS (expected leak verdict observed)",
+      "duration_seconds": 6.72,
+      "expected_leak_verdict": "DNS LEAK DETECTED",
+      "injected_target": "t183-hostname-probe.example.org",
+      "observed_leak_packets": 2,
+      "observed_on": "eth0",
+      "cleaned_falsifier_run": "PASS; controls, forwarding, and partitions remained valid after removing injected leak records",
+      "final_packet_socket_stats": {
+        "lo": {"known": true, "packets": 200, "drops": 0, "queue_freezes": 0, "read_errors": 0},
+        "eth0": {"known": true, "packets": 7, "drops": 0, "queue_freezes": 0, "read_errors": 0}
+      }
+    }
+  }
+}

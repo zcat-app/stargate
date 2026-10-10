@@ -1,9 +1,9 @@
 ---
 id: "T206"
 title: "Reject degraded DNS capture evidence"
-status: pending
+status: in-progress
 created: "2026-10-03"
-last_updated: "2026-10-03"
+last_updated: 2026-10-10
 source: "T155 resumed transport falsification m1; falsify-1-transport.md (2026-10-03); maintainer-approved next scope after T203"
 phase: "Foundation audit remediation"
 story: "-"
@@ -25,6 +25,7 @@ constitution_refs:
   - "VII/VIII: discriminating evidence and honest executed/skipped coverage"
 decision_refs:
   - "2026-10-03 maintainer: approve full next scope after T203; file DNS capture Minor with release/consumer blockers, without making it a T155 blocker or executing it ahead of the agreed sequence"
+  - "2026-10-10 maintainer: authorize T206 as a prerequisite while finishing the step-14 batch; keep Astra+Luna review with GLM paused, run only affected-part tests, and do not use a VM"
 reviews: {}
 overrides: []
 aborted_attempts: []

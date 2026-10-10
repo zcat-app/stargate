@@ -344,6 +344,15 @@ PR cadence — `T034a` (SC-003 DNS-leak Wireshark measurement),
 release-tag sweeps (`T077`–`T079`) are existing instances of this pattern,
 inlined into the spec rather than gathered under a tracker.
 
+The automated T034 DNS gate is a separate per-PR check. A zero-leak result is
+valid only when capture stayed intact on both the test namespace's loopback
+and default-route interface: retain final per-interface packet, drop, and
+queue-freeze statistics, and reject unreadable statistics, non-timeout read
+errors, any packet drops, or queue freezes. Missing packet-capture capability
+is an explicit skip, never a pass. Its claim remains limited to UDP/53 in that
+namespace; sanitized evidence records the candidate, tools, controls, and
+statistics without expanding this into browser-wide or encrypted-DNS coverage.
+
 When the first vertical slice approaches `done` (Phase 5+), author a living
 tracker at `specs/NNN-feature/live-e2e/README.md` that:
 
