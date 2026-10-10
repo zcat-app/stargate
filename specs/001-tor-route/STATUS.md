@@ -13,12 +13,12 @@
 
 | Status | Count |
 |---|---|
-| pending | 16 |
-| in-progress | 1 |
+| pending | 17 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 222 |
-| deferred | 9 |
+| done | 223 |
+| deferred | 8 |
 | **total** | **248** |
 
 ---
@@ -31,6 +31,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T109 | Cross-host JVM reproducibility assertion at release cadence | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
@@ -45,9 +46,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T217 | Make shipped Quarkus artifacts byte-reproducible | in-progress |  | 6: Polish & Cross-Cutting Concerns |
+_(nothing in flight)_
 
 ---
 
@@ -58,7 +57,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | spec-amend | T089 |
 | T068 | Contract test `tests/contract/error-template/body_byte_match | decomposed | T071 |
 | T069 | Contract tests `tests/contract/error-template/reference_id_u | decomposed | T071 |
-| T109 | Cross-host JVM reproducibility assertion at release cadence | blocked-on-new-ticket | T217 |
 | T117 | Reconcile arch §14.4 hardening-record example with T091 | blocked-on-new-ticket | T205 |
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
@@ -69,7 +67,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_222 ticket(s) done._
+_223 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -293,3 +291,4 @@ _222 ticket(s) done._
 - T213 — Restore fresh Tor builds with reviewed 0.4.9.14 package promotion
 - T214 — Make delayed review-boundary controls deterministic
 - T216 — Exclude generated files from the root Docker context
+- T217 — Make shipped Quarkus artifacts byte-reproducible

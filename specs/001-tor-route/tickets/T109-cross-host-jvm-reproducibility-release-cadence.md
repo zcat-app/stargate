@@ -1,7 +1,7 @@
 ---
 id: T109
 title: 'Cross-host JVM reproducibility assertion at release cadence'
-status: deferred
+status: pending
 created: 2026-09-02
 last_updated: 2026-10-10
 source: T098 review rounds 1+2 RECOMMENDED-FOLLOW-UP (carried)
@@ -21,12 +21,12 @@ constitution_refs:
   - "VI: Open and auditable"
 reviews: {}
 overrides: []
-aborted_attempts: []
-reopens: []
+aborted_attempts: [{ date: 2026-10-10, round: 1, reason: "run-task --reset", history: target/runs/T109.review-history }]
+reopens: [{ date: 2026-10-10, blocker: T217, resolved_by: cde54ea275818da7818cf23bb3ed6fcb96ccd5f9, prior_deferral_commit: bfa96dd14792ff4f6775cd7a66a3f8d593d4aa5d, prior_deferral_reason: blocked-on-new-ticket }]
 redteam_findings: []
 clarity_check: {}
-deferred_on: T217
-deferred_reason: blocked-on-new-ticket
+deferred_on:
+deferred_reason:
 ---
 
 # T109: Cross-host JVM reproducibility assertion at release cadence

@@ -1,7 +1,7 @@
 ---
 id: T217
 title: "Make shipped Quarkus artifacts byte-reproducible"
-status: in-progress
+status: done
 created: 2026-10-10
 last_updated: 2026-10-10
 source: "T109 cross-host comparison 2026-10-10: shipped generated-bytecode.jar, transformed-bytecode.jar, and quarkus-application.dat differ across approved build environments"
@@ -22,7 +22,7 @@ spec_refs:
   - "specs/000-architecture/spec.md §12.2"
 decision_refs:
   - "specs/001-tor-route/tickets/T109-cross-host-jvm-reproducibility-release-cadence.md §Implementation checkpoint"
-reviews: {}
+reviews: { round: 4, date: 2026-10-10, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []
