@@ -1,9 +1,9 @@
 ---
 id: T111
 title: 'BUILD-DIFFS: document extension zip binary as build input'
-status: pending
+status: done
 created: 2026-09-02
-last_updated: "2026-09-12"
+last_updated: "2026-10-10"
 source: T097 review round 1 (APPROVE) RECOMMENDED-FOLLOW-UP
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
@@ -19,8 +19,9 @@ spec_refs:
 decision_refs: []
 constitution_refs:
   - "VI: Open and auditable"
-reviews: {}
-overrides: []
+reviews: { round: 1, date: 2026-10-10, verdict: APPROVE, candidate_sha256: "c3e468ef21bd41c5e6ceef90ccfaa02063b1c0927857b32c474e3f41198a432c", reviewers: "gpt-6-astra/high: APPROVE; gpt-6-luna/high: APPROVE", findings: "Both reviewers approved the exact candidate; no open findings." }
+overrides:
+  - "2026-10-10, user-authorized scoped verification: run affected documentation/ticket checks only; omit full scripts/verify.sh, VM, Java, unrelated suites, push and merge."
 aborted_attempts: []
 reopens: []
 redteam_findings: []
@@ -74,3 +75,15 @@ Pinning the zip binary in package.sh or CI — a real but separate
 supply-chain decision (Principle IV promotion flow); file its own
 ticket if T081's release build needs it. Any change to package.sh or
 the reproducibility test.
+
+## Verification
+
+- Confirmed against architecture §12.3, `extension/package.sh`, and
+  `tests/reproducibility/extension_test.sh`: same-host reproducibility is
+  gated, while cross-version output is untested and the host `zip` executable
+  is unpinned.
+- `scripts/lint-ticket.py` and YAML frontmatter parsing passed; `STATUS.md` was
+  regenerated from ticket frontmatter; `git diff --check` passed.
+- Per the user-authorized scope override above, repository-wide
+  `scripts/verify.sh`, VM, Java, and unrelated suites were not run. This is a
+  documentation-only change.

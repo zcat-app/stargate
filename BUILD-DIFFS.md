@@ -6,6 +6,32 @@
 > variations. An auditor comparing two builds of the same source commit
 > should treat entries here as known-acceptable and focus on anything else.
 
+## Browser extension (`extension/`)
+
+**Gated property — byte-identical on the same host.** Two builds of the same
+extension source using the same host `zip` executable produce byte-identical
+archives even when source mtimes and modes are perturbed. The release-cadence
+gate `tests/reproducibility/extension_test.sh`
+(`STARGATE_VERIFY_REPRO=1`) also checks the expected member set and
+lexicographic order, canonical 1980-01-01 timestamps, Unix file modes
+(`100644`), and absence of extra fields. `extension/package.sh` stages and
+normalizes files before invoking the host `zip`; this test does not compare
+different `zip` executables or versions.
+
+**Expected variance — unpinned `zip` executable.** The repository does not pin
+or record the `zip` executable used by `extension/package.sh`. Different
+Info-ZIP builds or versions may therefore produce different compressed bytes
+through deflate implementation changes, or different EFS/Unicode filename
+flags for non-ASCII member names. The repository does not assert byte equality
+across those versions.
+
+**What an auditor should do.** Once T081 records the release build's `zip`
+identity, compare releases built with the same recorded identity. When the
+identity differs, differences confined to the documented compression or
+EFS/Unicode-flag vectors are expected; unexplained differences remain defects.
+Until T081 records that identity, do not infer which `zip` version produced a
+release.
+
 ## JVM control plane (`control-plane/`)
 
 **Gated property — byte-identical.** Two clean `mvnw clean package` builds
