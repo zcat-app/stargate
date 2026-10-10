@@ -544,20 +544,23 @@ was GREEN, 38 PASS / 4 SKIP / 0 FAIL. The local implementation commit is
 `546558d`; reviewer verdicts are retained in `target/runs/T211-r1.verdict`,
 `target/runs/T211-r2.verdict`, and `target/runs/T211-r3.verdict`.
 
-### Temporary reviewer substitution — T109 only (2026-10-10)
+### Temporary reviewer substitution — T109 and authorized batch (2026-10-10)
 
 The maintainer paused GLM until further notice and directed that Luna remain
-in the gate. T109 therefore used fresh Codex `gpt-6-astra` (`high`) and
-Codex `gpt-6-luna` (`high`) contexts on separate copies of each identical
-candidate. This is a one-ticket substitution, not a permanent change to the
-review matrix or Period 1 statistics. Both rounds were scoped to the affected
-T109 checks; `scripts/verify.sh` and VM runs were not performed by instruction.
-Verdict files and copies are retained under `target/runs/T109-review-*`.
+in the gate through step 14 of the current ticket batch. T109 and T206 therefore
+used fresh Codex `gpt-6-astra` (`high`) and Codex `gpt-6-luna` (`high`) contexts
+on separate copies of each identical candidate. This substitution applies only
+to the authorized batch, not the permanent review matrix or Period 1 statistics.
+Reviews were scoped to affected-part evidence; `scripts/verify.sh` and VM runs
+were not performed by instruction. T109 verdicts/copies are under
+`target/runs/T109-review-*`; T206 verdicts/copies are under
+`target/runs/T206-review-*`.
 
 | Date | Ticket | Round | Astra | Luna |
 |---|---|---:|---|---|
 | 2026-10-10 | T109 | 1 | REWORK (1 Major) | APPROVE (0) |
 | 2026-10-10 | T109 | 2 | APPROVE (0) | APPROVE (0) |
+| 2026-10-10 | T206 | 1 | APPROVE (0) | APPROVE (0) |
 
 | Date | Ticket | Round | Sev | Finding | Astra | Luna | Disposition |
 |---|---|---:|---|---|---|---|---|

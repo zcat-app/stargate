@@ -14,10 +14,10 @@
 | Status | Count |
 |---|---|
 | pending | 15 |
-| in-progress | 1 |
+| in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 224 |
+| done | 225 |
 | deferred | 8 |
 | **total** | **248** |
 
@@ -31,6 +31,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T081 | Prepare immutable reviewed release artifacts and workflow | 6: Polish & Cross-Cutting Concerns | ✓ |  |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
@@ -44,9 +45,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T206 | Reject degraded DNS capture evidence | in-progress | ✓ | Foundation audit remediation |
+_(nothing in flight)_
 
 ---
 
@@ -67,7 +66,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_224 ticket(s) done._
+_225 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -286,6 +285,7 @@ _224 ticket(s) done._
 - T203 — Remove observer raw Tor authority with finite health publication
 - T204 — Enforce control-plane HTTP listener boundary at startup
 - T205 — Remove persistent hardening failure events and reconcile the schema
+- T206 — Reject degraded DNS capture evidence
 - T208 — Raise the Tor upstream deadline; align the onion-load gate
 - T210 — Repair Tor verification transport and I/O deadlines
 - T211 — Repair workflow fixture context and owned child cleanup
