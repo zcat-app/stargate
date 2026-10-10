@@ -1,9 +1,9 @@
 ---
 id: T110
 title: 'Hermetic digest-agreement assertion for alpine:3.20 pins'
-status: pending
+status: done
 created: 2026-09-02
-last_updated: "2026-09-12"
+last_updated: "2026-10-10"
 source: T107 review round 1 (APPROVE) RECOMMENDED-FOLLOW-UP #1
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
@@ -19,8 +19,9 @@ decision_refs:
   - SECURITY-DECISIONS.md (alpine:3.20 digest-pin rotation policy)
 constitution_refs:
   - "IV: Every external component digest-pinned"
-reviews: {}
-overrides: []
+reviews: { round: 2, date: 2026-10-10, verdict: APPROVE, candidate_sha256: "17e1ae0931d81ebd5886acd55c0ddf312c170e663177cca827a9c26339b8ad8a", reviewers: "gpt-6-astra/high: APPROVE; gpt-6-luna/high: APPROVE", findings: "Both reviewers approved the exact candidate; no open findings." }
+overrides:
+  - "2026-10-10, user-authorized scoped verification: omit full scripts/verify.sh and VM; run the affected component checks only; preserve T110 red mutation evidence."
 aborted_attempts: []
 reopens: []
 redteam_findings: []
@@ -70,3 +71,26 @@ three sites agree.
 Rotating the pin; tightening the `alpine:[0-9][^@]` gate pattern (its
 tag-vs-digest blind spot belongs to whichever ticket owns that gate);
 any change to fixture services or runtime pull behaviour.
+
+## Implementation evidence
+
+- The changed script was run with a temporary `docker` shim whose `info`
+  command exits 1. It exited 0 after printing its existing
+  `SKIP: docker daemon unreachable` notice, showing the digest agreement
+  check passed before the daemon self-SKIP.
+- In a temporary minimal git-root copy, the single fixture digest was
+  rotated while `STAT_IMAGE` and `SECURITY-DECISIONS.md` stayed unchanged.
+  The same script exited 1 and named
+  `tests/contract/stargate-cli/fixtures/fixture-compose.yml` as disagreeing.
+- `bash -n tests/contract/stargate-cli/init_docker_test.sh`,
+  `python3 scripts/lint-ticket.py specs/001-tor-route/tickets/T110-hermetic-digest-agreement-assertion-alpine.md`,
+  `scripts/regen-status.sh specs/001-tor-route`, and `git diff --check`
+  all passed. The full `scripts/verify.sh` gate and VM were omitted under
+  the scoped verification authorization above.
+- Review trail: round 1 reviewed candidate
+  `6b5d9497598bc1f8314240a22b8217e35e499043eaee4ed1d30a9c6b2e1dd8fb`;
+  `gpt-6-astra/high` returned REWORK for one Minor (the multiline override
+  was invalid YAML), and `gpt-6-luna/high` returned APPROVE. The override was
+  corrected to one quoted scalar. On round 2, candidate
+  `17e1ae0931d81ebd5886acd55c0ddf312c170e663177cca827a9c26339b8ad8a`
+  received APPROVE from both `gpt-6-astra/high` and `gpt-6-luna/high`.

@@ -47,10 +47,21 @@ DISPATCHER="$REPO/scripts/stargate"
 # the fixture anchor, and SECURITY-DECISIONS.md in one PR (new superseding
 # entry there — dated bodies are immutable), then re-run this suite.
 STAT_IMAGE="alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc"
+fail() { echo "FAIL: $*" >&2; exit 1; }
+
+# T107's rotation procedure keeps this runtime input, the fixture anchor, and
+# SECURITY-DECISIONS.md in agreement (Constitution IV). Derive the expected
+# digest from the runtime reference so the check does not create a second pin.
+STAT_DIGEST="${STAT_IMAGE##*@}"
+[[ "$STAT_DIGEST" =~ ^sha256:[[:xdigit:]]{64}$ ]] \
+  || fail "STAT_IMAGE does not contain a valid sha256 digest: $STAT_IMAGE"
+grep -Fq -- "$STAT_DIGEST" "$FIXTURE" \
+  || fail "digest mismatch: $FIXTURE does not contain $STAT_DIGEST"
+grep -Fq -- "$STAT_DIGEST" "$REPO/SECURITY-DECISIONS.md" \
+  || fail "digest mismatch: $REPO/SECURITY-DECISIONS.md does not contain $STAT_DIGEST"
 
 errs=()
 bail() { errs+=("$*"); }
-fail() { echo "FAIL: $*" >&2; exit 1; }
 
 # ---- self-SKIP if the Docker daemon is unreachable ------------------------
 if ! command -v docker >/dev/null 2>&1; then
