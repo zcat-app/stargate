@@ -35,11 +35,16 @@
 # falsification power over the byte comparison.
 #
 # Compared: every file under */target/ except maven-status/ (compiler
-# bookkeeping) and quarkus-grpc*.sh (protoc invocation scratch left in the
+# bookkeeping), quarkus-grpc*.sh (protoc invocation scratch left in the
 # module target root by quarkus-grpc codegen: random per-build name, embeds
 # host paths — JVM home, local ~/.m2 — and is never packaged into any jar;
-# verified against api-*.jar and quarkus-run.jar). Not compared: nothing
-# else — if any shipped output leaks host state, this test must go red.
+# verified against api-*.jar and quarkus-run.jar), and the exact
+# ./control-plane/runtime/target/quarkus-artifact.properties path. That file
+# records metadata.library-dir as an absolute temporary build root and is not
+# shipped: the release Dockerfile copies runtime/target/quarkus-app only, and
+# no build/runtime consumer reads the separate target-root file. Both JVM
+# comparators omit this exact path; identically named files under quarkus-app
+# and all other shipped outputs remain byte-compared.
 #
 # Release cadence: opt-in via STARGATE_VERIFY_REPRO=1 (scripts/verify.sh
 # Gate 5). CI wiring for PRs touching control-plane/ is T076.
@@ -115,6 +120,7 @@ with zipfile.ZipFile(sys.argv[1]) as zf:
 manifest() {
   (cd "$1" && find . -path '*/target/*' -type f \
     -not -path '*/target/maven-status/*' -not -name 'quarkus-grpc*.sh' \
+    -not -path './control-plane/runtime/target/quarkus-artifact.properties' \
     -print0 | LC_ALL=C sort -z | xargs -0 sha256sum)
 }
 manifest "$WORK/a" > "$WORK/a.sha"

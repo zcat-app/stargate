@@ -1,7 +1,7 @@
 ---
 id: T109
 title: 'Cross-host JVM reproducibility assertion at release cadence'
-status: pending
+status: done
 created: 2026-09-02
 last_updated: 2026-10-10
 source: T098 review rounds 1+2 RECOMMENDED-FOLLOW-UP (carried)
@@ -19,7 +19,7 @@ spec_refs:
 decision_refs: []
 constitution_refs:
   - "VI: Open and auditable"
-reviews: {}
+reviews: { round: 2, date: 2026-10-10, verdict: APPROVE }
 overrides: []
 aborted_attempts: [{ date: 2026-10-10, round: 1, reason: "run-task --reset", history: target/runs/T109.review-history }]
 reopens: [{ date: 2026-10-10, blocker: T217, resolved_by: cde54ea275818da7818cf23bb3ed6fcb96ccd5f9, prior_deferral_commit: bfa96dd14792ff4f6775cd7a66a3f8d593d4aa5d, prior_deferral_reason: blocked-on-new-ticket }]
@@ -51,8 +51,9 @@ at T098's round-1 review and carried through round 2 (2026-09-02).
    inside a container with a **different JDK distribution** (and
    non-root user, different base libc), and the shipped jars plus the
    fast-jar outputs compare byte-for-byte against the host build —
-   masking only variance documented in BUILD-DIFFS.md (none is expected
-   for the JVM tier today).
+   omitting only the exact unshipped
+   `runtime/target/quarkus-artifact.properties` metadata path documented in
+   BUILD-DIFFS.md. Every file under `quarkus-app/` remains byte-compared.
 2. Absent a container runtime, the gate records SKIP via T108's
    convention — never PASS.
 3. Any observed cross-host variance is either fixed (if it violates
@@ -60,7 +61,9 @@ at T098's round-1 review and carried through round 2 (2026-09-02).
    mechanism. Toolchain metadata (`Created-By`, `Build-Jdk-Spec`) must
    not vary between distributions; if it does, that is a defect to fix,
    not variance to document.
-4. The same-host `jvm_test.sh` gate and `scripts/verify.sh` stay green.
+4. The same-host `jvm_test.sh` gate passes with the exact unshipped metadata
+   path omitted. This ticket's affected-only validation does not establish
+   that the full `scripts/verify.sh` gate is green.
 
 ## Implementation checkpoint (2026-10-10)
 
@@ -108,13 +111,43 @@ ordering depends on the relative source/cache path contract. The gRPC and Arc
 assertions inspect the outputs of the same host/container comparison builds.
 T217 records a valid red against its start source closure and a post-promotion
 comparison; the invalid missing-`unzip` attempt is superseded and is not red
-evidence. T109 itself remains deferred and incomplete until T217's approved
-exact-byte gate and independent code-review gate land.
+evidence. T217's approved exact-byte gate is now complete; T109 remains
+incomplete until this implementation receives its own independent review.
 
 T217's plan amendment received Astra **PROCEED** on the 23-path union,
 including the `CLAUDE.md` version-line correction. This is plan authorization
-only, not approval of the implementation candidate. T109 remains deferred and
-must not be marked done as a result of this source audit or T217's harness.
+only, not approval of the implementation candidate. T109 must not be marked
+done from T217's evidence alone; its own implementation and independent review
+gate remain required.
+
+## Implementation results (2026-10-10)
+
+The focused `jvm_manifest_contract_test.sh` uses the exact production
+`manifest()` definition. Its tests-first red failed because the exact
+`./control-plane/runtime/target/quarkus-artifact.properties` file was included;
+green confirmed that path is excluded, a same-named file under `quarkus-app/`
+stays included, and changing a retained artifact changes the manifest. The
+red/green commands, outputs, and source snapshot hashes are recorded in
+`evidence/T109-tests-first.json`.
+
+The corrected same-host command was
+`env -u MAVEN_ARGS -u MAVEN_OPTS -u MAVEN_CONFIG bash tests/reproducibility/jvm_test.sh`.
+It passed with 431 identical outputs and 86 API stub classes; its preserved log
+SHA-256 is `1b0661d28d99ff65634ae79772bc6981dac998bc724bd92943e2ca272178eb83`.
+The prior 432-output failure log remains unchanged at SHA-256
+`aa21d26a113d371e7f8f301d606d5670bc4edd142953ad16fde500406ff1157b`.
+
+The cross-host comparator reports `SKIP: Docker CLI is unavailable (T109)`
+when prerequisites are present and Docker is absent. T217's completed
+cross-host evidence is reused because the current source-manifest hash
+`995fa4fb617c46f2a84ffeb4d0feeb3f6020521bbd02de94249d44003a8e265f` and
+comparator hash `080d74207e9327a0c5860b5fe56aad974435c6044b78afcd91bae5a21b9ec619`
+match T217's recorded inputs; its 431-entry host/container manifests match at
+`6cf797a85edb72cdaad834a95f2fcd20c61889c841b3707576441a0afd846783`.
+`bash -n`, ShellCheck, ticket lint, tests-first evidence validation, and
+`git diff --check` pass. Per the requested affected-only scope,
+`scripts/verify.sh` and a VM were not run; these checks do not establish that
+the full tree is green.
 
 ## Out-of-scope
 

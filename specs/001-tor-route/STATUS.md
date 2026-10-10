@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 17 |
+| pending | 16 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 223 |
+| done | 224 |
 | deferred | 8 |
 | **total** | **248** |
 
@@ -31,7 +31,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T109 | Cross-host JVM reproducibility assertion at release cadence | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
@@ -67,7 +66,7 @@ _(nothing in flight)_
 
 ## Done
 
-_223 ticket(s) done._
+_224 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -199,6 +198,7 @@ _223 ticket(s) done._
 - T106 — Make the init count-probe failure path fail-closed (no key clobber)
 - T107 — Digest-pin alpine:3.20 in stargate-cli contract tests
 - T108 — verify.sh must record repro-test SKIP as SKIP, not PASS
+- T109 — Cross-host JVM reproducibility assertion at release cadence
 - T110 — Hermetic digest-agreement assertion for alpine:3.20 pins
 - T111 — BUILD-DIFFS: document extension zip binary as build input
 - T112 — Wire the stale-prose regression guard as a contract test

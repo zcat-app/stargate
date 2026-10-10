@@ -1,0 +1,85 @@
+{
+  "schema": 1,
+  "ticket": "T109",
+  "baseline": "0c24448d974cc75961b261d33803d5a2fb02c6e2",
+  "red": {
+    "patch": "diff --git a/tests/reproducibility/jvm_manifest_contract_test.sh b/tests/reproducibility/jvm_manifest_contract_test.sh\nnew file mode 100755\nindex 0000000..f459a3f\n--- /dev/null\n+++ b/tests/reproducibility/jvm_manifest_contract_test.sh\n@@ -0,0 +1,49 @@\n+#!/usr/bin/env bash\n+# Copyright 2026 The Stargate Authors\n+# SPDX-License-Identifier: Apache-2.0\n+#\n+# Contract for the production manifest in jvm_test.sh. Keep the extraction\n+# narrow so this test exercises the exact comparator function without running\n+# its Maven build harness.\n+\n+set -euo pipefail\n+\n+REPO_ROOT=\"$(cd -- \"$(dirname -- \"${BASH_SOURCE[0]}\")/../..\" && pwd -P)\"\n+PRODUCTION=\"$REPO_ROOT/tests/reproducibility/jvm_test.sh\"\n+WORK=\"$(mktemp -d)\"\n+trap 'rm -rf \"$WORK\"' EXIT\n+\n+manifest_definition=\"$(sed -n '/^manifest() {$/,/^}$/p' \"$PRODUCTION\")\"\n+[ -n \"$manifest_definition\" ] || {\n+  echo 'FAIL: production manifest() definition was not found' >&2\n+  exit 1\n+}\n+source <(printf '%s\\n' \"$manifest_definition\")\n+\n+fixture=\"$WORK/build\"\n+metadata='./control-plane/runtime/target/quarkus-artifact.properties'\n+fast_jar='./control-plane/runtime/target/quarkus-app/quarkus-artifact.properties'\n+retained='./control-plane/runtime/target/quarkus-app/quarkus/generated-bytecode.jar'\n+mkdir -p \"$fixture/control-plane/runtime/target/quarkus-app/quarkus\"\n+printf 'metadata.library-dir=/tmp/build-a\\n' > \"$fixture/$metadata\"\n+printf 'fast-jar-properties=retained\\n' > \"$fixture/$fast_jar\"\n+printf 'artifact bytes\\n' > \"$fixture/$retained\"\n+\n+first_manifest=\"$(manifest \"$fixture\")\"\n+if grep -Fq \"  $metadata\" <<<\"$first_manifest\"; then\n+  echo \"FAIL: exact unshipped metadata is included: $metadata\" >&2\n+  exit 1\n+fi\n+grep -Fq \"  $fast_jar\" <<<\"$first_manifest\" || {\n+  echo \"FAIL: identically named fast-jar file was excluded: $fast_jar\" >&2\n+  exit 1\n+}\n+\n+printf 'changed artifact bytes\\n' > \"$fixture/$retained\"\n+second_manifest=\"$(manifest \"$fixture\")\"\n+if [ \"$first_manifest\" = \"$second_manifest\" ]; then\n+  echo \"FAIL: retained artifact byte change did not change manifest: $retained\" >&2\n+  exit 1\n+fi\n+\n+echo 'OK: exact root metadata excluded; fast-jar same-name file retained; retained bytes affect manifest'\n",
+    "snapshot_sha256": "832839b155efe111a7191819981ebcd07b166a55561e5dae9fc2f806c1d97d86",
+    "command": [
+      "bash",
+      "tests/reproducibility/jvm_manifest_contract_test.sh"
+    ],
+    "exit_code": 1,
+    "output": "FAIL: exact unshipped metadata is included: ./control-plane/runtime/target/quarkus-artifact.properties\n",
+    "output_sha256": "cd5656113d0b17318fa4ac67f7c23a5037dc69a6b2e3fb90bdb9799cdd52673a"
+  },
+  "green": {
+    "snapshot_sha256": "6801ce46800648f5e1687f80b01cb23044fff6fcbf822284cbc9f90c9a7c7c04",
+    "command": [
+      "bash",
+      "tests/reproducibility/jvm_manifest_contract_test.sh"
+    ],
+    "exit_code": 0,
+    "output": "OK: exact root metadata excluded; fast-jar same-name file retained; retained bytes affect manifest\n"
+  },
+  "affected_checks": {
+    "same_host": {
+      "command": [
+        "env",
+        "-u",
+        "MAVEN_ARGS",
+        "-u",
+        "MAVEN_OPTS",
+        "-u",
+        "MAVEN_CONFIG",
+        "bash",
+        "tests/reproducibility/jvm_test.sh"
+      ],
+      "exit_code": 0,
+      "output": "OK: JVM build byte-reproducible across mtime perturbation (431 build outputs identical, 86 api stub classes)\n",
+      "output_sha256": "1b0661d28d99ff65634ae79772bc6981dac998bc724bd92943e2ca272178eb83",
+      "log_path": "target/runs/T109/same-host-jvm-test-corrected.log",
+      "compared_outputs": 431,
+      "api_stub_classes": 86
+    },
+    "preserved_same_host_red": {
+      "log_path": "target/runs/T109/same-host-jvm-test.log",
+      "log_sha256": "aa21d26a113d371e7f8f301d606d5670bc4edd142953ad16fde500406ff1157b",
+      "compared_outputs": 432,
+      "sole_difference": "./control-plane/runtime/target/quarkus-artifact.properties"
+    },
+    "docker_absent": {
+      "command": "private_path=\"$(mktemp -d)\"; for tool in java javac javap sha256sum python3 readlink getconf dirname; do tool_path=\"$(command -v \"$tool\")\"; ln -s \"$tool_path\" \"$private_path/$tool\"; done; PATH=\"$private_path\" /bin/bash tests/reproducibility/jvm_cross_host_test.sh",
+      "exit_code": 0,
+      "output": "SKIP: Docker CLI is unavailable (T109)\n",
+      "output_sha256": "a3f5ca5b50908fa1257d460a2d6c994e663bd9a7af417a69fa5f87a3330d4f98",
+      "prerequisites_present": [
+        "java",
+        "javac",
+        "javap",
+        "sha256sum",
+        "python3",
+        "readlink",
+        "getconf",
+        "dirname"
+      ]
+    },
+    "reused_t217_cross_host": {
+      "T217_evidence_path": "specs/001-tor-route/evidence/T217-tests-first.json",
+      "source_manifest_sha256": "995fa4fb617c46f2a84ffeb4d0feeb3f6020521bbd02de94249d44003a8e265f",
+      "comparator_sha256": "080d74207e9327a0c5860b5fe56aad974435c6044b78afcd91bae5a21b9ec619",
+      "host_manifest_sha256": "6cf797a85edb72cdaad834a95f2fcd20c61889c841b3707576441a0afd846783",
+      "container_manifest_sha256": "6cf797a85edb72cdaad834a95f2fcd20c61889c841b3707576441a0afd846783",
+      "entry_count": 431,
+      "shipped_outputs": {
+        "runtime/target/quarkus-app/quarkus/generated-bytecode.jar": "abf5ca63ea56ab152a09c2d84ecd7215307f7899bf217858dd42e4c3a336ef0b",
+        "runtime/target/quarkus-app/quarkus/transformed-bytecode.jar": "89feb63af51e657841e0b597c6049df1ec8750133fc14b2b6d9601ae62c34441",
+        "runtime/target/quarkus-app/quarkus/quarkus-application.dat": "62914e715bad089ed2b29173ac988d4b6d281434df5179665ff4db710afd1639"
+      }
+    },
+    "not_run": {
+      "scripts/verify.sh": "Not run; validation was explicitly narrowed to affected checks and does not establish full-tree green.",
+      "VM": "Not run by request."
+    }
+  }
+}
