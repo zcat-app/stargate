@@ -440,6 +440,25 @@ test('failedSaveKeepsTheTokenInTheFieldForRetry', async () => {
   );
 });
 
+test('invalidSubmitKeepsTheSubmittedValueInTheField', async () => {
+  const h = loadOptionsPage({});
+  requireConformance(h.sandbox);
+  const submitted = ` ${TOKEN} `;
+  await submit(h, submitted);
+  assert.ok(
+    h.document.getElementById(INPUT_ID).value === submitted,
+    'the invalid submit must preserve the field value after drain (P6)'
+  );
+  assert.ok(
+    renderedStatus(h) === INVALID_MESSAGE,
+    'the invalid submit must render the validation error (P6)'
+  );
+  assert.ok(
+    h.recorded.storageTouches.length === 0,
+    'the invalid submit must perform zero storage touches (P6)'
+  );
+});
+
 // ---------------------------------------------------------------------------
 // P1 across flows — the whole surface stays inside the pinned contract.
 // ---------------------------------------------------------------------------

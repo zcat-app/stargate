@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-10-09
+**Last updated:** 2026-10-10
 
 ---
 
@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 22 |
+| pending | 21 |
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 217 |
+| done | 218 |
 | deferred | 8 |
 | **total** | **247** |
 
@@ -36,7 +36,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T110 | Hermetic digest-agreement assertion for alpine:3.20 pins | 6: Polish & Cross-Cutting Concerns | ✓ | ✓ |
 | T111 | BUILD-DIFFS: document extension zip binary as build input | 6: Polish & Cross-Cutting Concerns |  | ✓ |
 | T112 | Wire the stale-prose regression guard as a contract test | 6: Polish & Cross-Cutting Concerns |  | ✓ |
-| T119 | Gate invalid-path field preservation in options.save.test.js | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ | ✓ |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
@@ -72,7 +71,7 @@ _(nothing in flight)_
 
 ## Done
 
-_217 ticket(s) done._
+_218 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -208,6 +207,7 @@ _217 ticket(s) done._
 - T115 — Fix the wire gate's comment-sensitive impl-detection probe
 - T116 — Fix ForbiddenDetailRejected journal-read race (poll the marker)
 - T118 — Clear the bearer-token field after a successful save
+- T119 — Gate invalid-path field preservation in options.save.test.js
 - T120 — Make `verify.sh` log writes concurrency-safe for parallel ticket runs
 - T121 — Hoist per-suite compose project runner into one shared helper
 - T122 — Fix DP/CP image builds: proto/ outside build contexts
