@@ -74,7 +74,16 @@ export DOCKER_LOG="$TMP/docker.log"
 cat > "$FAKE_BIN/docker" <<'SCRIPT_END'
 #!/usr/bin/env bash
 case "$1" in
-  info|image|pull)
+  context)
+    case "$2" in
+      show) printf 'default\n' ;;
+      inspect) printf '"unix:///var/run/docker.sock"\n' ;;
+      *) exit 1 ;;
+    esac ;;
+  info)
+    if [ "${2:-}" = --format ]; then printf '["name=seccomp,profile=builtin"]\n'; fi
+    exit 0 ;;
+  image|pull)
     exit 0 ;;
   compose)
     # `version` (preflight) and `ps -q` (health) succeed; `up` fails to

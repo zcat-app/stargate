@@ -755,6 +755,99 @@ Across all modes, the user trusts:
 
 ---
 
+### 3.5 Release artifacts, evidence and installer authority (T081)
+
+The release workflow prepares bytes from one reviewed source C and an existing
+version tag without write/signing grants. Generated release Compose pins four final
+registry digests; source local Compose remains a development build entry point.
+The source/tag is never rewritten to contain derived artifacts.
+Promotion reads the remote `refs/tags/<version>` object and resolves any
+annotated tag chain to C at the approval-pack, pre-push, pre-draft and
+pre-publish guards. A same-named branch does not substitute for a deleted
+tag. A privileged tag mutation between guards remains outside transactional
+guarantees and causes the next observed check to refuse.
+Each retained OCI image carries a hashed BuildKit SLSA v1 statement with a
+local Dockerfile/context request and source-C revision hints. Local-context
+`vcs:revision` and revision labels are unverified metadata, and BuildKit does
+not claim complete Git materials for that context. The driver rejects
+conflicting structured values or a conflicting own-repository Git dependency;
+source identity checked before and after building, shipped payload comparison,
+and the signed release manifest supply the independent C binding. This is not
+a claim that SLSA alone proves the local source commit.
+
+Promotion treats same-repository evidence commit E as bounded regular-file data,
+never executable workflow or deployment policy. Immutable artifact IDs, content
+hashes, full reports and source bindings prevent accidental swaps and stale evidence;
+they do not authenticate a report's author or prove its claims. A required non-self
+reviewer in the protected stargate-release environment inspects report provenance and
+approves the exact pack. Missing/unreadable protection, broad branch rules, possible
+admin bypass or absent explicit approval refuse. Constitution VIII external-human
+review remains independent of this deployment click.
+
+GitHub, the repository administrators, reviewed release code/input publishers and
+Sigstore trust roots are in this supply-chain TCB. Signing authenticates the expected
+workflow identity, not code safety; reproducibility and review remain distinct.
+Registry uploads across repositories are not atomic. Failed promotion can leave
+immutable blobs but must not publish a final release or advance installation.
+Administrative concurrent policy/tag mutation is outside transactional guarantees.
+Tokenless preparation can retain candidate bytes for a version that later refuses;
+it has no release publication authority. The read-only approval pack checks
+published releases only. Protected promotion separately verifies the token's push
+access, queries GraphQL for the exact-tag release (including drafts), and queries
+REST for the published release before the first registry push and again before
+draft creation. Presence, API errors, incomplete replies or conflicting results
+refuse. An unrelated release deletion cannot shift the target across an
+already-read offset page because no release list is used. The workflow
+serializes target-version promotion runs; authorized human/API writers must
+coordinate with that protocol. Neither exact-tag read reserves the version,
+and a privileged out-of-band edit can race both checks or change the owned
+draft before publication. An abandoned draft or lost create/publish response
+requires manual reconciliation; the driver does not retry those writes
+automatically.
+GitHub's `GITHUB_TOKEN` cannot obtain Workflows write permission and may be
+refused when C changes `.github/workflows` relative to the default branch.
+Promotion compares those exact Git subtrees using canonical source and
+current-default commit/tree API data at both guards; unknown or mismatched
+data refuses before the next write phase. C need not equal default HEAD.
+The default branch can change after the second check, so an API 403/404 or
+lost create/publish response still requires manual reconciliation; no broader
+credential is introduced.
+Preparation's verifier uses the local Docker driver so tagged test images are
+daemon-visible and the Tor rollback build can reach its runner-loopback replay
+proxy. The pinned private BuildKit builder is reserved for retained OCI exports.
+If the verifier cannot reach the proxy, its required receipt and pinned-hash
+failure checks refuse the candidate; a connection error is not a successful
+rollback-control observation.
+
+New promotion refuses stale source-selected Sigstore metadata (the selected
+2026-10-11 chain's earliest expiry is 2026-10-18T01:48:18Z). A reviewed source
+refresh is required; neither evidence nor environment can extend it. Installation
+of an existing signed artifact instead uses trusted signing-time validity.
+Offline static roots cannot discover later compromise/revocation/rotation. The
+historical root-5 bootstrap relies on official HTTPS selection; audited threshold
+continuity to root 15 does not independently authenticate that initial selection.
+The driver implements no custom cryptography or background TUF updater.
+
+Every required live tracker row remains a publication prerequisite, including
+R-7. Unmeasured/unsupported scope is release-blocking, never a PASS or N/A waiver.
+R-2 observations do not discharge R-3 or R-7; evidence binds the exact tracker at C
+and full report bodies, whose meaning and provenance need independent inspection.
+
+`init --release-dir` executes only from the verified exact source checkout. The
+release directory is data; pinned signature verification, source/file identity and
+regenerated canonical topology checks finish before host policy, volumes, keys or
+containers mutate. Approved release mode still requires local host confinement,
+key preservation and authenticated observer readiness and uses `--no-build`.
+Both source and release init resolve Docker's selected context and effective daemon
+endpoint before provisioning. Only the default context at the local rootful Unix
+socket is admitted; DOCKER_HOST, DOCKER_CONTEXT, stored context selection, alternate
+sockets and rootless daemon reports fail before host policy or Docker mutation.
+This check trusts the local Docker CLI/daemon and socket identity; a compromised
+local host or daemon can still misreport state or subvert host policy (§3.1).
+Fixture tests cannot establish apt/keyring acceptance, real tool interoperability,
+configured remote protection, final/live reviews or a published release. Those
+remain explicit later gates; no stronger protection is claimed by this mechanism.
+
 ## 4. Per-route threat models
 
 Each listening port (architecture spec §4) corresponds to one upstream

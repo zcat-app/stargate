@@ -81,6 +81,25 @@
 
 set -uo pipefail
 
+# Parse before sourcing defaults or touching installer state. Release data may
+# select images only through the source-owned verifier (Constitution IV).
+_SG_RELEASE_DIR=""
+_SG_VERIFIED_RELEASE_COMPOSE=""
+_SG_RELEASE_TMP=""
+if [ "$#" -ne 0 ]; then
+  if [ "$#" -ne 2 ] || [ "$1" != --release-dir ] || [ -z "$2" ]; then
+    printf '%s\n' 'usage: stargate init [--release-dir DIR]' >&2
+    exit 10
+  fi
+  _SG_RELEASE_DIR="$2"
+  for _sg_override in STARGATE_COMPOSE_FILE STARGATE_OBSERVER_IMAGE STARGATE_KEYGEN_IMAGE COMPOSE_FILE COMPOSE_PROFILES; do
+    if [ -v "$_sg_override" ]; then
+      printf 'stargate init: release mode refuses %s override\n' "$_sg_override" >&2
+      exit 10
+    fi
+  done
+fi
+
 # Source the authoritative compose-command builder (T088). Provides the
 # project/compose-file/env-file defaults, compose_run / compose_cmd /
 # compose_env_file / resolve_physical_volume / ensure_project_volume /
@@ -122,6 +141,9 @@ note() { printf 'stargate init: %s\n' "$*" >&2; }
 # no-host-network test fixture are supported here. A copied/overridden
 # production Compose file cannot silently bypass the host policy gate.
 host_boundary_required() {
+  if [ -n "$_SG_VERIFIED_RELEASE_COMPOSE" ] && [ "$STARGATE_COMPOSE_FILE" = "$_SG_VERIFIED_RELEASE_COMPOSE" ]; then
+    return 0
+  fi
   case "$STARGATE_COMPOSE_FILE" in
     "$_SG_REPO_ROOT/compose/docker-compose.local.yml") return 0 ;;
     "$_SG_REPO_ROOT/tests/contract/stargate-cli/fixtures/fixture-compose.yml") return 1 ;;
@@ -263,6 +285,9 @@ install_host_boundary() {
 # tmpdir for host-side key + pepper generation; cleaned on any exit (M11).
 KEYS_TMP=""
 cleanup() {
+  if [ -n "$_SG_RELEASE_TMP" ]; then
+    rm -rf -- "$_SG_RELEASE_TMP"
+  fi
   if [ -n "$KEYS_TMP" ] && [ -d "$KEYS_TMP" ]; then
     # Best-effort shred then remove. shred may be absent on macOS/BSD; fall
     # back to rm -rf. The dir is mode 0700 under $TMPDIR.
@@ -284,6 +309,22 @@ preflight() {
     say "Install Docker: https://docs.docker.com/get-docker/"
     return "$EXIT_PREFLIGHT"
   fi
+  # Host AppArmor/owner rules apply to this machine. A remote Docker context
+  # would start the host-networked DP elsewhere without those rules (Principle
+  # III; THREAT-MODEL §3.5). Resolve Docker's effective selected context, not
+  # only DOCKER_HOST: DOCKER_CONTEXT and stored currentContext also redirect it.
+  local docker_context docker_endpoint docker_security
+  docker_context="$(docker context show 2>/dev/null)" || docker_context=""
+  if [ "$docker_context" != default ]; then
+    note "Docker context must be the local default; refusing remote or unknown daemon"
+    return "$EXIT_PREFLIGHT"
+  fi
+  docker_endpoint="$(docker context inspect default --format '{{json .Endpoints.docker.Host}}' 2>/dev/null)" || docker_endpoint=""
+  case "$docker_endpoint" in
+    '"unix:///var/run/docker.sock"'|'"unix:///run/docker.sock"') : ;;
+    *) note "Docker endpoint must be the local rootful Unix socket; refusing redirected daemon"
+       return "$EXIT_PREFLIGHT" ;;
+  esac
   if ! docker compose version >/dev/null 2>&1; then
     say "docker compose v2 plugin not available."
     say "Install Docker Compose v2 (shipped with Docker Desktop / the docker-compose-plugin package)."
@@ -293,6 +334,16 @@ preflight() {
     say "Docker daemon unreachable (is the service running / your user in the docker group?)."
     return "$EXIT_PREFLIGHT"
   fi
+  docker_security="$(docker info --format '{{json .SecurityOptions}}' 2>/dev/null)" || docker_security=""
+  case "$docker_security" in
+    \[*\]) : ;;
+    *) note "Docker security options unavailable; refusing unverified daemon"
+       return "$EXIT_PREFLIGHT" ;;
+  esac
+  case "$docker_security" in
+    *'"name=rootless"'*) note "rootless Docker daemon cannot enforce local host policy"
+                         return "$EXIT_PREFLIGHT" ;;
+  esac
   if ! command -v openssl >/dev/null 2>&1; then
     say "openssl not found on PATH (required to generate ed25519 inter-plane keys + the bearer-token pepper)."
     return "$EXIT_PREFLIGHT"
@@ -649,7 +700,9 @@ build_observer_image() {
 # readiness-timeout path).
 compose_up() {
   note "building + starting stack (project $STARGATE_PROJECT, $STARGATE_COMPOSE_FILE)..."
-  if ! compose_run up -d --build >/dev/null 2>&1; then
+  local build_option=--build
+  [ -z "$_SG_VERIFIED_RELEASE_COMPOSE" ] || build_option=--no-build
+  if ! compose_run up -d "$build_option" >/dev/null 2>&1; then
     note "docker compose up failed."
     return "$EXIT_COMPOSE"
   fi
@@ -792,6 +845,13 @@ print_status() {
 }
 
 # ---- main -----------------------------------------------------------------
+if [ -n "$_SG_RELEASE_DIR" ]; then
+  _SG_RELEASE_TMP="$(mktemp -d)" || exit "$EXIT_PREFLIGHT"
+  _SG_VERIFIED_RELEASE_COMPOSE="$(python3 "$_SG_REPO_ROOT/scripts/release.py" verify-install --release-dir "$_SG_RELEASE_DIR" --output "$_SG_RELEASE_TMP/compose.json")" || exit "$EXIT_PREFLIGHT"
+  [ -n "$_SG_VERIFIED_RELEASE_COMPOSE" ] || exit "$EXIT_PREFLIGHT"
+  STARGATE_COMPOSE_FILE="$_SG_VERIFIED_RELEASE_COMPOSE"
+fi
+
 preflight; rc=$?
 [ "$rc" -eq 0 ] || exit "$rc"
 
@@ -810,7 +870,7 @@ ensure_volumes; rc=$?
 generate_keys; rc=$?
 [ "$rc" -eq 0 ] || exit "$rc"
 
-if host_boundary_required; then
+if [ -z "$_SG_VERIFIED_RELEASE_COMPOSE" ] && host_boundary_required; then
   build_observer_image; rc=$?
   [ "$rc" -eq 0 ] || exit "$rc"
 fi

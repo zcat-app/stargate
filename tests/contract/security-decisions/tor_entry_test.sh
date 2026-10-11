@@ -114,13 +114,9 @@ has "(T081|release[ -]tag|release\.yml|final[ -]image.*pin|GHCR)" \
 # prose (it appears for the base digest); forbid a `<repo>/<image>@sha256:`
 # final-image form presented as pinned. We approximate by forbidding the
 # Stargate-built image names followed by @sha256:.
-# NOTE: when T081 lands and appends the REAL final-image digests
-# (`ghcr.io/zcat-app/stargate-{dp,control,tor}@sha256:...`), this pattern
-# MUST be relaxed to scope the prohibition to "current pin" framing (e.g.
-# forbid the bare `stargate/tor@sha256:` form without the `ghcr.io/`
-# registry prefix, or re-anchor the assertion to the release variant
-# compose file). T081 owns that test edit; until then the fabrication guard
-# is load-bearing.
+# T081 generates final digests in signed release artifacts, never in this
+# source history. Retain the fabrication guard after workflow preparation;
+# only a real published artifact can claim a final registry identity.
 lacks "(stargate-dp|stargate-control|stargate/tor)@sha256:[0-9a-f]{64}" \
   "M6: $SD must not present a fabricated final-image digest as currently pinned (T081 produces these at release tag)"
 

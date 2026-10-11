@@ -1,0 +1,301 @@
+{
+  "schema": 1,
+  "ticket": "T081",
+  "kind": "recovered-original-session-events",
+  "description": "Verbatim selected test diffs, production diffs and command outputs recovered from the original 2026-10-11 implementation session after R6 review. This supplements, and does not replace or redate, T081-tests-first.json.",
+  "source": {
+    "original_jsonl": "/home/claudia/.codex/sessions/2026/10/11/rollout-2026-10-11T11-25-02-01a12ab5-8861-7010-8cf7-ca0047bf2341.jsonl",
+    "prefix_through_line": 3413,
+    "prefix_raw_bytes_sha256": "63867c2e02da3daeea75efef0b581804f68008772cc55c9c37b2aee030474061",
+    "extraction": "Events are selected by one-based JSONL line. Each line hash covers its original raw bytes, including the terminating newline. FileChange unified_diff and CommandExecution command, exit_code and aggregated_output are copied without redaction. Repository paths are normalized relative to the implementation root."
+  },
+  "limits": [
+    "No per-run staged patch or full source hash was captured alongside these historical command events. The event ordering and raw line hashes support chronology, but cannot cryptographically bind each run to an exact complete source tree.",
+    "Early CRLF fixture setup failures preceded the included CRLF assertion failure and are not presented as production regression reds.",
+    "The builder red exercises the shared verifier builder selection that also affected Tor rollback loopback reachability; there is no separate historical pre-fix runtime Tor rollback red.",
+    "The later Tor loopback probe is post-fix compatibility evidence only. Its first harness attempt failed from an overbroad grep matching Dockerfile text, and is not a product red.",
+    "Recovered R1/R2 events are not inserted into the original tests-first red or superseded history. An independent reviewer must determine whether this record meets Principle VII."
+  ],
+  "source_copy_patch_sha256": {
+    "r1": "1c12abc007a53605e1cb89f49458006da0b5bfb76f2e27c4396a2f6a856c9e36",
+    "r2": "fa45eb33a08482b0639b19e6af3dfd3e2e25d2517a3baa2655de1c3c253a1fcc",
+    "r3": "a2b611b952ee69f337e236368beb08a1ce0884c13c9bf55dc73d4927e829166d"
+  },
+  "tor_rollback_post_fix": {
+    "existing_test": "tests/reproducibility/tor_sidecar_manifest_test.sh:123-180",
+    "shared_cause": "Before the builder fix, the complete verifier inherited a private docker-container builder. The verifier-created image was not available to the local daemon for docker create/run, and the isolated builder could not reach the runner host-loopback rollback replay proxy. The builder red in this record detects the inherited builder selection; it does not itself execute the Tor rollback path.",
+    "first_probe": {
+      "call_jsonl_line": 3191,
+      "result_jsonl_line": 3194,
+      "result_exit_code": 1,
+      "failure_class": "probe harness overbroad grep matched Dockerfile text; not a Tor rollback runtime red"
+    },
+    "corrected_probe": {
+      "call_jsonl_line": 3215,
+      "result_jsonl_line": 3218,
+      "result_exit_code": 0,
+      "observation": "The host-loopback replay proxy received /rollback; the build emitted a runtime pinned-index-hash rejection. Repeating with the proxy closed gave connection refusal and no runtime hash-rejection marker."
+    },
+    "receipt_sha256": "0f45b8b22b0531ad333a502f77751a4704157c7c7eab2c372da648499a920d89",
+    "results_sha256": "47ea20680dd50a0d19e7a8fc5acb292d8ef67ab65be3d75d6c5e14eb8b6a4260"
+  },
+  "events": [
+    {
+      "role": "crlf_test_edit",
+      "jsonl_line": 2984,
+      "utc": "2026-10-11T13:42:52.256Z",
+      "raw_jsonl_line_sha256": "3f0c444954e6854267e6e7142001559c39b0670b8812f8fd1ee5e8bc3aef5726",
+      "type": "FileChange",
+      "changes": [
+        {
+          "repository_path": "tests/contract/workflow/release_test.py",
+          "operation": "update",
+          "unified_diff": "@@ -445,2 +445,36 @@\n class DriverTests(Fixture):\n+    def test_real_git_crlf_checkout_matches_canonical_archive_and_rejects_tamper(self):\n+        repo=self.root/\"crlf-git\"\n+        (repo/\"scripts\").mkdir(parents=True)\n+        shutil.copy2(ROOT/\"scripts/release.py\",repo/\"scripts/release.py\")\n+        (repo/\".gitattributes\").write_text(\"*.cmd text eol=crlf\\n\")\n+        file=repo/\"script.cmd\"\n+        file.write_bytes(b\"alpha\\nbeta\\n\")\n+        def git(*args):\n+            return subprocess.check_output([\"git\",*args],cwd=repo,stderr=subprocess.DEVNULL).decode().strip()\n+        git(\"init\");git(\"config\",\"user.email\",\"fixture@example.invalid\");git(\"config\",\"user.name\",\"T081 fixture\")\n+        git(\"add\",\".\");git(\"commit\",\"-qm\",\"CRLF source\");source=git(\"rev-parse\",\"HEAD\");git(\"tag\",VERSION)\n+        git(\"checkout-index\",\"-f\",\"--\",\"script.cmd\")\n+        self.assertEqual(file.read_bytes(),b\"alpha\\r\\nbeta\\r\\n\")\n+        spec=importlib.util.spec_from_file_location(\"crlf_release\",repo/\"scripts/release.py\")\n+        module=importlib.util.module_from_spec(spec)\n+        old=sys.dont_write_bytecode;sys.dont_write_bytecode=True\n+        try:spec.loader.exec_module(module)\n+        finally:sys.dont_write_bytecode=old\n+        manifest=module.source_identity(source,VERSION)\n+        self.assertEqual(manifest[\"script.cmd\"][\"sha256\"],sha(b\"alpha\\nbeta\\n\"))\n+        archive=self.root/\"crlf-source.tar\"\n+        git(\"archive\",\"--format=tar\",\"--output=\"+str(archive),source)\n+        module.verify_source_archive(archive,manifest)\n+        git(\"update-index\",\"--assume-unchanged\",\"script.cmd\")\n+        file.write_bytes(b\"changed\\r\\nbeta\\r\\n\")\n+        self.assertEqual(git(\"status\",\"--porcelain\"),\"\")\n+        with self.assertRaises(module.Refusal):module.source_identity(source,VERSION)\n+        file.write_bytes(b\"alpha\\r\\nbeta\\r\\n\")\n+        git(\"update-index\",\"--no-assume-unchanged\",\"script.cmd\")\n+        git(\"config\",\"core.filemode\",\"false\")\n+        file.chmod(0o755)\n+        self.assertEqual(git(\"status\",\"--porcelain\"),\"\")\n+        with self.assertRaises(module.Refusal):module.source_identity(source,VERSION)\n+\n     def test_real_git_filemode_false_cannot_hide_executable_drift(self):\n"
+        }
+      ]
+    },
+    {
+      "role": "crlf_test_fixture_edit",
+      "jsonl_line": 2998,
+      "utc": "2026-10-11T13:43:01.664Z",
+      "raw_jsonl_line_sha256": "1197f994350239dac62ce1dcd5055bf38ec01e6159f850325efd4ded35e3017a",
+      "type": "FileChange",
+      "changes": [
+        {
+          "repository_path": "tests/contract/workflow/release_test.py",
+          "operation": "update",
+          "unified_diff": "@@ -456,3 +456,3 @@\n         git(\"add\",\".\");git(\"commit\",\"-qm\",\"CRLF source\");source=git(\"rev-parse\",\"HEAD\");git(\"tag\",VERSION)\n-        git(\"checkout-index\",\"-f\",\"--\",\"script.cmd\")\n+        file.unlink();git(\"checkout-index\",\"--\",\"script.cmd\")\n         self.assertEqual(file.read_bytes(),b\"alpha\\r\\nbeta\\r\\n\")\n"
+        }
+      ]
+    },
+    {
+      "role": "crlf_test_fixture_edit",
+      "jsonl_line": 3010,
+      "utc": "2026-10-11T13:43:13.282Z",
+      "raw_jsonl_line_sha256": "eb149d82871830cc4bb00d6d7ebcf60a12d61e7b3c0b8afabac68e434aa8f285",
+      "type": "FileChange",
+      "changes": [
+        {
+          "repository_path": "tests/contract/workflow/release_test.py",
+          "operation": "update",
+          "unified_diff": "@@ -463,2 +463,3 @@\n         finally:sys.dont_write_bytecode=old\n+        self.assertEqual(git(\"status\",\"--porcelain\"),\"\")\n         manifest=module.source_identity(source,VERSION)\n"
+        }
+      ]
+    },
+    {
+      "role": "crlf_test_fixture_edit",
+      "jsonl_line": 3043,
+      "utc": "2026-10-11T13:43:52.083Z",
+      "raw_jsonl_line_sha256": "21b788e0fa58c35e1ab5ec11ce9249bc574031b1441af92effb95a767146ea84",
+      "type": "FileChange",
+      "changes": [
+        {
+          "repository_path": "tests/contract/workflow/release_test.py",
+          "operation": "update",
+          "unified_diff": "@@ -451,3 +451,3 @@\n         file=repo/\"script.cmd\"\n-        file.write_bytes(b\"alpha\\nbeta\\n\")\n+        file.write_bytes(b\"alpha\\r\\nbeta\\r\\n\")\n         def git(*args):\n@@ -456,3 +456,2 @@\n         git(\"add\",\".\");git(\"commit\",\"-qm\",\"CRLF source\");source=git(\"rev-parse\",\"HEAD\");git(\"tag\",VERSION)\n-        file.unlink();git(\"checkout-index\",\"--\",\"script.cmd\")\n         self.assertEqual(file.read_bytes(),b\"alpha\\r\\nbeta\\r\\n\")\n"
+        }
+      ]
+    },
+    {
+      "role": "crlf_red_checkout",
+      "jsonl_line": 3049,
+      "utc": "2026-10-11T13:43:56.947Z",
+      "raw_jsonl_line_sha256": "6c3d4b3eaf44f6d7117e27a56d855a97fad19a8fe3b0921bfa2260d37af3de83",
+      "type": "CommandExecution",
+      "command": [
+        "/bin/bash",
+        "-lc",
+        "python3 -B tests/contract/workflow/release_test.py DriverTests.test_real_git_crlf_checkout_matches_canonical_archive_and_rejects_tamper"
+      ],
+      "exit_code": 1,
+      "aggregated_output": "E\n======================================================================\nERROR: test_real_git_crlf_checkout_matches_canonical_archive_and_rejects_tamper (__main__.DriverTests.test_real_git_crlf_checkout_matches_canonical_archive_and_rejects_tamper)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 464, in test_real_git_crlf_checkout_matches_canonical_archive_and_rejects_tamper\n    manifest=module.source_identity(source,VERSION)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/tmp/stargate-t081-fixture-lclwfcrd/crlf-git/scripts/release.py\", line 254, in source_identity\n    require(actual == oid, \"source bytes differ from C: \" + relative)\n  File \"/tmp/stargate-t081-fixture-lclwfcrd/crlf-git/scripts/release.py\", line 53, in require\n    raise Refusal(message)\ncrlf_release.Refusal: source bytes differ from C: script.cmd\n\n----------------------------------------------------------------------\nRan 1 test in 0.107s\n\nFAILED (errors=1)\n"
+    },
+    {
+      "role": "crlf_source_edit_checkout",
+      "jsonl_line": 3062,
+      "utc": "2026-10-11T13:44:17.638Z",
+      "raw_jsonl_line_sha256": "a7292bb18405be3f09eea1f17b762fc327f026a47b0b5d8d8a7a241ef2413469",
+      "type": "FileChange",
+      "changes": [
+        {
+          "repository_path": "scripts/release.py",
+          "operation": "update",
+          "unified_diff": "@@ -249,8 +249,14 @@\n                 \"source path traverses a substituted symlink: \" + relative)\n-        data = regular(ROOT / relative, MAX_ARCHIVE)\n+        regular(ROOT / relative, MAX_ARCHIVE)\n         actual_mode = \"100755\" if (ROOT / relative).stat().st_mode & 0o111 else \"100644\"\n         require(actual_mode == mode, \"source executable mode differs from C: \" + relative)\n-        actual = hashlib.sha1(b\"blob \" + str(len(data)).encode() + b\"\\0\" + data).hexdigest()\n+        # Git's path clean filter defines C's blob bytes. A required CRLF\n+        # checkout is authentic even though its raw filesystem bytes differ\n+        # from the LF blob that git archive exports (Principle IV).\n+        actual = run([\"git\", \"hash-object\", \"--path=\" + relative, \"--\", relative]).decode().strip()\n         require(actual == oid, \"source bytes differ from C: \" + relative)\n-        result[relative] = {\"sha256\": sha(data), \"mode\": mode}\n+        canonical = run([\"git\", \"cat-file\", \"blob\", oid])\n+        require(hashlib.sha1(b\"blob \" + str(len(canonical)).encode() + b\"\\0\" + canonical).hexdigest() == oid,\n+                \"canonical source blob differs from C: \" + relative)\n+        result[relative] = {\"sha256\": sha(canonical), \"mode\": mode}\n     require(result, \"empty source manifest\")\n"
+        }
+      ]
+    },
+    {
+      "role": "crlf_test_fixture_edit",
+      "jsonl_line": 3069,
+      "utc": "2026-10-11T13:44:27.415Z",
+      "raw_jsonl_line_sha256": "e1ea74e9dc005e5ef9d27287f2c5f062684bedaa6dd0a4640a11776d01e4f0e0",
+      "type": "FileChange",
+      "changes": [
+        {
+          "repository_path": "tests/contract/workflow/release_test.py",
+          "operation": "update",
+          "unified_diff": "@@ -133,2 +133,10 @@\n     sys.stdout.buffer.write((mode+' blob '+oid+'\\t'+p.relative_to(root).as_posix()).encode()+b'\\0')\n+ elif args and args[0]=='hash-object':\n+  b=(root/args[-1]).read_bytes();print(hashlib.sha1(b'blob '+str(len(b)).encode()+b'\\0'+b).hexdigest())\n+ elif args[:2]==['cat-file','blob']:\n+  for p in sorted(root.rglob('*')):\n+   if p.is_file() and p.relative_to(root).as_posix().startswith(('scripts/','compose/')):\n+    b=p.read_bytes();oid=hashlib.sha1(b'blob '+str(len(b)).encode()+b'\\0'+b).hexdigest()\n+    if oid==args[2]:sys.stdout.buffer.write(b);sys.exit(0)\n+  sys.exit(75)\n  elif args and args[0]=='diff':sys.exit(1 if config.get('dirty') else 0)\n"
+        }
+      ]
+    },
+    {
+      "role": "crlf_red_archive",
+      "jsonl_line": 3077,
+      "utc": "2026-10-11T13:44:31.762Z",
+      "raw_jsonl_line_sha256": "a5eabe0a89584b8949e7f092b130b85389dbb977cd65392ca7cc385647d2e63e",
+      "type": "CommandExecution",
+      "command": [
+        "/bin/bash",
+        "-lc",
+        "python3 -B tests/contract/workflow/release_test.py DriverTests.test_real_git_crlf_checkout_matches_canonical_archive_and_rejects_tamper"
+      ],
+      "exit_code": 1,
+      "aggregated_output": "E\n======================================================================\nERROR: test_real_git_crlf_checkout_matches_canonical_archive_and_rejects_tamper (__main__.DriverTests.test_real_git_crlf_checkout_matches_canonical_archive_and_rejects_tamper)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 476, in test_real_git_crlf_checkout_matches_canonical_archive_and_rejects_tamper\n    module.verify_source_archive(archive,manifest)\n  File \"/tmp/stargate-t081-fixture-oqe79ywx/crlf-git/scripts/release.py\", line 1010, in verify_source_archive\n    require(len(data) == member.size and sha(data) == record[\"sha256\"],\n  File \"/tmp/stargate-t081-fixture-oqe79ywx/crlf-git/scripts/release.py\", line 53, in require\n    raise Refusal(message)\ncrlf_release.Refusal: source archive bytes differ from C\n\n----------------------------------------------------------------------\nRan 1 test in 0.109s\n\nFAILED (errors=1)\n"
+    },
+    {
+      "role": "builder_test_edit",
+      "jsonl_line": 3099,
+      "utc": "2026-10-11T13:45:14.359Z",
+      "raw_jsonl_line_sha256": "a26ac9a8a196835c4d3f7ae79da23859d4a0661d998287b7fc8962b1843ec11a",
+      "type": "FileChange",
+      "changes": [
+        {
+          "repository_path": "tests/contract/workflow/release_test.py",
+          "operation": "update",
+          "unified_diff": "@@ -153,2 +153,4 @@\n if name=='bash' and config.get('prepare_fixture') and args==['scripts/verify.sh']:\n+ (root/'verify-env.json').write_text(json.dumps({'BUILDX_BUILDER':os.environ.get('BUILDX_BUILDER'),\n+                                                 'DOCKER_CONFIG':os.environ.get('DOCKER_CONFIG')}))\n  destination=root/'target/verify.log';destination.parent.mkdir(parents=True,exist_ok=True)\n@@ -210,2 +212,5 @@\n if name=='docker-buildx' and (config.get('package_fixture') or config.get('prepare_fixture')):\n+ if args[:2]==['inspect','default']:\n+  print('Name: default\\nDriver: '+('docker-container' if config.get('nonloading_default') else 'docker'))\n+  sys.exit(0)\n  if config.get('package_build_failure') and 'build' in args:\n@@ -1066,2 +1071,4 @@\n         self.assertEqual(sum(row[:2]==[\"bash\",\"scripts/verify.sh\"] for row in calls),1)\n+        self.assertEqual(json.loads((self.root/\"verify-env.json\").read_text())[\"BUILDX_BUILDER\"],\"default\")\n+        self.assertTrue(any(row[:3]==[\"docker-buildx\",\"inspect\",\"default\"] for row in calls))\n         self.assertEqual(sum(row[:2]==[\"docker-buildx\",\"build\"] and \"--load\" in row for row in calls),2)\n@@ -1079,2 +1086,9 @@\n \n+    def test_verifier_refuses_nonloading_default_driver_before_build(self):\n+        self.config[\"nonloading_default\"]=True\n+        result=self.prepare_recorded()\n+        self.assertNotEqual(result.returncode,0)\n+        self.assertIn(\"local Docker builder must load verifier images\",result.stderr)\n+        self.assertFalse((self.root/\"verify-env.json\").exists())\n+\n \n"
+        }
+      ]
+    },
+    {
+      "role": "builder_red",
+      "jsonl_line": 3107,
+      "utc": "2026-10-11T13:45:33.131Z",
+      "raw_jsonl_line_sha256": "8336b88eb852e64b6cf0d5b07b73b5bf7419c12b064507e304a0d0dddbab8827",
+      "type": "CommandExecution",
+      "command": [
+        "/bin/bash",
+        "-lc",
+        "python3 -B tests/contract/workflow/release_test.py PreparationRecordingTests"
+      ],
+      "exit_code": 1,
+      "aggregated_output": "F.F\n======================================================================\nFAIL: test_full_preparation_retains_independent_builds_and_unsigned_candidate (__main__.PreparationRecordingTests.test_full_preparation_retains_independent_builds_and_unsigned_candidate)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 1072, in test_full_preparation_retains_independent_builds_and_unsigned_candidate\n    self.assertEqual(json.loads((self.root/\"verify-env.json\").read_text())[\"BUILDX_BUILDER\"],\"default\")\nAssertionError: 'stargate-release-7-1' != 'default'\n- stargate-release-7-1\n+ default\n\n\n======================================================================\nFAIL: test_verifier_refuses_nonloading_default_driver_before_build (__main__.PreparationRecordingTests.test_verifier_refuses_nonloading_default_driver_before_build)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 1090, in test_verifier_refuses_nonloading_default_driver_before_build\n    self.assertNotEqual(result.returncode,0)\nAssertionError: 0 == 0\n\n----------------------------------------------------------------------\nRan 3 tests in 12.743s\n\nFAILED (failures=2)\n"
+    },
+    {
+      "role": "builder_source_edit",
+      "jsonl_line": 3120,
+      "utc": "2026-10-11T13:45:52.308Z",
+      "raw_jsonl_line_sha256": "cac1cefddfcbbb5f5f81a0d31e466bc9750251c26b0fff8f1a9cc61f410ee390",
+      "type": "FileChange",
+      "changes": [
+        {
+          "repository_path": "scripts/release.py",
+          "operation": "update",
+          "unified_diff": "@@ -901,2 +901,10 @@\n                STARGATE_EXTENSION_RUNNER=\"release\")\n+    verifier_env = env | {\"BUILDX_BUILDER\": \"default\"}\n+    # The existing verifier's Docker builds are immediately consumed through\n+    # docker create/run. Its local Docker driver loads tags and shares the\n+    # runner's host-loopback proxy used by the Tor rollback control; the\n+    # private container builder below is only for retained OCI exports.\n+    driver = run([buildx, \"inspect\", \"default\"], env=verifier_env).decode()\n+    require(re.search(r\"(?m)^Driver:[ \\t]+docker[ \\t]*$\", driver),\n+            \"local Docker builder must load verifier images\")\n     run([buildx, \"create\", \"--name\", builder, \"--driver\", \"docker-container\", \"--driver-opt\", \"image=\" + pins()[\"buildkit\"]], env=env)\n@@ -906,3 +914,3 @@\n         (args.output / \"logs\").mkdir()\n-        run([\"bash\", \"scripts/verify.sh\"], env=env, log=args.output / \"logs/verify-command.log\", timeout=180 * 60)\n+        run([\"bash\", \"scripts/verify.sh\"], env=verifier_env, log=args.output / \"logs/verify-command.log\", timeout=180 * 60)\n         shutil.copyfile(ROOT / \"target/verify.log\", args.output / \"verify.log\")\n"
+        }
+      ]
+    },
+    {
+      "role": "builder_green",
+      "jsonl_line": 3128,
+      "utc": "2026-10-11T13:46:07.505Z",
+      "raw_jsonl_line_sha256": "50a2366b9be154c8596dbc87e9f6bd261ab79abc3184578c1661a2fed65b8b1c",
+      "type": "CommandExecution",
+      "command": [
+        "/bin/bash",
+        "-lc",
+        "python3 -B tests/contract/workflow/release_test.py PreparationRecordingTests"
+      ],
+      "exit_code": 0,
+      "aggregated_output": "...\n----------------------------------------------------------------------\nRan 3 tests in 10.101s\n\nOK\n"
+    },
+    {
+      "role": "crlf_source_edit_archive",
+      "jsonl_line": 3136,
+      "utc": "2026-10-11T13:46:21.878Z",
+      "raw_jsonl_line_sha256": "2dc5964d7a8812615359bf5c3bc53273ead109f8c84f43e6c88b58fc227524da",
+      "type": "FileChange",
+      "changes": [
+        {
+          "repository_path": "scripts/release.py",
+          "operation": "update",
+          "unified_diff": "@@ -249,14 +249,11 @@\n                 \"source path traverses a substituted symlink: \" + relative)\n-        regular(ROOT / relative, MAX_ARCHIVE)\n+        data = regular(ROOT / relative, MAX_ARCHIVE)\n         actual_mode = \"100755\" if (ROOT / relative).stat().st_mode & 0o111 else \"100644\"\n         require(actual_mode == mode, \"source executable mode differs from C: \" + relative)\n-        # Git's path clean filter defines C's blob bytes. A required CRLF\n-        # checkout is authentic even though its raw filesystem bytes differ\n-        # from the LF blob that git archive exports (Principle IV).\n+        # Git's path clean filter authenticates checkout bytes against C.\n+        # Git archive exports CRLF for required CRLF paths, so the retained\n+        # manifest binds the delivered checkout/archive bytes (Principle IV).\n         actual = run([\"git\", \"hash-object\", \"--path=\" + relative, \"--\", relative]).decode().strip()\n         require(actual == oid, \"source bytes differ from C: \" + relative)\n-        canonical = run([\"git\", \"cat-file\", \"blob\", oid])\n-        require(hashlib.sha1(b\"blob \" + str(len(canonical)).encode() + b\"\\0\" + canonical).hexdigest() == oid,\n-                \"canonical source blob differs from C: \" + relative)\n-        result[relative] = {\"sha256\": sha(canonical), \"mode\": mode}\n+        result[relative] = {\"sha256\": sha(data), \"mode\": mode}\n     require(result, \"empty source manifest\")\n"
+        },
+        {
+          "repository_path": "tests/contract/workflow/release_test.py",
+          "operation": "update",
+          "unified_diff": "@@ -135,8 +135,2 @@\n   b=(root/args[-1]).read_bytes();print(hashlib.sha1(b'blob '+str(len(b)).encode()+b'\\0'+b).hexdigest())\n- elif args[:2]==['cat-file','blob']:\n-  for p in sorted(root.rglob('*')):\n-   if p.is_file() and p.relative_to(root).as_posix().startswith(('scripts/','compose/')):\n-    b=p.read_bytes();oid=hashlib.sha1(b'blob '+str(len(b)).encode()+b'\\0'+b).hexdigest()\n-    if oid==args[2]:sys.stdout.buffer.write(b);sys.exit(0)\n-  sys.exit(75)\n  elif args and args[0]=='diff':sys.exit(1 if config.get('dirty') else 0)\n@@ -477,3 +471,3 @@\n         manifest=module.source_identity(source,VERSION)\n-        self.assertEqual(manifest[\"script.cmd\"][\"sha256\"],sha(b\"alpha\\nbeta\\n\"))\n+        self.assertEqual(manifest[\"script.cmd\"][\"sha256\"],sha(b\"alpha\\r\\nbeta\\r\\n\"))\n         archive=self.root/\"crlf-source.tar\"\n"
+        }
+      ]
+    },
+    {
+      "role": "crlf_green",
+      "jsonl_line": 3144,
+      "utc": "2026-10-11T13:46:26.744Z",
+      "raw_jsonl_line_sha256": "8987ffa082ea07df4123ac703a1353f311e09dcc7929d59a9f5d7b876b00f688",
+      "type": "CommandExecution",
+      "command": [
+        "/bin/bash",
+        "-lc",
+        "python3 -B tests/contract/workflow/release_test.py DriverTests.test_real_git_crlf_checkout_matches_canonical_archive_and_rejects_tamper"
+      ],
+      "exit_code": 0,
+      "aggregated_output": ".\n----------------------------------------------------------------------\nRan 1 test in 0.148s\n\nOK\n"
+    },
+    {
+      "role": "remote_docker_test_edit",
+      "jsonl_line": 3383,
+      "utc": "2026-10-11T13:59:30.791Z",
+      "raw_jsonl_line_sha256": "50f73b74446617b76fdbd4bd5507f716bf0a1dd577d611d6d4f8b5e87a534cf0",
+      "type": "FileChange",
+      "changes": [
+        {
+          "repository_path": "tests/contract/workflow/release_test.py",
+          "operation": "update",
+          "unified_diff": "@@ -153,2 +153,13 @@\n if name=='docker':\n+ if args[:2]==['context','show']:\n+  print(os.environ.get('DOCKER_CONTEXT',config.get('current_context','default')));sys.exit(0)\n+ if args[:2]==['context','inspect']:\n+  if config.get('malformed_context'):print('not-json');sys.exit(0)\n+  selected=os.environ.get('DOCKER_CONTEXT',config.get('current_context','default'))\n+  endpoint=config.get('endpoint','unix:///var/run/docker.sock')\n+  if selected!='default':endpoint=config.get('remote_endpoint','ssh://fixture.invalid/docker')\n+  elif os.environ.get('DOCKER_HOST'):endpoint=os.environ['DOCKER_HOST']\n+  print(json.dumps(endpoint));sys.exit(0)\n+ if args[:2]==['info','--format']:\n+  print(json.dumps(config.get('security_options',['name=seccomp,profile=builtin'])));sys.exit(0)\n  if args[:2] in (['compose','version'],) or args==['info']:sys.exit(0)\n@@ -358,2 +369,28 @@\n class InitTests(Fixture):\n+    def test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation(self):\n+        cases=((\"host\",{\"DOCKER_HOST\":\"tcp://192.0.2.2:2375\"},{}),\n+               (\"context\",{\"DOCKER_CONTEXT\":\"remote\"},{}),\n+               (\"stored-context\",{}, {\"current_context\":\"remote\"}),\n+               (\"alternate-unix\",{\"DOCKER_HOST\":\"unix:///tmp/docker.sock\"},{}),\n+               (\"malformed\",{}, {\"malformed_context\":True}),\n+               (\"rootless\",{}, {\"security_options\":[\"name=rootless\"]}))\n+        for release_mode in (False,True):\n+            for label,env,config in cases:\n+                with self.subTest(release=release_mode,case=label):\n+                    (self.root/\"calls.jsonl\").unlink(missing_ok=True)\n+                    self.config=config.copy()\n+                    directory=self.release()[0] if release_mode else None\n+                    args=(\"--release-dir\",directory) if release_mode else ()\n+                    result=self.invoke(*args,init=True,env=env)\n+                    self.assertEqual(result.returncode,10,result.stderr)\n+                    self.assertNoMutation()\n+\n+    def test_supported_local_docker_socket_reaches_existing_host_boundary(self):\n+        for endpoint in (\"unix:///var/run/docker.sock\",\"unix:///run/docker.sock\"):\n+            with self.subTest(endpoint=endpoint):\n+                (self.root/\"calls.jsonl\").unlink(missing_ok=True)\n+                result=self.invoke(init=True,env={\"DOCKER_HOST\":endpoint})\n+                self.assertEqual(result.returncode,60,result.stderr)\n+                self.assertTrue(any(\"stop\" in row for row in self.calls()))\n+\n     def test_complete_release_init_preserves_keys_and_checks_authenticated_readiness(self):\n"
+        }
+      ]
+    },
+    {
+      "role": "remote_docker_red",
+      "jsonl_line": 3391,
+      "utc": "2026-10-11T13:59:44.797Z",
+      "raw_jsonl_line_sha256": "fb816914a474ddeb6d571dd1f1f94f9abc56bf1507ac00bd0e24d7ac94a67d6e",
+      "type": "CommandExecution",
+      "command": [
+        "/bin/bash",
+        "-lc",
+        "python3 -B tests/contract/workflow/release_test.py InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation"
+      ],
+      "exit_code": 1,
+      "aggregated_output": "FFFFFFFFFFFF\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=False, case='host')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=False, case='context')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=False, case='stored-context')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=False, case='alternate-unix')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=False, case='malformed')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=False, case='rootless')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=True, case='host')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=True, case='context')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=True, case='stored-context')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=True, case='alternate-unix')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=True, case='malformed')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n======================================================================\nFAIL: test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation (__main__.InitTests.test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation) (release=True, case='rootless')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/home/claudia/stargate-t208/.scratch/tmp/T081/implementation/tests/contract/workflow/release_test.py\", line 385, in test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation\n    self.assertEqual(result.returncode,10,result.stderr)\nAssertionError: 60 != 10 : stargate init: cannot read /sys/kernel/security/apparmor/features/network/af_unix (host administration rights?); AppArmor af_unix mediation is unverified; refusing DP startup\n\n\n----------------------------------------------------------------------\nRan 1 test in 8.785s\n\nFAILED (failures=12)\n"
+    },
+    {
+      "role": "remote_docker_source_edit",
+      "jsonl_line": 3399,
+      "utc": "2026-10-11T14:00:09.204Z",
+      "raw_jsonl_line_sha256": "19284b9f12fd7aa2d31d7a0773abf2bf06763f822e3b741e64821334ed1027c6",
+      "type": "FileChange",
+      "changes": [
+        {
+          "repository_path": "scripts/subcommands/init",
+          "operation": "update",
+          "unified_diff": "@@ -311,2 +311,18 @@\n   fi\n+  # Host AppArmor/owner rules apply to this machine. A remote Docker context\n+  # would start the host-networked DP elsewhere without those rules (Principle\n+  # III; THREAT-MODEL §3.5). Resolve Docker's effective selected context, not\n+  # only DOCKER_HOST: DOCKER_CONTEXT and stored currentContext also redirect it.\n+  local docker_context docker_endpoint docker_security\n+  docker_context=\"$(docker context show 2>/dev/null)\" || docker_context=\"\"\n+  if [ \"$docker_context\" != default ]; then\n+    note \"Docker context must be the local default; refusing remote or unknown daemon\"\n+    return \"$EXIT_PREFLIGHT\"\n+  fi\n+  docker_endpoint=\"$(docker context inspect default --format '{{json .Endpoints.docker.Host}}' 2>/dev/null)\" || docker_endpoint=\"\"\n+  case \"$docker_endpoint\" in\n+    '\"unix:///var/run/docker.sock\"'|'\"unix:///run/docker.sock\"') : ;;\n+    *) note \"Docker endpoint must be the local rootful Unix socket; refusing redirected daemon\"\n+       return \"$EXIT_PREFLIGHT\" ;;\n+  esac\n   if ! docker compose version >/dev/null 2>&1; then\n@@ -320,2 +336,12 @@\n   fi\n+  docker_security=\"$(docker info --format '{{json .SecurityOptions}}' 2>/dev/null)\" || docker_security=\"\"\n+  case \"$docker_security\" in\n+    \\[*\\]) : ;;\n+    *) note \"Docker security options unavailable; refusing unverified daemon\"\n+       return \"$EXIT_PREFLIGHT\" ;;\n+  esac\n+  case \"$docker_security\" in\n+    *'\"name=rootless\"'*) note \"rootless Docker daemon cannot enforce local host policy\"\n+                         return \"$EXIT_PREFLIGHT\" ;;\n+  esac\n   if ! command -v openssl >/dev/null 2>&1; then\n"
+        }
+      ]
+    },
+    {
+      "role": "remote_docker_green",
+      "jsonl_line": 3413,
+      "utc": "2026-10-11T14:01:08.756Z",
+      "raw_jsonl_line_sha256": "0ce4bb34120fa81d4a2e78a41329a7da7b164a80fdc381d37cdb64edeae3de92",
+      "type": "CommandExecution",
+      "command": [
+        "/bin/bash",
+        "-lc",
+        "python3 -B tests/contract/workflow/release_test.py InitTests"
+      ],
+      "exit_code": 0,
+      "aggregated_output": "...........\n----------------------------------------------------------------------\nRan 11 tests in 53.785s\n\nOK\n"
+    }
+  ]
+}

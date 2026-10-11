@@ -479,8 +479,12 @@ tests-first suite (Principle VII) before implementation lands.
 - **FR-015**: The Tor sidecar image MUST be a Stargate-built image
   installing `tor` from the Tor Project's official Debian repository
   (`deb.torproject.org`) on a pinned Debian-slim base. Both the
-  Debian-slim base **and** the final composed image MUST be pinned by
-  sha256 digest in `compose/docker-compose.local.yml` (Principle IV).
+  Debian-slim base and reviewed build inputs MUST be pinned in source. The
+  development `compose/docker-compose.local.yml` builds that reviewed source;
+  the separate generated release Compose MUST pin all four final runtime images
+  (DP, JVM CP, Tor and observer) by registry sha256 digest. Final digests and
+  provenance belong to the signed release manifest, never post-review source
+  or tag write-back (Principles IV/VI; T081).
   The Tor Project's signing key for the apt repository MUST be
   pinned by fingerprint in the Dockerfile and verified at build time.
   The Debian build inputs (base + every `apt-get install` package,

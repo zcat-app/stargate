@@ -41,7 +41,11 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 SRC="extension"
 ZIP_NAME="stargate-extension.zip"
 
-command -v zip >/dev/null 2>&1 || { echo "SKIP: zip not available"; exit 0; }
+case "${STARGATE_EXTENSION_RUNNER:-host}" in
+  host) command -v zip >/dev/null 2>&1 || { echo "SKIP: zip not available"; exit 0; } ;;
+  release) : ;; # the source-owned release driver selects the pinned container
+  *) echo 'FAIL: unsupported STARGATE_EXTENSION_RUNNER'; exit 1 ;;
+esac
 command -v python3 >/dev/null 2>&1 || { echo "SKIP: python3 not available"; exit 0; }
 
 WORK="$(mktemp -d)"
@@ -77,8 +81,14 @@ perturb "$WORK/b" "2031-11-05 00:00:00 UTC" 664
 
 # --- package both trees -----------------------------------------------------
 for tree in a b; do
-  (cd "$WORK/$tree" && bash package.sh) > "$WORK/$tree.log" 2>&1 \
-    || fail "package.sh failed in copy $tree" "$(tail -5 "$WORK/$tree.log")"
+  if [ "${STARGATE_EXTENSION_RUNNER:-host}" = release ]; then
+    python3 scripts/release.py package-extension --source-dir "$WORK/$tree" \
+      --output "$WORK/$tree/dist/$ZIP_NAME" > "$WORK/$tree.log" 2>&1 \
+      || fail "release packager failed in copy $tree" "$(tail -5 "$WORK/$tree.log")"
+  else
+    (cd "$WORK/$tree" && bash package.sh) > "$WORK/$tree.log" 2>&1 \
+      || fail "package.sh failed in copy $tree" "$(tail -5 "$WORK/$tree.log")"
+  fi
   [ -f "$WORK/$tree/dist/$ZIP_NAME" ] \
     || fail "copy $tree produced no dist/$ZIP_NAME" "$(tail -5 "$WORK/$tree.log")"
 done

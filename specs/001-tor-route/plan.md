@@ -134,7 +134,7 @@ sol-review B5) hold regardless of wall-clock numbers.
 - No per-request metadata logging at finer than 1-hour resolution (FR-008).
 - Fixed SOCKS5 auth and route-failure replies with zero upstream/destination text;
   the four-header HTML template is renderer-only future-format coverage (FR-009).
-- All sidecar images digest-pinned in `compose/docker-compose.local.yml` (FR-015, Principle IV); contract tests block merge on a digest bump that breaks the Tor surface (FR-016).
+- Reviewed base/build inputs remain pinned in source local Compose/Dockerfiles. T081 generates separate release Compose with four final registry digests and a signed manifest bound to the exact reviewed source; it never writes final digests back into source or moves tags (FR-015, Principles IV/VI). Contract tests gate changed Tor inputs (FR-016).
 - Enforce Constitution III's actor matrix: DP has only the fixed pathname Unix
   adapter and authenticated Unix IPC; CP has narrow local management and no
   independent IP egress. T168 confines DP origins in the kernel before serving;
@@ -161,7 +161,7 @@ The constitution amended on 2026-09-12 and `contracts/foundation-boundaries.md` 
 | I — dumb router | Negotiation/management scope clarified; T147 selected HTTP `C` refusal on Tor port 8881, T172 reconciles the contract, and T173 records implementation and the scope of measured evidence. |
 | II — separation | CP authority, recovery/rollback and peer lifecycle incomplete: T138/T132/T135/T148/T159. |
 | III — privacy | Isolation, browser blocking, aggregate-only diagnostics and completed-hour publication: T136/T147/T152/T157/T158. |
-| IV — immutable updates | T160 delivers Tor package/content and dependency-source enforcement; remaining package/tool and release evidence is pending T141/T145/T081. |
+| IV — immutable updates | T160 delivers Tor package/content and dependency-source enforcement; T081 prepares immutable artifacts from reviewed source and a separate protected promotion gate. Actual input/signature/protection/live release evidence remains required; source fixtures alone do not close it. |
 | V — honest threat model | Known gaps recorded; T155 and final live evidence must establish actual compliance. |
 | VI — reproducibility | Obligations remain pending T075/T109/T081; no empty comparison is PASS. |
 | VII — tests-first | Required-coverage/evidence repairs T139/T144; implementations preserve real failing-before-fix evidence. |

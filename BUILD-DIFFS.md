@@ -8,29 +8,45 @@
 
 ## Browser extension (`extension/`)
 
-**Gated property — byte-identical on the same host.** Two builds of the same
-extension source using the same host `zip` executable produce byte-identical
-archives even when source mtimes and modes are perturbed. The release-cadence
-gate `tests/reproducibility/extension_test.sh`
-(`STARGATE_VERIFY_REPRO=1`) also checks the expected member set and
+**Gated property — byte-identical in the selected archive environment.** Two
+builds of the same extension source produce byte-identical archives even when
+source mtimes and modes are perturbed. `tests/reproducibility/extension_test.sh`
+(`STARGATE_VERIFY_REPRO=1`) keeps its host-zip default for local checks; the
+release workflow selects its source-owned pinned container runner. Both modes
+check the expected member set and
 lexicographic order, canonical 1980-01-01 timestamps, Unix file modes
 (`100644`), and absence of extra fields. `extension/package.sh` stages and
-normalizes files before invoking the host `zip`; this test does not compare
-different `zip` executables or versions.
+normalizes files before invoking `zip`. The release runner checks the full
+source-byte set, selected Debian base and snapshot inputs, archive recipe,
+zip/libbz2 package hashes, installed executable/library hashes and output ZIP
+hash. The recipe lives outside `extension/` and is not a ZIP member. Two
+perturbed release-runner copies still use the unchanged member/form assertions.
+Preparation independently packages the **delivered** ZIP twice with fresh
+no-cache helpers, requires byte identity, and retains the delivered hash in
+`reproducibility.json`; the earlier verifier copies alone cannot bind the
+published ZIP.
 
-**Expected variance — unpinned `zip` executable.** The repository does not pin
-or record the `zip` executable used by `extension/package.sh`. Different
-Info-ZIP builds or versions may therefore produce different compressed bytes
-through deflate implementation changes, or different EFS/Unicode filename
-flags for non-ASCII member names. The repository does not assert byte equality
-across those versions.
+**Expected variance — host mode only.** A developer's host `zip` executable
+remains unpinned. Different Info-ZIP builds or versions may yield different
+compressed bytes through deflate changes or EFS/Unicode flags. Those differences
+are not an allowance for the pinned release mode. The pinned Debian base's
+actual apt/keyring acceptance and release-runner compatibility have not been
+measured by T081's source fixtures; the source pins are a contract until the
+finite real validation completes.
 
-**What an auditor should do.** Once T081 records the release build's `zip`
-identity, compare releases built with the same recorded identity. When the
-identity differs, differences confined to the documented compression or
-EFS/Unicode-flag vectors are expected; unexplained differences remain defects.
-Until T081 records that identity, do not infer which `zip` version produced a
-release.
+**What an auditor should do.** Compare releases only after matching source,
+recipe, selected base/snapshot, zip/libbz2 bytes and candidate ZIP identity in
+the retained input report. A mismatch in the release mode's ZIP is a defect;
+do not normalize it away as host-tool variance.
+
+## Tor observer (`sidecars/tor-observer/`)
+
+The release-cadence `tor_observer_test.sh` compares the actual
+`/out/tor-observer` executable from two independent cold pinned-builder builds.
+The T081 preparation also compares the executable bytes extracted from both
+retained OCI runs, and the first payload supplies the released image. Image
+config/layer timestamps are not an accepted executable-byte difference or a
+claim that complete OCI images are byte-identical.
 
 ## JVM control plane (`control-plane/`)
 

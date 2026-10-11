@@ -41,6 +41,189 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-10-11 — Validate BuildKit provenance fields, not incidental text (T081 review round 8)
+
+**Accepted Major finding and mitigation.** The OCI inspector previously
+accepted a SLSA predicate whenever C appeared anywhere in its JSON. A label
+or note could contain C while the invocation identified another revision.
+The inspector now accepts the pinned builder's observed SLSA v1 shape only:
+BuildKit build type, local Dockerfile frontend and context, exact invocation
+revision label and nested `vcs:revision`, and no conflicting own-repository
+Git dependency or BuildKit VCS metadata. The v0.2 synthetic fixture was not
+grounded against the pinned builder and is no longer accepted. The native
+retained minimal OCI v1 sample passes; wrong/missing structured values refuse.
+
+**Scope of evidence.** Docker documents local-context VCS fields as unverified
+hints and local-directory materials as incomplete. This check detects
+contradictions within retained provenance; it does not certify an independent
+Git source digest. The clean source-identity checks around preparation,
+retained payload comparison and signed manifest remain the source-C binding
+(THREAT-MODEL §3.5; Constitution IV/VI).
+
+## 2026-10-11 — Require the remote version tag namespace (T081 review round 8)
+
+**Accepted Major finding and mitigation.** GitHub `GET /commits/{name}` accepts
+branches as well as tags. A same-named branch at C could satisfy the four
+remote source checks after the version tag was deleted, allowing promotion to
+push and publish against a missing tag. Each phase now fetches
+`GET /git/ref/tags/{version}` and resolves lightweight or bounded annotated
+tag objects to the reviewed source C. Missing, malformed, changed or
+over-nested tag refs refuse before the next promotion phase. Local workflow
+identity and source checks remain separate (THREAT-MODEL §3.5; Constitution IV).
+
+**Residual trust.** The authenticated GitHub API and its reported ref/object
+graph remain trusted. A privileged actor can move or remove the tag after a
+check; the driver rechecks before registry push, draft creation and publish,
+but cannot make these phases one transaction. No live release was attempted.
+
+## 2026-10-11 — Query exact-tag release identity during protected promotion (T081 review round 7)
+
+**Accepted Major finding and mitigation.** The round-5 offset-page scan could
+miss a target draft when another release before it was deleted between page
+requests, even with consistent Link headers and an empty final page. Promotion
+now verifies the canonical repository and push-capable token, then uses
+GraphQL `Repository.release(tagName:)` to observe the exact tag, including a
+draft, and REST `GET /releases/tags/{tag}` to observe a published release.
+It performs both lookups before the first registry push and again before draft
+creation. Any present target, GraphQL error, incomplete reply, failed access
+or REST result other than explicit absence refuses. The returned draft ID must
+be newly created by this run and match the requested tag before asset upload;
+no existing draft is adopted or overwritten (THREAT-MODEL §3.5).
+GitHub's current release API can also reject `GITHUB_TOKEN` when C changes
+`.github/workflows` relative to the default branch; that token cannot acquire
+Workflows write permission. Both guards therefore resolve C and the current
+default commit and compare their `.github/workflows` Git-tree identities.
+Missing, malformed, truncated or mismatched tree data refuses before registry
+push or draft creation. Equality of whole commits is not required.
+
+**Residual trust.** These are observations, not a version lock. The workflow
+serializes target-version promotion runs, and authorized human/API writers
+must coordinate with it. Privileged out-of-band edits can race either lookup
+or the owned draft's publication. An abandoned draft or an uncertain create or
+publish response requires manual reconciliation; the driver does not retry
+those writes automatically. A real push-capable token compatibility check is
+still outstanding; local transport fixtures test the response parser and
+decision path, not GitHub's live authorization behavior. A default-branch
+change after the second workflow-tree check can still cause GitHub to refuse
+release creation or publication.
+
+## 2026-10-11 — Require an empty draft-visible release-list sentinel (T081 review round 5)
+
+Superseded by: [the round-7 exact-tag decision](#2026-10-11--query-exact-tag-release-identity-during-protected-promotion-t081-review-round-7).
+
+**Accepted Major finding and mitigation.** Per-page Link termination could
+still stop on a short page without Link, even after an earlier page claimed a
+later `last` page. A first-only Link could also end a nonempty list. Protected
+promotion now constructs consecutive page requests itself and treats Link only
+as a persistent consistency claim. It requires actual HTTP 200 and a well-formed
+empty page beyond every claimed existing page; nonempty pages always continue.
+Changing last-page claims, a premature empty page, malformed/foreign Link, API
+error or partial status refuses. A hard cap refuses at 1,000 returned rows,
+before a possibly misleading empty page beyond GitHub's accessible result window.
+The same check runs before the first registry push and before draft creation
+(THREAT-MODEL §3.5; `scripts/release.py` and release transport fixtures).
+
+**Residual trust.** A successful scan assumes GitHub supplies a complete,
+contiguous draft-visible list below the cap and returns HTTP 200 `[]` beyond
+its end; the latter is observed behavior rather than a published guarantee.
+Concurrent release insertion, deletion, retagging or visibility changes can
+move a draft to an already-read page. The second scan narrows, but cannot
+eliminate, that window; it is neither a snapshot nor a version reservation.
+
+## 2026-10-11 — Exhaust release-list pagination before protected promotion (T081 review round 4)
+
+Superseded by: [the round-5 empty-sentinel decision](#2026-10-11--require-an-empty-draft-visible-release-list-sentinel-t081-review-round-5).
+
+**Accepted Major finding and mitigation.** The draft-aware list guard previously
+validated only `next` links; a `last=2` link without `next` could falsely mark
+page 1 complete. It also accepted a full 100-item page without a Link header
+without checking whether page 2 existed. Both paths could miss a later draft and
+permit registry pushes and signing. The guard now validates every supplied Link
+relation and rejects contradictory, foreign, malformed, duplicate or out-of-bound
+pages. Any full page without a `next` relation triggers one bounded next-page
+query; a terminal Link that conceals data is a contradiction and refuses. An
+empty follow-up page completes the traversal, while a later draft or unreadable
+page refuses before mutation. An ordinary short or empty single page remains valid
+(THREAT-MODEL §3.5; `scripts/release.py` and release transport fixtures).
+
+**Phase correction.** Tokenless preparation has no release API check or publication
+authority. The read-only approval pack checks published releases; protected
+promotion is the authoritative draft-visible reuse gate. No token is injected
+into preparation's build/tool subprocess environment.
+
+## 2026-10-11 — Draft-aware version reuse refusal in protected promotion (T081 review round 3)
+
+Superseded by: [the round-7 exact-tag decision](#2026-10-11--query-exact-tag-release-identity-during-protected-promotion-t081-review-round-7).
+
+**Accepted Major finding and mitigation.** `GET /releases/tags/{tag}` reports
+published releases, so its 404 did not establish that a failed upload had left
+no unpublished draft. A retry could push images and sign again before learning
+that the version was claimed. The read-only approval-pack phase retains that
+early published-release check; tokenless preparation has no release API check.
+Before the first registry push, protected promotion now verifies its
+token's push access for the canonical repository and traverses the bounded
+draft-visible release list, validating response shape and pagination links. It
+repeats the check immediately before creating the draft. A matching published
+release or draft, missing push proof, inaccessible list or incomplete traversal
+refuses. GitHub's list-releases API documents draft visibility for principals
+with push access; its pagination API documents Link headers. The driver now
+constructs consecutive page requests itself (round-5 decision). The transport
+fixtures cover a hidden draft after a published
+lookup 404, a later-page draft and failed visibility (THREAT-MODEL §3.5).
+
+**Residual trust.** The API's authenticated permission report and release list
+remain trusted. Concurrent administrator changes and cross-repository atomicity
+are outside the existing guarantee; retries do not delete or reuse drafts.
+
+## 2026-10-11 — Refuse redirected Docker daemons before local init policy (T081 review round 2)
+
+**Accepted Major finding and mitigation.** Source and signed-release init imposed
+host-boundary policy on the invoking machine, but Docker could select a remote
+daemon through DOCKER_HOST, DOCKER_CONTEXT or a stored currentContext. The local
+policy would then protect the wrong host while Compose started the data plane
+elsewhere. This violated the local deployment claim under Constitution III and
+THREAT-MODEL §3.5. The common init preflight now requires Docker's effective
+selected context to be `default`, its resolved daemon endpoint to be the local
+rootful `/var/run/docker.sock` or `/run/docker.sock`, and its security options to
+exclude rootless. Missing, malformed, redirected or alternate-socket responses
+refuse before host policy, volumes, keys or containers mutate. Both init modes use
+the same guard; the T081 release init fixture tests refusals in each mode, and the
+existing T106 count-probe fixture retains its original fail-closed assertion.
+
+**Residual trust.** The local Docker CLI, daemon and socket identity remain trusted;
+a compromised local host can lie about daemon state or change host policy. This
+does not confer host isolation on remote Docker deployments. See THREAT-MODEL §3.1
+and §3.5 and `scripts/subcommands/init`.
+
+## 2026-10-11 — Immutable source and separately promoted release artifacts (T081)
+
+**Supersession.** The historical 2026-07-04 Tor rationale's instruction to append
+final image digests to this file/source Compose at tag time is superseded by this
+entry. Historical bodies remain unchanged. Reviewed source contains base/build
+input pins; final four runtime registry digests belong to generated release Compose
+and a signed manifest. No final artifact identity can rewrite its reviewed source
+or move the selected existing version tag (Constitution IV/VI; THREAT-MODEL §3.5).
+
+Preparation retains exact OCI bytes, source, input identities and reproducibility
+records with read-only grants. Promotion retrieves the same immutable artifact ID,
+validates detached evidence from fixed paths at a same-repository commit as data,
+and requires the protected stargate-release environment's non-self approval of the
+exact pack. Registry GITHUB_TOKEN authority and OIDC signing authority are distinct.
+A deployment click cannot replace the external-human review required by VIII.
+
+Only the verified full-source init path may admit generated Compose; it retains the
+mandatory local host policy and authenticated readiness and never builds release
+images. Failed validation refuses before provisioning. Failed cross-repository
+uploads can leave immutable remote objects; publishing the verified signed manifest
+is the commit point. Uploads are not transactionally atomic across repositories.
+
+This is a reviewed-source contract and implementation target, not a published-release,
+apt/signature-validation or live-acceptance claim. The source-owned Sigstore selection
+records the audited metadata chain and a conservative new-promotion freshness cutoff;
+the HTTPS bootstrap assumption and offline revocation limits remain explicit.
+Actual input/tool compatibility, final reviews and all required live evidence,
+including R-7, remain required. See docs/releasing.md for the trust boundaries.
+
 ## 2026-10-09 — Promote Tor 0.4.9.14 after the pinned package left the index (T213)
 
 **Decision and authorization.** T212's cold T162 build fetched genuine Tor

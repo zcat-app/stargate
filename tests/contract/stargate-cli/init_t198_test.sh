@@ -45,6 +45,9 @@ fail() { errors+=("$*"); }
 # shellcheck disable=SC2016 # the stubs expand their variables when init runs them
 printf '%s\n' '#!/bin/sh' 'printf "docker %s\n" "$*" >> "$T198_LOG"' \
   'case "$*" in' \
+  '  "context show") printf "%s\n" default; exit 0 ;;' \
+  '  "context inspect default --format "*) printf "%s\n" '\''"unix:///var/run/docker.sock"'\''; exit 0 ;;' \
+  '  "info --format "*) printf "%s\n" '\''["name=seccomp,profile=builtin"]'\''; exit 0 ;;' \
   '  "volume inspect --format "*"_stargate-tor-health") printf "%s\n" "local|tmpfs|tmpfs|size=64k,uid=5103,gid=5103,mode=0700,noexec,nosuid,nodev" ;;' \
   '  *"for f in cp.priv"*) printf "%s\n" "${T198_KEYS:-}" ;;' \
   '  *"for f in observer.priv"*) printf "%s\n" "${T198_OBSERVER:-}" ;;' \

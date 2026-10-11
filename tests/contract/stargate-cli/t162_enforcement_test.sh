@@ -45,7 +45,7 @@ mkdir -p "$hermetic_tmp/bin"
 export T162_FAKE_DOCKER_LOG="$hermetic_tmp/docker.log"
 # The generated stub expands these variables when init invokes it, not here.
 # shellcheck disable=SC2016
-printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "$T162_FAKE_DOCKER_LOG"\nexit 0\n' > "$hermetic_tmp/bin/docker"
+printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "$T162_FAKE_DOCKER_LOG"\ncase "$*" in\n  "context show") printf "default\\n" ;;\n  "context inspect default --format "*) printf "\\"unix:///var/run/docker.sock\\"\\n" ;;\n  "info --format "*) printf "[\\"name=seccomp,profile=builtin\\"]\\n" ;;\nesac\nexit 0\n' > "$hermetic_tmp/bin/docker"
 printf '#!/bin/sh\nexit 1\n' > "$hermetic_tmp/bin/sudo"
 printf '#!/bin/sh\nexit 1\n' > "$hermetic_tmp/bin/apparmor_parser"
 chmod +x "$hermetic_tmp/bin/docker" "$hermetic_tmp/bin/sudo" "$hermetic_tmp/bin/apparmor_parser"

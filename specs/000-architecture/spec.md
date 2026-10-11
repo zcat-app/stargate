@@ -494,7 +494,7 @@ opens a PR with a newer digest and contract tests pass.
 
 | Sidecar     | Candidate image                                  | Digest pinning                                          |
 |-------------|--------------------------------------------------|---------------------------------------------------------|
-| Tor         | **`stargate/tor`** — Stargate-built image installing `tor` from `deb.torproject.org` (Tor Project's official Debian apt repository) on a pinned Debian-slim base. Dockerfile lives in `sidecars/tor/`. Tor Project signing key pinned by fingerprint (`A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89`, in `sidecars/tor/apt-key.fingerprint`) and verified at build time. Resolved by `specs/001-tor-route/` §Clarifications 2026-05-17 Q1. | **Pinned by sha256 digest per FR-015**: the Debian-slim base (`debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df`) and the final composed image are both pinned in `compose/docker-compose.local.yml` / `compose/env/local.env.example` and cross-checked by `tests/contract/compose/` (T015) and `tests/contract/security-decisions/tor_entry_test.sh` (T017). The Debian build inputs (every `apt-get install` package incl. `tor`'s transitive closure) are pinned to an immutable `snapshot.debian.org` run with explicit `=version` pins and retained sha256 hashes (T099), cross-checked by `tests/contract/security-decisions/tor_build_inputs_test.sh` and verified stable across cold rebuilds by `tests/reproducibility/tor_sidecar_manifest_test.sh`. The trust rationale and rotation procedure are in `SECURITY-DECISIONS.md` (T017, T099). |
+| Tor         | **`stargate/tor`** — Stargate-built image installing `tor` from `deb.torproject.org` (Tor Project's official Debian apt repository) on a pinned Debian-slim base. Dockerfile lives in `sidecars/tor/`. Tor Project signing key pinned by fingerprint (`A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89`, in `sidecars/tor/apt-key.fingerprint`) and verified at build time. Resolved by `specs/001-tor-route/` §Clarifications 2026-05-17 Q1. | **Pinned by sha256 digest per FR-015**: the Debian-slim base (`debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df`) and build inputs remain pinned in reviewed source. Development local Compose builds source; T081 generates a separate release Compose with all four final runtime registry digests and a signed manifest. No final digest is written back into source or a reviewed tag. Source invariants remain cross-checked by `tests/contract/compose/` (T015) and `tests/contract/security-decisions/tor_entry_test.sh` (T017). The Debian build inputs (every `apt-get install` package incl. `tor`'s transitive closure) are pinned to an immutable `snapshot.debian.org` run with explicit `=version` pins and retained sha256 hashes (T099), cross-checked by `tests/contract/security-decisions/tor_build_inputs_test.sh` and verified stable across cold rebuilds by `tests/reproducibility/tor_sidecar_manifest_test.sh`. The trust rationale and rotation procedure are in `SECURITY-DECISIONS.md` (T017, T099). |
 | i2pd        | `purplei2p/i2pd` (upstream maintainer)           | `NEEDS CLARIFICATION` — pin at first release tag        |
 | Nym client  | `NEEDS CLARIFICATION: Nym's official Docker distribution status is not resolved in this spec; either pin an upstream image if maintained or build from a pinned `nymtech/nym` source tree.` | `NEEDS CLARIFICATION` |
 | WireGuard   | `linuxserver/wireguard`                          | `NEEDS CLARIFICATION` — pin at first release tag        |
@@ -808,22 +808,37 @@ X") before the user confirms.
 - The Tor sidecar's Debian build inputs are pinned to an immutable
   `snapshot.debian.org` run with explicit `=version` pins (T099), so a
   clean rebuild selects a byte-stable package manifest (incl. `tor`'s
-  transitive closure); the final image digest is pinned at release-tag time
-  by T081, with any expected image-digest variance documented in
+  transitive closure); T081 pins final registry digests in generated release
+  Compose and the signed manifest, without changing the reviewed source/tag, with any expected image-digest variance documented in
   `BUILD-DIFFS.md` (Principle VI).
 
 ### 12.5 Release artefacts
 
-Each tagged `v<x.y.z>` produces:
+Feature 001 prepares an explicitly selected existing immutable `v<x.y.z>` tag:
 
-- `stargate-proxy_<x.y.z>_linux_amd64` and `_arm64` (Go binary).
-- `stargate-control_<x.y.z>.jar` (JVM) and a native `stargate-control`
-  binary per arch.
-- `stargate-extension_<x.y.z>.zip` (web-ext packaging).
-- `stargate_<x.y.z>_compose.tar.gz` containing the three compose files and
-  `scripts/stargate`.
-- Detached signatures (minisign or cosign — `NEEDS CLARIFICATION`: which
-  signing tool is the v1 standard?) + SBOMs + provenance.
+- `stargate-proxy_linux_amd64` and `stargate-proxy_linux_arm64`; arm64 is a
+  Go cross-build, not runtime acceptance. The supported local integration target
+  remains Linux x86_64 (feature plan Target Platform).
+- The complete JVM `quarkus-app/` fast-jar tree in `stargate-control.tar`.
+  `quarkus-run.jar` is a thin launcher and cannot be delivered alone.
+- `stargate-extension.zip`, from unchanged `extension/package.sh` in the pinned
+  amd64 archive environment, with its actual input/output identities.
+- Four amd64 OCI runtime images (DP, JVM CP, Tor, observer), retaining SBOM and
+  provenance blobs; generated `compose.json` pins their registry digests.
+- Full source/install material and a source-file manifest, plus a cosign keyless
+  signed release manifest/bundle bound to exact source, artifacts and evidence.
+  `init --release-dir` runs from the exact verified source checkout; release data
+  never supplies executable code or arbitrary Compose policy.
+
+Preparation has no publication/signing authority. Protected manual promotion checks
+retained immutable artifact identity, detached same-repository evidence and exact
+workflow/repository/ref/OIDC identity before publication. T078/T079, applicable live
+checks and Constitution VIII external-human review remain separate publication
+prerequisites. No source or tag is rewritten. See `docs/releasing.md` (T081).
+
+The broader product release contract still includes native CP binaries and the
+three Local/LAN/VPS Compose profiles when their owning features deliver and verify
+them. This feature does not add those targets or claim arm64 runtime evidence.
 
 ---
 
@@ -1178,8 +1193,9 @@ relies on it can be planned.
 3. **§8 Nym default gateway** — Pin a default Nym gateway at install, pick
    randomly from a vetted list, or require user choice on first run?
    (Defer to mixnet-route feature spec; flag here so it isn't lost.)
-4. **§12.5 Signing tool** — minisign or cosign as the v1 release-signing
-   standard?
+4. **§12.5 Signing tool** — T081 selects digest-verified cosign keyless signing
+   for feature 001 with exact GitHub workflow identity and a reviewed trust anchor.
+   Actual anchor authentication/signature checks remain prerequisites to publication.
 5. **§13.1 Backup encryption** — `age` (preferred) vs `gpg --symmetric`
    (more ecosystem familiarity)?
 6. **§14.1 Manifest version** — ~~Confirm MV2 support on Mullvad Browser
