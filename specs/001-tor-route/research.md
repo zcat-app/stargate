@@ -14,9 +14,9 @@ available at the time the scaffolding task lands (`go.mod` `go 1.26` +
 `toolchain go1.26.3` as of 2026-05-18). Pin the control-plane to JDK 25 LTS via
 `<maven.compiler.release>25` plus Temurin 25 in the CI build matrix. Pin
 Quarkus to the 3.40 LTS line (`quarkus.platform.version` property in the
-parent POM, managed by the Quarkus BOM). Defer the concrete Mandrel 25
-builder image digest pin until the first release tag — the JVM-mode build
-is what this feature exercises.
+parent POM, managed by the Quarkus BOM). This feature-preview uses JVM mode
+and requires verified Quarkus/JDK runtime compatibility. The Mandrel 25
+builder image digest is required before the first completed-v1 native artifact.
 
 **Rationale**:
 
@@ -34,9 +34,9 @@ is what this feature exercises.
 - Temurin is the CI artefact distribution for reproducibility; the
   bytecode-reproducibility property does not depend on a specific
   distribution as long as one is pinned (architecture spec §12.2).
-- Mandrel 25 native-image: not load-bearing here; deferred per arch §15
-  #9. The constitution Sync Impact Report explicitly defers the Mandrel
-  digest to first release tag.
+- Mandrel 25 native-image: not part of this feature-preview. Its pinned
+  builder digest is required before the first completed-v1 native artifact;
+  the preview still requires verification of its Quarkus/JDK runtime pair.
 
 **Alternatives considered**:
 
@@ -478,5 +478,5 @@ feature are resolved in §1–§9 above. The remaining open questions in arch
 §15 (Nym, signing tool, backup encryption, IPFS) do not affect this
 feature.
 
-The constitution Sync Impact Report's deferred Mandrel 25 digest pin is
-intentionally left to first release tag — see §1.
+The Mandrel 25 digest pin remains a completed-v1 native-build prerequisite;
+see §1. The JVM feature-preview still requires runtime compatibility verification.

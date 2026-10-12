@@ -41,6 +41,16 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-10-12 — Feature-preview artifacts and immutable source (T081)
+
+**Decision.** The 001 deliverable is an internal Local/JVM/Linux-amd64 feature-preview, not completed v1 or a public release. Candidate JSON and signed `release.json` carry `channel: feature-preview`; any prepared GitHub Release metadata must set `prerelease: true`, never stable. Source `compose/docker-compose.local.yml` remains source-build configuration. T081 may prepare separate digest-pinned Local release Compose, signed manifest, SBOMs and provenance, bound to exact reviewed source C. Installation uses the clean exact-source checkout, separately signed release data and `scripts/stargate init --release-dir`; `verify-install` checks source bytes/modes, HEAD/tag and clean state, signature and generated Compose before mutation, then release init uses verified Compose with `--no-build`. `source.tar` is audit material, not an installer. Preserve the complete CP fast-jar tree (launcher, `app/`, `lib/`, `quarkus/`, entrypoint). Generated digests and per-release evidence are derived artifacts: T081 MUST NOT write them into the reviewed source commit or append per-release mutable values to this source log. Cosign is the OCI signing standard; registry and signing authentication remain separate controls.
+
+**Completed-v1 obligation.** This preview does not satisfy completed v1. Native CP, Local/LAN/VPS profiles and verified supported architectures remain required under architecture §12.5 and Constitution VI. T191's observer provenance and reproducibility obligation remains assigned to T081 and is not superseded here.
+
+**Supersedes.** This entry supersedes only the 2026-07-04 FR-015 source-local-Compose final-image digest wording. The Tor trust rationale remains. The 2026-10-02 T191 observer provenance/reproducibility requirement is unaffected.
+
+**Owner and re-evaluation.** Owner: maintainer; T081 owns implementation of this release contract. Re-evaluate on changes to preview artifacts or the exact-source release installation path, and before completed-v1 designation. A later public preview is the first public release and requires Constitution Governance and VIII external-human review.
+
 ## 2026-10-11 — Validate BuildKit provenance fields, not incidental text (T081 review round 8)
 
 **Accepted Major finding and mitigation.** The OCI inspector previously
@@ -1487,6 +1497,8 @@ cross-reference" above for the drift reconciliation plan under T018.
 ---
 
 ## 2026-07-04 — Tor sidecar trust rationale (FR-015)
+
+Superseded by: [2026-10-12 — Feature-preview artifacts and immutable source (T081)](#2026-10-12--feature-preview-artifacts-and-immutable-source-t081), for the source-Compose final-image digest placement only; trust rationale remains.
 
 Superseded by: [T160 Tor security promotion](#2026-09-12--tor-04912-security-promotion-and-exact-package-content-pins-t160), for the Tor version/hash selection and same-version content-integrity claim only.
 Superseded by: [T184 Debian snapshot rollback refusal](#2026-09-30--refuse-rolled-back-debian-snapshot-metadata-for-the-tor-image-t184), for the T099 claims that the snapshot run and `=version` pins freeze the closure and need no Valid-Until handling only.

@@ -665,6 +665,8 @@ These are reasonable defaults the spec adopts where the input prompt or
 the architecture did not pin a choice. Each is recorded so a later
 clarification round (`/speckit-clarify`) can revisit them deliberately.
 
+- **Feature-preview boundary.** This 001 delivery is an internal Local/JVM/Linux-amd64 `feature-preview`, not completed v1 or a public release. Candidate and signed release manifest carry `channel: feature-preview`; prepared GitHub Release metadata must set `prerelease: true`. Native CP, Local/LAN/VPS profiles and runtime-verified supported architectures remain required before completed v1. T081 implementation authorizes no tag creation or publication. A public preview is the first public release and requires Constitution Governance and VIII external-human review.
+
 - **Local profile only for this feature.** LAN and VPS profiles
   (architecture spec §3 profiles) are explicitly out of scope here, per
   the user input. They are revisited in a separate feature spec once

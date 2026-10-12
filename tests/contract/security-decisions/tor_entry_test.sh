@@ -103,8 +103,17 @@ TOR_DIGEST_COUNT="$(grep -Eo 'debian:12-slim@sha256:[0-9a-f]{64}' "$TOR_DOCKERFI
 has "${TOR_BASE_DIGEST#*@}" "M5: base digest ${TOR_BASE_DIGEST#*@} (from $TOR_DOCKERFILE) missing in $SD"
 
 # --- M6: final-image digest honesty ----------------------------------------
-# The entry must reference T081 / release-tag-time pinning (the gap is real
-# and release-blocking per FR-015 literal text).
+# The T081 reconciliation binds preview channel/prerelease metadata and
+# supersedes only the historical source-Compose digest placement wording.
+has "2026-10-12 — Feature-preview artifacts and immutable source \(T081\)" \
+  "M6: feature-preview source/digest decision missing"
+has "channel: feature-preview" "M6: candidate/release channel decision missing"
+has "prerelease: true" "M6: prerelease metadata decision missing"
+has "Superseded by: \[2026-10-12 — Feature-preview artifacts and immutable source" \
+  "M6: July 4 FR-015 entry lacks metadata-only supersession backlink"
+# The preserved July 4 body is historical; its metadata backlink supersedes
+# only source-Compose digest placement. Current derived digests belong in the
+# signed T081 release artifacts.
 has "(T081|release[ -]tag|release\.yml|final[ -]image.*pin|GHCR)" \
   "M6: final-image digest entry must reference T081 / release-tag-time pinning"
 # It must NOT present a fabricated final-image sha256 pin as current. The

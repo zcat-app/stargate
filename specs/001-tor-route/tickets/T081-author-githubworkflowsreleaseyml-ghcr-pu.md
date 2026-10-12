@@ -3,13 +3,13 @@ id: T081
 title: 'Prepare immutable reviewed release artifacts and workflow'
 status: done
 created: 2026-07-04
-last_updated: "2026-10-11"
+last_updated: "2026-10-12"
 source: review/sol-review.md#M7
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
 blocked_by: ["T002a", "T003a", "T014", "T017", "T076", "T098", "T099", "T155", "T075", "T109", "T110", "T111", "T112", "T156", "T206"]
 parallel: false
-files_budget: 25
+files_budget: 28
 privacy_critical: true
 complexity: medium
 risk: high
@@ -24,10 +24,11 @@ constitution_refs:
 decision_refs:
   - .specify/memory/constitution.md#iv-pinned-tested-manually-promoted-updates
   - specs/001-tor-route/contracts/foundation-boundaries.md#compatibility-and-completion
-reviews: { round: 9, date: 2026-10-11, verdict: APPROVE }
+reviews: { round: 10, date: 2026-10-12, verdict: APPROVE }
 overrides:
   - "2026-10-11 maintainer session: affected Python/shell/workflow/init checks only at source checkpoints; no full verifier or Java/Go builds locally. Future release preparation still requires the complete gate."
   - "2026-10-11 maintainer session: independent Astra/high and Luna/high ticket reviews; implementor switched to Sol/high and does not review its own work."
+  - "2026-10-12 maintainer reconciliation: 28-path maximum inventory; internal feature-preview channel/prerelease contract; affected-only local checks, no full verifier or unrelated Go/Java builds, no tag or publication. Fresh independent Astra and Luna reviews remain required."
 aborted_attempts: []
 reopens: []
 redteam_findings: []
@@ -43,6 +44,8 @@ artifacts with source/tag write-back, assumed registry authentication and signin
 mechanism, and demanded zero secrets.* references while explicitly using GITHUB_TOKEN. T156
 replaces those instructions with a reviewed-candidate release contract. No publication or tag
 creation is authorized merely by completing workflow implementation.
+
+This ticket prepares an internal Local/JVM/Linux-amd64 feature-preview only. The candidate and signed manifest carry `channel: feature-preview`; prepared GitHub Release metadata carries `prerelease: true`. Native CP, Local/LAN/VPS profiles and runtime-verified supported architectures remain completed-v1 obligations. A public preview is the first public release and requires Constitution Governance plus VIII external-human review.
 
 ## Analysis
 
@@ -65,10 +68,12 @@ creation is authorized merely by completing workflow implementation.
    run current verify, online grounding and release reproducibility with explicit flags:
    STARGATE_GROUND_ONLINE=1 and STARGATE_VERIFY_REPRO=1. Required skips or missing evidence must
    block release. Preparation fixtures can run without publication credentials or real pushes.
-3. Build DP, JVM CP, Tor and Tor-observer (`sidecars/tor-observer/Dockerfile`) artifacts from the
-   reviewed candidate with pinned toolchains/inputs, and include the observer in the release
-   reproducibility evidence; the generated release Compose pins the observer by its registry digest
-   instead of init's local image ID (SECURITY-DECISIONS 2026-10-02, T191).
+3. Build the Local/Linux-amd64 feature-preview DP, JVM CP, Tor and Tor-observer
+   (`sidecars/tor-observer/Dockerfile`) artifacts from the reviewed candidate with pinned
+   toolchains/inputs; omit the unvalidated arm64 binary from distributed assets while retaining
+   it only as internal evidence with no support claim. Include observer provenance and
+   reproducibility evidence; generated release Compose pins it by registry digest instead of
+   init's local image ID (SECURITY-DECISIONS 2026-10-02, T191 remains active).
    Pin and record the extension archive tool/build environment identified by T111; prove the
    delivered extension bytes reproducible. Record artifact hashes, source commit, build inputs,
    SBOMs and signature/provenance verification instructions. Verify output/source agreement.
@@ -90,10 +95,11 @@ creation is authorized merely by completing workflow implementation.
    tests and Constitution VIII's external human review when triggered. Test rejection of stale,
    missing or mismatched review/evidence records. Do not add circular implementation-ticket deps
    between this preparation task and its final reviewers.
-8. Run scripts/verify.sh and independent reviews (the 2026-10-11 session limits local
-   source checkpoints to affected fixtures and selects independent Astra/Luna reviews;
-   no full-green claim follows from those fixtures). Acceptance of workflow preparation is not a
-   claim that a release was published or that its live/reproducibility obligations were executed.
+8. Run only the affected workflow/release Python and shell tests, release-init and fast-jar
+   checks, and directly affected Tor security-decision/reproducibility checks. The approved
+   2026-10-12 session excludes the full verifier and unrelated Go/Java builds. Obtain fresh
+   independent Astra and Luna reviews against the same exact candidate. Fixture results do not
+   establish runtime correctness, live evidence, real signature compatibility or publication.
 
 9. Before implementation, record a real failing `release_init_test.sh` probe showing that
    invalid release data or unknown init arguments reach a host/Compose mutation. Then
@@ -108,8 +114,7 @@ creation is authorized merely by completing workflow implementation.
 
 ## Out-of-scope
 
-Native-image/Mandrel delivery, additional deployment profiles, new registries/architectures,
-actual tag creation or publication. The extension reproducibility test may select a
+Native-image/Mandrel delivery, LAN/VPS artifacts and architectures not runtime-verified by this feature are outside T081 implementation but remain completed-v1 requirements. T081 does not authorize version-tag creation or publication. The extension reproducibility test may select a
 pinned release runner while retaining its host default and archive assertions; the
 Tor security-decision test may reconcile historical write-back comments without
 weakening its fabrication guard. Existing source Compose assertions may be reused but cannot

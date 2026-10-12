@@ -31,15 +31,13 @@
 # health is an authenticated observation, not a Docker probe journal.
 # No host port mapping is introduced for the CP (Principle II).
 #
-# Native-image is explicitly out of scope here — plan.md "the JVM
-# build is what this feature exercises"; the constitution Sync
-# Impact Report defers the Mandrel 25 digest pin to the first
-# release tag.
+# Mandrel 25 is a completed-v1 native-build input; the 001 feature-preview
+# uses this JVM runtime and still requires JDK/Quarkus compatibility evidence.
 #
 # Contract status: `docker build` against this file will fail until
 # T040 lands Java sources and activates the quarkus-maven-plugin in
-# runtime/. T015 pins this image's output digest in
-# compose/docker-compose.local.yml.
+# runtime/. The output digest belongs in T081's separate signed release
+# data and derived digest-pinned Compose, never source local Compose.
 
 FROM maven:3.9-eclipse-temurin-25@sha256:1c3a703ab39fee7ac0880f46e6ccd22c0d701f17f0616e6e66a258ddc1c637d2 AS builder
 

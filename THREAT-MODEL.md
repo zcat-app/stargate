@@ -8,7 +8,7 @@
 > repairs remain pending; no repaired runtime or live pass is claimed by this amendment.
 
 **Status**: Draft
-**Last updated**: 2026-05-17
+**Last updated**: 2026-10-12
 **Derives from**:
 - `.specify/memory/constitution.md` v1.0.0 (with the pre-release T091 amendment to Principle III bullet 3) (Principles III and V)
 - `specs/000-architecture/spec.md` (concrete ports, profiles, sidecars)
@@ -757,10 +757,17 @@ Across all modes, the user trusts:
 
 ### 3.5 Release artifacts, evidence and installer authority (T081)
 
+T081 prepares an internal Local/JVM/Linux-amd64 `feature-preview`, not completed
+v1 or a public release. Candidate and signed manifest carry `channel: feature-preview`;
+prepared GitHub Release metadata carries `prerelease: true`. Native CP, Local/LAN/VPS
+profiles and runtime-verified supported architectures remain completed-v1 requirements.
+A public preview is the first public release and requires Constitution Governance and
+VIII external-human review.
+
 The release workflow prepares bytes from one reviewed source C and an existing
 version tag without write/signing grants. Generated release Compose pins four final
 registry digests; source local Compose remains a development build entry point.
-The source/tag is never rewritten to contain derived artifacts.
+Generated digests and release evidence are derived artifacts and never rewrite source/tag.
 Promotion reads the remote `refs/tags/<version>` object and resolves any
 annotated tag chain to C at the approval-pack, pre-push, pre-draft and
 pre-publish guards. A same-named branch does not substitute for a deleted
@@ -2741,10 +2748,10 @@ reviewed upstream code trustworthy. The dated T160 decision supplements the hist
 
 Remaining obligations:
 
-- The final composed image digests are not yet pinned; that lands at
-  release-tag time with the release workflow (T081). Until then the
-  supply chain is base-pinned + snapshot-pinned + key-verified, not
-  fully image-pinned.
+- The 001 feature-preview carries final Tor and observer image digests in
+  separate signed release data; source Compose retains `build:` and is not
+  rewritten. Completed-v1 profile artifacts still need their own signed,
+  digest-pinned bundles and runtime-verified architecture claims.
 - T161 preserves the two failed cold T058 runs and supplies current attributable evidence from
   two new cold distinct-credential passes plus independent configuration/control and fusion
   controls. The earlier failures remain unattributed rather than relabeled. These native Tor

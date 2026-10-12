@@ -249,11 +249,15 @@ seen={}
 def urlopen(request,**kw):
  url=request.full_url
  with (root/'http.jsonl').open('a') as f:f.write(json.dumps([request.get_method(),url])+'\n')
+ if request.get_method() in ('POST','PATCH') and '/assets?' not in url and hasattr(request,'data') and request.data:
+  with (root/'http-bodies.jsonl').open('a') as f:f.write(json.dumps([url,request.data.decode()])+'\n')
  if url=='https://api.github.com/graphql':
   with (root/'graphql.jsonl').open('a') as f:f.write(request.data.decode()+'\n')
  if url.startswith('https://uploads.github.com/repos/zcat-app/stargate/releases/99/assets?name='):
   if fixture.get('upload_failure'):raise urllib.error.HTTPError(url,500,'fixture upload failure',{},None)
   data=request.data.read() if hasattr(request.data,'read') else request.data
+  name=url.rsplit('name=',1)[1]
+  if name in ('candidate.json','release.json'):(root/('uploaded-'+name)).write_bytes(data)
   return Response(json.dumps({'state':'uploaded','size':len(data),'digest':'sha256:'+hashlib.sha256(data).hexdigest()}).encode())
  if fixture.get('row_shift') and '/releases?per_page=100&page=' in url:
   page=int(url.rsplit('page=',1)[1]); rows=fixture['row_shift']
@@ -370,7 +374,7 @@ class Fixture(unittest.TestCase):
             if service.get("pull_policy") == "build":
                 del service["pull_policy"]
         write_json(directory / "compose.json", generated)
-        manifest = {"schema": 1, "version": VERSION, "source": C,
+        manifest = {"schema": 1, "version": VERSION, "channel": "feature-preview", "source": C,
                     "platform": "linux/amd64", "images": self.images,
                     "compose_sha256": sha((directory / "compose.json").read_bytes()),
                     "source_files": {p.relative_to(self.root).as_posix(): {"sha256": sha(p.read_bytes()), "mode": "100755" if p.stat().st_mode & 0o111 else "100644"}
@@ -383,6 +387,20 @@ class Fixture(unittest.TestCase):
 
 
 class InitTests(Fixture):
+    def test_release_manifest_requires_feature_preview_channel(self):
+        for channel in (None, "stable", "feature-preview-v2"):
+            with self.subTest(channel=channel):
+                directory, manifest = self.release()
+                if channel is None:
+                    del manifest["channel"]
+                else:
+                    manifest["channel"] = channel
+                write_json(directory / "release.json", manifest)
+                result = self.invoke("verify-install", "--release-dir", directory)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("release: refusing:", result.stderr)
+                self.assertNoMutation()
+
     def test_remote_or_malformed_docker_endpoint_refuses_before_any_mutation(self):
         cases=(("host",{"DOCKER_HOST":"tcp://192.0.2.2:2375"},{}),
                ("context",{"DOCKER_CONTEXT":"remote"},{}),
@@ -1059,7 +1077,7 @@ class CandidateBindingTests(Fixture):
         with tarfile.open(retained / "source.tar", "w") as tf:
             for name, record in source_files.items():
                 data=(self.root / name).read_bytes();info=tarfile.TarInfo(name);info.mode=0o755 if record["mode"]=="100755" else 0o644;info.size=len(data);tf.addfile(info,io.BytesIO(data))
-        candidate={"schema":1,"source":C,"version":VERSION,"platform":"linux/amd64","images":images,
+        candidate={"schema":1,"source":C,"version":VERSION,"channel":"feature-preview","platform":"linux/amd64","images":images,
                    "source_files":source_files,"artifacts":{p.relative_to(retained).as_posix():{"sha256":sha(p.read_bytes()),"size":p.stat().st_size} for p in retained.rglob("*") if p.is_file()},
                    "pending":[],"prepare_run_id":7,"prepare_run_attempt":1}
         write_json(retained / "candidate.json",candidate)
@@ -1073,6 +1091,20 @@ class CandidateBindingTests(Fixture):
         result=self.check()
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertNoMutation()
+
+    def test_candidate_requires_feature_preview_channel(self):
+        for channel in (None, "stable", "feature-preview-v2"):
+            with self.subTest(channel=channel):
+                retained, candidate = self.candidate()
+                if channel is None:
+                    del candidate["channel"]
+                else:
+                    candidate["channel"] = channel
+                write_json(retained / "candidate.json", candidate)
+                result = self.check()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("release: refusing:", result.stderr)
+                self.assertNoMutation()
 
     def test_changed_delivered_bytes_with_rehashed_inventory_refuse(self):
         for name in ("stargate-proxy-linux-amd64","stargate-control.tar","stargate-extension.zip","stargate-proxy-linux-arm64","reproducibility.json","tor-packages.json","source.tar"):
@@ -1143,7 +1175,12 @@ class PreparationRecordingTests(Fixture):
         result=self.prepare_recorded()
         self.assertEqual(result.returncode,0,result.stderr)
         prepared=self.root/"prepared"
-        self.assertEqual(json.loads((prepared/"candidate.json").read_text())["pending"],[])
+        candidate=json.loads((prepared/"candidate.json").read_text())
+        self.assertEqual(candidate["pending"],[])
+        self.assertEqual(candidate["channel"],"feature-preview")
+        self.assertIn("stargate-proxy-linux-arm64",candidate["artifacts"])
+        self.assertEqual(json.loads((prepared/"reproducibility.json").read_text())["arm64"]["tier"],
+                         "cross-build-only-no-runtime-acceptance")
         checked=self.invoke("verify-candidate","--directory",prepared,"--source",C,"--version",VERSION)
         self.assertEqual(checked.returncode,0,checked.stderr)
         calls=self.calls()
@@ -1304,12 +1341,12 @@ class PromotionDispatchTests(PromotionPolicyTests):
                 "tree": [{"path": name, "type": "tree", "mode": "040000", "sha": child}]}
         responses["https://api.github.com/repos/zcat-app/stargate/releases?per_page=100&page=1"] = (
             [] if releases is None else releases)
-        created = {"id": 99, "tag_name": VERSION, "draft": True} if create_response is None else create_response
+        created = {"id": 99, "tag_name": VERSION, "draft": True, "prerelease": True} if create_response is None else create_response
         responses["https://api.github.com/repos/zcat-app/stargate/releases"] = (
             created if "__status" in created or "__value" in created else
             {"__value": created, "__http_status": 201})
         responses["https://api.github.com/repos/zcat-app/stargate/releases/99"] = (
-            {"id": 99, "draft": False, "tag_name": VERSION} if publish_response is None else publish_response)
+            {"id": 99, "draft": False, "tag_name": VERSION, "prerelease": True} if publish_response is None else publish_response)
         if workflow_override:
             responses.update(workflow_override)
         self.transport["upload_failure"] = failure == "upload"
@@ -1318,7 +1355,8 @@ class PromotionDispatchTests(PromotionPolicyTests):
         self.env.update(GITHUB_RUN_ATTEMPT="1", GITHUB_SHA=C, GITHUB_WORKFLOW_SHA=C, GITHUB_REF="refs/tags/" + VERSION,
                         GITHUB_EVENT_NAME="workflow_dispatch", GITHUB_WORKFLOW_REF="zcat-app/stargate/.github/workflows/release.yml@refs/tags/" + VERSION,
                         ACTIONS_ID_TOKEN_REQUEST_TOKEN="fixture-oidc", ACTIONS_ID_TOKEN_REQUEST_URL="https://fixture.invalid")
-        write_json(directory / "candidate.json", {"images": self.images, "source_files": manifest["source_files"], "artifacts": {}})
+        write_json(directory / "candidate.json", {"channel": "feature-preview", "images": self.images,
+                                                   "source_files": manifest["source_files"], "artifacts": {}})
         write_json(self.root / "fixture.json", self.config)
         write_json(self.root / "transport.json", self.transport)
         extra = '''
@@ -1353,6 +1391,21 @@ m.candidate_pack=lambda args,where:(m.document(root/'pack.json'),root/'release',
         uploaded = [url for method, url in http if method == "POST" and "/assets?name=" in url]
         for name in ("stargate-extension.zip.inputs.json", "tor-packages.json", "build-logs.tar"):
             self.assertTrue(any(url.endswith("name=" + name) for url in uploaded), name)
+        self.assertFalse(any(url.endswith("name=stargate-proxy-linux-arm64") for url in uploaded))
+        self.assertEqual(json.loads((self.root / "uploaded-candidate.json").read_text())["channel"],"feature-preview")
+        self.assertEqual(json.loads((self.root / "uploaded-release.json").read_text())["channel"],"feature-preview")
+        bodies = [json.loads(line) for line in (self.root / "http-bodies.jsonl").read_text().splitlines()]
+        create = json.loads(next(body for url, body in bodies if url.endswith("/releases")))
+        self.assertTrue(create["prerelease"])
+        self.assertTrue(create["draft"])
+
+    def test_release_metadata_and_signed_manifest_bind_feature_preview(self):
+        result=self.publish()
+        self.assertEqual(result.returncode,0,result.stderr)
+        bodies=[json.loads(line) for line in (self.root/"http-bodies.jsonl").read_text().splitlines()]
+        create=json.loads(next(body for url,body in bodies if url.endswith("/releases")))
+        self.assertTrue(create["prerelease"])
+        self.assertEqual(json.loads((self.root/"uploaded-release.json").read_text())["channel"],"feature-preview")
 
     def test_signing_uses_exact_source_owned_service_config(self):
         result=self.publish()

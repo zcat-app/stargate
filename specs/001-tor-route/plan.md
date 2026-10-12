@@ -59,7 +59,7 @@ defines preservation and the reviewed reopen sequence. Historical guest15 aggreg
 **Language/Version**:
 
 - **Data plane**: Go (toolchain pinned via `go.mod` `go` + `toolchain` directives — concrete patch fixed during scaffold task; v1.26.x line per research.md §1).
-- **Control plane**: JDK 25 LTS + Quarkus 3.40 LTS, promoted by T217 under the dependency-promotion process. This feature builds the *JVM-mode* artefact; native-image is not load-bearing for this slice (spec Assumption "Reproducibility holds for the Go data plane in this feature").
+- **Control plane**: JDK 25 LTS + Quarkus 3.40 LTS, promoted by T217 under the dependency-promotion process. This feature delivers an internal *feature-preview* using the JVM-mode artefact; native-image is not part of this slice. A feature-preview is not completed v1: native-image remains required before completed-v1 release under architecture §§12.2/12.5 and Constitution VI.
 - **Extension**: WebExtensions MV2, vanilla JavaScript (ES2022), no build step (arch §12.3, Principle VI — avoid npm supply chain on a privacy-critical component). **Node 20 LTS** is pinned as a *CI-only* dependency for extension JS unit tests (`node:test` runner, see research.md §10); no Node deps ship to the user.
 - **Sidecar**: Tor (from `deb.torproject.org`) on pinned `debian:12-slim` base, built by Stargate's Dockerfile at `sidecars/tor/`.
 
@@ -88,13 +88,10 @@ defines preservation and the reviewed reopen sequence. Historical guest15 aggreg
 - **Extension JS units**: Node 20 LTS + built-in `node:test` runner; MV2 background scripts are loaded into the test via `vm.runInNewContext()` with a synthesized `browser` global, so production code stays in idiomatic browser-script style (no UMD wrapper, no test-only export branch). Used in this feature for the FR-004 hardening-audit test (research.md §10).
 - **Browser-level**: Mullvad Browser integration tests are run manually for the SC-001 walkthrough in this feature; automation is deferred (no headless privacy-safe Mullvad Browser harness exists in v1).
 
-**Target Platform**: Linux x86_64 (the local Compose profile), with AppArmor, Landlock
+**Target Platform**: This feature-preview is exercised on Linux x86_64 (the local Compose profile), with AppArmor, Landlock
 ABI >= 4 (upstream Linux 6.7+) and seccomp thread synchronization. The DP is built
 with `CGO_ENABLED=0`; confinement failure refuses serving. Mullvad Browser on Linux
-desktop is the user-facing walkthrough. `arm64` data-plane builds use native kernel
-constants but cross-compilation alone is not runtime verification; they are not
-exercised by this feature's integration harness. T168's mechanism and supported
-restart behavior are normative in `contracts/foundation-boundaries.md`.
+desktop is the user-facing walkthrough. `arm64` data-plane cross-builds are unvalidated internal evidence; cross-compilation alone is not runtime verification and arm64 is not a distributed preview asset or support claim. Completed-v1 profile and architecture support remains governed by architecture §12.5. T168's mechanism and supported restart behavior are normative in `contracts/foundation-boundaries.md`.
 
 **Project Type**: Multi-language monorepo — three language planes (Go data plane, Quarkus control plane, JS extension) + Docker-orchestrated sidecars + cross-cutting contract tests. Layout is defined in architecture spec §3; this feature populates a vertical slice through that layout.
 
@@ -163,7 +160,7 @@ The constitution amended on 2026-09-12 and `contracts/foundation-boundaries.md` 
 | III — privacy | Isolation, browser blocking, aggregate-only diagnostics and completed-hour publication: T136/T147/T152/T157/T158. |
 | IV — immutable updates | T160 delivers Tor package/content and dependency-source enforcement; T081 prepares immutable artifacts from reviewed source and a separate protected promotion gate. Actual input/signature/protection/live release evidence remains required; source fixtures alone do not close it. |
 | V — honest threat model | Known gaps recorded; T155 and final live evidence must establish actual compliance. |
-| VI — reproducibility | Obligations remain pending T075/T109/T081; no empty comparison is PASS. |
+| VI — reproducibility | Feature-preview DP/JVM/extension evidence remains gated by T075/T109/T081; no empty comparison is PASS. Native-image reproducibility and the completed-v1 artifact matrix remain required before completed v1; this slice does not waive them. |
 | VII — tests-first | Required-coverage/evidence repairs T139/T144; implementations preserve real failing-before-fix evidence. |
 | VIII — independent reviews | Amendment review in T156; foundation T155 and final T078/T079 remain required. |
 | Deployment | T162 enforces loopback and Unix fabrics; T168 adds irreversible all-thread IP confinement before serving. Owner rules remain installer-required defense in depth. T170 preserves enforcing-profile signal/lifecycle behavior. T163 records cumulative evidence from actual deployment namespaces on an independently booted Linux host, under the foundation contract's capture, family, failure/recovery and restart requirements. The maintainer approved VM evidence on 2026-09-21; the measured guest result makes no physical-NIC, hypervisor or untested-environment claim. |
@@ -442,12 +439,11 @@ the resolutions deliberately rather than accepting them implicitly.
    against). research.md §8.
 
 9. **Quarkus 3.40 LTS / JDK 25 / Mandrel 25 compatibility** (arch §15 #9
-   / constitution pre-release JDK-pin note). The JVM
-   build is exercised by this feature; the native-image build is not
-   load-bearing for SC-1 through SC-5. The constitution amendment that
-   pinned these versions remains the source of truth; the concrete
-   Mandrel 25 builder image digest is pinned at first release tag, not
-   in this feature. research.md §1.
+   / constitution pre-release JDK-pin note). The JDK 25 / Quarkus 3.40
+   runtime pair used by this JVM feature-preview must be verified. The
+   Mandrel 25 builder digest is required before the first completed-v1
+   native artifact; deferring the native builder does not defer or waive
+   preview runtime compatibility. research.md §1.
 
 10. **Minimum-subset `GetStatus` RPC ships in v1 proto, called by tests
     only**. The production CP→DP `GetStatus` pull and SQLite

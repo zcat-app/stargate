@@ -3,7 +3,10 @@
 Copyright 2026 The Stargate Authors. SPDX-License-Identifier: Apache-2.0
 
 The release workflow operates on an **existing reviewed version tag** and its exact
-source commit C. Preparation does not publish, sign, create a tag or rewrite source.
+source commit C. T081 prepares an internal Local/JVM/Linux-amd64 `feature-preview`;
+candidate and signed manifest carry `channel: feature-preview`, and prepared GitHub
+Release metadata must carry `prerelease: true`. This is not completed v1 or a public
+release. Preparation does not publish, sign, create a tag or rewrite source.
 Promotion consumes retained bytes and independent evidence; it never rebuilds.
 Acceptance of T081's workflow implementation is not release authorization or a
 claim that final review, real signatures, live tests or publication have occurred.
@@ -16,12 +19,20 @@ generated JSON Compose document with exactly `stargate-dp`, `stargate-control`,
 build entries and `pull_policy: build` are removed. All other parsed source
 topology is retained. A relative host bind mount requires an explicit future
 implementation; it cannot silently change meaning in the release directory.
+Source local Compose remains source-build configuration; final image digests live in
+separate signed release data and generated digest-pinned Local Compose. Installation
+uses the clean exact-source checkout, separately signed release data and
+`scripts/stargate init --release-dir`; `verify-install` validates source bytes/modes,
+HEAD/tag, clean state, signature and generated Compose before mutation. Release init
+uses verified Compose with `--no-build`; `source.tar` is audit material, not an
+installer. Preserve the full fast-jar payload.
 
-Feature 001 packages Linux amd64 Local images, amd64 and arm64 data-plane
-binaries, the complete JVM fast-jar tree (including its launcher, app/lib/quarkus
-directories and entrypoint), the extension ZIP and full source. Arm64 is a
-cross-build comparison, **not runtime acceptance**. Native CP and additional
-runtime profiles are not produced by this workflow. This packaging scope does
+The distributed preview includes Linux amd64 Local images, amd64 data-plane
+binary, the complete JVM fast-jar tree (including its launcher, app/lib/quarkus
+directories and entrypoint), the reproducible extension ZIP and full source. The
+arm64 cross-build remains internal unvalidated evidence and is not distributed or
+claimed as supported. Native CP and LAN/VPS profiles are not produced by this workflow;
+they and runtime-verified supported architectures remain completed-v1 requirements. This packaging scope does
 not discharge any live release obligation: R-1 through R-8, including R-7's
 routed IPv6, LAN/VPS, physical NIC and hypervisor observations, remain required.
 Unsupported or unmeasured scope blocks promotion; it is never N/A or PASS. R-2

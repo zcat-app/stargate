@@ -265,9 +265,10 @@ def verify_install(directory, output=None):
     manifest_path = directory / "release.json"
     manifest_data = regular(manifest_path)
     manifest = decode(manifest_data)
-    fields(manifest, ("schema", "version", "source", "platform", "images", "compose_sha256",
+    fields(manifest, ("schema", "version", "channel", "source", "platform", "images", "compose_sha256",
                       "source_files", "artifacts", "pack_sha256"), "release manifest")
-    require(manifest["schema"] == 1 and manifest["platform"] == "linux/amd64", "unsupported release")
+    require(manifest["schema"] == 1 and manifest["channel"] == "feature-preview"
+            and manifest["platform"] == "linux/amd64", "unsupported release")
     version(manifest["version"])
     commit(manifest["source"])
     digest(manifest["pack_sha256"])
@@ -1030,7 +1031,8 @@ def prepare(args):
         run(["git", "archive", "--format=tar", "--output=" + str(args.output / "source.tar"), args.source])
         write_json(args.output / "reproducibility.json", repro)
         require(source_identity(args.source, args.version) == source_files, "preparation changed source")
-        candidate = {"schema": 1, "source": args.source, "version": args.version, "platform": "linux/amd64",
+        candidate = {"schema": 1, "source": args.source, "version": args.version, "channel": "feature-preview",
+                     "platform": "linux/amd64",
                      "images": images, "source_files": source_files, "artifacts": inventory(args.output),
                      "pending": pending, "prepare_run_id": int(os.environ["GITHUB_RUN_ID"]),
                      "prepare_run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"])}
@@ -1207,10 +1209,11 @@ def validate_retained_candidate(retained, source, tag, source_files):
     retained = Path(retained)
     candidate_path = retained / "candidate.json"
     candidate = document(candidate_path)
-    fields(candidate, ("schema", "source", "version", "platform", "images", "source_files", "artifacts",
+    fields(candidate, ("schema", "source", "version", "channel", "platform", "images", "source_files", "artifacts",
                        "pending", "prepare_run_id", "prepare_run_attempt"), "candidate")
     require(type(candidate["schema"]) is int and candidate["schema"] == 1 and candidate["source"] == source
-            and candidate["version"] == tag and candidate["platform"] == "linux/amd64"
+            and candidate["version"] == tag and candidate["channel"] == "feature-preview"
+            and candidate["platform"] == "linux/amd64"
             and candidate["source_files"] == source_files, "retained candidate source differs")
     require(type(candidate["prepare_run_id"]) is int and candidate["prepare_run_id"] > 0
             and type(candidate["prepare_run_attempt"]) is int and candidate["prepare_run_attempt"] > 0,
@@ -1374,14 +1377,15 @@ def promote(args):
             require_space(publication, size + count * 2048 + 10240)
             archive_directory(retained / "oci" / service, publication / ("oci-" + service + ".tar"))
             shutil.rmtree(retained / "oci" / service)
-        for name in ("compose.json", "candidate.json", "stargate-proxy-linux-amd64", "stargate-proxy-linux-arm64",
+        for name in ("compose.json", "candidate.json", "stargate-proxy-linux-amd64",
                      "stargate-control.tar", "stargate-extension.zip", "stargate-extension.zip.inputs.json",
                      "source.tar", "verify.log", "reproducibility.json", "tor-packages.json"):
             shutil.move(retained / name, publication / name)
         archive_directory(retained / "logs", publication / "build-logs.tar")
         archive_directory(evidence, publication / "evidence.tar")
         write_json(publication / "approval-pack.json", pack)
-        manifest = {"schema": 1, "version": args.version, "source": args.source, "platform": "linux/amd64",
+        manifest = {"schema": 1, "version": args.version, "channel": "feature-preview",
+                    "source": args.source, "platform": "linux/amd64",
                     "images": candidate["images"], "compose_sha256": file_hash(publication / "compose.json"),
                     "source_files": candidate["source_files"], "artifacts": inventory(publication),
                     "pack_sha256": args.pack_sha256}
@@ -1398,19 +1402,21 @@ def promote(args):
         reject_existing_draft_or_release(args.source, args.version)
         release = api("/releases", method="POST", expected_status=201,
                       data={"tag_name": args.version, "target_commitish": args.source,
-                      "name": "Stargate " + args.version, "draft": True, "prerelease": False,
+                      "name": "Stargate " + args.version, "draft": True, "prerelease": True,
                       "body": "Source " + args.source + ". Approval pack SHA256 " + args.pack_sha256
                       + ". Verify release.json and its Sigstore bundle before installation; see docs/releasing.md at that source."})
         require(type(release) is dict and type(release.get("id")) is int and release["id"] > 0 and
-                release.get("tag_name") == args.version and release.get("draft") is True,
+                release.get("tag_name") == args.version and release.get("draft") is True
+                and release.get("prerelease") is True,
                 "release staging did not return the owned target draft")
         for path in sorted(publication.iterdir()):
             upload_asset(release["id"], path)
         require_remote_tag(args.source, args.version)
         published = api("/releases/" + str(release["id"]), method="PATCH", expected_status=200,
-                        data={"draft": False, "make_latest": "false"})
+                        data={"draft": False, "prerelease": True, "make_latest": "false"})
         require(type(published) is dict and published.get("id") == release["id"] and
-                published.get("tag_name") == args.version and published.get("draft") is False,
+                published.get("tag_name") == args.version and published.get("draft") is False
+                and published.get("prerelease") is True,
                 "release publication returned an incomplete or conflicting result; reconcile manually")
 
 

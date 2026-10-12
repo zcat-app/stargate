@@ -494,10 +494,10 @@ opens a PR with a newer digest and contract tests pass.
 
 | Sidecar     | Candidate image                                  | Digest pinning                                          |
 |-------------|--------------------------------------------------|---------------------------------------------------------|
-| Tor         | **`stargate/tor`** — Stargate-built image installing `tor` from `deb.torproject.org` (Tor Project's official Debian apt repository) on a pinned Debian-slim base. Dockerfile lives in `sidecars/tor/`. Tor Project signing key pinned by fingerprint (`A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89`, in `sidecars/tor/apt-key.fingerprint`) and verified at build time. Resolved by `specs/001-tor-route/` §Clarifications 2026-05-17 Q1. | **Pinned by sha256 digest per FR-015**: the Debian-slim base (`debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df`) and build inputs remain pinned in reviewed source. Development local Compose builds source; T081 generates a separate release Compose with all four final runtime registry digests and a signed manifest. No final digest is written back into source or a reviewed tag. Source invariants remain cross-checked by `tests/contract/compose/` (T015) and `tests/contract/security-decisions/tor_entry_test.sh` (T017). The Debian build inputs (every `apt-get install` package incl. `tor`'s transitive closure) are pinned to an immutable `snapshot.debian.org` run with explicit `=version` pins and retained sha256 hashes (T099), cross-checked by `tests/contract/security-decisions/tor_build_inputs_test.sh` and verified stable across cold rebuilds by `tests/reproducibility/tor_sidecar_manifest_test.sh`. The trust rationale and rotation procedure are in `SECURITY-DECISIONS.md` (T017, T099). |
-| i2pd        | `purplei2p/i2pd` (upstream maintainer)           | `NEEDS CLARIFICATION` — pin at first release tag        |
+| Tor         | **`stargate/tor`** — Stargate-built image installing `tor` from `deb.torproject.org` (Tor Project's official Debian apt repository) on a pinned Debian-slim base. Dockerfile lives in `sidecars/tor/`. Tor Project signing key pinned by fingerprint (`A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89`, in `sidecars/tor/apt-key.fingerprint`) and verified at build time. Resolved by `specs/001-tor-route/` §Clarifications 2026-05-17 Q1. | **Pinned by sha256 digest per FR-015**: the Debian-slim base (`debian:12-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df`) and build inputs remain pinned in reviewed source. Source `compose/docker-compose.local.yml` remains source-build configuration and does not contain the final digest of its built Tor image. T081 generates separate digest-pinned Local preview Compose and binds the final Tor image digest to reviewed source in the signed release manifest; completed-v1 profile bundles likewise pin distributed images in derived Compose. No final digest is written back into source or a reviewed tag. Source invariants remain cross-checked by `tests/contract/compose/` (T015) and `tests/contract/security-decisions/tor_entry_test.sh` (T017). The Debian build inputs (every `apt-get install` package incl. `tor`'s transitive closure) are pinned to an immutable `snapshot.debian.org` run with explicit `=version` pins and retained sha256 hashes (T099), cross-checked by `tests/contract/security-decisions/tor_build_inputs_test.sh` and verified stable across cold rebuilds by `tests/reproducibility/tor_sidecar_manifest_test.sh`. The trust rationale and rotation procedure are in `SECURITY-DECISIONS.md` (T017, T099). |
+| i2pd        | `purplei2p/i2pd` (upstream maintainer)           | resolve and pin before the first artifact for its profile ships |
 | Nym client  | `NEEDS CLARIFICATION: Nym's official Docker distribution status is not resolved in this spec; either pin an upstream image if maintained or build from a pinned `nymtech/nym` source tree.` | `NEEDS CLARIFICATION` |
-| WireGuard   | `linuxserver/wireguard`                          | `NEEDS CLARIFICATION` — pin at first release tag        |
+| WireGuard   | `linuxserver/wireguard`                          | resolve and pin before the first artifact for its profile ships |
 | Base (data-plane, control-plane runtime images) | Distroless static (Go) and `quarkus.io/builder`-derived | `NEEDS CLARIFICATION` |
 
 `NEEDS CLARIFICATION` entries here are not invented digests. They are
@@ -779,15 +779,17 @@ X") before the user confirms.
   as sidecar image updates (Principle IV).
 - JVM bytecode reproducibility via `reproducible-build-maven-plugin`
   configured at the parent POM. `mvn -B clean package -DskipTests=false`.
-- Native-image build via `mvn package -Pnative`, with
+- **Completed-v1 native build**: `mvn package -Pnative`, with
   `-Dquarkus.native.reproducible-build=true` and a pinned
   `quay.io/quarkus/ubi-quarkus-mandrel-builder-image` digest for the
   **Mandrel 25** (JDK 25) builder, matching the Quarkus 3.40 LTS
-  compatibility matrix.
-- Reproducibility tier: **JVM bytecode = byte-reproducible**; **native-image
-  = best-effort** with expected variations enumerated in `BUILD-DIFFS.md`
-  (Principle VI). CI runs both builds twice and diffs; expected-variation
-  bytes are masked before comparison.
+  compatibility matrix. The 001 feature-preview is JVM-only; the native
+  artifact and its verification remain required before completed v1.
+- Reproducibility tier: **JVM bytecode = byte-reproducible**;
+  **completed-v1 native-image = best-effort** with expected variations
+  enumerated in `BUILD-DIFFS.md` (Principle VI). Completed-v1 CI runs both
+  builds twice and diffs; expected-variation bytes are masked before
+  comparison. The feature-preview makes no native reproducibility claim.
 
 ### 12.3 Browser extension
 
@@ -807,18 +809,24 @@ X") before the user confirms.
   and provenance attestations ship with each release.
 - The Tor sidecar's Debian build inputs are pinned to an immutable
   `snapshot.debian.org` run with explicit `=version` pins (T099), so a
-  clean rebuild selects a byte-stable package manifest (incl. `tor`'s
-  transitive closure); T081 pins final registry digests in generated release
-  Compose and the signed manifest, without changing the reviewed source/tag, with any expected image-digest variance documented in
-  `BUILD-DIFFS.md` (Principle VI).
+  clean rebuild selects a byte-stable package manifest, including Tor's
+  transitive closure. For the 001 feature-preview, T081 prepares a separate
+  digest-pinned Local release Compose and signed derived manifest; source
+  `compose/docker-compose.local.yml` remains source-build configuration,
+  and the reviewed source commit is not rewritten with generated digests.
+  Completed-v1 profile bundles likewise pin distributed images in derived
+  Compose bound to reviewed source by their signed release manifest. Expected
+  image-digest variance is documented in `BUILD-DIFFS.md` (Principle VI).
+  Preparing the workflow does not authorize tag creation or publication.
 
 ### 12.5 Release artefacts
 
-Feature 001 prepares an explicitly selected existing immutable `v<x.y.z>` tag:
+The 001 deliverable is an **internal feature-preview**, not completed v1 or a public release. Its distributed inventory is Local/JVM/Linux amd64: DP, JVM CP, Tor and observer images, reproducible extension ZIP, complete fast-jar CP payload, signed release data and audit source. Candidate and signed manifest carry `channel: feature-preview`; prepared GitHub Release metadata carries `prerelease: true`. T081 implementation does not authorize tag creation or publication. A public preview is the first public release and requires Constitution Governance and VIII external-human review.
 
-- `stargate-proxy_linux_amd64` and `stargate-proxy_linux_arm64`; arm64 is a
-  Go cross-build, not runtime acceptance. The supported local integration target
-  remains Linux x86_64 (feature plan Target Platform).
+The preview retains the arm64 cross-build only as internal evidence marked unvalidated; it is not a distributed asset or support claim. Completed v1 still requires native CP, Local/LAN/VPS profiles and runtime-verified supported architectures.
+
+The 001 feature-preview artifacts are prepared from an explicitly selected existing immutable `v<x.y.z>` tag and include:
+- `stargate-proxy_linux_amd64`; the unvalidated arm64 cross-build remains internal evidence and is not distributed.
 - The complete JVM `quarkus-app/` fast-jar tree in `stargate-control.tar`.
   `quarkus-run.jar` is a thin launcher and cannot be delivered alone.
 - `stargate-extension.zip`, from unchanged `extension/package.sh` in the pinned
@@ -836,9 +844,7 @@ workflow/repository/ref/OIDC identity before publication. T078/T079, applicable 
 checks and Constitution VIII external-human review remain separate publication
 prerequisites. No source or tag is rewritten. See `docs/releasing.md` (T081).
 
-The broader product release contract still includes native CP binaries and the
-three Local/LAN/VPS Compose profiles when their owning features deliver and verify
-them. This feature does not add those targets or claim arm64 runtime evidence.
+Completed v1 still requires native CP binaries, Local/LAN/VPS Compose profiles, the full supported runtime architecture matrix and applicable verification evidence. This preview does not discharge those obligations or claim arm64 runtime evidence.
 
 ---
 
@@ -1187,9 +1193,10 @@ relies on it can be planned.
    rationale entry owed for **Nym only** (Tor entry authored under T017
    — `SECURITY-DECISIONS.md` §"2026-07-04 — Tor sidecar trust rationale
    (FR-015)"; file exists at repo root, verified at HEAD).
-2. **§7 Image digests** — Concrete sha256 digests for Tor, i2pd, Nym
-   client, WireGuard, distroless base, and the Quarkus native builder
-   image. To be pinned at first release tag.
+2. **§7 Image digests** — Resolve and pin each external image before the
+   first artifact for its applicable profile ships. The preview pins its
+   Local distributed images in signed derived release data; completed-v1
+   profile artifacts require their own verified pins.
 3. **§8 Nym default gateway** — Pin a default Nym gateway at install, pick
    randomly from a vetted list, or require user choice on first run?
    (Defer to mixnet-route feature spec; flag here so it isn't lost.)
@@ -1219,12 +1226,11 @@ relies on it can be planned.
    by FR-019 + `research.md` §6: accept `storage.local` with the canonical
    warning text pinned in `data-model.md` §5.1. §14.4 amended in lock-
    step; see that section for the cross-reference.
-9. **§12.2 Quarkus / JDK / Mandrel compatibility matrix** — Confirm
-    Quarkus 3.40 LTS officially targets JDK 25 as a runtime, and pin the
-    matching Mandrel 25 builder image digest at first release tag. If
-    Quarkus 3.40 LTS lags JDK 25 support, fall back to the highest Quarkus
-    LTS that does and reopen the constitution amendment that introduced
-    these pins (constitution v1.0.0 pre-release JDK-pin note; no version bump).
+9. **§12.2 Completed-v1 Mandrel compatibility** — Pin and verify the
+    Mandrel 25 builder image before the first completed-v1 native artifact.
+    Separately, the Quarkus 3.40 LTS / JDK 25 runtime pair used by the JVM
+    feature-preview must be verified before that preview is prepared. Deferring
+    native-image construction does not defer runtime compatibility.
 
 None of these are deviations from the constitution; they are unresolved
 implementation choices within the space the constitution allows.
