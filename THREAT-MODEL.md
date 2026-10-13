@@ -1712,6 +1712,23 @@ resolution on the user's behalf inside its anonymity network.
 each route before implementation lands. `stargate-redteam` checks header
 and DNS handling at every milestone (Principle VIII).
 
+**SC-003 observation boundary (T219):** the release-tag T034a measurement may
+run the Local profile on the existing Linux x86_64 VPS with a fresh supported
+full Mullvad Browser profile and the reviewed extension. Bounded automation
+through the ordinary browser interface may repeatedly load only `.onion` content,
+but the receipt must show successful loads throughout at least 10 continuous
+minutes. Simultaneous complete guest-host loopback and active-egress pcaps,
+zero drops/truncation, and safe pre/post DNS query-and-answer positive controls
+on each interface make the zero-match assertion meaningful. Never send a real
+`.onion` name to a public resolver for calibration. The canonical filter covers
+DNS query and answer names in both complete pcaps; `tcpdump` capture with a
+grounded pinned `tshark` offline decoder is allowed. This observation covers
+decoded DNS on the measured guest interfaces only. It does not prove absence
+at a physical NIC, hypervisor, other namespace or inside encrypted DNS; §5.4's
+separate external DoH/DoT hardening proof still applies. Record the exact
+browser build/channel: an Alpha result supports only that recorded Alpha
+environment, not a stable-browser release.
+
 ### 5.3 WebRTC leaks
 
 **Concern**: WebRTC's STUN/ICE machinery enumerates the user's local and

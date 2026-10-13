@@ -137,7 +137,7 @@ release candidate and recorded with snapshot and evidence before a release tag.
 
 | ID | Check | Class | Why it stays open |
 |----|-------|-------|-------------------|
-| R-1 | T034a SC-003 hand-driven measurement: fresh Mullvad Browser profile, 10-minute `.onion` session through the Local stack, Wireshark on `lo` and egress NIC, zero `.onion` DNS | transport-relevant | needs a stable browser on a reference workstation; record in `tests/integration/sc003_dns_leak.md` |
+| R-1 | T034a SC-003 measurement: fresh supported full Mullvad Browser profile, at least 10 minutes of successful `.onion`-only loads through the Local stack, complete guest-host `lo` and active-egress pcaps with zero canonical DNS matches and safe pre/post controls | transport-relevant | existing VPS Local profile is an allowed venue; the live receipt remains pending in `tests/integration/sc003_dns_leak.md`. An Alpha result covers only that build/channel and does not close R-8 stable-browser coverage |
 | R-2 | T034f egress-consensus capture: every SYN on the host egress NIC during a >=120 s routed window is in the live consensus | transport-relevant | needs the live consensus and a physical/real NIC capture; a VM NIC is not that |
 | R-3 | Real-browser packet attribution on a host NIC for the F5 scenarios | transport-relevant | F5 attributes at the browser's own sockets and resolver, not on the wire |
 | R-4 | T070a mid-request circuit drop (no retry, no synthesised bytes, leak-corpus scan) | transport-relevant | needs the control-port helper against a live circuit |

@@ -606,10 +606,15 @@ tests-first suite (Principle VII) before implementation lands.
 - **SC-001**: A first-time user with Mullvad Browser installed completes
   the steps "install Stargate extension → paste bearer token → load a
   known `.onion`" in **under 5 minutes** of wall-clock time on a
-  reference workstation, **without** consulting any documentation
+  clean browser profile in a private local or remote/virtual browser session,
+  **without** consulting any documentation
   beyond the project quick-start (`specs/001-tor-route/quickstart.md`
   in this feature; a top-level README will mirror or supersede it in a
-  later feature). Measured by the walkthrough in T077 on a clean profile.
+  later feature). The first-time human operator starts the timer at extension
+  installation and stops it when the page renders; T077 records the complete
+  clean-checkout setup duration separately. Agent-driven automation is functional
+  evidence only and cannot satisfy this human usability criterion. Measured by
+  the T077 walkthrough; the existing VPS is an allowed remote venue.
 - **SC-002**: Over a run of **100 sequential CONNECTs, each labeled with
   one of 100 distinct first-party `.onion` domains** from the synthetic
   corpus published in `tests/integration/` — the corpus string is the
@@ -633,13 +638,29 @@ tests-first suite (Principle VII) before implementation lands.
   auth identity, and the shipped torrc carries no destination-based
   isolation directive (SECURITY-DECISIONS.md 2026-09-07, T058 entry).)*
 - **SC-003**: During a continuous **10-minute Mullvad Browser session
-  loading only `.onion` content** through Stargate, a Wireshark capture
-  on the host's loopback interface and on its egress NIC contains
-  **zero** DNS queries (A, AAAA, MX, or otherwise) for any name ending
+  loading only `.onion` content through repeated, demonstrably successful
+  page loads** via a Local-profile Stargate stack, complete simultaneous captures on the
+  measured Linux x86_64 guest-host's loopback interface and active egress
+  interface contain **zero** DNS queries (A, AAAA, MX, or otherwise) for any name ending
   in `.onion`. Canonical assertion: no DNS packet's query or answer
   fields contain a hostname matching `*.onion`. Wireshark/tshark
   display filter: `dns.qry.name contains ".onion" || dns.resp.name
   contains ".onion"`; expected zero matches across both interfaces.
+  T034a may use the existing VPS as the Local-profile host and bounded
+  automation through the ordinary browser interface. It records the exact
+  browser build and channel, a fresh supported full profile with the reviewed
+  extension, successful page-load evidence throughout the interval, complete
+  capture start/stop and zero drop/truncation counts, and safe pre/post positive
+  controls that show DNS queries and answers are visible on each captured
+  interface. Controls must never send a real `.onion` name to a public resolver.
+  `tcpdump` capture with grounded, pinned `tshark` offline analysis is permitted.
+  A VPS result asserts decoded DNS absence only at its guest-host `lo` and
+  active egress capture points; it does not establish physical-NIC, hypervisor,
+  other namespace or encrypted-DNS absence. This VPS venue permission applies
+  only to SC-003's DNS measurement and does not prove the separately owned US1
+  egress-consensus assertion (T034f). An Alpha-browser result covers only
+  its recorded Alpha environment and does not establish stable-browser support;
+  the separate encrypted-DNS hardening proof remains required.
   The per-PR gate (T034) implements the same assertion via `gopacket`'s
   DNS-layer parse; the release-tag measurement (T034a) and the
   operator quickstart sanity check use the display filter above.

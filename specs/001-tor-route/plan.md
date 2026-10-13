@@ -86,25 +86,27 @@ defines preservation and the reviewed reopen sequence. Historical guest15 aggreg
 - **Contract tests**: five directories under `tests/contract/` — `tor/` (Tor SOCKS surface), `torrc/` (rendered config invariants), `socks5/` (RFC 1928/1929 surface on port 8881), `error-template/` (future renderer format only), and `control-grpc/` (inter-plane RPC + event-kind invariants). Authoritative list is FR-016 + the project-structure tree below. Harness language: **Go** (research.md §5) so the suite runs in the same toolchain as the data plane and can spin sidecars via the docker SDK.
 - **Reproducibility**: `tests/reproducibility/` builds the Go binary twice in clean containers and `cmp`s the output (arch §12.1).
 - **Extension JS units**: Node 20 LTS + built-in `node:test` runner; MV2 background scripts are loaded into the test via `vm.runInNewContext()` with a synthesized `browser` global, so production code stays in idiomatic browser-script style (no UMD wrapper, no test-only export branch). Used in this feature for the FR-004 hardening-audit test (research.md §10).
-- **Browser-level**: Mullvad Browser integration tests are run manually for the SC-001 walkthrough in this feature; automation is deferred (no headless privacy-safe Mullvad Browser harness exists in v1).
+- **Browser-level**: SC-001 is a first-time-human walkthrough on a clean profile, including a private remote/virtual session on the existing VPS. SC-003 may use bounded automation through a fresh supported full Mullvad Browser profile's ordinary browser interface on the VPS Local profile; the run records its exact build/channel and cannot turn Alpha evidence into stable-browser support.
 
 **Target Platform**: This feature-preview is exercised on Linux x86_64 (the local Compose profile), with AppArmor, Landlock
 ABI >= 4 (upstream Linux 6.7+) and seccomp thread synchronization. The DP is built
-with `CGO_ENABLED=0`; confinement failure refuses serving. Mullvad Browser on Linux
-desktop is the user-facing walkthrough. `arm64` data-plane cross-builds are unvalidated internal evidence; cross-compilation alone is not runtime verification and arm64 is not a distributed preview asset or support claim. Completed-v1 profile and architecture support remains governed by architecture §12.5. T168's mechanism and supported restart behavior are normative in `contracts/foundation-boundaries.md`.
+with `CGO_ENABLED=0`; confinement failure refuses serving. Mullvad Browser in a local or private remote/virtual Linux session is the user-facing walkthrough. `arm64` data-plane cross-builds are unvalidated internal evidence; cross-compilation alone is not runtime verification and arm64 is not a distributed preview asset or support claim. Completed-v1 profile and architecture support remains governed by architecture §12.5. T168's mechanism and supported restart behavior are normative in `contracts/foundation-boundaries.md`.
 
 **Project Type**: Multi-language monorepo — three language planes (Go data plane, Quarkus control plane, JS extension) + Docker-orchestrated sidecars + cross-cutting contract tests. Layout is defined in architecture spec §3; this feature populates a vertical slice through that layout.
 
 **Performance Goals**:
 
-**Reference workstation (measurement baseline for SC-001, SC-003, SC-005,
+**Reference workstation (measurement baseline for SC-005,
 plan.md §"Scale/Scope", data-model.md §1.5)**: Linux x86_64 desktop;
 ≥8 physical cores at ≥3 GHz (Zen 3 / Alder Lake or newer); ≥16 GiB RAM;
-NVMe SSD; not under thermal throttling at measurement time. The hand-driven
-T077 walkthrough and the T034a Wireshark capture record the concrete CPU
-model used at the time the artefact is produced in their respective
-markdown outputs, so a reader can verify the number against the hardware it
-was measured on. **(T092 amendment)** the verifier is now
+NVMe SSD; not under thermal throttling at measurement time. T077 and T034a
+instead record their actual venue, CPU, browser build/channel and measurement
+conditions. T077 may use a private remote/virtual browser session on the
+existing VPS but retains a first-time human and the extension-install-to-page
+timer. T034a may use that VPS with the Local profile, ordinary browser-interface
+automation and complete guest-host `lo` plus active-egress capture. This is a
+guest-kernel DNS observation, not a physical-NIC or encrypted-DNS claim.
+**(T092 amendment)** the verifier is now
 `HMAC-SHA-256(pepper, candidate)` — a single ~sub-microsecond HMAC per
 request (data-model.md §1.5), not the retired ~50 ms Argon2id hash. The
 former Argon2id-derived cost model (linear in N, capped at N ≤ 4, 64 MiB
@@ -164,6 +166,18 @@ The constitution amended on 2026-09-12 and `contracts/foundation-boundaries.md` 
 | VII — tests-first | Required-coverage/evidence repairs T139/T144; implementations preserve real failing-before-fix evidence. |
 | VIII — independent reviews | Amendment review in T156; foundation T155 and final T078/T079 remain required. |
 | Deployment | T162 enforces loopback and Unix fabrics; T168 adds irreversible all-thread IP confinement before serving. Owner rules remain installer-required defense in depth. T170 preserves enforcing-profile signal/lifecycle behavior. T163 records cumulative evidence from actual deployment namespaces on an independently booted Linux host, under the foundation contract's capture, family, failure/recovery and restart requirements. The maintainer approved VM evidence on 2026-09-21; the measured guest result makes no physical-NIC, hypervisor or untested-environment claim. |
+
+**T219 Constitution Check — SC-001/SC-003 measurement venue.** Principle I/II
+runtime boundaries do not change. Principle III's DNS boundary still requires
+the canonical query-and-answer filter and separate encrypted-DNS hardening
+proof. Principle V limits VPS evidence to complete guest-host `lo` and active
+egress captures with safe pre/post DNS positive controls, no drops or truncation,
+and a named browser build/channel; Alpha evidence cannot claim stable support.
+Principle VII's privacy-critical runtime tests remain T034/T034a work, while
+this document amendment uses source consistency checks. Principle VIII requires
+independent candidate-bound source review. SC-001 keeps a first-time human and
+its extension-install-to-page timer; SC-005 retains the physical workstation
+baseline. T219 changes venue permission only and establishes no live result.
 
 **T124 scoped Constitution Check (Local Tor init).** Principle II keeps CP health
 advisory for DP routing. Principle III keeps Docker health history and raw diagnostics

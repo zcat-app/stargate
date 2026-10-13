@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-10-12
+**Last updated:** 2026-10-13
 
 ---
 
@@ -17,9 +17,9 @@
 | in-progress | 0 |
 | in-review | 0 |
 | escalated | 0 |
-| done | 226 |
+| done | 227 |
 | deferred | 8 |
-| **total** | **248** |
+| **total** | **249** |
 
 ---
 
@@ -29,7 +29,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T034a | Hand-driven SC-003 measurement on the reference workstation | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
+| T034a | Measure SC-003 in a supported browser on a Local-profile hos | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
@@ -65,7 +65,7 @@ _(nothing in flight)_
 
 ## Done
 
-_226 ticket(s) done._
+_227 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -293,3 +293,4 @@ _226 ticket(s) done._
 - T214 — Make delayed review-boundary controls deterministic
 - T216 — Exclude generated files from the root Docker context
 - T217 — Make shipped Quarkus artifacts byte-reproducible
+- T219 — Amend SC-001 and SC-003 browser measurement venue

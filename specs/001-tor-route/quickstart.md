@@ -1,11 +1,16 @@
 # Quickstart — Tor Route v1 (Local Profile)
 
-**Audience**: a privacy-conscious user with a Linux desktop, Docker, and
-Mullvad Browser already installed. This walkthrough is the SC-001
-target: from a clean checkout to a `.onion` page loaded in the browser
-in **under 5 minutes**.
+**Audience**: a privacy-conscious user with a Linux x86_64 Local-profile host,
+Docker, and Mullvad Browser already installed. The browser may run in a private
+local or remote/virtual session, including on the existing VPS. SC-001 measures
+a first-time human from **extension installation → token paste → rendered
+`.onion` page** in **under 5 minutes** on a fresh browser profile. Record the
+complete clean-checkout setup duration separately; it has no five-minute
+threshold. An agent-run walkthrough provides functional evidence only.
 
-**Profile**: `local` (loopback only). LAN and VPS profiles ship later.
+**Profile**: `local` (loopback only), including when the Local-profile stack
+runs on the existing VPS for a private browser measurement. LAN and VPS
+deployment profiles ship later.
 
 ---
 
@@ -365,10 +370,15 @@ sudo tshark -i any \
   -Y 'dns.qry.name contains ".onion" || dns.resp.name contains ".onion"'
 ```
 
-Browse `.onion` sites for a few minutes. The output should be empty
-(spec SC-003 requires zero matches). Same display filter as the per-PR
-gate (T034 via `gopacket`) and the release-tag Wireshark capture
-(T034a), so the three measurement points assert the same property.
+This is an optional spot check, not the SC-003 release measurement. T034a
+requires at least 10 minutes of repeated successful page loads of only `.onion`
+content in a fresh supported full Mullvad Browser profile, with complete simultaneous
+guest-host `lo` and active-egress pcaps, safe pre/post DNS query-and-answer
+positive controls, zero drops/truncation and the same canonical filter over
+both complete pcaps. The existing VPS Local profile is an allowed venue;
+its result covers only those guest interfaces and the recorded browser
+build/channel. An Alpha result does not establish stable-browser support or
+encrypted-DNS absence; the separate browser hardening proof remains required.
 
 ### SC-002 — Stream isolation
 
