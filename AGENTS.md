@@ -76,8 +76,10 @@ menu: `.specify/memory/review-loop.md`.
 
 - **Constitution is authoritative.** Re-read it before privacy-critical work.
 - **Tests-first for privacy-critical paths** (DNS, routing, headers, auth,
-  sidecar contracts) — Constitution Principle VII, **no AI exception**. Tests
-  are derived from the spec, then implementation is driven to satisfy them.
+  sidecar contracts) — Constitution Principle VII. Tests are derived from the
+  spec, then implementation is driven to satisfy them. VII’s one-time T221
+  disposition covers only its exact past guard candidate and keeps that history
+  NONCOMPLIANT; it grants no future AI exception.
 - **Falsify before publishing.** Every claim is a hypothesis. Name what would
   make it false and check *that* — re-confirming supporting evidence is
   confirmation, not verification.

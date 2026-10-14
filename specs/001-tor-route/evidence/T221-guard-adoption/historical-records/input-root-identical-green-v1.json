@@ -1,0 +1,84 @@
+{
+  "schema": "task-run-guard-identical-green-v1",
+  "parent_runtime_flags_same_as_pre_fix": true,
+  "guard_sha256": "064c7e271e80b60b4ac848b3f9483af0c9459e51a1fc2b5a2bf404738c577b86",
+  "tests_sha256": "df4407459fe31b4e2b00a96fa55811eb8a4bb3dd8f3e2702444944af7fe7090e",
+  "runs": [
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-I",
+        "tests/contract/workflow/task_run_guard_test.py",
+        "RepairRegressions.test_unpinned_python_directory_main_is_refused"
+      ],
+      "selector": "test_unpinned_python_directory_main_is_refused",
+      "exit_code": 0,
+      "stdout_log": ".scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-1.stdout.log",
+      "stderr_log": ".scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-1.stderr.log",
+      "started_epoch": 1791928261.5370724,
+      "finished_epoch": 1791928261.8540814
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-I",
+        "tests/contract/workflow/task_run_guard_test.py",
+        "RepairRegressions.test_python_stdin_source_is_refused"
+      ],
+      "selector": "test_python_stdin_source_is_refused",
+      "exit_code": 0,
+      "stdout_log": ".scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-2.stdout.log",
+      "stderr_log": ".scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-2.stderr.log",
+      "started_epoch": 1791928261.8540928,
+      "finished_epoch": 1791928262.1928618
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-I",
+        "tests/contract/workflow/task_run_guard_test.py",
+        "RepairRegressions.test_bash_stdin_source_is_refused"
+      ],
+      "selector": "test_bash_stdin_source_is_refused",
+      "exit_code": 0,
+      "stdout_log": ".scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-3.stdout.log",
+      "stderr_log": ".scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-3.stderr.log",
+      "started_epoch": 1791928262.1928701,
+      "finished_epoch": 1791928262.4602423
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-I",
+        "tests/contract/workflow/task_run_guard_test.py",
+        "RepairRegressions.test_opaque_pinned_command_receives_eof_not_caller_source"
+      ],
+      "selector": "test_opaque_pinned_command_receives_eof_not_caller_source",
+      "exit_code": 0,
+      "stdout_log": ".scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-4.stdout.log",
+      "stderr_log": ".scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-4.stderr.log",
+      "started_epoch": 1791928262.4602494,
+      "finished_epoch": 1791928262.749081
+    },
+    {
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-I",
+        "tests/contract/workflow/task_run_guard_test.py",
+        "RepairRegressions.test_python_isolated_without_no_site_is_not_admitted"
+      ],
+      "selector": "test_python_isolated_without_no_site_is_not_admitted",
+      "exit_code": 0,
+      "stdout_log": ".scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-5.stdout.log",
+      "stderr_log": ".scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-5.stderr.log",
+      "started_epoch": 1791928262.7490883,
+      "finished_epoch": 1791928263.0720322
+    }
+  ],
+  "extra_isolated_parent_green_evidence_preserved": "input-green-evidence-v3.json"
+}

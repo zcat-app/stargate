@@ -1,0 +1,40 @@
+{
+  "schema": "task-run-guard-governance-proposal-review-v1",
+  "role": "astra",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "proposal_sha256": "ec151f07ab64537643b47574f1e20bab72bfbba47f1cc38d649c117c74bed3bc",
+  "candidate_sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+  "verdict": "APPROVE-PROPOSAL",
+  "approval_scope": "Exact proposal suitable for a concrete maintainer decision. This is not user authorization, source approval, governance amendment approval, or guard activation/adoption authority.",
+  "findings": [],
+  "assessment": {
+    "exact_binding": "Verified raw proposal and source-candidate-v5 manifest hashes. All four proposal path/hash/mode tuples match the manifest and current on-disk bytes/modes. The insertion now binds one concrete candidate rather than an unspecified future candidate.",
+    "historical_integrity": "The source-v2 ESCALATE remains an immutable verdict on its original candidate. Distinguishing that historical result from fresh v5 functional/security review does not erase either missed tests-first sequence or authorize a round reset. NONCOMPLIANT history remains permanent even if v5 receives functional approval.",
+    "authorization": "Both alternatives are concrete. Retaining VII preserves the unmet gate; the alternative expressly changes permission for only the identified past implementation. Actual maintainer authorization, a dedicated governed ticket and exact independent amendment reviews remain prerequisites. The draft does not infer approval from repair requests.",
+    "pending_source_review": "V5 source review is explicitly mandatory and unclaimed. This governance-proposal review supplies no evidence of source correctness and cannot substitute for that review.",
+    "protection_delta": "Only historical sequencing acceptance for the named guard candidate changes. Future repairs remain tests-first; runtime, routes, protected-host guarantees, native qualification, T218/R14j, backend/retry guarantees, T078/T079 and review-matrix scope remain unchanged.",
+    "constitutional_consistency": "Canonical Constitution hash is unchanged from v1 review. VII, VIII and Governance support presenting this explicitly normative one-time proposal, while barring unilateral amendment or ordinary finding acceptance as a waiver."
+  },
+  "required_follow_through_if_authorized": [
+    "Create the dedicated governed ticket only after explicit maintainer authorization; enumerate the two historical sequences and every missed property, preserve original failures and retrospective probes durably with content identities, and retain the original source-v2 verdicts unchanged.",
+    "Obtain fresh exact-v5 functional/security results and the required amendment codereview plus independent redteam. Bind each result to its actual scope/candidate and distinguish functional approval from permanently NONCOMPLIANT historical evidence.",
+    "Preserve the ordinary exact-tree verify.sh green gate and applicable directly affected checks; the exception concerns historical ordering only and does not replace these gates.",
+    "The four-file binding includes documentation and file modes. A subsequent usage-note edit to docs/process/task-run-guard.md or any other pinned-byte/mode change requires a new manifest and renewed affected proposal/reviews; the phrase any code change cannot exempt documentation from the explicit four-file hash binding. Alternatively retain the pinned files and place the governance usage note in the separately reviewed governance records.",
+    "Complete dated amendment records and required consistency updates in the governed change. Do not adopt or activate from this proposal verdict, from pending source reviews, or from functional approval alone."
+  ],
+  "verification": {
+    "proposal_raw_sha256_verified": true,
+    "manifest_raw_sha256_verified": true,
+    "four_source_hashes_and_modes_verified": true,
+    "constitution_sha256": "161689898ef7e594734e7def94a850f2e1b28982017c9d43b0640debf9ca65a1",
+    "prior_governance_astra_v1_report_preserved": true
+  },
+  "limitations": [
+    "Proposal review only. No live commands, tests, broad suites, source/policy/amendment edits, ticket/worktree/index changes, activation or delegation; only this requested report was written.",
+    "Read v3 proposal and v5 manifest; checked source bytes/modes without reviewing source implementation. Reused the prior independent Constitution and historical evidence assessment after verifying Constitution identity remained unchanged.",
+    "Did not read current peer source/governance reports or source-writer rationale. Pending v5 review results are not asserted.",
+    "Role/model/effort describe the assigned session; no independent backend identity attestation is claimed.",
+    "Maintainer authorization, final governed amendment candidate and its required reviews remain unestablished."
+  ]
+}

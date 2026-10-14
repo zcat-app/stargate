@@ -1,0 +1,146 @@
+{
+  "created_epoch": 1791922009.0343654,
+  "integration_head": "cb3af686d8aaca6f703689e50437b8c90d7c6fad",
+  "preserved_files": [
+    {
+      "path": "/home/claudia/stargate-t208/THREAT-MODEL.md",
+      "sha256": "05cef4e268e05c938e4d5cbb94d9dfad9769d68a95c61abf42303be7cf85d109",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/compose/docker-compose.local.yml",
+      "sha256": "ac29ea34989844c01a285fbdd123953a0f36b2eb91e5f3a4d3a9c6ce683f0d4e",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/scripts/test_t218_readiness_run.py",
+      "sha256": "00ba49e821e8755f3f66049b273dd3f763ddef47c8fb834f28f693b5978eb8f5",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/specs/001-tor-route/STATUS.md",
+      "sha256": "60f7e95e9acda39d1d2d8237bd831641e67e262357f3ae8ba608307ba3a32607",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/specs/001-tor-route/evidence/T034f-tests-first.json",
+      "sha256": "aa7bd14558c07986ea246cbd8ebe8090c71eb6a4c83b7774ea2daae5eb4dabba",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/specs/001-tor-route/evidence/T218-tests-first.json",
+      "sha256": "163124e5530c5d6a666bba4461be83e2b2ad2cc4870d67a35adfaa36c7b7a7ab",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/specs/001-tor-route/live-e2e/README.md",
+      "sha256": "039a10404900c062268b4254f4d2cd6ae6a7cd46d9ff415b8ac9f594708eae8a",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/specs/001-tor-route/spec.md",
+      "sha256": "6547a197a2e22a68bcaacf72fbb405bbb7c03c4ee7e00f3b39092f5d09f04c53",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/specs/001-tor-route/tasks.md",
+      "sha256": "f0be48339c55555c5756cd1bc01a828b624c11cee73d671f22147c295b01eda0",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/specs/001-tor-route/tickets/T034f-integration-test-for-us1-acceptance-scen.md",
+      "sha256": "0320f92df9030074abaaf22a71c3b701905d93e5309ac1b9e02cb52b0cef8d66",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/specs/001-tor-route/tickets/T209-bind-apparmor-to-running-dp-observer-hardening.md",
+      "sha256": "0050fe71e293fd9849336c7f7b2f32856f5125fac5ab0289069608f84fb69ded",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/specs/001-tor-route/tickets/T218-qualify-shared-egress-observer.md",
+      "sha256": "1757fbc1c3efe2df168b5443a0a7eb7940ba3e879fa08cee4f212364c029e3c3",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/specs/001-tor-route/tickets/T220-own-native-local-qualification-effects-and-cleanup.md",
+      "sha256": "44b18f8f89de13cfa3569e78d4c863166c480b1c49efe03123aebd02e96bef83",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/tests/contract/tor/control_port.go",
+      "sha256": "f475d218a71053d52561dadc491c5c3673febb4b422b54566c2119d21ba71e20",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/tests/contract/tor/control_port_test.go",
+      "sha256": "9088f1a94e6242f08381e83659f51cc3fbaf6fcd225f00f7715c10fcef1fa598",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/tests/integration/egress_consensus_test.go",
+      "sha256": "ba2bfafa3eb0fc24859c62178ffaee07bb57b14fa2a140190997b23cb49c4caa",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/tests/integration/egress_observer_readiness_test.go",
+      "sha256": "782591f1956bb2f68faef9bbcef2d7cf0ef50b7ab001053d72573f0f784c222e",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/tests/integration/egress_observer_test.go",
+      "sha256": "9c54823ab0dfda11c828e4c719ce2d974a50eb684438b36c99c4f763414128c5",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/tests/integration/sc_egress_observer_readiness.md",
+      "sha256": "30d61851cb81567c7b4877047652ef759f0d19a0a13432b7d4b4340ba9cec915",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/tests/integration/sc_us1_egress_consensus.md",
+      "sha256": "7d08a732d30525a59a3a92a096023643584084d46246e7bccb70befdf93d4751",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate/.git/worktrees/stargate-t208/index",
+      "sha256": "a6cd763bb26c18af6bdfba322ab85bad3563bc75eb21695755bdeb9b16847f3b",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T218/implementation/tests/integration/egress_observer_test.go",
+      "sha256": "5fd1b4d1f938e4ffa67e58dba56d740ba0722bc97c45d815cd75e3500832307a",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T218/implementation/tests/integration/egress_observer_readiness_test.go",
+      "sha256": "91f04e0ed622bac8490c6948ca589428228bc347732503036d4c5fba39ad4f7d",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T218/implementation/scripts/t218-readiness-run.py",
+      "sha256": "c923aa32ceb6e6f67fe06bfc6e6f5388f3e5da340478465676e559dcbe9cfaa0",
+      "mode": 493
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T218/implementation/scripts/test_t218_readiness_run.py",
+      "sha256": "2dbc67b114139a08f13c1b15164c2d7233ab8d7e0bb33bfb68328059094e4f9e",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate/.git/worktrees/implementation4/index",
+      "sha256": "7195a1b85adbc9f0f80c7da7a79bd6ce7a365c4727e319acee558af78c191827",
+      "mode": 436
+    }
+  ],
+  "run_task_before": {
+    "path": "/home/claudia/stargate-t208/scripts/run-task.sh",
+    "sha256": "4d9ffe964b23b5808db44491b5af44775ea08b92baf06caa3bcc4cd24b702279",
+    "mode": 509
+  },
+  "plan": {
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/implementation-plan-v1.md",
+    "sha256": "3fd1f7c36404183222238108d5b86dc1db64b5bb0de0f466bd9b2a8a488c6b4d",
+    "mode": 436
+  }
+}

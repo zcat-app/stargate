@@ -1,0 +1,24 @@
+E
+======================================================================
+ERROR: test_deadline_uses_monotonic_budget_after_spawn (__main__.GuardCase.test_deadline_uses_monotonic_budget_after_spawn)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 215, in test_deadline_uses_monotonic_budget_after_spawn
+    r = subprocess.run(["/usr/bin/python3", "-B", "-I", str(wrapper), str(self.policy_path),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/usr/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/usr/bin/python3', '-B', '-I', '/tmp/task-run-guard-h4euuxg7/clock-wrapper.py', '/tmp/task-run-guard-h4euuxg7/policy.json', '7beef7e796249e9a608a9066b6b4b83c982bc74f717a4c6f78aa3bea7b3d557b', 'safe']' timed out after 5 seconds
+
+----------------------------------------------------------------------
+Ran 1 test in 5.028s
+
+FAILED (errors=1)

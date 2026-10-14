@@ -1,0 +1,46 @@
+{
+  "schema": "task-run-guard-source-review-v1",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "verdict": "REWORK",
+  "candidate_sha256": "113b061606609e645d35934ba42f044d378e2d5e8ac3cacbeae44d5a8ddb6e19",
+  "plan_sha256": "94940a4faa1c4cc4db67357ee87d007921b184716f136f5820c6348a1b9bc8be",
+  "findings": [
+    {
+      "category": "source",
+      "severity": "MAJOR",
+      "property": "Every executable program input must be included in the reviewed file pins; commands must not execute caller-supplied stdin as script text.",
+      "evidence": "scripts/task-run-guard.py:175-181 deliberately sets script_index to None when Python argv contains '-', and the Bash branch at 183-186 leaves script_index unset for '-s' because it is an option. The later regular-input scan (199-219) only examines argv entries and cannot inspect stdin. subprocess.Popen at 379 inherits the guard process stdin. Thus policy actions such as ['/usr/bin/python3', '-'] and ['/usr/bin/bash', '-s'] are admitted without a pinned script file and read executable source from inherited stdin; the review/pin checks do not cover those bytes. This contradicts the approved whole-path requirement that executable/script inputs be pinned regular files. I did not run an extra behavioral probe because only the specified affected suite was authorized.",
+      "falsifier": "Reject stdin-program modes (including Python '-' and Bash '-s') before journal mutation/dispatch, or define and enforce an explicit pinned regular stdin source; add affected tests showing no marker executes from inherited stdin and preserving valid argv literal controls."
+    },
+    {
+      "category": "workflow_evidence",
+      "severity": "MAJOR",
+      "property": "The approved valid-policy preimplementation driver baseline must be demonstrated before source edits; later replay cannot establish that ordering.",
+      "evidence": "whole-path-reanalysis-v1.md requires the genuine valid-policy driver RED before hook changes and says replay after source work is retrospective. evidence-v2.json records that the original pre-hook baseline used a missing policy and that the structurally valid disabled-policy replay happened after implementation; no user/root waiver is recorded. This requirement remains unmet even if the source findings are repaired.",
+      "falsifier": "No later test can establish historical ordering. Only an explicit authorized plan amendment could change this evidence requirement; absent that, this remains unmet and must not be described as tests-first compliance."
+    }
+  ],
+  "executed_test_counts": {
+    "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py",
+    "total": 48,
+    "passed": 48,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "log": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v2-tests.log",
+    "note": "The suite reports 48 executions; RepairRegressions inherits GuardCase, so some base tests run twice and 48 is not the count of unique tests."
+  },
+  "source_copy_unchanged": true,
+  "verification": {
+    "candidate_manifest_sha256": "113b061606609e645d35934ba42f044d378e2d5e8ac3cacbeae44d5a8ddb6e19",
+    "plan_sha256_verified": true,
+    "four_scoped_source_hashes_and_modes_verified_before_and_after": true,
+    "support_review_matrix_hash_verified_before_and_after": true,
+    "source_edits": false,
+    "extra_behavioral_probes": false
+  },
+  "functional_source_assessment": "The v1 reported defects appear repaired in source and the affected suite passes. A new unpinned stdin-program path remains, so source approval is withheld.",
+  "workflow_evidence_assessment": "The required valid-policy preimplementation baseline is historically absent. This is separate from source functionality and cannot be supplied by the retrospective replay. No T218 approval or completion is implied."
+}

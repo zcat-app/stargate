@@ -1,0 +1,110 @@
+{
+  "schema": "task-run-guard-source-review-v1",
+  "role": "astra",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "verdict": "ESCALATE",
+  "candidate_sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+  "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+  "functional_source_assessment": {
+    "status": "APPROVE",
+    "finding_count": 0,
+    "security_assessment": "The scoped guard, driver hook, documentation and contract tests satisfy the inspected source contract. The exact dash sentinel is now refused before journal mutation; ./- remains a directly pinned script and dash after a real script remains a literal argument. No remaining functional source finding was identified. Functional source passes; historical workflow evidence alone blocks this overall verdict.",
+    "not_a_claim": "This is not activation authorization, completed guard workflow, T218 approval, containment, or historical tests-first certification."
+  },
+  "workflow_evidence_assessment": {
+    "status": "UNMET",
+    "historical_valid_policy_baseline": "The original preimplementation fixture used an absent /disabled/policy.json and zero hash. The later valid-policy pre-hook replay is retrospective and does not establish the required original ordering.",
+    "v2_behavioral_red_before_source_edits": "The initial named selectors failed because methods were absent from the selected class. The corrected behavioral probes ran against retained v1 bytes after source work began. Those are retrospective, not pre-edit RED evidence.",
+    "v3_program_input_reds": "The five actual behavioral RED logs and separate input-source-phase-authorization-v2.json were inspected. They show directory/Python stdin/Bash stdin execution, caller input reaching the opaque child, and site-enabled Python admission. input-root-identical-green-v1.json supplies the five same-command passing records; the additional -S parent runs are retained separately.",
+    "v4_fifo_argument_reds": "Both actual collected FIFO-argument RED logs show exit0, marker creation and journal mutation against unchanged v3. Separate root authorization and identical-command passing records remain preserved.",
+    "v5_dash_sentinel_red": "input-v4-python-dash-red-evidence.json and its actual failure log show one collected test with (0, false, true), after the ./- healthy control, against v4 guard hash 0a88f3b8938c599a8017519bed1e1f6c52d1e1d23d77cc72271a5f6717ff9938. dash-source-phase-authorization-v1.json explicitly authorizes only the narrow source repair after RED inspection. evidence-v5.json records the identical selector command passing; the passing log and current test were inspected. Current candidate repeats the regression successfully.",
+    "tests_first_compliance_certified": false,
+    "historical_gaps_waived": false,
+    "activation_authorized": false,
+    "t218_approval_or_completion": false
+  },
+  "findings": [
+    {
+      "severity": "BLOCKER",
+      "category": "mandatory_workflow_evidence",
+      "property": "Constitution VII requires genuine failing evidence before AI implementation; VIII keeps unresolved mandatory evidence blocking completion. Governance forbids an agent waiver.",
+      "evidence": "evidence.json and evidence-v2.json retain the invalid original baseline fixture and classify the later valid-policy replay as retrospective. evidence-v2.json also records initial missing-method selector errors and the corrected v1-copy behavioral replays after source edits began. The separately ordered program-input, FIFO-argument and dash-sentinel RED/GREEN repairs do not supply the missing earlier records. Their source authorizations explicitly preserve no-waiver/no-activation boundaries.",
+      "uncertainty": "No independently verifiable contemporaneous records closing the acknowledged historical gaps were supplied. This review neither approves nor applies a governance proposal.",
+      "falsifier": "Produce authentic, independently verifiable missing valid-policy baseline and behavioral RED records predating their respective source changes, if they exist. Otherwise preserve the original evidence and obtain a concrete maintainer disposition through the applicable Governance process. Retrospective replay, source correctness and current green tests cannot establish the missing chronology."
+    }
+  ],
+  "prior_findings_closure": [
+    {
+      "property": "v4 selected Python dash stdin sentinel admitted as a pinned file",
+      "status": "CLOSED",
+      "evidence": "pinned_script now rejects path == '-' before path normalization or file checks. This handles the token after -- without rejecting ./- or script arguments. Actual prior RED, separate source authorization, identical focused GREEN and the fresh complete suite support closure. The source delta from retained v4 is exactly this two-line refusal."
+    },
+    {
+      "property": "Known-interpreter arguments must retain existing special-path checks",
+      "status": "CLOSED",
+      "evidence": "Arguments after script_index pass the common existing-path lstat/regular-file/direct-pin checks. Python and Bash FIFO regressions and healthy literal-argument controls pass."
+    },
+    {
+      "property": "Known interpreter modes, startup and inherited stdin",
+      "status": "Retained",
+      "evidence": "Resolved Python/Bash runtime identities select closed parsers. Python requires isolation plus -S; Bash requires -p. Selected scripts must be regular, non-symlink and directly pinned. The direct guard and hook use -IBS. The sole Popen uses DEVNULL. Runtime/stdlib and approved opaque commands remain declared trusted inputs."
+    },
+    {
+      "property": "Exact policy, review, phase, pin and driver binding",
+      "status": "Retained",
+      "evidence": "Exact raw policy hash, closed typed fields, duplicate JSON refusal, matching review roles/model/effort/APPROVE/plan hash, direct candidate content/mode pins, enabled action and phase checks precede journal mutation. Driver binding is the exact /usr/bin/bash -p DRIVER ORIGINAL_ARGS sequence with required bootstrap pins. Partial hook configuration refuses before driver Git/state processing."
+    },
+    {
+      "property": "Journal budgets and complete attempt publication",
+      "status": "Retained",
+      "evidence": "Bounded regular JSONL journal, nonblocking lock, immutable run/deadline/caps, sequential attempt/result replay and sticky uncertainty persist. Complete write loops and fsync precede launch; zero/error-after-prefix paths refuse. This does not assert power-loss durability, journal tamper resistance or kernel-call interruption."
+    },
+    {
+      "property": "Deadline, exact child/group and postconditions",
+      "status": "Retained",
+      "evidence": "Entry clocks anchor the monotonic budget; admission rechecks after validation/replay/attempt publication and immediately before Popen prevent stale admission. Exact-child wait, bounded TERM/KILL cleanup, group-remainder refusal, interruption and unchanged post-pins are retained. Postcondition validation cannot return successful completion beyond the command budget. Relevant passing real-process and injected-boundary tests were inspected."
+    }
+  ],
+  "executed_test_counts": {
+    "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py",
+    "cwd": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v5",
+    "exit_code": 0,
+    "total": 57,
+    "passed": 57,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 29.171,
+    "log": "source-astra-v5-tests.log",
+    "distinct_defined_test_methods": 37,
+    "note": "20 GuardCase methods execute directly and again by inheritance in RepairRegressions. Sixteen additional repair methods plus one baseline method produce 57 executions and 37 distinct methods; this is not 57 unique tests."
+  },
+  "source_copy_unchanged": true,
+  "verification": {
+    "manifest_hash_verified_before_and_after": true,
+    "acceptance_plan_hash_verified_before_and_after": true,
+    "four_source_hashes_and_modes_verified_before_and_after": true,
+    "support_hash_and_mode_verified_before_and_after": true,
+    "observed_source_inventory_before_and_after": {
+      "scripts/task-run-guard.py": {"sha256": "66d02bb9fd735760eb9208ba3e250681763083f93a0c9168b4ad82c29ccd41b2", "mode": "0755"},
+      "scripts/run-task.sh": {"sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b", "mode": "0775"},
+      "tests/contract/workflow/task_run_guard_test.py": {"sha256": "7ae9ed666b6ba9bb01b32e55e27029ef88b6c480e6340a8d35041a887b972efc", "mode": "0664"},
+      "docs/process/task-run-guard.md": {"sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b", "mode": "0664"},
+      "scripts/review-matrix.json": {"sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8", "mode": "0664"}
+    },
+    "source_edits": false,
+    "extra_behavioral_probes": false,
+    "current_peer_verdict_or_implementation_summary_read": false,
+    "prior_source_v4_findings_read_for_closure": true,
+    "delegation": false
+  },
+  "limitations": [
+    "Reviewer tool is Codex; role/model/effort identify the requested session and are not independent backend identity attestation.",
+    "Only the permitted affected contract suite ran. No verify.sh, unrelated suite, native qualification, Docker, VM, network, production ticket, source/index/staging/commit/activation or worktree operation was performed. The suite itself creates disposable fixture repositories and writes its baseline report inside this candidate copy.",
+    "Inspection covers the four-file source scope and unchanged review-matrix support. It does not authorize changes to broader ticket workflow or reinterpret support reviewer identities as this scoped guard's policy schema.",
+    "The guard validates named pins and known interpreter entrypoints. It does not discover transitive dependencies, contain arbitrary opaque commands, or protect calls that bypass the supported entry forms.",
+    "Unrestricted same-UID/root mutation, journal deletion/rewrite, escaped descendants, daemon work, blocked kernel calls and hard real-time cleanup remain excluded as documented.",
+    "This verdict preserves prior negative reports and review history. It does not authorize a count reset, activation, commit, historical evidence waiver or dependent T218 execution."
+  ]
+}

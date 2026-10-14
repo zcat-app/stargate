@@ -1,0 +1,17 @@
+{
+  "schema": "T218-live-driver-guard-refusal-v1",
+  "argv": [
+    "/usr/bin/bash",
+    "-p",
+    "/home/claudia/stargate-t208/scripts/run-task.sh",
+    "T218"
+  ],
+  "policy_sha256": "3826934f7e488f411c27471b1533e8f0407016d74d684712457f7e4127b65b50",
+  "returncode": 78,
+  "stdout": "",
+  "stderr": "task-run-guard: REFUSED: T218 implementation BLOCKED: automatic predecessor completion carrier remains unresolved; existing strict unknown/late refusal guarantees remain binding. T221 authorizes only the exact past guard disposition, not a T218 contract amendment.\n",
+  "journal_absent": true,
+  "implementation_handoff_absent": true,
+  "guard_source_unchanged": true,
+  "purpose": "Actual protected driver hook refusal; not T218 qualification or success."
+}

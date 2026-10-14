@@ -1,0 +1,67 @@
+{
+  "schema": "task-run-guard-source-review-v1",
+  "role": "astra",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "verdict": "REWORK",
+  "candidate_sha256": "05917a0b6f54440cdb5dfe59f30afa14f986ac4b977e47abd4853ca5bad0a09c",
+  "plan_sha256": "bc6ad792747145843bee993f6e8d17e0959f7f01fd89c4d6e1647efbce522156",
+  "findings": [
+    {
+      "severity": "MAJOR",
+      "property": "An expired original session deadline must prevent child dispatch.",
+      "evidence": "scripts/task-run-guard.py:119 checks the wall deadline before hashing plan/review/candidate inputs. run():315-345 captures the original monotonic budget but performs validation, journal reads and fsync before unconditionally calling Popen. No remaining-budget check occurs immediately before spawn; the first check is after Popen. Slow admission can therefore start a command after the absolute deadline has already expired. check also returns admitted after lengthy validation without rechecking its deadline. The existing monotonic test exercises a sleeping child, not expiration during admission.",
+      "falsifier": "Add an affected regression that delays admission past the original deadline, then verifies a real harmless marker child is never launched. Require refusal before Popen when the original monotonic deadline is exhausted; preserve the original deadline throughout admission and postconditions. This finding is source analysis; no additional probe was run."
+    },
+    {
+      "severity": "MAJOR",
+      "property": "Executable script inputs must be pinned regular files; nonregular inputs must not bypass pin admission.",
+      "evidence": "scripts/task-run-guard.py:168-173 only requires an argv input pin when os.path.isfile(possible) is true. An action naming the pinned Python interpreter and an unpinned FIFO as its script argument passes this loop because isfile is false. The subprocess inherits input streams and can execute arbitrary script bytes supplied through the FIFO; postvalidation repeats the same false test. An unpinned /dev/stdin script input has the same issue. This contradicts the approved plan requirement that executable and script command inputs be included in pins, with nonregular inputs rejected.",
+      "falsifier": "Add a real FIFO-script admission regression with a harmless marker script and require exit 78 without launching/reading the script. Validate command script input paths before treating a non-file argv element as an ordinary literal; keep legitimate non-path arguments usable. This finding is source analysis; no additional probe was run."
+    },
+    {
+      "severity": "MAJOR",
+      "property": "Guarded driver bootstrap must not execute unapproved inherited startup code before admission.",
+      "evidence": "scripts/run-task.sh:1 starts ordinary noninteractive /usr/bin/bash and lines 64-79 implement the guard only inside that script. Bash reads inherited BASH_ENV before executing the script, for both direct shebang execution and explicit /usr/bin/bash script invocation. Thus a BASH_ENV file can execute commands or unset all three guard variables before the hook. Fixed PATH binaries and Python -I do not close this earlier startup path. BASH_ENV is neither a pinned trusted bootstrap input nor an explicitly documented required clean-launch precondition. The supplied hostile-environment test covers PATH and PYTHONPATH only.",
+      "falsifier": "Exercise both supported invocation forms with a harmless BASH_ENV marker and disabled valid policy; no marker may execute before refusal under any promised protected form. Establish a supported bootstrap invocation that suppresses inherited Bash startup code, and explicitly reconcile/document the trust precondition for an ordinary explicit bash invocation that the script itself cannot repair. This finding is source analysis; no additional probe was run."
+    },
+    {
+      "severity": "MINOR",
+      "property": "Closed JSON admission must reject invalid field types and nonfinite numbers with the specified refusal status.",
+      "evidence": "scripts/task-run-guard.py:133-134 uses review role as a dict key without first requiring a string; role=[] raises uncaught TypeError instead of refusal 78. strict_json rejects literal NaN/Infinity but ordinary JSON numeric overflow such as timeout_seconds:1e999 becomes float infinity and passes lines 176-177. Enabled actions also accept non-string blocked_reason. The current tests do not exercise these types.",
+      "falsifier": "Add table-driven affected checks for unhashable role, overflow-to-infinity timeout, and wrong blocked_reason type. Each malformed policy should return 78 before state creation or dispatch; a valid policy should still pass."
+    },
+    {
+      "severity": "MINOR",
+      "property": "The driver-argument mismatch regression must exercise the actual argv binding check.",
+      "evidence": "tests/contract/workflow/task_run_guard_test.py:76-80 inserts extra before the run subcommand. test_driver_argument_mismatch_refuses_without_attempt at lines 275-277 consequently invokes guard --driver /bin/false -- wrong run ... and receives a usage rejection from main(), never reaching run() lines 320-323. This is a false-positive test of the required driver binding.",
+      "falsifier": "Place --driver PATH -- ARGS after run POLICY SHA ACTION in the test invocation, use an otherwise admissible pinned driver fixture, and assert the specific argument-mismatch refusal plus absence of an attempt. Include a matching harmless driver control."
+    }
+  ],
+  "executed_test_counts": {
+    "passed": 22,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py",
+    "log": "source-astra-v1-tests.log",
+    "elapsed_seconds": 11.841
+  },
+  "source_copy_unchanged": true,
+  "verification": {
+    "manifest_hash_verified": true,
+    "plan_hash_verified": true,
+    "all_four_source_hashes_and_modes_verified_before_and_after": true,
+    "support_review_matrix_hash_verified_before_and_after": true,
+    "source_edits": false,
+    "extra_behavioral_probes": false
+  },
+  "limitations": [
+    "Requested/observable reviewer identity only; no backend identity attestation.",
+    "Only the specified affected suite ran. No verify.sh, unrelated suite, Docker, network, host-policy or VM actions.",
+    "Independent read-only source analysis; no implementation-summary or peer source-review reports were read.",
+    "The test suite itself creates a .scratch baseline output inside its candidate copy; the four reviewed sources, support file, and manifest remain unchanged.",
+    "evidence.json honestly states the original pre-hook baseline used an absent policy/minimal fixture. The valid-policy baseline replay was retrospective. The exact approved-plan requirement for a valid-policy preimplementation baseline is therefore unfulfilled; a later replay cannot establish that historical ordering. Preserved initial tests and actual driver behavior remain useful evidence of missing admission, without the stronger historical claim.",
+    "Opt-in/same-UID/process-group limitations in documentation are appropriate; this review does not establish T218 completion or protected native-policy containment."
+  ]
+}

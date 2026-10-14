@@ -1,0 +1,167 @@
+{
+  "schema": "task-run-guard-program-input-red-evidence-v2",
+  "approved_plan": {
+    "path": "program-input-repair-plan-v2.md",
+    "sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+    "astra_approval_sha256": "c9756319c715d3892484c2a7e28fd08b8f4dc767b08b94c072d8f11956b94911",
+    "luna_approval_sha256": "d72c9bab37d46a52446c2b628cee1c22dca0e0d7407d3c3613ac29c6ae20a8bf"
+  },
+  "before_snapshot": {
+    "guard": {
+      "path": "pre-input-v2-guard.py",
+      "sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73"
+    },
+    "driver": {
+      "path": "pre-input-v2-run-task.sh",
+      "sha256": "3c4c647097443d7fd4d6b32ef0e8f68cad07d5f0a1cb2b558d9e9adb145b2081"
+    },
+    "tests": {
+      "path": "pre-input-v2-tests.py",
+      "sha256": "37d61baa344977a3a2a701782f786678ae053b3b030188179c9c0f6b1562ce6e"
+    }
+  },
+  "after_test_only_edit": {
+    "tests_sha256": "292ce4d9897ba78bcb739a72c30e3cacf57a19b15da36c1d4f6d1790db4c1a6a",
+    "guard_sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73",
+    "driver_sha256": "3c4c647097443d7fd4d6b32ef0e8f68cad07d5f0a1cb2b558d9e9adb145b2081",
+    "docs_sha256": "af32aa83b3ac3c0d8d06ed6e1d2aa932ffe5a2b29b10eef188e6fb5e413d22f9"
+  },
+  "selectors": [
+    {
+      "selector": "test_unpinned_python_directory_main_is_refused",
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-I",
+        "tests/contract/workflow/task_run_guard_test.py",
+        "RepairRegressions.test_unpinned_python_directory_main_is_refused"
+      ],
+      "started_utc": "2026-10-13T21:40:46Z",
+      "ended_utc": "2026-10-13T21:40:46Z",
+      "returncode": 1,
+      "collected": true,
+      "pre_source_sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73",
+      "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+      "stdout_log": "input-v2-red-confirmed-test_unpinned_python_directory_main_is_refused.stdout.log",
+      "stderr_log": "input-v2-red-confirmed-test_unpinned_python_directory_main_is_refused.stderr.log",
+      "observed_property_failure": "True is not false : unpinned directory __main__.py actually executed; marker proves admission",
+      "collected_tests": 1,
+      "classification": "behavioral RED against unchanged source v2; actual marker/input or sys.flags.no_site observation matched the named defect"
+    },
+    {
+      "selector": "test_python_stdin_source_is_refused",
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-I",
+        "tests/contract/workflow/task_run_guard_test.py",
+        "RepairRegressions.test_python_stdin_source_is_refused"
+      ],
+      "started_utc": "2026-10-13T21:40:46Z",
+      "ended_utc": "2026-10-13T21:40:47Z",
+      "returncode": 1,
+      "collected": true,
+      "pre_source_sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73",
+      "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+      "stdout_log": "input-v2-red-confirmed-test_python_stdin_source_is_refused.stdout.log",
+      "stderr_log": "input-v2-red-confirmed-test_python_stdin_source_is_refused.stderr.log",
+      "observed_property_failure": "True is not false : caller stdin actually executed as Python source; marker proves admission",
+      "collected_tests": 1,
+      "classification": "behavioral RED against unchanged source v2; actual marker/input or sys.flags.no_site observation matched the named defect"
+    },
+    {
+      "selector": "test_bash_stdin_source_is_refused",
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-I",
+        "tests/contract/workflow/task_run_guard_test.py",
+        "RepairRegressions.test_bash_stdin_source_is_refused"
+      ],
+      "started_utc": "2026-10-13T21:40:47Z",
+      "ended_utc": "2026-10-13T21:40:47Z",
+      "returncode": 1,
+      "collected": true,
+      "pre_source_sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73",
+      "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+      "stdout_log": "input-v2-red-confirmed-test_bash_stdin_source_is_refused.stdout.log",
+      "stderr_log": "input-v2-red-confirmed-test_bash_stdin_source_is_refused.stderr.log",
+      "observed_property_failure": "True is not false : caller stdin actually executed as Bash source; marker proves admission",
+      "collected_tests": 1,
+      "classification": "behavioral RED against unchanged source v2; actual marker/input or sys.flags.no_site observation matched the named defect"
+    },
+    {
+      "selector": "test_opaque_pinned_command_receives_eof_not_caller_source",
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-I",
+        "tests/contract/workflow/task_run_guard_test.py",
+        "RepairRegressions.test_opaque_pinned_command_receives_eof_not_caller_source"
+      ],
+      "started_utc": "2026-10-13T21:40:47Z",
+      "ended_utc": "2026-10-13T21:40:47Z",
+      "returncode": 1,
+      "collected": true,
+      "pre_source_sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73",
+      "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+      "stdout_log": "input-v2-red-confirmed-test_opaque_pinned_command_receives_eof_not_caller_source.stdout.log",
+      "stderr_log": "input-v2-red-confirmed-test_opaque_pinned_command_receives_eof_not_caller_source.stderr.log",
+      "observed_property_failure": "b'opaque caller-fed source\\n' != b'' : opaque pinned child received caller-controlled stdin",
+      "collected_tests": 1,
+      "classification": "behavioral RED against unchanged source v2; actual marker/input or sys.flags.no_site observation matched the named defect"
+    },
+    {
+      "selector": "test_python_isolated_without_no_site_is_not_admitted",
+      "command": [
+        "/usr/bin/python3",
+        "-B",
+        "-I",
+        "tests/contract/workflow/task_run_guard_test.py",
+        "RepairRegressions.test_python_isolated_without_no_site_is_not_admitted"
+      ],
+      "started_utc": "2026-10-13T21:40:47Z",
+      "ended_utc": "2026-10-13T21:40:47Z",
+      "returncode": 1,
+      "collected": true,
+      "pre_source_sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73",
+      "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+      "stdout_log": "input-v2-red-confirmed-test_python_isolated_without_no_site_is_not_admitted.stdout.log",
+      "stderr_log": "input-v2-red-confirmed-test_python_isolated_without_no_site_is_not_admitted.stderr.log",
+      "observed_property_failure": "False is not true : (0, b'0\\n', b'')",
+      "collected_tests": 1,
+      "classification": "behavioral RED against unchanged source v2; actual marker/input or sys.flags.no_site observation matched the named defect"
+    }
+  ],
+  "healthy_controls": [
+    {
+      "selector": "test_unpinned_python_directory_main_is_refused; test_python_stdin_source_is_refused; test_python_isolated_without_no_site_is_not_admitted",
+      "control": "Directly pinned resolved Python with -I -S script; exit 0, sys.flags.no_site=1, marker content healthy."
+    },
+    {
+      "selector": "test_bash_stdin_source_is_refused",
+      "control": "Directly pinned resolved Bash -p script; exit 0 and marker content healthy."
+    },
+    {
+      "selector": "test_opaque_pinned_command_receives_eof_not_caller_source",
+      "control": "Pinned /usr/bin/cat with empty caller stdin; exit 0, empty stdout."
+    }
+  ],
+  "test_source_setup_errors": {
+    "classification": "The first command batch used GuardCase.<selector> while methods had landed in RepairRegressions. These are preserved setup errors and excluded as evidence. The confirmed batch uses the actual collected RepairRegressions.<selector> class and records Ran 1 test for each.",
+    "logs": [
+      "input-red-test_unpinned_python_directory_main_is_refused.stderr.log",
+      "input-red-test_python_stdin_source_is_refused.stderr.log",
+      "input-red-test_bash_stdin_source_is_refused.stderr.log",
+      "input-red-test_opaque_pinned_command_receives_eof_not_caller_source.stderr.log",
+      "input-red-test_python_isolated_without_no_site_is_not_admitted.stderr.log"
+    ]
+  },
+  "phase_boundary": {
+    "production_source_edits": false,
+    "source_fix_authorized_or_performed": false,
+    "full_or_unrelated_tests": false,
+    "staging_or_index_changes": false,
+    "next_action": "Root inspects these actual RED logs and explicitly authorizes a separate source phase."
+  }
+}

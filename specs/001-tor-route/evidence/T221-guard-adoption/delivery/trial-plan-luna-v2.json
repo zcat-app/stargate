@@ -1,0 +1,9 @@
+{
+  "schema": "task-run-guard-review-v1",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "verdict": "APPROVE",
+  "plan_sha256": "c881fe3c84506486b68d7c6ee4fc0b24ae5c467f6f35b06673db50f12504d2d0",
+  "findings": []
+}

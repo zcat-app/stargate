@@ -1,0 +1,53 @@
+{
+  "schema": "task-run-guard-governance-proposal-review-v1",
+  "role": "astra",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "proposal_sha256": "ab58c602302105e19ddf6c6e850698b22ac4544836c307702d4af0abf7211964",
+  "verdict": "APPROVE-PROPOSAL",
+  "approval_scope": "The exact draft is suitable to present for a concrete maintainer policy decision. This verdict is not maintainer authorization, an adopted amendment, source approval, or guard activation authority.",
+  "findings": [],
+  "assessment": {
+    "historical_facts": "evidence.json and evidence-v2.json acknowledge the absent-policy original baseline and retrospective valid-policy replay. evidence-v2.json also identifies setup failures and corrected v1-copy probes after source work began. The two source-v2 reviews retain functional defects and unmet provenance. The draft accurately preserves these facts without claiming retrospective compliance.",
+    "constitutional_basis": "VII applies tests-first to all AI-generated implementation, including this workflow tool. VIII bars ordinary finding acceptance from waiving it. Governance permits a recorded, explicitly authorized pre-release amendment with a dedicated ticket and independent reviews. Presenting the exact proposed insertion for a decision does not itself amend the rule.",
+    "options": "Retaining the existing rule keeps the historical completion gate unmet. The alternative explicitly changes permission for a one-time historical disposition, preserves NONCOMPLIANT provenance, and requires a governed amendment. Neither option treats further ordinary bug-fix authorization as policy approval.",
+    "boundary": "The four named paths and eventual final reviewed manifest bound the proposed adopted tool. The prose restricts the exception to the two already identified historical sequences, while later repairs remain tests-first. The final manifest is deliberately not represented as known or approved today.",
+    "excluded_authority": "The proposal expressly preserves T218/R14j, native qualification/completion/retry/backend guarantees, routing/privacy boundaries, excluded T078/T079 scope, and the distinction between opt-in guard behavior and host containment.",
+    "ticket_timing": "The draft requires an unused dedicated governance ticket only after actual maintainer authorization. No ticket creation is authorized by this review. The final repaired manifest must be supplied before the later adoption decision."
+  },
+  "required_follow_through_if_authorized": [
+    "In the dedicated ticket, enumerate the original valid-policy driver baseline and each source-v2 missed behavioral ordering from evidence-v2.json; bind the preserved original records and retrospective probes by content identity. Keep both original negative source-v2 verdicts unchanged and accessible. The final manifest must not expand the exception to new failed sequences incurred during present or future repairs.",
+    "Apply the existing Governance and VIII gates explicitly: amendment codereview plus independent redteam, actual reviewer identities, and verdicts bound to the final amendment/source candidate. Proposal review does not satisfy those future candidate reviews.",
+    "Retain the ordinary exact-tree scripts/verify.sh green gate and directly affected test obligations before review/commit/adoption as applicable. The proposed affected-tests wording supplies an additional adoption condition; it cannot silently replace the unchanged canonical green gate.",
+    "Before adoption, supply the final repaired four-file manifest, amendment/ticket/evidence identities, dated amendment record and required consistency updates. Preserve the actual evidence durably rather than leaving an inventory whose only referents are disposable scratch files. Any later candidate change invalidates affected review/evidence under VIII."
+  ],
+  "inputs": [
+    {
+      "path": ".specify/memory/constitution.md",
+      "sha256": "161689898ef7e594734e7def94a850f2e1b28982017c9d43b0640debf9ca65a1"
+    },
+    {
+      "path": "evidence.json",
+      "sha256": "a4167ea71d271f275360f8ce93a9590f0c2800ee07664faf160e278452e8ca60"
+    },
+    {
+      "path": "evidence-v2.json",
+      "sha256": "3b5e57f7eb2d56cb6516f83a6e7ee105e2f069046701c7d6fd5f310ab1a3bb8c"
+    },
+    {
+      "path": "source-astra-v2.json",
+      "sha256": "d231dba81bda4fd43c3bdd688f0ca2a48a162379a5c0705e51ed87c2a273cedc"
+    },
+    {
+      "path": "source-luna-v2.json",
+      "sha256": "bc7021d286dea312fc805c8023724b51e0749faf4603fb3971100c80e2fad94b"
+    }
+  ],
+  "limitations": [
+    "Read-only consultation except for this requested report. No source, policy, ticket, worktree or index changes; no live commands, tests, broad verification or delegation.",
+    "Inspected the draft, canonical Constitution and the four explicitly supplied historical evidence/review records. Did not inspect source-writer chat, implementation summaries or a current governance peer report.",
+    "Historical factual assessment is based on the preserved evidence records; no independent wall-clock attestation or reconstruction of all underlying logs is claimed.",
+    "The role/model/effort fields describe the assigned review session; no independent backend identity attestation is available.",
+    "Future candidate source correctness, final hashes, maintainer approval and amendment adoption remain unestablished."
+  ]
+}

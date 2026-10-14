@@ -1,0 +1,1359 @@
+--- a/scripts/task-run-guard.py
++++ b/scripts/task-run-guard.py
+@@ -0,0 +1,529 @@
++#!/usr/bin/python3 -IBS
++# Copyright 2026 The Stargate Authors
++# SPDX-License-Identifier: Apache-2.0
++"""Strict admission and bounded execution for explicitly guarded workflow commands."""
++import fcntl
++import hashlib
++import json
++import math
++import os
++import signal
++import stat
++import subprocess
++import sys
++import time
++
++MAX_INPUT = 1 << 20
++MAX_JOURNAL = 1 << 20
++MAX_ATTEMPTS = 1000
++MAX_DEADLINE_SECONDS = 365 * 24 * 60 * 60
++HOOK_VARS = ("STARGATE_GUARD_POLICY", "STARGATE_GUARD_SHA256", "STARGATE_GUARD_ACTION")
++
++
++class Refuse(Exception):
++    pass
++
++
++def fail(message):
++    raise Refuse(message)
++
++
++def strict_json(data, label):
++    def pairs(items):
++        out = {}
++        for key, value in items:
++            if key in out:
++                fail(f"{label}: duplicate JSON key {key}")
++            out[key] = value
++        return out
++    try:
++        return json.loads(data, object_pairs_hook=pairs,
++                          parse_constant=lambda value: fail(f"{label}: invalid number {value}"))
++    except (UnicodeDecodeError, json.JSONDecodeError, ValueError, OverflowError) as exc:
++        fail(f"{label}: invalid JSON ({exc})")
++
++
++def read_regular(path, limit=MAX_INPUT):
++    if not isinstance(path, str) or not os.path.isabs(path) or os.path.realpath(path) != path:
++        fail("input path must be absolute and contain no symlink components")
++    try:
++        fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
++    except OSError as exc:
++        fail(f"cannot open pinned input: {exc}")
++    try:
++        st = os.fstat(fd)
++        if not stat.S_ISREG(st.st_mode) or st.st_size > limit:
++            fail("pinned input is not a bounded regular file")
++        chunks, size = [], 0
++        while True:
++            chunk = os.read(fd, min(65536, limit + 1 - size))
++            if not chunk:
++                break
++            chunks.append(chunk)
++            size += len(chunk)
++            if size > limit:
++                fail("pinned input exceeds size limit")
++        return b"".join(chunks), st
++    finally:
++        os.close(fd)
++
++
++def pin(path, expected_hash, expected_mode):
++    if (not isinstance(path, str) or not os.path.isabs(path) or os.path.realpath(path) != path or
++            not isinstance(expected_hash, str) or len(expected_hash) != 64 or
++            any(ch not in "0123456789abcdef" for ch in expected_hash) or
++            type(expected_mode) is not int or not 0 <= expected_mode <= 0o777):
++        fail("malformed file pin")
++    try:
++        fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
++    except OSError as exc:
++        fail(f"cannot open pinned file {path}: {exc}")
++    h = hashlib.sha256()
++    try:
++        st = os.fstat(fd)
++        if not stat.S_ISREG(st.st_mode) or stat.S_IMODE(st.st_mode) != expected_mode:
++            fail(f"pinned file type or mode changed: {path}")
++        while True:
++            block = os.read(fd, 131072)
++            if not block:
++                break
++            h.update(block)
++    finally:
++        os.close(fd)
++    if h.hexdigest() != expected_hash:
++        fail(f"pinned file hash changed: {path}")
++
++
++def exact(obj, keys, label):
++    if type(obj) is not dict or set(obj) != set(keys):
++        fail(f"{label}: expected exactly fields {', '.join(keys)}")
++
++
++def valid_pin(obj, label):
++    exact(obj, ("path", "sha256", "mode"), label)
++    pin(obj["path"], obj["sha256"], obj["mode"])
++
++
++def pinned_script(path, cwd, candidate_paths, label):
++    candidate = path if os.path.isabs(path) else os.path.join(cwd, path)
++    absolute = os.path.abspath(candidate)
++    resolved = os.path.realpath(absolute)
++    try:
++        st = os.lstat(absolute)
++    except OSError as exc:
++        fail(f"{label} is unavailable: {exc}")
++    if (absolute != resolved or stat.S_ISLNK(st.st_mode) or not stat.S_ISREG(st.st_mode) or
++            resolved not in candidate_paths):
++        fail(f"{label} must be a directly pinned regular script file")
++
++
++def interpreter_script(argv, cwd, candidate_paths, py_identity, bash_identity, label):
++    executable = os.path.realpath(argv[0])
++    if executable == py_identity:
++        i, isolated, no_site = 1, False, False
++        allowed = {"-I", "-S", "-B", "-IB", "-BI", "-u"}
++        while i < len(argv) and argv[i] in allowed:
++            option = argv[i]
++            isolated = isolated or option in ("-I", "-IB", "-BI")
++            no_site = no_site or option == "-S"
++            i += 1
++        if i < len(argv) and argv[i] == "--":
++            i += 1
++        elif i < len(argv) and argv[i].startswith("-"):
++            fail(f"{label} Python action uses an unsupported interpreter option or stdin mode")
++        if not isolated or not no_site:
++            fail(f"{label} Python action requires isolated startup and -S")
++        if i >= len(argv):
++            fail(f"{label} Python action requires one pinned script path")
++        pinned_script(argv[i], cwd, candidate_paths, f"{label} Python script")
++        return i
++    if executable == bash_identity:
++        i = 1
++        if i >= len(argv) or argv[i] != "-p":
++            fail(f"{label} Bash action requires -p before its script")
++        i += 1
++        if i < len(argv) and argv[i] == "--":
++            i += 1
++        elif i < len(argv) and argv[i].startswith("-"):
++            fail(f"{label} Bash action uses an unsupported interpreter option or stdin mode")
++        if i >= len(argv):
++            fail(f"{label} Bash action requires one pinned script path")
++        pinned_script(argv[i], cwd, candidate_paths, f"{label} Bash script")
++        return i
++    return None
++
++
++def validate(policy_path, expected_sha, action_name):
++    if not isinstance(expected_sha, str) or len(expected_sha) != 64:
++        fail("policy SHA256 is malformed")
++    data, _ = read_regular(policy_path)
++    if hashlib.sha256(data).hexdigest() != expected_sha:
++        fail("policy SHA256 does not match")
++    p = strict_json(data, "policy")
++    exact(p, ("schema", "run_id", "journal_path", "deadline_epoch", "maximum_attempts",
++              "maximum_failed_attempts", "phase", "plan", "reviews", "candidates", "actions"), "policy")
++    if p["schema"] != "task-run-guard-policy-v1" or not isinstance(p["run_id"], str) or not p["run_id"]:
++        fail("unsupported policy schema or empty run_id")
++    if (not isinstance(p["journal_path"], str) or not os.path.isabs(p["journal_path"]) or
++            os.path.realpath(p["journal_path"]) != p["journal_path"]):
++        fail("journal_path must be absolute and contain no symlink components")
++    now_epoch = int(time.time())
++    if (type(p["deadline_epoch"]) is not int or p["deadline_epoch"] <= now_epoch or
++            p["deadline_epoch"] - now_epoch > MAX_DEADLINE_SECONDS or
++            type(p["maximum_attempts"]) is not int or not 1 <= p["maximum_attempts"] <= MAX_ATTEMPTS or
++            type(p["maximum_failed_attempts"]) is not int or not 1 <= p["maximum_failed_attempts"] <= 3):
++        fail("deadline or attempt budget is invalid or exhausted")
++    if not isinstance(p["phase"], str) or not p["phase"]:
++        fail("phase must be nonempty")
++    valid_pin(p["plan"], "plan")
++    if type(p["reviews"]) is not list or len(p["reviews"]) != 2:
++        fail("exactly two independent review records are required")
++    expected_reviews = {"astra": ("gpt-6-astra", "high"), "luna": ("gpt-6-luna", "high")}
++    seen_paths, seen_roles = set(), set()
++    for row in p["reviews"]:
++        exact(row, ("path", "sha256", "mode", "role", "model", "effort"), "review descriptor")
++        valid_pin({k: row[k] for k in ("path", "sha256", "mode")}, "review")
++        role = row["role"]
++        if (not isinstance(role, str) or role not in expected_reviews or
++                not isinstance(row["model"], str) or not isinstance(row["effort"], str) or
++                (row["model"], row["effort"]) != expected_reviews[role] or
++                role in seen_roles or row["path"] in seen_paths):
++            fail("review roles, models, effort or report paths do not match the required pair")
++        seen_roles.add(role); seen_paths.add(row["path"])
++        report_data, _ = read_regular(row["path"])
++        report = strict_json(report_data, "review report")
++        if type(report) is not dict or set(report) - {"schema", "role", "model", "effort", "verdict", "plan_sha256", "findings"}:
++            fail("review report has unknown fields")
++        if any(report.get(k) != v for k, v in {"schema": "task-run-guard-review-v1", "role": role,
++                "model": row["model"], "effort": row["effort"], "verdict": "APPROVE",
++                "plan_sha256": p["plan"]["sha256"]}.items()):
++            fail("review report does not approve this exact plan with required identity")
++        if "findings" in report and type(report["findings"]) is not list:
++            fail("review findings must be a list")
++    if type(p["candidates"]) is not list or not p["candidates"]:
++        fail("at least one pinned candidate is required")
++    for item in p["candidates"]:
++        valid_pin(item, "candidate")
++    candidate_paths = {item["path"] for item in p["candidates"]}
++    if type(p["actions"]) is not dict or not p["actions"] or action_name not in p["actions"]:
++        fail("named action is absent")
++    for name, a in p["actions"].items():
++        if not isinstance(name, str) or not name:
++            fail("action name must be nonempty")
++        exact(a, ("phase", "enabled", "blocked_reason", "argv", "cwd", "env", "timeout_seconds"), "action")
++        if a["phase"] != p["phase"]:
++            fail(f"action {name} phase does not match current policy phase")
++        if (type(a["enabled"]) is not bool or not isinstance(a["blocked_reason"], str) or
++                (not a["enabled"] and not a["blocked_reason"].strip())):
++            fail(f"action {name} is disabled or has no blocking reason")
++        if type(a["argv"]) is not list or not a["argv"] or any(not isinstance(v, str) or "\0" in v for v in a["argv"]):
++            fail(f"action {name} argv is invalid")
++        if not os.path.isabs(a["argv"][0]) or not isinstance(a["cwd"], str) or not os.path.isabs(a["cwd"]):
++            fail(f"action {name} executable and cwd must be absolute")
++        if a["argv"][0] not in candidate_paths:
++            fail(f"action {name} executable is not pinned as a candidate")
++        for value in a["argv"][1:]:
++            possible = value if os.path.isabs(value) else os.path.join(a["cwd"], value)
++            if os.path.isfile(possible):
++                resolved_input = os.path.realpath(possible)
++                if os.path.islink(possible) or resolved_input not in candidate_paths:
++                    fail(f"action {name} file input is not directly pinned as a candidate: {value}")
++        if type(a["env"]) is not dict or any(not isinstance(k, str) or not k or "=" in k or "\0" in k or not isinstance(v, str) or "\0" in v for k, v in a["env"].items()):
++            fail(f"action {name} environment must contain string pairs")
++        timeout = a["timeout_seconds"]
++        if (type(timeout) not in (int, float) or
++                (type(timeout) is int and timeout > MAX_DEADLINE_SECONDS) or
++                (type(timeout) is float and not math.isfinite(timeout)) or timeout <= 0):
++            fail(f"action {name} timeout must be positive")
++        argv = a["argv"]
++        script_index = interpreter_script(argv, a["cwd"], candidate_paths,
++            os.path.realpath(sys.executable), os.path.realpath("/usr/bin/bash"), f"action {name}")
++        values = argv[1:] if script_index is None else argv[1:1]
++        for value in values:
++            possible = value if os.path.isabs(value) else os.path.join(a["cwd"], value)
++            if not os.path.lexists(possible):
++                continue
++            st = os.lstat(possible)
++            if stat.S_ISDIR(st.st_mode):
++                continue
++            if not stat.S_ISREG(st.st_mode) or os.path.islink(possible):
++                fail(f"action {name} argument is a nonregular input: {value}")
++            if os.path.realpath(possible) not in candidate_paths:
++                fail(f"action {name} file input is not directly pinned as a candidate: {value}")
++    action = p["actions"][action_name]
++    if not action["enabled"]:
++        fail(action["blocked_reason"])
++    return p, action
++
++
++def journal_open(path):
++    if not os.path.isabs(path) or os.path.realpath(path) != path:
++        fail("journal path must be absolute and contain no symlink components")
++    try:
++        fd = os.open(path, os.O_RDWR | os.O_APPEND | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
++        st = os.fstat(fd)
++        if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_JOURNAL:
++            fail("journal must be a bounded regular file")
++        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
++        return fd
++    except OSError as exc:
++        fail(f"journal is unavailable or locked: {exc}")
++
++
++def journal_state(fd, policy, initialize=True):
++    os.lseek(fd, 0, os.SEEK_SET)
++    raw = os.read(fd, MAX_JOURNAL + 1)
++    if len(raw) > MAX_JOURNAL or (raw and not raw.endswith(b"\n")):
++        fail("journal is oversized or truncated")
++    rows = [strict_json(line, "journal record") for line in raw.splitlines()]
++    if len(rows) > MAX_ATTEMPTS * 2:
++        fail("journal attempt cap exceeded")
++    metadata = {"run_id": policy["run_id"], "deadline_epoch": policy["deadline_epoch"],
++                "maximum_attempts": policy["maximum_attempts"],
++                "maximum_failed_attempts": policy["maximum_failed_attempts"]}
++    attempts, failures, pending = 0, 0, None
++    if rows:
++        first = rows[0]
++        if (type(first) is not dict or first.get("type") != "identity" or
++                any(type(first.get(k)) is not type(v) or first.get(k) != v for k, v in metadata.items()) or
++                set(first) != {"type", *metadata}):
++            fail("journal immutable identity or budget changed")
++        rows = rows[1:]
++    elif initialize:
++        append_record(fd, {"type": "identity", **metadata})
++    for row in rows:
++        if type(row) is not dict:
++            fail("invalid journal record")
++        if row.get("type") == "attempt" and pending is None:
++            attempts += 1
++            if (set(row) != {"type", "number", "action"} or type(row.get("number")) is not int or
++                    row.get("number") != attempts or not isinstance(row.get("action"), str) or not row["action"]):
++                fail("invalid journal attempt sequence")
++            pending = attempts
++        elif row.get("type") == "result" and pending is not None:
++            result, exit_code = row.get("result"), row.get("exit")
++            valid_exit = ((result == "ok" and type(exit_code) is int and exit_code == 0) or
++                          (result == "failed" and type(exit_code) is int and exit_code != 0) or
++                          (result == "timeout" and (exit_code is None or type(exit_code) is int)) or
++                          (result == "uncertain" and exit_code is None))
++            if (set(row) != {"type", "attempt", "result", "exit"} or
++                    type(row.get("attempt")) is not int or row.get("attempt") != pending or
++                    result not in ("ok", "failed", "timeout", "uncertain") or not valid_exit):
++                fail("invalid journal result")
++            if row["result"] in ("timeout", "uncertain"):
++                fail("previous command completion is uncertain; no retries")
++            if row["result"] == "failed":
++                failures += 1
++            pending = None
++        else:
++            fail("journal has dangling or unknown records")
++    if pending is not None:
++        fail("journal has an interrupted attempt; no retries")
++    if attempts >= policy["maximum_attempts"] or failures >= policy["maximum_failed_attempts"]:
++        fail("persistent attempt or failure cap reached")
++    return attempts
++
++
++def check_journal(policy):
++    path = policy["journal_path"]
++    try:
++        fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
++    except FileNotFoundError:
++        return
++    except OSError as exc:
++        fail(f"journal cannot be inspected: {exc}")
++    try:
++        st = os.fstat(fd)
++        if not stat.S_ISREG(st.st_mode) or st.st_size > MAX_JOURNAL:
++            fail("journal must be a bounded regular file")
++        try:
++            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
++        except OSError as exc:
++            fail(f"journal is locked: {exc}")
++        journal_state(fd, policy, initialize=False)
++    finally:
++        os.close(fd)
++
++
++def append_record(fd, row):
++    data = (json.dumps(row, sort_keys=True, separators=(",", ":")) + "\n").encode()
++    if os.fstat(fd).st_size + len(data) > MAX_JOURNAL:
++        fail("journal size cap reached")
++    offset = 0
++    while offset < len(data):
++        try:
++            written = os.write(fd, data[offset:])
++        except OSError as exc:
++            fail(f"journal write failed after {offset} bytes: {exc}")
++        if type(written) is not int or written <= 0:
++            fail("journal write made no progress")
++        offset += written
++    try:
++        os.fsync(fd)
++    except OSError as exc:
++        fail(f"journal sync failed: {exc}")
++
++
++def group_exists(pgid):
++    try:
++        os.killpg(pgid, 0)
++        return True
++    except ProcessLookupError:
++        return False
++    except PermissionError:
++        return True
++
++
++def stop_group(proc):
++    try:
++        os.killpg(proc.pid, signal.SIGTERM)
++    except ProcessLookupError:
++        pass
++    deadline = time.monotonic() + .25
++    while time.monotonic() < deadline and group_exists(proc.pid):
++        time.sleep(.01)
++    if group_exists(proc.pid):
++        try:
++            os.killpg(proc.pid, signal.SIGKILL)
++        except ProcessLookupError:
++            pass
++    try:
++        proc.wait(timeout=1)
++        return not group_exists(proc.pid)
++    except subprocess.TimeoutExpired:
++        return False
++
++
++def interrupt_guard(_signum, _frame):
++    raise KeyboardInterrupt
++
++
++def run(policy_path, expected_sha, action_name, driver=None, args=()):
++    entry_wall = time.time()
++    entry_mono = time.monotonic()
++    p, action = validate(policy_path, expected_sha, action_name)
++    global_deadline = entry_mono + max(0.0, p["deadline_epoch"] - entry_wall)
++    if time.monotonic() >= global_deadline:
++        fail("admission deadline expired during policy validation")
++    if driver is not None:
++        actual = ["/usr/bin/bash", "-p", driver, *args]
++        if action["argv"] != actual:
++            fail("guarded driver arguments do not match the approved action")
++        pinned = {item["path"] for item in p["candidates"]}
++        bootstrap = {os.path.realpath(__file__), os.path.realpath(sys.executable),
++                     os.path.realpath("/usr/bin/readlink")}
++        if driver not in pinned or "/usr/bin/bash" not in pinned or not bootstrap.issubset(pinned):
++            fail("guarded driver, bash and guard bootstrap inputs must be pinned candidates")
++    for name in HOOK_VARS:
++        if name in action["env"]:
++            fail("guard variables cannot be inherited by the child")
++    fd = journal_open(p["journal_path"])
++    try:
++        attempts = journal_state(fd, p)
++        if time.monotonic() >= global_deadline:
++            fail("admission deadline expired during journal validation")
++        number = attempts + 1
++        append_record(fd, {"type": "attempt", "number": number, "action": action_name})
++        if time.monotonic() >= global_deadline:
++            append_record(fd, {"type": "result", "attempt": number,
++                               "result": "timeout", "exit": None})
++            print("task-run-guard: admission deadline expired before spawn", file=sys.stderr)
++            return 124
++        env = dict(action["env"])
++        started = time.monotonic()
++        proc = None
++        action_started = time.monotonic()
++        monotonic_deadline = min(global_deadline, action_started + float(action["timeout_seconds"]))
++        previous_term = signal.signal(signal.SIGTERM, interrupt_guard)
++        try:
++            if time.monotonic() >= monotonic_deadline:
++                append_record(fd, {"type": "result", "attempt": number,
++                                   "result": "timeout", "exit": None})
++                print("task-run-guard: admission deadline expired before spawn", file=sys.stderr)
++                return 124
++            proc = subprocess.Popen(action["argv"], cwd=action["cwd"], env=env,
++                                    stdin=subprocess.DEVNULL, start_new_session=True)
++            remaining = monotonic_deadline - time.monotonic()
++            try:
++                code = proc.wait(timeout=max(.001, remaining))
++            except subprocess.TimeoutExpired:
++                clean = stop_group(proc)
++                append_record(fd, {"type": "result", "attempt": number,
++                    "result": "timeout" if clean else "uncertain", "exit": None})
++                print("task-run-guard: command timed out", file=sys.stderr)
++                return 124
++            if time.monotonic() >= monotonic_deadline:
++                clean = stop_group(proc)
++                append_record(fd, {"type": "result", "attempt": number,
++                    "result": "timeout" if clean else "uncertain", "exit": code})
++                print("task-run-guard: command timed out", file=sys.stderr)
++                return 124
++            if group_exists(proc.pid):
++                stop_group(proc)
++                append_record(fd, {"type": "result", "attempt": number,
++                    "result": "uncertain", "exit": code})
++                fail("command left process-group members; stopped group")
++            result = "ok" if code == 0 else "failed"
++            if code == 0:
++                try:
++                    validate(policy_path, expected_sha, action_name)
++                except Refuse:
++                    append_record(fd, {"type": "result", "attempt": number,
++                        "result": "uncertain", "exit": code})
++                    fail("pinned inputs changed during command")
++                if time.monotonic() >= monotonic_deadline:
++                    append_record(fd, {"type": "result", "attempt": number,
++                        "result": "timeout", "exit": code})
++                    print("task-run-guard: command exceeded its time budget", file=sys.stderr)
++                    return 124
++            append_record(fd, {"type": "result", "attempt": number, "result": result, "exit": code})
++            return code
++        except KeyboardInterrupt:
++            clean = stop_group(proc) if proc is not None else True
++            append_record(fd, {"type": "result", "attempt": number,
++                "result": "uncertain" if not clean else "timeout", "exit": None})
++            return 130
++        except OSError as exc:
++            append_record(fd, {"type": "result", "attempt": number, "result": "failed", "exit": 127})
++            fail(f"cannot start approved command: {exc}")
++        finally:
++            signal.signal(signal.SIGTERM, previous_term)
++    finally:
++        os.close(fd)
++
++
++def main(argv):
++    if not argv or argv[0] not in ("check", "run"):
++        fail("usage: task-run-guard.py check POLICY SHA256 ACTION | run POLICY SHA256 ACTION [--driver PATH -- ARGS...]")
++    mode = argv[0]
++    rest = argv[1:]
++    if mode == "check" and len(rest) == 3:
++        entry_mono = time.monotonic()
++        entry_wall = time.time()
++        policy, _ = validate(*rest)
++        deadline = entry_mono + max(0.0, policy["deadline_epoch"] - entry_wall)
++        check_journal(policy)
++        if time.monotonic() >= deadline:
++            fail("admission deadline expired during check")
++        print("task-run-guard: admitted")
++        return 0
++    if mode == "run" and len(rest) >= 3:
++        policy, sha, action = rest[:3]
++        driver, args = None, ()
++        if len(rest) > 3:
++            if len(rest) < 5 or rest[3] != "--driver" or "--" not in rest[4:]:
++                fail("malformed guarded driver arguments")
++            index = rest.index("--", 4)
++            if index != 5:
++                fail("malformed guarded driver path")
++            driver, args = rest[4], rest[6:]
++        return run(policy, sha, action, driver, args)
++    fail("invalid command arguments")
++
++
++if __name__ == "__main__":
++    try:
++        sys.exit(main(sys.argv[1:]))
++    except Refuse as exc:
++        print(f"task-run-guard: REFUSED: {exc}", file=sys.stderr)
++        sys.exit(78)
+--- a/scripts/run-task.sh
++++ b/scripts/run-task.sh
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env bash
++#!/usr/bin/bash -p
+ # Copyright 2026 The Stargate Authors
+ # SPDX-License-Identifier: Apache-2.0
+ #
+@@ -63,6 +63,23 @@
+ 
+ set -euo pipefail
+ 
++# Opt-in admission happens before git, argument parsing or transient state.
++# Fixed system paths keep PATH and Python startup hooks outside bootstrap.
++if [ "${STARGATE_GUARD_POLICY+x}${STARGATE_GUARD_SHA256+x}${STARGATE_GUARD_ACTION+x}" != "" ]; then
++  if [ -z "${STARGATE_GUARD_POLICY:-}" ] || [ -z "${STARGATE_GUARD_SHA256:-}" ] || [ -z "${STARGATE_GUARD_ACTION:-}" ]; then
++    echo "run-task: incomplete task-run guard configuration" >&2
++    exit 78
++  fi
++  DRIVER_PATH="$(/usr/bin/readlink -f -- "$0")" || {
++    echo "run-task: cannot resolve driver path" >&2
++    exit 78
++  }
++  GUARD_PATH="${DRIVER_PATH%/*}/task-run-guard.py"
++  exec /usr/bin/python3 -IBS "$GUARD_PATH" run \
++    "$STARGATE_GUARD_POLICY" "$STARGATE_GUARD_SHA256" "$STARGATE_GUARD_ACTION" \
++    --driver "$DRIVER_PATH" -- "$@"
++fi
++
+ cd "$(git rev-parse --show-toplevel)"
+ 
+ # --- arg parsing -----------------------------------------------------------
+--- a/tests/contract/workflow/task_run_guard_test.py
++++ b/tests/contract/workflow/task_run_guard_test.py
+@@ -0,0 +1,746 @@
++#!/usr/bin/python3
++# Copyright 2026 The Stargate Authors
++# SPDX-License-Identifier: Apache-2.0
++"""Contract tests for the opt-in task-run admission guard."""
++import hashlib
++import json
++import os
++import pathlib
++import shutil
++import signal
++import subprocess
++import tempfile
++import time
++import unittest
++
++ROOT = pathlib.Path(__file__).resolve().parents[3]
++GUARD = pathlib.Path(os.environ.get("TASK_RUN_GUARD", ROOT / "scripts/task-run-guard.py"))
++DRIVER = pathlib.Path(os.environ.get("TASK_RUN_DRIVER", ROOT / "scripts/run-task.sh"))
++REPORTS = ROOT / ".scratch/reports/2026-10-13-fresh-session/guard"
++
++
++def digest(path):
++    return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
++
++
++class GuardCase(unittest.TestCase):
++    def setUp(self):
++        self.tmp = tempfile.TemporaryDirectory(prefix="task-run-guard-")
++        self.root = pathlib.Path(self.tmp.name)
++        self.script = self.root / "cmd.py"
++        self.script.write_text("import os,sys\nopen(os.environ['MARKER'],'a').write('ran\\n')\n")
++        self.script.chmod(0o644)
++        self.policy_path = self.root / "policy.json"
++        self.journal = self.root / "journal.jsonl"
++        self.plan = self.root / "plan.md"
++        self.plan.write_text("approved plan\n")
++        self.review_a = self.root / "astra.json"
++        self.review_l = self.root / "luna.json"
++        self._review(self.review_a, "astra", "gpt-6-astra")
++        self._review(self.review_l, "luna", "gpt-6-luna")
++        self.policy = {
++            "schema": "task-run-guard-policy-v1", "run_id": "fixture-run",
++            "journal_path": str(self.journal), "deadline_epoch": int(time.time()) + 90,
++            "maximum_attempts": 8, "maximum_failed_attempts": 3, "phase": "review",
++            "plan": self._pin(self.plan),
++            "reviews": [self._review_pin(self.review_a, "astra", "gpt-6-astra"),
++                        self._review_pin(self.review_l, "luna", "gpt-6-luna")],
++            "candidates": [self._pin(GUARD), self._pin(self.script), self._pin("/usr/bin/python3")],
++            "actions": {"safe": {"phase": "review", "enabled": True, "blocked_reason": "",
++                "argv": [str(pathlib.Path("/usr/bin/python3").resolve()), "-I", "-S", str(self.script)], "cwd": str(self.root),
++                "env": {"PATH": "/usr/bin:/bin", "MARKER": str(self.root / "marker")},
++                "timeout_seconds": 5}},
++        }
++        self.write_policy()
++
++    def tearDown(self):
++        self.tmp.cleanup()
++
++    def _pin(self, path):
++        st = pathlib.Path(path).stat()
++        return {"path": str(pathlib.Path(path).resolve()), "sha256": digest(path), "mode": st.st_mode & 0o777}
++
++    def _review(self, path, role, model, verdict="APPROVE", plan_hash=None):
++        body = {"schema": "task-run-guard-review-v1", "role": role, "model": model,
++                "effort": "high", "verdict": verdict,
++                "plan_sha256": plan_hash or digest(self.plan), "findings": []}
++        pathlib.Path(path).write_text(json.dumps(body, separators=(",", ":")) + "\n")
++
++    def _review_pin(self, path, role, model):
++        pin = self._pin(path)
++        return {**pin, "role": role, "model": model, "effort": "high"}
++
++    def write_policy(self):
++        self.policy_path.write_text(json.dumps(self.policy, separators=(",", ":")) + "\n")
++
++    def invoke(self, action="safe", extra=(), env=None, timeout=8):
++        return subprocess.run(["/usr/bin/python3", "-B", "-I", "-S", str(GUARD), *extra,
++                               "run", str(self.policy_path), digest(self.policy_path), action],
++                              cwd=self.root, env=env or os.environ.copy(), text=True,
++                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
++
++    def check(self, action="safe"):
++        return subprocess.run(["/usr/bin/python3", "-B", "-I", "-S", str(GUARD), "check",
++                               str(self.policy_path), digest(self.policy_path), action],
++                              cwd=self.root, text=True, stdout=subprocess.PIPE,
++                              stderr=subprocess.PIPE, timeout=5)
++
++    def assert_blocked(self, mutate):
++        mutate()
++        self.write_policy()
++        r = self.check()
++        self.assertEqual(r.returncode, 78, (r.stdout, r.stderr))
++        self.assertFalse((self.root / "marker").exists())
++
++    def test_allowed_exact_child_runs_once(self):
++        r = self.invoke()
++        self.assertEqual(r.returncode, 0, (r.stdout, r.stderr))
++        self.assertEqual((self.root / "marker").read_text(), "ran\n")
++        direct = subprocess.run([str(GUARD), "check", str(self.policy_path), digest(self.policy_path), "safe"],
++                                cwd=self.root, text=True, capture_output=True, timeout=5)
++        self.assertEqual(direct.returncode, 0, (direct.stdout, direct.stderr))
++
++    def test_disabled_phase_review_and_pin_fail_closed(self):
++        self.assert_blocked(lambda: self.policy.update(phase="implement"))
++        self.policy["phase"] = "review"
++        self.assert_blocked(lambda: self.policy["actions"]["safe"].update(enabled=False, blocked_reason="blocked"))
++        self.policy["actions"]["safe"].update(enabled=True, blocked_reason="")
++        self.assert_blocked(lambda: self.policy["reviews"].pop())
++
++    def test_review_identity_verdict_plan_and_candidate_changes_block(self):
++        self.review_l.write_text(self.review_l.read_text().replace('"verdict":"APPROVE"', '"verdict":"REWORK"'))
++        self.assertEqual(self.check().returncode, 78, "changed review bytes escaped the original pin")
++        self._review(self.review_l, "luna", "gpt-6-luna", verdict="REWORK")
++        self.policy["reviews"][1] = self._review_pin(self.review_l, "luna", "gpt-6-luna")
++        self.write_policy()
++        self.assertEqual(self.check().returncode, 78)
++        self._review(self.review_l, "astra", "gpt-6-astra")
++        self.policy["reviews"][1] = self._review_pin(self.review_l, "astra", "gpt-6-astra")
++        self.write_policy()
++        self.assertEqual(self.check().returncode, 78)
++        self._review(self.review_l, "luna", "gpt-6-luna", plan_hash="f" * 64)
++        self.policy["reviews"][1] = self._review_pin(self.review_l, "luna", "gpt-6-luna")
++        self.write_policy()
++        self.assertEqual(self.check().returncode, 78)
++        self._review(self.review_l, "luna", "gpt-6-luna")
++        self.policy["reviews"][1] = self._review_pin(self.review_l, "luna", "gpt-6-luna")
++        self.write_policy()
++        self.plan.write_text("changed approved plan\n")
++        self.assertEqual(self.check().returncode, 78)
++        self.plan.write_text("approved plan\n")
++        self.script.write_text("changed candidate\n")
++        self.assertEqual(self.check().returncode, 78)
++
++    def test_mode_and_unknown_fields_are_rejected(self):
++        self.plan.chmod(0o600)
++        self.assertEqual(self.check().returncode, 78)
++        self.plan.chmod(0o644)
++        self.policy["unknown"] = True
++        self.write_policy()
++        self.assertEqual(self.check().returncode, 78)
++
++    def test_argv_script_input_must_have_a_pin(self):
++        self.policy["candidates"] = [self.policy["candidates"][0], self.policy["candidates"][2]]
++        self.write_policy()
++        r = self.check()
++        self.assertEqual(r.returncode, 78, (r.stdout, r.stderr))
++
++    def test_fifo_policy_refuses_without_blocking(self):
++        fifo = self.root / "policy.fifo"
++        os.mkfifo(fifo)
++        proc = subprocess.Popen(["/usr/bin/python3", "-B", "-I", "-S", str(GUARD), "check",
++            str(fifo), "0" * 64, "safe"], cwd=self.root, stdout=subprocess.PIPE,
++            stderr=subprocess.PIPE, text=True)
++        try:
++            out, err = proc.communicate(timeout=1)
++        except subprocess.TimeoutExpired:
++            proc.kill()
++            proc.communicate(timeout=1)
++            self.fail("guard blocked opening a FIFO policy")
++        self.assertEqual(proc.returncode, 78, (out, err))
++
++    def test_postcondition_pin_change_is_sticky(self):
++        self.script.write_text(f"from pathlib import Path\nPath({str(self.plan)!r}).write_text('changed')\n")
++        self.policy["candidates"][1] = self._pin(self.script)
++        self.write_policy()
++        self.assertEqual(self.invoke().returncode, 78)
++        self.plan.write_text("approved plan\n")
++        r = self.check()
++        self.assertEqual(r.returncode, 78, (r.stdout, r.stderr))
++
++    def test_sigterm_stops_child_group_and_records_sticky_attempt(self):
++        marker = self.root / "child.pid"
++        self.script.write_text(f"import os,time\nopen({str(marker)!r},'w').write(str(os.getpid()))\ntime.sleep(30)\n")
++        self.policy["candidates"][1] = self._pin(self.script)
++        self.policy["actions"]["safe"]["timeout_seconds"] = 20
++        self.write_policy()
++        guard = subprocess.Popen(["/usr/bin/python3", "-B", "-I", "-S", str(GUARD), "run",
++            str(self.policy_path), digest(self.policy_path), "safe"], cwd=self.root,
++            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
++        deadline = time.monotonic() + 3
++        while time.monotonic() < deadline and not marker.exists():
++            time.sleep(.01)
++        self.assertTrue(marker.exists(), "child did not start")
++        child_pid = int(marker.read_text())
++        guard.send_signal(signal.SIGTERM)
++        guard.wait(timeout=3)
++        remains = True
++        try:
++            os.killpg(child_pid, 0)
++        except ProcessLookupError:
++            remains = False
++        if remains:
++            try:
++                os.killpg(child_pid, signal.SIGKILL)
++            except ProcessLookupError:
++                pass
++        self.assertEqual(guard.returncode, 130)
++        self.assertFalse(remains, "child process group survived guard interruption")
++        self.assertEqual(self.check().returncode, 78, "interrupted attempt did not remain sticky in journal")
++
++    def test_deadline_uses_monotonic_budget_after_spawn(self):
++        self.script.write_text("import time\ntime.sleep(3)\n")
++        self.policy["candidates"][1] = self._pin(self.script)
++        self.policy["deadline_epoch"] = int(time.time()) + 2
++        self.policy["actions"]["safe"]["timeout_seconds"] = 15
++        self.write_policy()
++        wrapper = self.root / "clock-wrapper.py"
++        wrapper.write_text("""import importlib.util, os, sys, time
++spec=importlib.util.spec_from_file_location('guard', os.environ['TASK_RUN_GUARD_MODULE'])
++guard=importlib.util.module_from_spec(spec); spec.loader.exec_module(guard)
++real_pin=guard.pin; real_time=time.time; count=0
++def shifted_pin(*args, **kwargs):
++    global count
++    result=real_pin(*args, **kwargs); count+=1
++    if count == 6: guard.time.time=lambda: real_time()-3600
++    return result
++guard.pin=shifted_pin
++sys.exit(guard.main(['run', sys.argv[1], sys.argv[2], sys.argv[3]]))
++""")
++        env = os.environ.copy()
++        env.setdefault("TASK_RUN_GUARD_MODULE", str(GUARD))
++        started = time.monotonic()
++        r = subprocess.run(["/usr/bin/python3", "-B", "-I", "-S", str(wrapper), str(self.policy_path),
++                            digest(self.policy_path), "safe"], cwd=self.root, env=env,
++                           text=True, capture_output=True, timeout=5)
++        self.assertEqual(r.returncode, 124, (r.stdout, r.stderr))
++        self.assertLess(time.monotonic() - started, 4)
++
++    def test_late_postcondition_cannot_return_success(self):
++        self.script.write_text("pass\n")
++        self.policy["candidates"][1] = self._pin(self.script)
++        self.policy["actions"]["safe"]["timeout_seconds"] = 3
++        self.write_policy()
++        wrapper = self.root / "slow-validation-wrapper.py"
++        wrapper.write_text("""import importlib.util, os, sys, time
++spec=importlib.util.spec_from_file_location('guard', os.environ['TASK_RUN_GUARD_MODULE'])
++guard=importlib.util.module_from_spec(spec); spec.loader.exec_module(guard)
++real_validate=guard.validate; count=0
++def slow_validate(*args, **kwargs):
++    global count
++    result=real_validate(*args, **kwargs); count+=1
++    print('VALIDATE_'+str(count), file=sys.stderr)
++    if count == 2: time.sleep(3.2)
++    return result
++guard.validate=slow_validate
++sys.exit(guard.main(['run', sys.argv[1], sys.argv[2], sys.argv[3]]))
++""")
++        env = os.environ.copy()
++        env.setdefault("TASK_RUN_GUARD_MODULE", str(GUARD))
++        r = subprocess.run(["/usr/bin/python3", "-B", "-I", "-S", str(wrapper), str(self.policy_path),
++                            digest(self.policy_path), "safe"], cwd=self.root, env=env,
++                           text=True, capture_output=True, timeout=7)
++        self.assertEqual(r.returncode, 124, (r.stdout, r.stderr))
++        journal = self.check()
++        self.assertEqual(journal.returncode, 78)
++        self.assertIn("previous command completion is uncertain", journal.stderr)
++        self.assertIn("VALIDATE_2", r.stderr)
++
++    def test_policy_hash_duplicate_json_and_file_mode_are_checked(self):
++        r = subprocess.run(["/usr/bin/python3", "-B", "-I", "-S", str(GUARD), "check",
++                            str(self.policy_path), "0" * 64, "safe"], text=True, capture_output=True)
++        self.assertEqual(r.returncode, 78)
++        self.policy_path.write_text('{"x":1,"x":2}')
++        r = subprocess.run(["/usr/bin/python3", "-B", "-I", "-S", str(GUARD), "check",
++                            str(self.policy_path), digest(self.policy_path), "safe"], text=True, capture_output=True)
++        self.assertEqual(r.returncode, 78)
++        self.policy_path.write_text('{"schema":')
++        r = subprocess.run(["/usr/bin/python3", "-B", "-I", "-S", str(GUARD), "check",
++                            str(self.policy_path), digest(self.policy_path), "safe"], text=True, capture_output=True)
++        self.assertEqual(r.returncode, 78)
++
++    def test_expired_deadline_and_driver_argument_mismatch_block(self):
++        self.assert_blocked(lambda: self.policy.update(deadline_epoch=int(time.time()) - 1))
++
++    def test_timeout_stops_child_and_consumes_attempt_without_retry(self):
++        self.script.write_text("import time\ntime.sleep(30)\n")
++        self.policy["candidates"][1] = self._pin(self.script)
++        self.policy["actions"]["safe"]["timeout_seconds"] = 1
++        self.write_policy()
++        r = self.invoke(timeout=4)
++        self.assertEqual(r.returncode, 124, (r.stdout, r.stderr))
++        r2 = self.invoke(timeout=4)
++        self.assertEqual(r2.returncode, 78, (r2.stdout, r2.stderr))
++
++    def test_nonzero_failure_cap_survives_policy_filename_change(self):
++        self.script.write_text("raise SystemExit(9)\n")
++        self.policy["candidates"][1] = self._pin(self.script)
++        self.policy["maximum_attempts"] = 5
++        self.policy["maximum_failed_attempts"] = 2
++        self.write_policy()
++        for _ in range(2):
++            self.assertEqual(self.invoke().returncode, 9)
++        other = self.root / "renamed-policy.json"
++        shutil.copyfile(self.policy_path, other)
++        self.policy_path = other
++        r = self.invoke()
++        self.assertEqual(r.returncode, 78, (r.stdout, r.stderr))
++
++    def test_dangling_journal_and_nonregular_policy_refuse(self):
++        self.journal.write_text('{"type":"attempt","attempt":1}\n')
++        self.assertEqual(self.check().returncode, 78)
++        self.journal.unlink()
++        link = self.root / "policy-link.json"
++        link.symlink_to(self.policy_path)
++        r = subprocess.run(["/usr/bin/python3", "-B", "-I", "-S", str(GUARD), "check",
++                            str(link), digest(self.policy_path), "safe"], capture_output=True)
++        self.assertEqual(r.returncode, 78)
++
++    def test_journal_terminal_exit_and_attempt_types_are_consistent(self):
++        identity = {"type":"identity", "run_id":self.policy["run_id"],
++            "deadline_epoch":self.policy["deadline_epoch"], "maximum_attempts":self.policy["maximum_attempts"],
++            "maximum_failed_attempts":self.policy["maximum_failed_attempts"]}
++        attempt = {"type":"attempt", "number":1, "action":"safe"}
++        for result, exit_code in (("ok", 7), ("failed", 0), ("ok", True)):
++            rows = [identity, attempt, {"type":"result", "attempt":1, "result":result, "exit":exit_code}]
++            self.journal.write_text("".join(json.dumps(row, separators=(",", ":")) + "\n" for row in rows))
++            r = self.check()
++            self.assertEqual(r.returncode, 78, (result, exit_code, r.stdout, r.stderr))
++        bad_attempt = {"type":"attempt", "number":True, "action":"safe"}
++        self.journal.write_text(json.dumps(identity)+"\n"+json.dumps(bad_attempt)+"\n")
++        self.assertEqual(self.check().returncode, 78)
++
++    def test_policy_mutated_by_child_prevents_success(self):
++        self.script.write_text(f"from pathlib import Path\nPath({str(self.plan)!r}).write_text('mutated')\n")
++        self.policy["candidates"][1] = self._pin(self.script)
++        self.write_policy()
++        r = self.invoke()
++        self.assertEqual(r.returncode, 78, (r.stdout, r.stderr))
++
++    def test_concurrent_writer_is_refused(self):
++        self.script.write_text("import time\ntime.sleep(2)\n")
++        self.policy["candidates"][1] = self._pin(self.script)
++        self.write_policy()
++        first = subprocess.Popen(["/usr/bin/python3", "-B", "-I", "-S", str(GUARD), "run",
++            str(self.policy_path), digest(self.policy_path), "safe"], cwd=self.root,
++            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
++        deadline = time.monotonic() + 2
++        while time.monotonic() < deadline and not self.journal.exists():
++            time.sleep(.01)
++        second = self.invoke(timeout=4)
++        self.assertEqual(second.returncode, 78, (second.stdout, second.stderr))
++        self.assertEqual(first.wait(timeout=5), 0)
++
++    def test_group_leftover_is_stopped_and_pipe_holder_cannot_hang(self):
++        self.script.write_text("import subprocess,sys\nsubprocess.Popen([sys.executable,'-c','import time; time.sleep(20)'])\n")
++        self.policy["candidates"][1] = self._pin(self.script)
++        self.write_policy()
++        started = time.monotonic()
++        r = self.invoke(timeout=4)
++        self.assertEqual(r.returncode, 78, (r.stdout, r.stderr))
++        self.assertLess(time.monotonic() - started, 3)
++
++    def test_hook_partial_environment_and_hostile_path_are_blocked(self):
++        with tempfile.TemporaryDirectory(prefix="guard-hook-") as td:
++            root = pathlib.Path(td)
++            (root / "scripts").mkdir()
++            (root / ".specify").mkdir()
++            ticket_dir = root / "specs/001-test/tickets"
++            ticket_dir.mkdir(parents=True)
++            driver = root / "scripts/run-task.sh"
++            shutil.copy2(DRIVER, driver)
++            guard = root / "scripts/task-run-guard.py"
++            shutil.copy2(GUARD, guard)
++            (root / "scripts/review-matrix.json").write_text('{"reviewers":[]}\n')
++            (root / ".specify/feature.json").write_text('{"feature_directory":"specs/001-test"}\n')
++            (ticket_dir / "T900-fixture.md").write_text("---\nid: T900\ntitle: 'guarded fixture'\nstatus: in-progress\ncreated: 2026-10-13\nlast_updated: 2026-10-13\nsource: tasks.md#T900\nphase: \"1: Setup\"\nstory: '-'\nblocked_by: []\nparallel: false\nfiles_budget: 8\nprivacy_critical: false\ntest_for: []\ncomplexity: low\nrisk: low\nround_cap: 2\nspec_refs: []\ndecision_refs: []\nreviews: {}\noverrides: []\naborted_attempts: []\nreopens: []\nredteam_findings: []\nclarity_check: {}\n---\n\n# T900: guarded fixture\n\n## Context\nThis disposable ticket exercises blocked admission.\n\n## Acceptance\n- The driver blocks before handoff.\n\n## Out-of-scope\nNo production changes.\n")
++            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
++            subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
++            subprocess.run(["git", "config", "user.name", "fixture"], cwd=root, check=True)
++            subprocess.run(["git", "add", "."], cwd=root, check=True)
++            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=root, check=True)
++            marker = root / "hostile-ran"
++            bash_env = root / "bash-env.sh"
++            bash_env.write_text(f"echo bash-startup >> {marker}\nif declare -F imported_probe >/dev/null; then echo imported-function >> {marker}; fi\n")
++            (root / "sitecustomize.py").write_text(f"from pathlib import Path\nPath({str(marker)!r}).write_text('python startup ran')\n")
++            evil = root / "evil"
++            evil.mkdir()
++            for name in ("bash", "python3", "readlink"):
++                shim = evil / name
++                shim.write_text(f"#!/bin/sh\necho {name} >> {marker}\nexit 99\n")
++                shim.chmod(0o755)
++            for explicit in (False, True):
++                args = [str(driver), "T900"] if explicit else [str(driver), "T900"]
++                pp = root / f"policy-{explicit}.json"
++                plan = root / "plan.md"; plan.write_text("plan\n")
++                def pin(path):
++                    st = pathlib.Path(path).stat()
++                    return {"path":str(pathlib.Path(path).resolve()), "sha256":digest(path), "mode":st.st_mode & 0o777}
++                plan_hash = digest(plan)
++                reviews = []
++                for role, model in (("astra","gpt-6-astra"),("luna","gpt-6-luna")):
++                    rp = root / f"{role}-{explicit}.json"
++                    rp.write_text(json.dumps({"schema":"task-run-guard-review-v1","role":role,"model":model,
++                        "effort":"high","verdict":"APPROVE","plan_sha256":plan_hash,"findings":[]})+"\n")
++                    reviews.append({**pin(rp),"role":role,"model":model,"effort":"high"})
++                driver_args = ["/usr/bin/bash", "-p", str(driver.resolve()), "T900"]
++                policy = {"schema":"task-run-guard-policy-v1","run_id":f"hook-{explicit}",
++                    "journal_path":str(root / f"journal-{explicit}.jsonl"),"deadline_epoch":int(time.time())+60,
++                    "maximum_attempts":3,"maximum_failed_attempts":2,"phase":"implement","plan":pin(plan),
++                    "reviews":reviews,"candidates":[pin(guard),pin(driver),pin("/usr/bin/bash"),pin("/usr/bin/python3"),pin("/usr/bin/readlink")],
++                    "actions":{"implement":{"phase":"implement","enabled":False,"blocked_reason":"blocked implementation",
++                        "argv":driver_args,"cwd":str(root),"env":{},"timeout_seconds":10}}}
++                pp.write_text(json.dumps(policy,separators=(",",":"))+"\n")
++                env = os.environ.copy()
++                env.update(STARGATE_GUARD_POLICY=str(pp), STARGATE_GUARD_SHA256=digest(pp), STARGATE_GUARD_ACTION="implement",
++                           PATH=str(evil), PYTHONPATH=str(root), BASH_ENV=str(bash_env))
++                env["BASH_FUNC_imported_probe%%"] = "() { :; }"
++                invocation = ["/usr/bin/bash", "-p", str(driver), "T900"] if explicit else [str(driver), "T900"]
++                r = subprocess.run(invocation,cwd=root,env=env,text=True,capture_output=True,timeout=8)
++                self.assertEqual(r.returncode,78,(r.stdout,r.stderr))
++                self.assertFalse(marker.exists())
++            partial = os.environ.copy()
++            partial.update(STARGATE_GUARD_POLICY="x", PATH=str(evil))
++            r = subprocess.run([str(driver),"T900"],cwd=root,env=partial,text=True,capture_output=True,timeout=5)
++            self.assertEqual(r.returncode,78)
++            self.assertFalse(marker.exists())
++
++
++class RepairRegressions(GuardCase):
++    def test_deadline_expiring_during_validation_never_dispatches(self):
++        self.policy["deadline_epoch"] = int(time.time()) + 1
++        self.write_policy()
++        wrapper = self.root / "slow-admission.py"
++        wrapper.write_text("""import importlib.util,os,sys,time
++spec=importlib.util.spec_from_file_location('guard',os.environ['TASK_RUN_GUARD_MODULE'])
++g=importlib.util.module_from_spec(spec);spec.loader.exec_module(g)
++real_state=g.journal_state; real_popen=g.subprocess.Popen
++marker=os.environ['DISPATCH_MARKER']
++def slow(*a,**k):
++ time.sleep(1.4); return real_state(*a,**k)
++def tracked(*a,**k):
++ open(marker,'w').write('Popen reached')
++ return real_popen(*a,**k)
++g.journal_state=slow; g.subprocess.Popen=tracked
++try: sys.exit(g.main(['run',sys.argv[1],sys.argv[2],sys.argv[3]]))
++except g.Refuse as e: print('REFUSED:'+str(e),file=sys.stderr);sys.exit(78)
++""")
++        env=os.environ.copy(); env['TASK_RUN_GUARD_MODULE']=str(GUARD); env['DISPATCH_MARKER']=str(self.root/'dispatch-marker')
++        r=subprocess.run(['/usr/bin/python3','-B','-I','-S',str(wrapper),str(self.policy_path),digest(self.policy_path),'safe'],cwd=self.root,env=env,text=True,capture_output=True,timeout=5)
++        self.assertFalse((self.root/'dispatch-marker').exists(),(r.returncode,r.stdout,r.stderr))
++
++    def test_fifo_script_input_refuses_before_dispatch(self):
++        fifo=self.root/'script.fifo'; os.mkfifo(fifo)
++        self.policy['actions']['safe']['argv']=[str(pathlib.Path('/usr/bin/python3').resolve()),str(fifo)]
++        self.write_policy()
++        payload = f"import os;open({str(self.root/'marker')!r},'w').write('ran')"
++        writer_code = "import sys;open(sys.argv[1],'w').write(" + repr(payload) + ")"
++        writer=subprocess.Popen(['/usr/bin/python3','-c',writer_code,str(fifo)])
++        try:
++            r=self.invoke(timeout=4)
++        finally:
++            if writer.poll() is None:
++                writer.kill(); writer.wait(timeout=2)
++        self.assertEqual(r.returncode,78,(r.stdout,r.stderr))
++        self.assertFalse((self.root/'marker').exists())
++
++    def test_policy_malformed_field_types_refuse_with_78(self):
++        cases = ("role", "overflow", "hugeint", "reason", "bad_env")
++        for case in cases:
++            self.tearDown(); self.setUp()
++            if case == "role":
++                self.policy['reviews'][0]['role'] = []
++                self.write_policy()
++            elif case == "overflow":
++                raw=self.policy_path.read_text().replace('"timeout_seconds":5', '"timeout_seconds":1e999')
++                self.policy_path.write_text(raw)
++            elif case == "hugeint":
++                raw=self.policy_path.read_text().replace('"maximum_attempts":8', '"maximum_attempts":' + ('9' * 5000))
++                self.policy_path.write_text(raw)
++            elif case == "bad_env":
++                self.policy['actions']['safe']['env']['BAD=KEY'] = 'value'
++                self.write_policy()
++            else:
++                self.policy['actions']['safe'].update(enabled=False,blocked_reason=7)
++                self.write_policy()
++            r=self.check()
++            self.assertEqual(r.returncode,78,(case,r.stdout,r.stderr))
++            self.assertFalse(self.journal.exists())
++        self.tearDown(); self.setUp()
++
++    def test_attempt_record_short_write_never_dispatches(self):
++        wrapper=self.root/'short-write.py'
++        wrapper.write_text("""import importlib.util,os,sys
++spec=importlib.util.spec_from_file_location('guard',os.environ['TASK_RUN_GUARD_MODULE'])
++g=importlib.util.module_from_spec(spec);spec.loader.exec_module(g)
++real=g.os.write; count=0
++def short(fd,data):
++ global count
++ count+=1
++ if count==2:
++  real(fd,data[:max(1,len(data)//2)]); return 0
++ return real(fd,data)
++g.os.write=short
++try: sys.exit(g.main(['run',sys.argv[1],sys.argv[2],sys.argv[3]]))
++except g.Refuse as e: print('REFUSED:'+str(e),file=sys.stderr);sys.exit(78)
++""")
++        env=os.environ.copy();env['TASK_RUN_GUARD_MODULE']=str(GUARD)
++        r=subprocess.run(['/usr/bin/python3','-B','-I','-S',str(wrapper),str(self.policy_path),digest(self.policy_path),'safe'],cwd=self.root,env=env,text=True,capture_output=True,timeout=5)
++        self.assertEqual(r.returncode,78,(r.stdout,r.stderr))
++        self.assertFalse((self.root/'marker').exists())
++
++    def test_identity_or_attempt_write_error_refuses_without_dispatch(self):
++        for fail_on in (1, 2):
++            self.tearDown(); self.setUp()
++            wrapper=self.root/'write-error.py'
++            wrapper.write_text("""import importlib.util,os,sys
++spec=importlib.util.spec_from_file_location('guard',os.environ['TASK_RUN_GUARD_MODULE'])
++g=importlib.util.module_from_spec(spec);spec.loader.exec_module(g)
++real=g.os.write;count=0;fail_on=int(os.environ['FAIL_ON'])
++def broken(fd,data):
++ global count
++ count+=1
++ if count==fail_on:
++  real(fd,data[:max(1,len(data)//2)])
++  raise OSError('injected bounded write failure after prefix')
++ return real(fd,data)
++g.os.write=broken
++try: sys.exit(g.main(['run',sys.argv[1],sys.argv[2],sys.argv[3]]))
++except g.Refuse as e: print('REFUSED:'+str(e),file=sys.stderr);sys.exit(78)
++""")
++            env=os.environ.copy();env['TASK_RUN_GUARD_MODULE']=str(GUARD);env['FAIL_ON']=str(fail_on)
++            r=subprocess.run(['/usr/bin/python3','-B','-I','-S',str(wrapper),str(self.policy_path),digest(self.policy_path),'safe'],cwd=self.root,env=env,text=True,capture_output=True,timeout=5)
++            self.assertEqual(r.returncode,78,(fail_on,r.stdout,r.stderr))
++            self.assertFalse((self.root/'marker').exists())
++        self.tearDown(); self.setUp()
++
++    def test_attempt_record_short_write_completes_before_dispatch(self):
++        wrapper=self.root/'short-positive.py'
++        wrapper.write_text("""import importlib.util,os,sys
++spec=importlib.util.spec_from_file_location('guard',os.environ['TASK_RUN_GUARD_MODULE'])
++g=importlib.util.module_from_spec(spec);spec.loader.exec_module(g)
++real=g.os.write;count=0
++def short(fd,data):
++ global count
++ count+=1
++ if count==2:
++  n=max(1,len(data)//2);real(fd,data[:n]);return n
++ return real(fd,data)
++g.os.write=short
++sys.exit(g.main(['run',sys.argv[1],sys.argv[2],sys.argv[3]]))
++""")
++        env=os.environ.copy();env['TASK_RUN_GUARD_MODULE']=str(GUARD)
++        r=subprocess.run(['/usr/bin/python3','-B','-I','-S',str(wrapper),str(self.policy_path),digest(self.policy_path),'safe'],cwd=self.root,env=env,text=True,capture_output=True,timeout=5)
++        self.assertEqual(r.returncode,0,(r.stdout,r.stderr))
++        self.assertTrue((self.root/'marker').exists())
++
++    def test_driver_argument_binding_uses_correct_run_argv_position(self):
++        driver=self.root/'driver.sh'; driver.write_text('#!/usr/bin/bash -p\nexit 0\n'); driver.chmod(0o755)
++        pins=[self._pin(GUARD),self._pin('/usr/bin/python3'),self._pin('/usr/bin/bash'),self._pin('/usr/bin/readlink'),self._pin(driver)]
++        self.policy['candidates']=pins
++        self.policy['actions']['safe']['argv']=['/usr/bin/bash','-p',str(driver),'T900']
++        self.write_policy()
++        base=['/usr/bin/python3','-B','-I','-S',str(GUARD),'run',str(self.policy_path),digest(self.policy_path),'safe']
++        mismatch=subprocess.run(base+['--driver',str(driver),'--','wrong'],cwd=self.root,text=True,capture_output=True)
++        self.assertEqual(mismatch.returncode,78,(mismatch.stdout,mismatch.stderr))
++        self.assertIn('arguments do not match',mismatch.stderr)
++        self.assertFalse(self.journal.exists())
++        healthy=subprocess.run(base+['--driver',str(driver),'--','T900'],cwd=self.root,text=True,capture_output=True,timeout=5)
++        self.assertEqual(healthy.returncode,0,(healthy.stdout,healthy.stderr))
++
++
++
++    def _program_action(self, argv, extra_pins=()):
++        pins = {item["path"]: item for item in self.policy["candidates"]}
++        for path in extra_pins:
++            item = self._pin(path)
++            pins[item["path"]] = item
++        self.policy["candidates"] = list(pins.values())
++        self.policy["actions"]["safe"]["argv"] = [str(x) for x in argv]
++        self.write_policy()
++
++    def _run_program_stdin(self, data=b""):
++        return subprocess.run(["/usr/bin/python3", "-B", "-I", "-S", str(GUARD), "run",
++            str(self.policy_path), digest(self.policy_path), "safe"], cwd=self.root,
++            input=data, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=6)
++
++    def _healthy_python_control(self):
++        healthy = self.root / "healthy.py"
++        healthy.write_text("import os,sys\nopen(os.environ['MARKER'],'w').write('healthy')\nprint(sys.flags.no_site)\n")
++        healthy.chmod(0o644)
++        py = str(pathlib.Path("/usr/bin/python3").resolve())
++        self._program_action([py, "-I", "-S", str(healthy)], (healthy, py))
++        r = self._run_program_stdin()
++        self.assertEqual(r.returncode, 0, (r.stdout, r.stderr))
++        self.assertEqual(r.stdout.decode().strip(), "1")
++        self.assertEqual((self.root / "marker").read_text(), "healthy")
++        (self.root / "marker").unlink()
++        return py
++
++    def _healthy_bash_control(self):
++        healthy = self.root / "healthy.sh"
++        healthy.write_text(f"printf healthy > {str(self.root / 'marker')!r}\n")
++        healthy.chmod(0o644)
++        bash = str(pathlib.Path("/usr/bin/bash").resolve())
++        self._program_action([bash, "-p", str(healthy)], (healthy, bash))
++        r = self._run_program_stdin()
++        self.assertEqual(r.returncode, 0, (r.stdout, r.stderr))
++        self.assertEqual((self.root / "marker").read_text(), "healthy")
++        (self.root / "marker").unlink()
++        return bash
++
++    def test_unpinned_python_directory_main_is_refused(self):
++        py = self._healthy_python_control()
++        package = self.root / "unapproved-package"
++        package.mkdir()
++        (package / "__main__.py").write_text("import os\nopen(os.environ['MARKER'],'w').write('directory source ran')\n")
++        self._program_action([py, str(package)], (py,))
++        r = self._run_program_stdin()
++        self.assertFalse((self.root / "marker").exists(), "unpinned directory __main__.py actually executed; marker proves admission")
++        self.assertEqual(r.returncode, 78, (r.stdout, r.stderr))
++        self.assertFalse((self.root / "marker").exists(), "unpinned directory __main__.py executed")
++
++    def test_python_stdin_source_is_refused(self):
++        py = self._healthy_python_control()
++        self._program_action([py, "-"], (py,))
++        source = f"open({str(self.root / 'marker')!r},'w').write('stdin source ran')\n".encode()
++        r = self._run_program_stdin(source)
++        self.assertFalse((self.root / "marker").exists(), "caller stdin actually executed as Python source; marker proves admission")
++        self.assertEqual(r.returncode, 78, (r.stdout, r.stderr))
++        self.assertFalse((self.root / "marker").exists(), "caller stdin executed as Python source")
++
++    def test_bash_stdin_source_is_refused(self):
++        bash = self._healthy_bash_control()
++        self._program_action([bash, "-p", "-s"], (bash,))
++        source = f"printf ran > {str(self.root / 'marker')!r}\n".encode()
++        r = self._run_program_stdin(source)
++        self.assertFalse((self.root / "marker").exists(), "caller stdin actually executed as Bash source; marker proves admission")
++        self.assertEqual(r.returncode, 78, (r.stdout, r.stderr))
++        self.assertFalse((self.root / "marker").exists(), "caller stdin executed as Bash source")
++
++    def test_opaque_pinned_command_receives_eof_not_caller_source(self):
++        cat = str(pathlib.Path("/usr/bin/cat").resolve())
++        self._program_action([cat], (cat,))
++        empty = self._run_program_stdin()
++        self.assertEqual(empty.returncode, 0, (empty.stdout, empty.stderr))
++        self.assertEqual(empty.stdout, b"")
++        source = b"opaque caller-fed source\n"
++        r = self._run_program_stdin(source)
++        self.assertEqual(r.returncode, 0, (r.stdout, r.stderr))
++        self.assertEqual(r.stdout, b"", "opaque pinned child received caller-controlled stdin")
++
++    def test_python_isolated_without_no_site_is_not_admitted(self):
++        py = self._healthy_python_control()
++        script = self.root / "site-flag.py"
++        script.write_text("import os,sys\nopen(os.environ['MARKER'],'w').write('executed')\nprint(sys.flags.no_site)\n")
++        script.chmod(0o644)
++        journal_before = self.journal.read_bytes()
++        self._program_action([py, "-I", str(script)], (script, py))
++        r = self._run_program_stdin()
++        observed = (r.returncode, r.stdout.decode(), (self.root / "marker").exists(),
++                    self.journal.read_bytes() != journal_before)
++        expected = (78, "", False, False)
++        self.assertEqual(observed, expected,
++                         "-I-only must refuse before site-enabled script execution or journal mutation")
++
++    def test_interpreter_modes_are_closed_and_script_arguments_remain_literal(self):
++        py = self._healthy_python_control()
++        bash = self._healthy_bash_control()
++        py_script = self.root / "literal-args.py"
++        py_script.write_text("import json,sys\nprint(json.dumps(sys.argv[1:]))\n")
++        py_script.chmod(0o644)
++        bash_script = self.root / "literal-args.sh"
++        bash_script.write_text("printf '%s\\n' \"$@\"\n")
++        bash_script.chmod(0o644)
++        self._program_action([py, "-I", "-S", str(py_script), "-m", "-", "-c"], (py_script, py))
++        r = self._run_program_stdin()
++        self.assertEqual(r.returncode, 0, (r.stdout, r.stderr))
++        self.assertEqual(json.loads(r.stdout), ["-m", "-", "-c"])
++
++        self._program_action([bash, "-p", "--", str(bash_script), "-s", "-", "-c"], (bash_script, bash))
++        r = self._run_program_stdin()
++        self.assertEqual(r.returncode, 0, (r.stdout, r.stderr))
++        self.assertEqual(r.stdout.decode().splitlines(), ["-s", "-", "-c"])
++
++        for argv in ([py, "-I", "-S", "-c", "pass"], [py, "-I", "-S", "-m", "json"],
++                     [py, "-I", "-S", "-W", "ignore", str(py_script)],
++                     [bash, "-s"], [bash, "-p", "-c", "true"], [bash, "-pl", str(bash_script)]):
++            before = self.journal.read_bytes()
++            self._program_action(argv, (py_script, bash_script, py, bash))
++            refused = self._run_program_stdin(b"source must not execute\n")
++            self.assertEqual(refused.returncode, 78, (argv, refused.stdout, refused.stderr))
++            self.assertEqual(self.journal.read_bytes(), before, argv)
++
++
++class DriverAdmissionBaseline(unittest.TestCase):
++    def test_driver_guard_baseline(self):
++        """Prove the opt-in hook blocks a valid in-progress ticket and policy."""
++        with tempfile.TemporaryDirectory(prefix="guard-driver-baseline-") as td:
++            root = pathlib.Path(td)
++            (root / "scripts").mkdir()
++            (root / ".specify").mkdir()
++            tickets = root / "specs/001-test/tickets"
++            tickets.mkdir(parents=True)
++            shutil.copy2(DRIVER, root / "scripts/run-task.sh")
++            shutil.copy2(ROOT / "scripts/review-matrix.json", root / "scripts/review-matrix.json")
++            shutil.copy2(ROOT / "scripts/task-run-guard.py", root / "scripts/task-run-guard.py")
++            (root / ".specify/feature.json").write_text('{"feature_directory":"specs/001-test"}\n')
++            (root / ".gitignore").write_text("target/\n")
++            (tickets / "T900-fixture.md").write_text("---\nid: T900\ntitle: 'guarded fixture'\nstatus: in-progress\ncreated: 2026-10-13\nlast_updated: 2026-10-13\nsource: tasks.md#T900\nphase: \"1: Setup\"\nstory: '-'\nblocked_by: []\nparallel: false\nfiles_budget: 8\nprivacy_critical: false\ntest_for: []\ncomplexity: low\nrisk: low\nround_cap: 2\nspec_refs: []\ndecision_refs: []\nreviews: {}\noverrides: []\naborted_attempts: []\nreopens: []\nredteam_findings: []\nclarity_check: {}\n---\n\n# T900: guarded fixture\n\n## Context\nThis disposable ticket exercises blocked admission.\n\n## Acceptance\n- The driver blocks before handoff.\n\n## Out-of-scope\nNo production changes.\n")
++            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=root, check=True)
++            subprocess.run(["git", "config", "user.email", "fixture@example.invalid"], cwd=root, check=True)
++            subprocess.run(["git", "config", "user.name", "fixture"], cwd=root, check=True)
++            subprocess.run(["git", "add", "."], cwd=root, check=True)
++            subprocess.run(["git", "commit", "-qm", "fixture"], cwd=root, check=True)
++            plan = root / "plan.md"
++            plan.write_text("approved plan\n")
++            plan_hash = digest(plan)
++            def pin(path):
++                st = pathlib.Path(path).stat()
++                return {"path": str(pathlib.Path(path).resolve()), "sha256": digest(path), "mode": st.st_mode & 0o777}
++            reviews = []
++            for role, model in (("astra", "gpt-6-astra"), ("luna", "gpt-6-luna")):
++                rp = root / f"{role}.json"
++                rp.write_text(json.dumps({"schema":"task-run-guard-review-v1", "role":role, "model":model,
++                    "effort":"high", "verdict":"APPROVE", "plan_sha256":plan_hash, "findings":[]}) + "\n")
++                reviews.append({**pin(rp), "role":role, "model":model, "effort":"high"})
++            policy = {
++                "schema":"task-run-guard-policy-v1", "run_id":"baseline", "journal_path":str(root / "journal.jsonl"),
++                "deadline_epoch":int(time.time()) + 120, "maximum_attempts":4, "maximum_failed_attempts":2,
++                "phase":"implement", "plan":pin(plan), "reviews":reviews,
++                "candidates":[pin(root / "scripts/task-run-guard.py"), pin(root / "scripts/run-task.sh"), pin("/usr/bin/bash"), pin("/usr/bin/python3"), pin("/usr/bin/readlink")],
++                "actions":{"implement":{"phase":"implement", "enabled":False,
++                    "blocked_reason":"implementation is blocked pending approved completion contract",
++                    "argv":["/usr/bin/bash", "-p", str((root / "scripts/run-task.sh").resolve()), "T900"],
++                    "cwd":str(root), "env":{}, "timeout_seconds":30}},
++            }
++            pp = root / "blocked-policy.json"
++            pp.write_text(json.dumps(policy, separators=(",", ":")) + "\n")
++            env = os.environ.copy()
++            env.update(STARGATE_GUARD_POLICY=str(pp), STARGATE_GUARD_SHA256=digest(pp), STARGATE_GUARD_ACTION="implement")
++            r = subprocess.run([str(root / "scripts/run-task.sh"), "T900"], cwd=root, env=env,
++                               text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
++            REPORTS.mkdir(parents=True, exist_ok=True)
++            (REPORTS / "baseline-driver-green-v2.json").write_text(json.dumps({
++                "command": [str(root / "scripts/run-task.sh"), "T900"], "environment_policy_sha256":digest(pp), "returncode": r.returncode,
++                "stdout": r.stdout, "stderr": r.stderr,
++                "driver_sha256": digest(root / "scripts/run-task.sh"),
++                "driver_bytes_hex": (root / "scripts/run-task.sh").read_bytes().hex()}, indent=2) + "\n")
++            self.assertEqual(r.returncode, 78, f"expected admission refusal; got {r.returncode}: {r.stdout}\n{r.stderr}")
++            self.assertNotIn("IMPLEMENT", r.stdout)
++
++
++
++
++if __name__ == "__main__":
++    unittest.main()
+--- a/docs/process/task-run-guard.md
++++ b/docs/process/task-run-guard.md
+@@ -0,0 +1,43 @@
++<!-- Copyright 2026 The Stargate Authors -->
++<!-- SPDX-License-Identifier: Apache-2.0 -->
++
++# Task-run guard
++
++`scripts/task-run-guard.py` admits one exact, named local command from a pinned JSON policy. `scripts/run-task.sh` has an opt-in entry hook: if any of `STARGATE_GUARD_POLICY`, `STARGATE_GUARD_SHA256`, or `STARGATE_GUARD_ACTION` is present, all three must be nonempty and the guard runs before the driver reads Git state, parses its arguments, or creates transient state. With no guard variables, the existing workflow continues unchanged. This is an invocation guard, not universal enforcement: calls that bypass the hook, collaboration tools, and unrestricted same-UID/root actions remain outside its boundary.
++
++Use an absolute policy path, its SHA-256 over the exact file bytes, and a named action. The protected driver entry forms are the executable shebang (`scripts/run-task.sh ...`) and the explicit `/usr/bin/bash -p scripts/run-task.sh ...`; `-p` suppresses inherited Bash startup files and imported shell functions before the hook runs. An ordinary explicit `bash scripts/run-task.sh ...` is outside the protected contract because Bash can execute `BASH_ENV` before reading the script, which script code cannot undo. The direct guard entry uses `/usr/bin/python3 -IBS`; explicit calls must use `/usr/bin/python3 -B -I -S`. Ordinary Python invocation without isolated and no-site startup is outside the protected startup contract. These are caller/runtime preconditions, not a sandbox or universal enforcement boundary.
++
++```sh
++scripts/task-run-guard.py check /absolute/policy.json POLICY_SHA256 action-name
++scripts/task-run-guard.py run /absolute/policy.json POLICY_SHA256 action-name
++STARGATE_GUARD_POLICY=/absolute/policy.json \
++STARGATE_GUARD_SHA256=POLICY_SHA256 \
++STARGATE_GUARD_ACTION=action-name \
++  /usr/bin/bash -p scripts/run-task.sh T123
++```
++
++`check` validates policy, review and candidate pins and inspects an existing journal without creating it or launching a child. `run` repeats admission, locks the journal, records an attempt before spawn, runs only the action's exact argv with its exact environment, and records the result. The driver hook additionally binds argv to `/usr/bin/bash -p`, the resolved driver path, and every original driver argument. The hook uses `/usr/bin/readlink` and `/usr/bin/python3 -IBS`; those OS-managed bootstrap inputs, Bash and the readlink binary are trusted. Their candidate paths must be pinned in the policy. The three guard variables are not passed to the child.
++
++Interpreter actions use closed forms. Python is recognized by the resolved identity of the running system interpreter and must have `-I` (or its grouped equivalent) and `-S`, followed by an optional `--`, one directly pinned regular script, and then literal script arguments. Bash is recognized by its resolved system identity and requires `-p`, an optional `--`, one directly pinned regular script, and literal script arguments. Inline code, module execution, stdin source, directory entrypoints, unsupported interpreter options, and option-value modes are refused. Every child receives EOF on stdin; caller input is never forwarded. This checks the selected executable and explicitly pinned script bytes. It does not discover or pin arbitrary runtime dependencies, analyze opaque programs, or contain same-UID processes.
++
++The closed `task-run-guard-policy-v1` JSON object has these fields:
++
++| Field | Meaning |
++|---|---|
++| `schema`, `run_id` | Exact schema name and stable run identity. |
++| `journal_path` | Absolute path to the single append-only JSONL attempt journal. |
++| `deadline_epoch` | Absolute Unix deadline, fixed by the journal's first record. |
++| `maximum_attempts`, `maximum_failed_attempts` | Positive total-attempt cap (at most 1000) and cumulative ordinary-failure cap (at most 3). |
++| `phase` | Current phase. Every action's phase must match it. |
++| `plan` | `{path, sha256, mode}` pin for the exact approved plan. |
++| `reviews` | Exactly two pinned structured approvals: role `astra`, model `gpt-6-astra`, effort `high`; role `luna`, model `gpt-6-luna`, effort `high`. Report paths must differ. |
++| `candidates` | Nonempty list of `{path, sha256, mode}` pins for source and executable inputs. |
++| `actions` | Nonempty map of action names to `{phase, enabled, blocked_reason, argv, cwd, env, timeout_seconds}`. |
++
++All pins use absolute paths to regular, non-symlink files and include the exact mode and SHA-256. Reviews use schema `task-run-guard-review-v1`, the matching role/model/effort, `verdict: "APPROVE"`, and `plan_sha256` equal to the plan pin. JSON is a structured record, not backend identity attestation. Unknown keys, duplicate JSON keys, malformed numbers, changed pins, partial hook configuration, disabled actions and phase mismatch refuse admission with exit 78. A timeout exits 124; an ordinary child failure returns its exit status. No command can be added or changed at the CLI.
++
++The journal uses a nonblocking exclusive `flock` from admission through child completion. Its first record fixes run identity, deadline and attempt caps. Attempts are written before spawn, numbered in order, and followed by one result. A dangling attempt, malformed/truncated record, changed fixed metadata, unknown result, attempt/failure cap, timeout, interruption, or uncertain process cleanup prevents another launch. There is no reset operation. Renaming a policy does not create a new journal identity. An operator with unrestricted same-UID access can delete or rewrite the journal; this is outside the guard's security boundary and the journal is not tamperproof.
++
++The child inherits stdout and stderr directly, runs in its own process group, and is bounded by the smaller of the action timeout and remaining wall deadline. After launch, timeout uses monotonic elapsed time. The guard sends TERM, waits at most 0.25 seconds, then KILLs and waits at most one second for the exact child. A successful leader that leaves process-group members is stopped and recorded as uncertain. These controls are best effort for ordinary schedulable local processes. They cannot prove interruption of kernel calls, stop escaped descendants or daemon work, or guarantee hard real-time cleanup. Do not use this tool for native protected-policy commands or as a substitute for filesystem/process containment.
++
++For the T218 readiness situation, an implementation action must remain disabled with the unresolved completion-contract reason until the prerequisite is resolved and the relevant approval is recorded. A plan approval is not source approval. This guard does not authorize code-writing actions that mutate pinned inputs; a successful action is returned only if all pins still match afterward. The integration policy may allow harmless workflow handoffs or read-only commands, but it does not turn the T218 readiness gap into completion evidence.

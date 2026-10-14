@@ -1,0 +1,125 @@
+{
+  "schema": "task-run-guard-source-evidence-v4",
+  "timestamp_utc": "2026-10-13T21:57:04.083037+00:00",
+  "authorized_plan": {
+    "path": "remaining-argument-check-repair-plan-v1.json",
+    "approved_contract_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+    "authorization": "fifo-source-phase-authorization-v1.json"
+  },
+  "repair": "Restored existing path/special-file checks to script arguments after a recognized interpreter script; nonpath literal flags remain accepted.",
+  "red_evidence": {
+    "combined": "input-v3-fifo-red-evidence.json",
+    "split": "input-v3-fifo-split-red-evidence.json",
+    "classification": "Both resolved Python and Bash actual-v3 REDs independently dispatched marker scripts and mutated journals for FIFO trailing args."
+  },
+  "focused_green": {
+    "evidence": "input-green-evidence-v4.json",
+    "selectors": [
+      {
+        "selector": "RepairRegressions.test_python_script_arguments_reject_special_paths",
+        "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_python_script_arguments_reject_special_paths",
+        "started_utc": "2026-10-13T21:56:24.710300+00:00",
+        "exit_code": 0,
+        "stdout_log": "input-v4-green-1.stdout.log",
+        "stderr_log": "input-v4-green-1.stderr.log",
+        "ran_one": true
+      },
+      {
+        "selector": "RepairRegressions.test_bash_script_arguments_reject_special_paths",
+        "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_bash_script_arguments_reject_special_paths",
+        "started_utc": "2026-10-13T21:56:25.081542+00:00",
+        "exit_code": 0,
+        "stdout_log": "input-v4-green-2.stdout.log",
+        "stderr_log": "input-v4-green-2.stderr.log",
+        "ran_one": true
+      },
+      {
+        "selector": "RepairRegressions.test_unpinned_python_directory_main_is_refused",
+        "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_unpinned_python_directory_main_is_refused",
+        "started_utc": "2026-10-13T21:56:25.439272+00:00",
+        "exit_code": 0,
+        "stdout_log": "input-v4-green-3.stdout.log",
+        "stderr_log": "input-v4-green-3.stderr.log",
+        "ran_one": true
+      },
+      {
+        "selector": "RepairRegressions.test_python_stdin_source_is_refused",
+        "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_python_stdin_source_is_refused",
+        "started_utc": "2026-10-13T21:56:25.698983+00:00",
+        "exit_code": 0,
+        "stdout_log": "input-v4-green-4.stdout.log",
+        "stderr_log": "input-v4-green-4.stderr.log",
+        "ran_one": true
+      },
+      {
+        "selector": "RepairRegressions.test_bash_stdin_source_is_refused",
+        "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_bash_stdin_source_is_refused",
+        "started_utc": "2026-10-13T21:56:25.946843+00:00",
+        "exit_code": 0,
+        "stdout_log": "input-v4-green-5.stdout.log",
+        "stderr_log": "input-v4-green-5.stderr.log",
+        "ran_one": true
+      },
+      {
+        "selector": "RepairRegressions.test_opaque_pinned_command_receives_eof_not_caller_source",
+        "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_opaque_pinned_command_receives_eof_not_caller_source",
+        "started_utc": "2026-10-13T21:56:26.199448+00:00",
+        "exit_code": 0,
+        "stdout_log": "input-v4-green-6.stdout.log",
+        "stderr_log": "input-v4-green-6.stderr.log",
+        "ran_one": true
+      },
+      {
+        "selector": "RepairRegressions.test_python_isolated_without_no_site_is_not_admitted",
+        "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_python_isolated_without_no_site_is_not_admitted",
+        "started_utc": "2026-10-13T21:56:26.417517+00:00",
+        "exit_code": 0,
+        "stdout_log": "input-v4-green-7.stdout.log",
+        "stderr_log": "input-v4-green-7.stderr.log",
+        "ran_one": true
+      }
+    ]
+  },
+  "affected_suite": {
+    "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py",
+    "exit_code": 0,
+    "collected": 56,
+    "passed": 56,
+    "failed": 0,
+    "skipped": 0,
+    "duration_seconds": 26.406,
+    "stderr": "Ran 56 tests in 26.406s; OK"
+  },
+  "final_sources": {
+    "scripts/task-run-guard.py": {
+      "sha256": "0a88f3b8938c599a8017519bed1e1f6c52d1e1d23d77cc72271a5f6717ff9938",
+      "mode": "0755",
+      "size_bytes": 24400
+    },
+    "scripts/run-task.sh": {
+      "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b",
+      "mode": "0775",
+      "size_bytes": 55034
+    },
+    "tests/contract/workflow/task_run_guard_test.py": {
+      "sha256": "6838d9db81d5b62e12d174735500db43b078dd01c1b69e531d32e32978da9286",
+      "mode": "0664",
+      "size_bytes": 44581
+    },
+    "docs/process/task-run-guard.md": {
+      "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b",
+      "mode": "0664",
+      "size_bytes": 6896
+    }
+  },
+  "scope": {
+    "source_paths_edited": [
+      "scripts/task-run-guard.py",
+      "tests/contract/workflow/task_run_guard_test.py"
+    ],
+    "no_driver_or_docs_edits_in_this_repair": true,
+    "no_unrelated_suite_or_verify": true,
+    "no_activation_or_historical_evidence_waiver": true
+  },
+  "limitations": "The prior historical evidence gaps remain unresolved. This repair does not activate policy or establish containment."
+}

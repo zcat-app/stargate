@@ -1,0 +1,20 @@
+F
+======================================================================
+FAIL: test_python_dash_sentinel_is_not_a_pinned_script (__main__.RepairRegressions.test_python_dash_sentinel_is_not_a_pinned_script)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 738, in test_python_dash_sentinel_is_not_a_pinned_script
+    self.assertEqual(observed, (78, False, False),
+AssertionError: Tuples differ: (0, False, True) != (78, False, False)
+
+First differing element 0:
+0
+78
+
+- (0, False, True)
++ (78, False, False) : Python '-' stdin sentinel must refuse before dispatch: (0, False, True)
+
+----------------------------------------------------------------------
+Ran 1 test in 0.355s
+
+FAILED (failures=1)

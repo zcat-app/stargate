@@ -1,0 +1,4 @@
+47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73  scripts/task-run-guard.py
+3c4c647097443d7fd4d6b32ef0e8f68cad07d5f0a1cb2b558d9e9adb145b2081  scripts/run-task.sh
+37d61baa344977a3a2a701782f786678ae053b3b030188179c9c0f6b1562ce6e  tests/contract/workflow/task_run_guard_test.py
+af32aa83b3ac3c0d8d06ed6e1d2aa932ffe5a2b29b10eef188e6fb5e413d22f9  docs/process/task-run-guard.md

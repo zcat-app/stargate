@@ -1,0 +1,17 @@
+{
+  "schema": "task-run-guard-remaining-check-repair-plan-v1",
+  "root_authored_epoch": 1791928467.4129434,
+  "approved_plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+  "current_candidate_sha256": "b10afc448c31bf621a17e6fbe053fa3f5c381d8bb2004d84dc9fdca52ae77f67",
+  "hypothesis": "Recognized-interpreter path uses argv[1:1], skipping existing regular/special path checks after its pinned script. This is an own-change regression against the explicit approved acceptance to preserve existing checks.",
+  "tests_only_phase": "Add collected focused regression with enabled valid Python -I -S pinned marker script + real FIFO as extra arg, and Bash -p equivalent; existing control admits literal nonpath flags. Before edits, expect actual marker/exit0 instead of refusal78/no journal mutation. Preserve source v3 and actual failed logs; stop for root inspection.",
+  "authorized_source_repair_after_red": "Restore existing argument-path lstat checks for recognized interpreters while preserving closed interpreter source parsing and literal nonpath args. No extra parser or scope expansion.",
+  "paths": [
+    "scripts/task-run-guard.py",
+    "tests/contract/workflow/task_run_guard_test.py"
+  ],
+  "verification": "Identical focused command before/after plus affected guard suite only; fresh final source/security reviewers.",
+  "historical_gaps_waived": false,
+  "source_edit_authorized_now": false,
+  "activation_authorized": false
+}

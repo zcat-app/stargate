@@ -1,0 +1,34 @@
+{
+  "schema": "T221-governance-amendment-review-v2",
+  "role": "astra",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "tool": "Codex independent review session",
+  "candidate_sha256": "657d63385b3e9c987bea73e506563d52bf913a80f9885f6de26a5cbff6905500",
+  "plan_sha256": "c881fe3c84506486b68d7c6ee4fc0b24ae5c467f6f35b06673db50f12504d2d0",
+  "proposal_sha256": "d15bcf5614141b4541d7443797e3ac98a58a4070790202115e29c4d481557ce0",
+  "guard_source_manifest_sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+  "verdict": "APPROVE",
+  "findings": [],
+  "scope": "Exact 357-path candidate-v2 governance amendment and actual bounded trial in plan-v2.md; correctness and adversarial governance review. No implementation, trial launch, commit or ticket completion.",
+  "checks": [
+    "Read active Constitution, AGENTS, CONTRIBUTING and relevant workflow, review-loop and ticket-schema rules. Applied recorded explicit maintainer authorization and affected-only session restriction; no authority inferred from a historical source or proposal review.",
+    "Verified raw candidate manifest and plan hashes, all 357 candidate file hashes/modes/sizes, exact candidate file inventory, and all five pinned live before baselines. Reviewed the complete five-file diff and four new non-archive artifacts.",
+    "Compared all 348 archived records with their original paths: bytes, hashes, modes and sizes match. Inventory preserves the initial valid-policy driver RED and source-v2 repair behavioral RED histories as separate permanent NONCOMPLIANT properties.",
+    "Compared the normative VII insertion verbatim with the exact maintainer-authorized proposal-v4 paragraph. Scope remains the four-file source-v5 manifest only; later repair, privacy-routing, protected-host, native/backend, T218 and release authorities are excluded.",
+    "AGENTS and CONTRIBUTING changes are narrow cross-references to the past T221 exception and preserve the ordinary future AI tests-first obligation. SECURITY-DECISIONS is append-only and records authorization, exposure, owner and re-evaluation trigger. Ticket budget equals 357; ticket and tasks retain incomplete status.",
+    "Verified live source-v5 manifest hash and all four source hashes/modes plus review-matrix support hash. Inspected original final source-review records: both functional_source_assessment statuses are APPROVE, while Astra verdict and Luna overall_verdict remain ESCALATE and workflow evidence remains UNMET. Neither source record was rewritten.",
+    "Inspected live driver bootstrap and guard validation/run/check control flow: disabled implement action refuses with its reason before journal_open and child dispatch; hook precedes Git, ticket parsing and transient driver state. Plan uses protected Bash -p entry and all three hook variables.",
+    "Inspected regression script ROOT/GUARD/DRIVER overrides and write sites. Copied script anchors REPORTS beneath trial-copy; actual integration guard and driver are selected through explicit environment overrides, while baseline fixtures use identical copied support. Disposable fixture repositories are created by TemporaryDirectory; historical report paths are not targeted.",
+    "Trial plan requires one immutable 900-second deadline, maximum_attempts 2, maximum_failed_attempts 1, no resets or retries, one enabled regression invocation bounded to 90 seconds, pin validation before/after, and a read-only admission check after success. It preserves both indices, private T218 source and historical evidence; stops before dependent implementation.",
+    "Static AST inspection finds 37 defined test methods and 57 expected executions through inheritance. Existing v5 source reviews separately record 57 passed, zero failed/errors/skipped. New trial must report its actual counts; this review did not execute that suite.",
+    "Revalidated exact amendment manifest/plan and all candidate pins immediately before writing this report."
+  ],
+  "limitations": [
+    "Read-only inspection and affected document/hash consistency checks only. No verify.sh, canonical native review launcher, regression suite, trial, native qualification, Go/Java build, Docker, VM, installation or network execution was performed.",
+    "This is exact-candidate amendment approval and actual plan approval, not evidence that amendment application, the trial, normal delivery or T221 completion has occurred. Required peer approval and actual execution receipts remain necessary.",
+    "Historical evidence chronology remains NONCOMPLIANT; archival equality cannot establish missing preimplementation evidence or certify every historical claim.",
+    "Opt-in admission is not universal agent enforcement, host containment, dependency discovery or tamperproof storage. Same-user filesystem/process access and OS bootstrap dependencies remain documented trust boundaries.",
+    "Current and previous amendment reviewer reports and implementation rationale were not consulted; historical source assessments were inspected only as required adoption evidence. No delegation."
+  ]
+}

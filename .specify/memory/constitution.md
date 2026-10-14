@@ -12,6 +12,19 @@ The earlier amendment log is preserved in [constitution-history.md](constitution
 The Governance section below is the sole active procedure; conflicting historical procedure
 notes are superseded. No public release or external human review is claimed here.
 
+## Sync Impact Report — T221, 2026-10-14
+
+Maintainer authorization is recorded in T221's evidence inventory. This one-time pre-release
+permission change disposes of missing historical test ordering for only the exact four-file
+task-run guard manifest stated in VII. The original noncompliance and negative overall review
+verdicts remain permanent. Future tests-first, independent review and all runtime/route/native/
+T218/release guarantees remain binding. No constitution version bump occurs before release.
+Downstream effects are confined to narrow T221 exception cross-references in AGENTS and
+CONTRIBUTING, T221's ticket/tasks entry, immutable evidence/adoption records and append-only
+SECURITY-DECISIONS rationale. Existing source usage explicitly scopes
+the opt-in guard and remains byte-identical; no deployed threat-model surface changes.
+T156's amendment record above and sync report below remain historical and unchanged.
+
 ## Sync Impact Report — T156
 
 - **Scope:** all eight principles, deployment boundaries, scope terminology and governance.
@@ -275,6 +288,8 @@ passing result after implementation. A failure due only to missing tooling is no
 Tests that independently prove existing behavior are retrospective evidence, never fabricated
 historical tests-first compliance. Pure normative-document changes use consistency checks and
 independent adversarial review; they do not invent a runtime red/green sequence.
+
+One-time pre-release disposition for the 2026-10-13 task-run guard: the initial guard and its source-v2 rework lack part of the required preimplementation behavioral evidence. Those records MUST remain labelled NONCOMPLIANT; retrospective reproduction MUST NOT be described as historical tests-first evidence. Only this past workflow-tool implementation may be adopted after exact-candidate independent FUNCTIONAL source/security approval, directly affected tests, and an immutable evidence inventory identifying every missed requirement, original failure and retrospective probe. The exception covers only scripts/task-run-guard.py, its opt-in scripts/run-task.sh hook, tests/contract/workflow/task_run_guard_test.py, and docs/process/task-run-guard.md as bound by reviewed source manifest SHA256 92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459. Every later repair and any change beyond that manifest remains subject to the ordinary tests-first rule. This disposition grants no privacy-routing, protected-host, sidecar/backend, native qualification, T218 completion, release or runtime authority.
 
 Each privacy claim names its positive control, falsifier and appropriate evidence layer.
 Required coverage cannot disappear through executable-bit changes, workspace omissions or skips.

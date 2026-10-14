@@ -1,0 +1,77 @@
+{
+  "schema": "task-run-guard-stopped-v1",
+  "recorded_epoch": 1791924639.2803116,
+  "state": "ESCALATED_UNAPPROVED_DRAFT",
+  "candidate_sha256": "113b061606609e645d35934ba42f044d378e2d5e8ac3cacbeae44d5a8ddb6e19",
+  "source_paths": [
+    {
+      "mode": 493,
+      "path": "scripts/task-run-guard.py",
+      "sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73"
+    },
+    {
+      "mode": 509,
+      "path": "scripts/run-task.sh",
+      "sha256": "3c4c647097443d7fd4d6b32ef0e8f68cad07d5f0a1cb2b558d9e9adb145b2081"
+    },
+    {
+      "mode": 436,
+      "path": "tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "37d61baa344977a3a2a701782f786678ae053b3b030188179c9c0f6b1562ce6e"
+    },
+    {
+      "mode": 436,
+      "path": "docs/process/task-run-guard.md",
+      "sha256": "af32aa83b3ac3c0d8d06ed6e1d2aa932ffe5a2b29b10eef188e6fb5e413d22f9"
+    }
+  ],
+  "source_reviews": [
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v2.json",
+      "sha256": "d231dba81bda4fd43c3bdd688f0ca2a48a162379a5c0705e51ed87c2a273cedc",
+      "verdict": "ESCALATE",
+      "role": "astra",
+      "model": "gpt-6-astra",
+      "effort": "high"
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v2.json",
+      "sha256": "bc7021d286dea312fc805c8023724b51e0749faf4603fb3971100c80e2fad94b",
+      "verdict": "REWORK",
+      "role": "luna",
+      "model": "gpt-6-luna",
+      "effort": "high"
+    }
+  ],
+  "paired_gates": {
+    "plan_v1": "REWORK",
+    "plan_v2": "REWORK",
+    "plan_v3": "APPROVE",
+    "source_v1": "REWORK",
+    "whole_path_reanalysis_v1": "APPROVE",
+    "source_v2": "ESCALATE"
+  },
+  "review_history_not_reset": true,
+  "execution_profile_installed": false,
+  "t218_dependent_implementation_launched": false,
+  "source_changes_outside_four_paths": false,
+  "existing_overlay_and_indices_preserved": true,
+  "native_host_policy_or_docker_actions": false,
+  "new_tickets_or_worktrees": false,
+  "tests": {
+    "executions": 48,
+    "distinct_methods": 28,
+    "skips": 0,
+    "scope": "guard affected suite only"
+  },
+  "remaining_source_findings": [
+    "Resolved Python directory __main__.py bypasses script pin admission",
+    "Python - / Bash -s inherited stdin is an unpinned script carrier"
+  ],
+  "historical_gaps": [
+    "Original valid-policy preimplementation driver baseline missed",
+    "V2 corrected probes were retrospective after invalid initial selectors and source edits"
+  ],
+  "boundary": "Only supported invocations routed through guard could be controlled; unrestricted root, other chat tools, escaped processes/daemon work remain outside. This draft is NOT approved or installed as enforcement.",
+  "required_next_decision": "Review-loop ESCALATE menu: refine, override, decompose, defer, amend. Finding acceptance cannot waive Constitution VII."
+}

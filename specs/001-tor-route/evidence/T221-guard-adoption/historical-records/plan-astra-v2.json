@@ -1,0 +1,9 @@
+{
+  "schema": "task-run-guard-review-v1",
+  "role": "astra",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "verdict": "APPROVE",
+  "plan_sha256": "37455514dd9ff5f5b8380a9f5d18d280c731d91f2cb3332e55459adb342e9b8c",
+  "findings": []
+}

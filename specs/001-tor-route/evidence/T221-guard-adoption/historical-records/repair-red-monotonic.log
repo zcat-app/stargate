@@ -1,0 +1,3 @@
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 208
+    env = os.environ.copy()
+IndentationError: unexpected indent

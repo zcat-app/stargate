@@ -1,0 +1,13 @@
+F
+======================================================================
+FAIL: test_driver_argument_binding_uses_correct_run_argv_position (__main__.RepairRegressions.test_driver_argument_binding_uses_correct_run_argv_position)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 572, in test_driver_argument_binding_uses_correct_run_argv_position
+    self.assertEqual(healthy.returncode,0,(healthy.stdout,healthy.stderr))
+AssertionError: 78 != 0 : ('', 'task-run-guard: REFUSED: guarded driver arguments do not match the approved action\n')
+
+----------------------------------------------------------------------
+Ran 1 test in 0.122s
+
+FAILED (failures=1)

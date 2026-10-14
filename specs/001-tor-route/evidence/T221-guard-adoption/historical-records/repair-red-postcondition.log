@@ -1,0 +1,13 @@
+F
+======================================================================
+FAIL: test_postcondition_pin_change_is_sticky (__main__.GuardCase.test_postcondition_pin_change_is_sticky)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 158, in test_postcondition_pin_change_is_sticky
+    self.assertEqual(r.returncode, 78, (r.stdout, r.stderr))
+AssertionError: 0 != 78 : ('task-run-guard: admitted\n', '')
+
+----------------------------------------------------------------------
+Ran 1 test in 0.256s
+
+FAILED (failures=1)

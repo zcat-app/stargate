@@ -1,0 +1,34 @@
+{
+  "schema": "task-run-guard-governance-proposal-review-v1",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "proposal_path": "evidence-governance-proposal-v4.md",
+  "proposal_sha256": "d15bcf5614141b4541d7443797e3ac98a58a4070790202115e29c4d481557ce0",
+  "verdict": "APPROVE-PROPOSAL",
+  "findings": [],
+  "assessment": {
+    "v5_candidate_manifest": {
+      "path": "source-candidate-v5.json",
+      "raw_sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+      "proposal_binding_matches": true,
+      "pins_match": [
+        {"path": "scripts/task-run-guard.py", "sha256": "66d02bb9fd735760eb9208ba3e250681763083f93a0c9168b4ad82c29ccd41b2", "mode": "0755"},
+        {"path": "scripts/run-task.sh", "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b", "mode": "0775"},
+        {"path": "tests/contract/workflow/task_run_guard_test.py", "sha256": "7ae9ed666b6ba9bb01b32e55e27029ef88b6c480e6340a8d35041a887b972efc", "mode": "0664"},
+        {"path": "docs/process/task-run-guard.md", "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b", "mode": "0664"}
+      ]
+    },
+    "review_bindings": {
+      "astra": {"path": "source-astra-v5.json", "sha256": "ba6828094002ddf5a151791b1ac3ac4cea46d4bde06b50faf9086e9927325489", "candidate_sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459", "functional_status": "APPROVE", "functional_findings": 0, "overall_verdict": "ESCALATE"},
+      "luna": {"path": "luna-candidate-v5/source-luna-v5.json", "sha256": "b89f731e8bff898e60436575e8eba02e5f81d4b5f7861a708d1ad205ff27bdcd", "candidate_sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459", "functional_status": "APPROVE", "functional_findings": 0, "overall_verdict": "ESCALATE"}
+    },
+    "tests": "Both v5 reports record 57 executions, 57 passed, 0 failed/skipped/errors, and 37 distinct methods. The proposal preserves this count accurately and does not call these 57 unique methods.",
+    "historical_evidence": "Both reports keep the original valid-policy baseline and v2 pre-edit behavioral RED gaps UNMET. Later repair RED/GREEN records remain evidence only for their respective later repairs. The proposal preserves the overall ESCALATE verdicts, permanent NONCOMPLIANT history, and prohibition on relabeling retrospective evidence.",
+    "governance": "The normative insertion requires exact-candidate FUNCTIONAL source/security approval plus affected tests and the separately approved governed historical disposition. It does not demand the impossible overall source-review APPROVE while the historical evidence finding remains in the overall verdict. It requires the amendment's own exact-candidate codereview and independent redteam, a dedicated ticket if the maintainer selects the path, explicit maintainer approval, and preserves all stated T218/native/routing/runtime/release/host boundaries."
+  },
+  "limitations": [
+    "This verdict approves the proposal as a bounded governance draft only. It is not maintainer approval, a Constitution amendment, an adoption decision, activation authority, or source/task completion approval.",
+    "The dedicated ticket and amendment reviews are still required if the maintainer chooses the governed path. Any change to a manifest-bound file or mode invalidates this exact candidate proposal and requires renewed review."
+  ]
+}

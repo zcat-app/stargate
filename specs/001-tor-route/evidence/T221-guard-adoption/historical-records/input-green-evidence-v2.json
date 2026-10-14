@@ -1,0 +1,52 @@
+{
+  "schema": "task-run-guard-input-green-v1",
+  "source_sha256": "064c7e271e80b60b4ac848b3f9483af0c9459e51a1fc2b5a2bf404738c577b86",
+  "tests_sha256": "df4407459fe31b4e2b00a96fa55811eb8a4bb3dd8f3e2702444944af7fe7090e",
+  "selectors": [
+    {
+      "selector": "RepairRegressions.test_unpinned_python_directory_main_is_refused",
+      "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_unpinned_python_directory_main_is_refused",
+      "exit_code": 0,
+      "stdout_log": "input-v2-green-1.stdout.log",
+      "stderr_log": "input-v2-green-1.stderr.log",
+      "timestamp_utc": "2026-10-13T21:48:44.033916+00:00",
+      "collected_and_passed": true
+    },
+    {
+      "selector": "RepairRegressions.test_python_stdin_source_is_refused",
+      "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_python_stdin_source_is_refused",
+      "exit_code": 0,
+      "stdout_log": "input-v2-green-2.stdout.log",
+      "stderr_log": "input-v2-green-2.stderr.log",
+      "timestamp_utc": "2026-10-13T21:48:44.308618+00:00",
+      "collected_and_passed": true
+    },
+    {
+      "selector": "RepairRegressions.test_bash_stdin_source_is_refused",
+      "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_bash_stdin_source_is_refused",
+      "exit_code": 0,
+      "stdout_log": "input-v2-green-3.stdout.log",
+      "stderr_log": "input-v2-green-3.stderr.log",
+      "timestamp_utc": "2026-10-13T21:48:44.528789+00:00",
+      "collected_and_passed": true
+    },
+    {
+      "selector": "RepairRegressions.test_opaque_pinned_command_receives_eof_not_caller_source",
+      "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_opaque_pinned_command_receives_eof_not_caller_source",
+      "exit_code": 0,
+      "stdout_log": "input-v2-green-4.stdout.log",
+      "stderr_log": "input-v2-green-4.stderr.log",
+      "timestamp_utc": "2026-10-13T21:48:44.736665+00:00",
+      "collected_and_passed": true
+    },
+    {
+      "selector": "RepairRegressions.test_python_isolated_without_no_site_is_not_admitted",
+      "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_python_isolated_without_no_site_is_not_admitted",
+      "exit_code": 0,
+      "stdout_log": "input-v2-green-5.stdout.log",
+      "stderr_log": "input-v2-green-5.stderr.log",
+      "timestamp_utc": "2026-10-13T21:48:44.978913+00:00",
+      "collected_and_passed": true
+    }
+  ]
+}

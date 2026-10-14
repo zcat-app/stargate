@@ -1,0 +1,10 @@
+E
+======================================================================
+ERROR: test_opaque_pinned_command_receives_eof_not_caller_source (unittest.loader._FailedTest.test_opaque_pinned_command_receives_eof_not_caller_source)
+----------------------------------------------------------------------
+AttributeError: type object 'GuardCase' has no attribute 'test_opaque_pinned_command_receives_eof_not_caller_source'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

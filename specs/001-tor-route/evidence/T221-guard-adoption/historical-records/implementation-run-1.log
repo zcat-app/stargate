@@ -1,0 +1,29 @@
+.F...sF..F
+======================================================================
+FAIL: test_allowed_exact_child_runs_once (__main__.GuardCase.test_allowed_exact_child_runs_once)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 95, in test_allowed_exact_child_runs_once
+    self.assertEqual(r.returncode, 0, (r.stdout, r.stderr))
+AssertionError: 78 != 0 : ('', 'task-run-guard: REFUSED: action safe executable is not pinned as a candidate\n')
+
+======================================================================
+FAIL: test_nonzero_failure_cap_survives_policy_filename_change (__main__.GuardCase.test_nonzero_failure_cap_survives_policy_filename_change)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 139, in test_nonzero_failure_cap_survives_policy_filename_change
+    self.assertEqual(self.invoke().returncode, 9)
+AssertionError: 78 != 9
+
+======================================================================
+FAIL: test_timeout_stops_child_and_consumes_attempt_without_retry (__main__.GuardCase.test_timeout_stops_child_and_consumes_attempt_without_retry)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 128, in test_timeout_stops_child_and_consumes_attempt_without_retry
+    self.assertEqual(r.returncode, 124, (r.stdout, r.stderr))
+AssertionError: 78 != 124 : ('', 'task-run-guard: REFUSED: action safe executable is not pinned as a candidate\n')
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.782s
+
+FAILED (failures=3, skipped=1)

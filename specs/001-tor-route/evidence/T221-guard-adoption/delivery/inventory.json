@@ -1,0 +1,63 @@
+{
+  "schema": "t221-durable-delivery-receipts-v1",
+  "records": [
+    {
+      "path": "specs/001-tor-route/evidence/T221-guard-adoption/delivery/amendment-astra-v2.json",
+      "sha256": "6a01c4e41f2e2b9b1349175881a1cc37bbdbcbbf3026a1509abf934eae6610d2",
+      "original_sha256": "6a01c4e41f2e2b9b1349175881a1cc37bbdbcbbf3026a1509abf934eae6610d2"
+    },
+    {
+      "path": "specs/001-tor-route/evidence/T221-guard-adoption/delivery/amendment-luna-v2.json",
+      "sha256": "c099620e2f378d6f6a00785945c0b419ee1c68fc99f725f236d7449e236ed47e",
+      "original_sha256": "c099620e2f378d6f6a00785945c0b419ee1c68fc99f725f236d7449e236ed47e"
+    },
+    {
+      "path": "specs/001-tor-route/evidence/T221-guard-adoption/delivery/trial-plan-astra-v2.json",
+      "sha256": "584ac28735281fcfb4ba503547eb6869c5a6a040dfedc52dd1d0690e697ac29b",
+      "original_sha256": "584ac28735281fcfb4ba503547eb6869c5a6a040dfedc52dd1d0690e697ac29b"
+    },
+    {
+      "path": "specs/001-tor-route/evidence/T221-guard-adoption/delivery/trial-plan-luna-v2.json",
+      "sha256": "f8e1c77b154ce45fd8f026fe692318c0f5fbc0064342e8ee4aa53ea044c19206",
+      "original_sha256": "f8e1c77b154ce45fd8f026fe692318c0f5fbc0064342e8ee4aa53ea044c19206"
+    },
+    {
+      "path": "specs/001-tor-route/evidence/T221-guard-adoption/delivery/amendment-application-v1.json",
+      "sha256": "dab588de33203dff1d25db87b17b629b3efe539afd0d2fe31f5ea053201963bc",
+      "original_sha256": "dab588de33203dff1d25db87b17b629b3efe539afd0d2fe31f5ea053201963bc"
+    },
+    {
+      "path": "specs/001-tor-route/evidence/T221-guard-adoption/delivery/live-trial-result-v1.json",
+      "sha256": "9e3c3051c593204b0654d70f9ecf57f7f3c52301406826c59985db832678c63b",
+      "original_sha256": "9e3c3051c593204b0654d70f9ecf57f7f3c52301406826c59985db832678c63b"
+    },
+    {
+      "path": "specs/001-tor-route/evidence/T221-guard-adoption/delivery/live-driver-refusal-v1.json",
+      "sha256": "ec399eab7154dc1bbfcd8301b62bfa560027188b474593267b35929818e7ab8b",
+      "original_sha256": "ec399eab7154dc1bbfcd8301b62bfa560027188b474593267b35929818e7ab8b"
+    },
+    {
+      "path": "specs/001-tor-route/evidence/T221-guard-adoption/delivery/live-regression-result-v1.json",
+      "sha256": "fdb8b4d9c310a89e250e43a12f4af1080377caf227f2348bc2c89439219bec36",
+      "original_sha256": "fdb8b4d9c310a89e250e43a12f4af1080377caf227f2348bc2c89439219bec36"
+    },
+    {
+      "path": "specs/001-tor-route/evidence/T221-guard-adoption/delivery/live-regression.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "specs/001-tor-route/evidence/T221-guard-adoption/delivery/live-regression.stderr.log",
+      "sha256": "cc9fd373f0468a4a0d0911459a138fef4e911ef6b58976adc7b35ba3b4116399",
+      "original_sha256": "cc9fd373f0468a4a0d0911459a138fef4e911ef6b58976adc7b35ba3b4116399"
+    },
+    {
+      "path": "specs/001-tor-route/evidence/T221-guard-adoption/delivery/live-trial.journal.jsonl",
+      "sha256": "5312197ac9e96354062d5d2affef977afe092ed060fc0af95896b18f9cac83cf",
+      "original_sha256": "5312197ac9e96354062d5d2affef977afe092ed060fc0af95896b18f9cac83cf"
+    }
+  ],
+  "historical_overall_source_verdict": "ESCALATE permanently, functional-only APPROVE; governed past chronology exception separately accepted",
+  "source_manifest_sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+  "trial": "BOUNDED_GUARD_TRIAL_PASS;57executions37distinct;driver refusal before attempt;1successful regression attempt"
+}

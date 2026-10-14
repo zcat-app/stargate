@@ -1,0 +1,15 @@
+{
+  "schema": "task-run-guard-source-phase-authorization-v1",
+  "epoch": 1791928564.7323961,
+  "source_v3_immutable_before_actual_red_verified": true,
+  "red_evidence_sha256": "ea819649a358dcba8713d6cac43d285f548236787402117ae6dc2fb636c2d4ea",
+  "actual_valid_reds": 2,
+  "authorized_by": "root after log and fixture inspection",
+  "authorized_repair": "Restore approved existing general path-argument checks for known interpreters; no new parser, privilege or scope. Preserve nonpath literal args.",
+  "scope": [
+    "scripts/task-run-guard.py",
+    "tests/contract/workflow/task_run_guard_test.py"
+  ],
+  "governance_waiver": false,
+  "activation_authorized": false
+}

@@ -1,0 +1,10 @@
+E
+======================================================================
+ERROR: test_python_stdin_source_is_refused (unittest.loader._FailedTest.test_python_stdin_source_is_refused)
+----------------------------------------------------------------------
+AttributeError: type object 'GuardCase' has no attribute 'test_python_stdin_source_is_refused'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.002s
+
+FAILED (errors=1)

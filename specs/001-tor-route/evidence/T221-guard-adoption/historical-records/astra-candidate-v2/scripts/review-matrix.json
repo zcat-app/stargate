@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "isolation": {
+    "backend": "native",
+    "context": "fresh-per-reviewer",
+    "candidate": "separate-copy",
+    "security_boundary": false,
+    "verdict_import": "manifest-last"
+  },
+  "reviewers": [
+    {
+      "id": "glm",
+      "tool": "opencode",
+      "role": "stargate-review",
+      "model": "zai-coding-plan/glm-5.3-flash",
+      "effort": "xhigh",
+      "output": "{ticket}.review-glm.verdict"
+    },
+    {
+      "id": "astra",
+      "tool": "codex",
+      "role": "stargate-review",
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "output": "{ticket}.review-astra.verdict"
+    }
+  ]
+}

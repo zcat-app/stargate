@@ -1,0 +1,26 @@
+{
+  "schema": "T221-amendment-review-v1",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "verdict": "APPROVE",
+  "candidate_manifest_sha256": "657d63385b3e9c987bea73e506563d52bf913a80f9885f6de26a5cbff6905500",
+  "plan_sha256": "c881fe3c84506486b68d7c6ee4fc0b24ae5c467f6f35b06673db50f12504d2d0",
+  "source_manifest_sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+  "findings": [],
+  "checks": [
+    "Candidate manifest digest and plan digest match the assigned exact snapshots.",
+    "All 357 manifest entries match candidate bytes, sizes, and modes; no unmanifested files exist.",
+    "All 348 archived records match their manifest hashes and inventory paths, and each archive byte-for-byte matches its preserved historical-record source.",
+    "The inventory independently records both missed chronology properties as NONCOMPLIANT and states that the source overall verdicts remain ESCALATE; no status or source review is rewritten.",
+    "The authorized VII insertion matches the approved proposal paragraph and is bound to only the exact four-file source manifest; later repairs and all future AI implementation remain tests-first.",
+    "AGENTS.md and CONTRIBUTING.md change only the narrow T221 cross-references and explicitly preserve the future no-exception rule.",
+    "SECURITY-DECISIONS.md retains its complete prior bytes as a prefix with a dated rationale appended; tasks.md retains its prior task content with only the T221 task appended at the task-list end.",
+    "The ticket remains in-review, and adoption text does not claim T221 completion, T218 completion, host containment, or runtime authorization."
+  ],
+  "limits": [
+    "This is an independent review of the exact amendment candidate and trial plan; the trial was not launched.",
+    "No canonical verify.sh gate, native qualification, Docker/VM/network operation, or T218 implementation was run or claimed.",
+    "The review verifies preserved evidence identities and candidate consistency; it does not recreate the historical chronology or convert retrospective evidence into tests-first compliance."
+  ]
+}

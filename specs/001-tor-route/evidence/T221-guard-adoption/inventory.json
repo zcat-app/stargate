@@ -1,0 +1,2491 @@
+{
+  "schema": "T221-guard-historical-evidence-inventory-v1",
+  "original_candidate_sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+  "authorization": {
+    "schema": "maintainer-guard-amendment-authorization-v1",
+    "user_message": "authorize it and lets try it in wild",
+    "client_date": "2026-10-14",
+    "client_timezone": "Europe/Prague",
+    "proposal_sha256": "d15bcf5614141b4541d7443797e3ac98a58a4070790202115e29c4d481557ce0",
+    "scope": "Exact one-time historical sequencing disposition for guard source manifest 92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459 and a bounded local guarded trial. No T218 completion, backend, native protected-policy, privacy-routing or future tests-first waiver."
+  },
+  "historical_properties": [
+    {
+      "property": "Initial valid-policy real-driver RED before hook implementation",
+      "status": "NONCOMPLIANT",
+      "records": [
+        "baseline-driver.json",
+        "baseline-valid-policy-replay.json",
+        "evidence.json",
+        "source-astra-v2.json"
+      ],
+      "reason": "Unavailable-policy baseline is not the required valid-policy behavioral baseline; valid-policy replay is post-implementation."
+    },
+    {
+      "property": "Source-v2 repair behavioral RED before source editing",
+      "status": "NONCOMPLIANT",
+      "records": [
+        "pre-v2-red-test_deadline_expiring_during_validation_never_dispatches.log",
+        "evidence-v2.json",
+        "source-astra-v2.json",
+        "source-luna-v2.json"
+      ],
+      "reason": "Initial selector/setup failures were not behavioral falsifiers; corrected preserved-source replays occurred after editing began."
+    }
+  ],
+  "later_tests_first_records": [
+    "input-program-red-evidence-v3.json",
+    "input-source-phase-authorization-v2.json",
+    "input-root-identical-green-v1.json",
+    "input-v3-fifo-split-red-evidence.json",
+    "fifo-source-phase-authorization-v1.json",
+    "input-green-evidence-v4.json",
+    "input-v4-python-dash-red-evidence.json",
+    "dash-source-phase-authorization-v1.json",
+    "evidence-v5.json"
+  ],
+  "functional_approval_reports": [
+    "source-astra-v5.json",
+    "luna-candidate-v5/source-luna-v5.json"
+  ],
+  "overall_source_verdicts_remain": "ESCALATE; historical provenance UNMET permanently",
+  "records": [
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v1/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green.json",
+      "archive_path": "historical-records/astra-candidate-v1/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green.json",
+      "sha256": "70e3df143c9fd7197b463da577fef09cf586c9fa5005e98f065faf00aa093159",
+      "mode": 436,
+      "size_bytes": 110514
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v1/docs/process/task-run-guard.md",
+      "archive_path": "historical-records/astra-candidate-v1/docs/process/task-run-guard.md",
+      "sha256": "1081c1ca8f7f3b997e5c9ce8932026d56e5b4724af1da542f4cf4bd9ab162de7",
+      "mode": 436,
+      "size_bytes": 5326
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v1/scripts/review-matrix.json",
+      "archive_path": "historical-records/astra-candidate-v1/scripts/review-matrix.json",
+      "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+      "mode": 436,
+      "size_bytes": 630
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v1/scripts/run-task.sh",
+      "archive_path": "historical-records/astra-candidate-v1/scripts/run-task.sh",
+      "sha256": "dd1ddce57a3c257c6fad88330771409c786d59fb282a54ddb25962cf25e0ee6d",
+      "mode": 509,
+      "size_bytes": 55032
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v1/scripts/task-run-guard.py",
+      "archive_path": "historical-records/astra-candidate-v1/scripts/task-run-guard.py",
+      "sha256": "16ec3bb0bd0548d4e9b2a265190c4708b8b696b8a954d8eb1df0736fdaca309d",
+      "mode": 493,
+      "size_bytes": 19255
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v1/source-candidate-v1.json",
+      "archive_path": "historical-records/astra-candidate-v1/source-candidate-v1.json",
+      "sha256": "05917a0b6f54440cdb5dfe59f30afa14f986ac4b977e47abd4853ca5bad0a09c",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v1/tests/contract/workflow/task_run_guard_test.py",
+      "archive_path": "historical-records/astra-candidate-v1/tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "adb31ded2c044a1ff4cdeb6713ce7f8e59aa44513f66ec17f32e1752c156e6a7",
+      "mode": 436,
+      "size_bytes": 28028
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v2/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "archive_path": "historical-records/astra-candidate-v2/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "sha256": "d58ea1209d59ea982b769b199bc0e1a164ed90c122f8c8a0472410df4e590e2c",
+      "mode": 436,
+      "size_bytes": 110516
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v2/docs/process/task-run-guard.md",
+      "archive_path": "historical-records/astra-candidate-v2/docs/process/task-run-guard.md",
+      "sha256": "af32aa83b3ac3c0d8d06ed6e1d2aa932ffe5a2b29b10eef188e6fb5e413d22f9",
+      "mode": 436,
+      "size_bytes": 6043
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v2/scripts/review-matrix.json",
+      "archive_path": "historical-records/astra-candidate-v2/scripts/review-matrix.json",
+      "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+      "mode": 436,
+      "size_bytes": 630
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v2/scripts/run-task.sh",
+      "archive_path": "historical-records/astra-candidate-v2/scripts/run-task.sh",
+      "sha256": "3c4c647097443d7fd4d6b32ef0e8f68cad07d5f0a1cb2b558d9e9adb145b2081",
+      "mode": 509,
+      "size_bytes": 55033
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v2/scripts/task-run-guard.py",
+      "archive_path": "historical-records/astra-candidate-v2/scripts/task-run-guard.py",
+      "sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73",
+      "mode": 493,
+      "size_bytes": 23161
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v2/source-candidate-v2.json",
+      "archive_path": "historical-records/astra-candidate-v2/source-candidate-v2.json",
+      "sha256": "113b061606609e645d35934ba42f044d378e2d5e8ac3cacbeae44d5a8ddb6e19",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v2/tests/contract/workflow/task_run_guard_test.py",
+      "archive_path": "historical-records/astra-candidate-v2/tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "37d61baa344977a3a2a701782f786678ae053b3b030188179c9c0f6b1562ce6e",
+      "mode": 436,
+      "size_bytes": 35886
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v3/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "archive_path": "historical-records/astra-candidate-v3/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "sha256": "de136cb22b5086fac93134b3bddf1eeddfa905bc74d0731bcefd888781a306f2",
+      "mode": 436,
+      "size_bytes": 110518
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v3/docs/process/task-run-guard.md",
+      "archive_path": "historical-records/astra-candidate-v3/docs/process/task-run-guard.md",
+      "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b",
+      "mode": 436,
+      "size_bytes": 6896
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v3/scripts/review-matrix.json",
+      "archive_path": "historical-records/astra-candidate-v3/scripts/review-matrix.json",
+      "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+      "mode": 436,
+      "size_bytes": 630
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v3/scripts/run-task.sh",
+      "archive_path": "historical-records/astra-candidate-v3/scripts/run-task.sh",
+      "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b",
+      "mode": 509,
+      "size_bytes": 55034
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v3/scripts/task-run-guard.py",
+      "archive_path": "historical-records/astra-candidate-v3/scripts/task-run-guard.py",
+      "sha256": "064c7e271e80b60b4ac848b3f9483af0c9459e51a1fc2b5a2bf404738c577b86",
+      "mode": 493,
+      "size_bytes": 24386
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v3/source-candidate-v3.json",
+      "archive_path": "historical-records/astra-candidate-v3/source-candidate-v3.json",
+      "sha256": "b10afc448c31bf621a17e6fbe053fa3f5c381d8bb2004d84dc9fdca52ae77f67",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v3/tests/contract/workflow/task_run_guard_test.py",
+      "archive_path": "historical-records/astra-candidate-v3/tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "df4407459fe31b4e2b00a96fa55811eb8a4bb3dd8f3e2702444944af7fe7090e",
+      "mode": 436,
+      "size_bytes": 42783
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v4/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "archive_path": "historical-records/astra-candidate-v4/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "sha256": "8f2415c99d034922168ab9ae21c132508c9d0ab1721560922efb173e8ac11c96",
+      "mode": 436,
+      "size_bytes": 110518
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v4/docs/process/task-run-guard.md",
+      "archive_path": "historical-records/astra-candidate-v4/docs/process/task-run-guard.md",
+      "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b",
+      "mode": 436,
+      "size_bytes": 6896
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v4/scripts/review-matrix.json",
+      "archive_path": "historical-records/astra-candidate-v4/scripts/review-matrix.json",
+      "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+      "mode": 436,
+      "size_bytes": 630
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v4/scripts/run-task.sh",
+      "archive_path": "historical-records/astra-candidate-v4/scripts/run-task.sh",
+      "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b",
+      "mode": 509,
+      "size_bytes": 55034
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v4/scripts/task-run-guard.py",
+      "archive_path": "historical-records/astra-candidate-v4/scripts/task-run-guard.py",
+      "sha256": "0a88f3b8938c599a8017519bed1e1f6c52d1e1d23d77cc72271a5f6717ff9938",
+      "mode": 493,
+      "size_bytes": 24400
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v4/source-candidate-v4.json",
+      "archive_path": "historical-records/astra-candidate-v4/source-candidate-v4.json",
+      "sha256": "16a019e1ff6c92652c51a2db4d3a68e8bab5f52e9bf22307204f54374bdbdaad",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v4/tests/contract/workflow/task_run_guard_test.py",
+      "archive_path": "historical-records/astra-candidate-v4/tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "6838d9db81d5b62e12d174735500db43b078dd01c1b69e531d32e32978da9286",
+      "mode": 436,
+      "size_bytes": 44581
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v5/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "archive_path": "historical-records/astra-candidate-v5/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "sha256": "1b57bae5f6e4743f3be1e68dc61e9ae0a13acc7a2732fe72aaca5fd37eedfff1",
+      "mode": 436,
+      "size_bytes": 110518
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v5/docs/process/task-run-guard.md",
+      "archive_path": "historical-records/astra-candidate-v5/docs/process/task-run-guard.md",
+      "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b",
+      "mode": 436,
+      "size_bytes": 6896
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v5/scripts/review-matrix.json",
+      "archive_path": "historical-records/astra-candidate-v5/scripts/review-matrix.json",
+      "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+      "mode": 436,
+      "size_bytes": 630
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v5/scripts/run-task.sh",
+      "archive_path": "historical-records/astra-candidate-v5/scripts/run-task.sh",
+      "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b",
+      "mode": 509,
+      "size_bytes": 55034
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v5/scripts/task-run-guard.py",
+      "archive_path": "historical-records/astra-candidate-v5/scripts/task-run-guard.py",
+      "sha256": "66d02bb9fd735760eb9208ba3e250681763083f93a0c9168b4ad82c29ccd41b2",
+      "mode": 493,
+      "size_bytes": 24494
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v5/source-candidate-v5.json",
+      "archive_path": "historical-records/astra-candidate-v5/source-candidate-v5.json",
+      "sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/astra-candidate-v5/tests/contract/workflow/task_run_guard_test.py",
+      "archive_path": "historical-records/astra-candidate-v5/tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "7ae9ed666b6ba9bb01b32e55e27029ef88b6c480e6340a8d35041a887b972efc",
+      "mode": 436,
+      "size_bytes": 45625
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "archive_path": "historical-records/baseline-driver-green-v2.json",
+      "sha256": "2cbe9c905c45ac2ec80bb99b36ea8438f1b434cf7f91d503f61a9aba59e6805c",
+      "mode": 436,
+      "size_bytes": 110518
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green.json",
+      "archive_path": "historical-records/baseline-driver-green.json",
+      "sha256": "47bd4693b8922ae216766e7bd84459a1faee8a4f4064261284729c0abc581376",
+      "mode": 436,
+      "size_bytes": 110514
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver.json",
+      "archive_path": "historical-records/baseline-driver.json",
+      "sha256": "c7a8e6a60ecbecf59dcec8ea8e0fbc4e2338a313cf334b0d7d6bfefc534e0177",
+      "mode": 436,
+      "size_bytes": 110334
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/baseline-green-final.log",
+      "archive_path": "historical-records/baseline-green-final.log",
+      "sha256": "98d5e9b9951fcbe3c0e6acf530997a1c02e92dab1d1d567ebde28c47ba7f4fea",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/baseline-green-selector.log",
+      "archive_path": "historical-records/baseline-green-selector.log",
+      "sha256": "dba9b5000e6e318d42738bb164009448f56127540c67609c931f1dbe46abf22d",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/baseline-valid-policy-replay.json",
+      "archive_path": "historical-records/baseline-valid-policy-replay.json",
+      "sha256": "9683c7d1f5134a19e9260168c30309b9877d0367ac7c3f4ce7aa379bb0614ca1",
+      "mode": 436,
+      "size_bytes": 110784
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/dash-source-phase-authorization-v1.json",
+      "archive_path": "historical-records/dash-source-phase-authorization-v1.json",
+      "sha256": "125d47a56a8120d3ac05faeb478e8b230b318141ccd071f33f2dbf04b382a176",
+      "mode": 436,
+      "size_bytes": 681
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/evidence-governance-proposal-v1.md",
+      "archive_path": "historical-records/evidence-governance-proposal-v1.md",
+      "sha256": "ab58c602302105e19ddf6c6e850698b22ac4544836c307702d4af0abf7211964",
+      "mode": 436,
+      "size_bytes": 4951
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/evidence-governance-proposal-v2.md",
+      "archive_path": "historical-records/evidence-governance-proposal-v2.md",
+      "sha256": "92e881f8ade4ba650a24fcdbf739f6df62d4ed0789601e9a7c3da5a637555800",
+      "mode": 436,
+      "size_bytes": 5836
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/evidence-governance-proposal-v3.md",
+      "archive_path": "historical-records/evidence-governance-proposal-v3.md",
+      "sha256": "ec151f07ab64537643b47574f1e20bab72bfbba47f1cc38d649c117c74bed3bc",
+      "mode": 436,
+      "size_bytes": 5836
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/evidence-governance-proposal-v4.md",
+      "archive_path": "historical-records/evidence-governance-proposal-v4.md",
+      "sha256": "d15bcf5614141b4541d7443797e3ac98a58a4070790202115e29c4d481557ce0",
+      "mode": 436,
+      "size_bytes": 7279
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/evidence-v2.json",
+      "archive_path": "historical-records/evidence-v2.json",
+      "sha256": "3b5e57f7eb2d56cb6516f83a6e7ee105e2f069046701c7d6fd5f310ab1a3bb8c",
+      "mode": 436,
+      "size_bytes": 11339
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/evidence-v3.json",
+      "archive_path": "historical-records/evidence-v3.json",
+      "sha256": "c602627e8bbf3a401bc47fa984d4cbab78f67f6d7008aab8521b1036f3526db6",
+      "mode": 436,
+      "size_bytes": 4880
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/evidence-v4.json",
+      "archive_path": "historical-records/evidence-v4.json",
+      "sha256": "fb89c7836e9fff131cefcf164a19d071978163f9b40f4f762117949ca0e9cae5",
+      "mode": 436,
+      "size_bytes": 5692
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/evidence-v5.json",
+      "archive_path": "historical-records/evidence-v5.json",
+      "sha256": "4fd3acdebf718b937b4d56d49a2162cd01e49b94399af8f55edc9b77609b7f09",
+      "mode": 436,
+      "size_bytes": 2111
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/evidence.json",
+      "archive_path": "historical-records/evidence.json",
+      "sha256": "a4167ea71d271f275360f8ce93a9590f0c2800ee07664faf160e278452e8ca60",
+      "mode": 436,
+      "size_bytes": 5621
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/fifo-source-phase-authorization-v1.json",
+      "archive_path": "historical-records/fifo-source-phase-authorization-v1.json",
+      "sha256": "831b7baa2ffd989ee4b2ee987e94c91b86c9ff39105b639d5a2c8fb4b77d9f81",
+      "mode": 436,
+      "size_bytes": 670
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/final-suite-completion.log",
+      "archive_path": "historical-records/final-suite-completion.log",
+      "sha256": "f32e1636c9da9a09a53cfcab93b53ba6975ff42fe5630f00134e0706bd2db51e",
+      "mode": 436,
+      "size_bytes": 122
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/final-suite-frozen-candidate.log",
+      "archive_path": "historical-records/final-suite-frozen-candidate.log",
+      "sha256": "fe2b5da2fa4a4c5d8a1c45931328f34e2bbd762446aa9f41f2f392f3f1cde3c1",
+      "mode": 436,
+      "size_bytes": 122
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/final-suite-run-1.log",
+      "archive_path": "historical-records/final-suite-run-1.log",
+      "sha256": "fce797afcc7a8fc1541baba89b7e3ebb46e4125f2a78fb5c56d6e47537dc091c",
+      "mode": 436,
+      "size_bytes": 122
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/final-suite-run-2.log",
+      "archive_path": "historical-records/final-suite-run-2.log",
+      "sha256": "49416860e0b2c49536965624fd15c86b557239e954e83c6b0ff179fedd650791",
+      "mode": 436,
+      "size_bytes": 122
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/final-suite-v2-final.log",
+      "archive_path": "historical-records/final-suite-v2-final.log",
+      "sha256": "1a0e56d790c4d4a84a72ebb4bd9e20a512d75942c901c4e78abc8575f414ee19",
+      "mode": 436,
+      "size_bytes": 148
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/final-suite-v2.log",
+      "archive_path": "historical-records/final-suite-v2.log",
+      "sha256": "0a630ce4f33c3682954b43573055cc0af39fc63ba239f5e51ee7d8fc545904e0",
+      "mode": 436,
+      "size_bytes": 148
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/final-suite.log",
+      "archive_path": "historical-records/final-suite.log",
+      "sha256": "3978de73bae174a9a1213f770e5ea3c65ea8d952663cf9d60e91c041eeaeeec5",
+      "mode": 436,
+      "size_bytes": 122
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/governance-astra-v1.json",
+      "archive_path": "historical-records/governance-astra-v1.json",
+      "sha256": "2936ea0be2d27edb73f3dcda964202de3fe86f26f1aa4550ba81239162c169c9",
+      "mode": 436,
+      "size_bytes": 5386
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/governance-astra-v3.json",
+      "archive_path": "historical-records/governance-astra-v3.json",
+      "sha256": "791ce47750364dbf0df47fbb9492c584d6e4b9ba68e1c776cbc7c2b7572e3e07",
+      "mode": 436,
+      "size_bytes": 4901
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/governance-astra-v4.json",
+      "archive_path": "historical-records/governance-astra-v4.json",
+      "sha256": "337fde1d6f4fcd5da121e75a37c123cfd1aa50d5a9c1e78ba571d402da64bf18",
+      "mode": 436,
+      "size_bytes": 5006
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/governance-luna-v1.json",
+      "archive_path": "historical-records/governance-luna-v1.json",
+      "sha256": "f05b299218629aa411ea1e27c7e80a775dfedf288a7d42dc34d342eabb31647f",
+      "mode": 436,
+      "size_bytes": 3327
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/governance-luna-v3.json",
+      "archive_path": "historical-records/governance-luna-v3.json",
+      "sha256": "53262d8ef4c176b4e5d6cd3bebd6ee8aebe201102aa5630b3a87b7021ddedd94",
+      "mode": 436,
+      "size_bytes": 4125
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/governance-luna-v4.json",
+      "archive_path": "historical-records/governance-luna-v4.json",
+      "sha256": "a1a01fa6b390c30f4b4121d93baebe856b64a4c9a7873dff61d1c43000a75697",
+      "mode": 436,
+      "size_bytes": 3413
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/implementation-plan-v1.md",
+      "archive_path": "historical-records/implementation-plan-v1.md",
+      "sha256": "3fd1f7c36404183222238108d5b86dc1db64b5bb0de0f466bd9b2a8a488c6b4d",
+      "mode": 436,
+      "size_bytes": 10687
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/implementation-plan-v2.md",
+      "archive_path": "historical-records/implementation-plan-v2.md",
+      "sha256": "37455514dd9ff5f5b8380a9f5d18d280c731d91f2cb3332e55459adb342e9b8c",
+      "mode": 436,
+      "size_bytes": 11505
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/implementation-plan-v3.md",
+      "archive_path": "historical-records/implementation-plan-v3.md",
+      "sha256": "bc6ad792747145843bee993f6e8d17e0959f7f01fd89c4d6e1647efbce522156",
+      "mode": 436,
+      "size_bytes": 12023
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/implementation-run-1.log",
+      "archive_path": "historical-records/implementation-run-1.log",
+      "sha256": "5b0a194d2742acb6687237a2e1d49ae2cc3770b4f713e9f0fbdd0ed81d894ead",
+      "mode": 436,
+      "size_bytes": 1925
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/implementation-run-2.log",
+      "archive_path": "historical-records/implementation-run-2.log",
+      "sha256": "fd1680ed73441b21d72676455d6db532733d6e50d9d377ebc89ac680a949758f",
+      "mode": 436,
+      "size_bytes": 552
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/implementation-run-3.log",
+      "archive_path": "historical-records/implementation-run-3.log",
+      "sha256": "9dc2c0dd7e0e9c907b4c11c6202796d7966a9f21ada09839cc74ed4686e6ae96",
+      "mode": 436,
+      "size_bytes": 114
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/implementation-summary-v2.md",
+      "archive_path": "historical-records/implementation-summary-v2.md",
+      "sha256": "a4eff6a13232dbfe6db721f2b3bc5206f2b8559f9d3ec510c3f47cc715c1e469",
+      "mode": 436,
+      "size_bytes": 2000
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/implementation-summary.md",
+      "archive_path": "historical-records/implementation-summary.md",
+      "sha256": "59a425efcfad817c55d3f05888d7300b84fedc1e4787f143d89769e0cda91bc9",
+      "mode": 436,
+      "size_bytes": 2216
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-green-evidence-v2.json",
+      "archive_path": "historical-records/input-green-evidence-v2.json",
+      "sha256": "054b06f078bea1bde09ff051e3c1b76189e255c1efd48efceca78c5a12f77cf0",
+      "mode": 436,
+      "size_bytes": 2603
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-green-evidence-v3.json",
+      "archive_path": "historical-records/input-green-evidence-v3.json",
+      "sha256": "054b06f078bea1bde09ff051e3c1b76189e255c1efd48efceca78c5a12f77cf0",
+      "mode": 436,
+      "size_bytes": 2603
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-green-evidence-v4.json",
+      "archive_path": "historical-records/input-green-evidence-v4.json",
+      "sha256": "b08b2ffa3fc424790640ddb2f481fc823a7feca8213516a39d1d25ee496397d4",
+      "mode": 436,
+      "size_bytes": 3370
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-plan-astra-v1.json",
+      "archive_path": "historical-records/input-plan-astra-v1.json",
+      "sha256": "c9cc857e749c245e82015ad4456f7665c65e28bc11556dd2cfb9ac4da7ff6d9b",
+      "mode": 436,
+      "size_bytes": 235
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-plan-astra-v2.json",
+      "archive_path": "historical-records/input-plan-astra-v2.json",
+      "sha256": "c9756319c715d3892484c2a7e28fd08b8f4dc767b08b94c072d8f11956b94911",
+      "mode": 436,
+      "size_bytes": 235
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-plan-luna-v1.json",
+      "archive_path": "historical-records/input-plan-luna-v1.json",
+      "sha256": "14514be1c0fb54c157697061681d48fcca374beb95960ad155fab4502667251a",
+      "mode": 436,
+      "size_bytes": 2219
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-plan-luna-v2.json",
+      "archive_path": "historical-records/input-plan-luna-v2.json",
+      "sha256": "d72c9bab37d46a52446c2b628cee1c22dca0e0d7407d3c3613ac29c6ae20a8bf",
+      "mode": 436,
+      "size_bytes": 233
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-program-red-evidence-v2.json",
+      "archive_path": "historical-records/input-program-red-evidence-v2.json",
+      "sha256": "56d73b564d24dff12cb8de684dbb2b8acfc8ff458a283635fb54c8a8cd895b95",
+      "mode": 436,
+      "size_bytes": 8551
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-program-red-evidence-v3.json",
+      "archive_path": "historical-records/input-program-red-evidence-v3.json",
+      "sha256": "200b33b215f24116f43a7df3af800b447ddcf7c39aa81b5d0d000e377a51c8f4",
+      "mode": 436,
+      "size_bytes": 9521
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_bash_stdin_source_is_refused.json",
+      "archive_path": "historical-records/input-red-test_bash_stdin_source_is_refused.json",
+      "sha256": "d7bae564f2f59f5e1693c1c76ef53a14176dfa7227952ba3f60780479a4ef5d9",
+      "mode": 436,
+      "size_bytes": 645
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_bash_stdin_source_is_refused.stderr.log",
+      "archive_path": "historical-records/input-red-test_bash_stdin_source_is_refused.stderr.log",
+      "sha256": "40f27c01b8cb90534d060e59a0fb753780380e82f78c5c6280f130ca0bec8c71",
+      "mode": 436,
+      "size_bytes": 454
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_bash_stdin_source_is_refused.stdout.log",
+      "archive_path": "historical-records/input-red-test_bash_stdin_source_is_refused.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_opaque_pinned_command_receives_eof_not_caller_source.json",
+      "archive_path": "historical-records/input-red-test_opaque_pinned_command_receives_eof_not_caller_source.json",
+      "sha256": "43ca2b1dac72679eb32e186fed2c4fe77705d0227c6487903a49e9002af3c93d",
+      "mode": 436,
+      "size_bytes": 741
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_opaque_pinned_command_receives_eof_not_caller_source.stderr.log",
+      "archive_path": "historical-records/input-red-test_opaque_pinned_command_receives_eof_not_caller_source.stderr.log",
+      "sha256": "ac276c73f48d7a25064653b94283d5426c403986473e3ff64e3428e607d1be36",
+      "mode": 436,
+      "size_bytes": 526
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_opaque_pinned_command_receives_eof_not_caller_source.stdout.log",
+      "archive_path": "historical-records/input-red-test_opaque_pinned_command_receives_eof_not_caller_source.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_python_isolated_without_no_site_is_not_admitted.json",
+      "archive_path": "historical-records/input-red-test_python_isolated_without_no_site_is_not_admitted.json",
+      "sha256": "7e3a3d84ff40d19ca4388cfee55a703d5833f72450353a11a97af1f67aac8051",
+      "mode": 436,
+      "size_bytes": 721
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_python_isolated_without_no_site_is_not_admitted.stderr.log",
+      "archive_path": "historical-records/input-red-test_python_isolated_without_no_site_is_not_admitted.stderr.log",
+      "sha256": "e844a56664e47432752829450182a274b1b627a116f251c65e1a08626ea0944d",
+      "mode": 436,
+      "size_bytes": 511
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_python_isolated_without_no_site_is_not_admitted.stdout.log",
+      "archive_path": "historical-records/input-red-test_python_isolated_without_no_site_is_not_admitted.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_python_stdin_source_is_refused.json",
+      "archive_path": "historical-records/input-red-test_python_stdin_source_is_refused.json",
+      "sha256": "8d6b3adec148bd22229f4593fdcc6ef0a9701fe5429130620dc88971c6b0407e",
+      "mode": 436,
+      "size_bytes": 653
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_python_stdin_source_is_refused.stderr.log",
+      "archive_path": "historical-records/input-red-test_python_stdin_source_is_refused.stderr.log",
+      "sha256": "7850a99f7e6b44f02dd5ac6bd702c179d3b6f396669d64e7559013855b368843",
+      "mode": 436,
+      "size_bytes": 460
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_python_stdin_source_is_refused.stdout.log",
+      "archive_path": "historical-records/input-red-test_python_stdin_source_is_refused.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_unpinned_python_directory_main_is_refused.json",
+      "archive_path": "historical-records/input-red-test_unpinned_python_directory_main_is_refused.json",
+      "sha256": "f632e1466c9ba6755508a1c08be9c4d8a109655a99671490cbeaf22f5a12da98",
+      "mode": 436,
+      "size_bytes": 697
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_unpinned_python_directory_main_is_refused.stderr.log",
+      "archive_path": "historical-records/input-red-test_unpinned_python_directory_main_is_refused.stderr.log",
+      "sha256": "b681f80532280c2d8299dc787e88e9e762e12182d4b9b65a4b29e463997d3a7e",
+      "mode": 436,
+      "size_bytes": 493
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-red-test_unpinned_python_directory_main_is_refused.stdout.log",
+      "archive_path": "historical-records/input-red-test_unpinned_python_directory_main_is_refused.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-1.stderr.log",
+      "archive_path": "historical-records/input-root-identical-green-1.stderr.log",
+      "sha256": "d86eeba877b43fc9d49d50e4a17ebb349a8869ff2cd03ee8aa19804da1ccfc97",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-1.stdout.log",
+      "archive_path": "historical-records/input-root-identical-green-1.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-2.stderr.log",
+      "archive_path": "historical-records/input-root-identical-green-2.stderr.log",
+      "sha256": "5c16fa5f86e24a7467ba8dfea0809262e52e396bfb0992898a52f0bce555067d",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-2.stdout.log",
+      "archive_path": "historical-records/input-root-identical-green-2.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-3.stderr.log",
+      "archive_path": "historical-records/input-root-identical-green-3.stderr.log",
+      "sha256": "3420909f8b5c2e3ee7325bad5947edcfa5b9f48b5d7f6d59842d38ed1ffb6865",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-3.stdout.log",
+      "archive_path": "historical-records/input-root-identical-green-3.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-4.stderr.log",
+      "archive_path": "historical-records/input-root-identical-green-4.stderr.log",
+      "sha256": "a42877bd2e84c2e3d978e609e93b4293d642c94bcf1fc0d3766605363a41a608",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-4.stdout.log",
+      "archive_path": "historical-records/input-root-identical-green-4.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-5.stderr.log",
+      "archive_path": "historical-records/input-root-identical-green-5.stderr.log",
+      "sha256": "ff1fdaa7f7b011880e9cf5c61d0e51f0466d712f3ad1dc5e6ec9c7aa9fc2a728",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-5.stdout.log",
+      "archive_path": "historical-records/input-root-identical-green-5.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-root-identical-green-v1.json",
+      "archive_path": "historical-records/input-root-identical-green-v1.json",
+      "sha256": "ab7551c9151eb77f875161f0380b9c6eca541e666f19084873afbdfeca17de5b",
+      "mode": 436,
+      "size_bytes": 3497
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-source-phase-authorization-v1.json",
+      "archive_path": "historical-records/input-source-phase-authorization-v1.json",
+      "sha256": "858c9d3adf20e55004390e817364b5dab45c090b5aa8ba2384af6ba9bd756f78",
+      "mode": 436,
+      "size_bytes": 773
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-source-phase-authorization-v2.json",
+      "archive_path": "historical-records/input-source-phase-authorization-v2.json",
+      "sha256": "ef05372216b12ef8f1bf47f68c60349175457075959af349fa78aec701d6554e",
+      "mode": 436,
+      "size_bytes": 902
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-source-phase-suspension-v1.json",
+      "archive_path": "historical-records/input-source-phase-suspension-v1.json",
+      "sha256": "b7d270cedaffc7434ab1007a98d74ac2bce782fcc10d5efab25b0b8fdddb581a",
+      "mode": 436,
+      "size_bytes": 484
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-contradictory-tests.py",
+      "archive_path": "historical-records/input-v2-contradictory-tests.py",
+      "sha256": "292ce4d9897ba78bcb739a72c30e3cacf57a19b15da36c1d4f6d1790db4c1a6a",
+      "mode": 436,
+      "size_bytes": 40830
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-green-1.stderr.log",
+      "archive_path": "historical-records/input-v2-green-1.stderr.log",
+      "sha256": "05ad26e36631de8131f12873f769dbb00171493c677c523443005184597b477b",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-green-1.stdout.log",
+      "archive_path": "historical-records/input-v2-green-1.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-green-2.stderr.log",
+      "archive_path": "historical-records/input-v2-green-2.stderr.log",
+      "sha256": "b3863de40bdc191d8cc001e14a618e30d250c9733ba0897709962f097e9e0f0a",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-green-2.stdout.log",
+      "archive_path": "historical-records/input-v2-green-2.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-green-3.stderr.log",
+      "archive_path": "historical-records/input-v2-green-3.stderr.log",
+      "sha256": "708feba68f2d954bffaf77ffd887b10b9a9b074c696163446c774053bf176a32",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-green-3.stdout.log",
+      "archive_path": "historical-records/input-v2-green-3.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-green-4.stderr.log",
+      "archive_path": "historical-records/input-v2-green-4.stderr.log",
+      "sha256": "61a359b33668d78f8c0ffce569884985c0c852b162d11bd082661867440b5244",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-green-4.stdout.log",
+      "archive_path": "historical-records/input-v2-green-4.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-green-5.stderr.log",
+      "archive_path": "historical-records/input-v2-green-5.stderr.log",
+      "sha256": "c3225ddfde34e105f30ecab99c3fa9e9c4702c24725636c2ec9827e8bc397d11",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-green-5.stdout.log",
+      "archive_path": "historical-records/input-v2-green-5.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_bash_stdin_source_is_refused.json",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_bash_stdin_source_is_refused.json",
+      "sha256": "eed174321cc8117eeefb8da481758b67bf363dd24888d74a9c8bd63e783a8137",
+      "mode": 436,
+      "size_bytes": 700
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_bash_stdin_source_is_refused.stderr.log",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_bash_stdin_source_is_refused.stderr.log",
+      "sha256": "158e5a02893be894a1d0ded444111b93ec18e26e29ab1e13adffc51d0652bb76",
+      "mode": 436,
+      "size_bytes": 763
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_bash_stdin_source_is_refused.stdout.log",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_bash_stdin_source_is_refused.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_opaque_pinned_command_receives_eof_not_caller_source.json",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_opaque_pinned_command_receives_eof_not_caller_source.json",
+      "sha256": "e74e00db49212a2dec7df114b4270d16d4eeaaf028cccd39f512a53938efac3e",
+      "mode": 436,
+      "size_bytes": 796
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_opaque_pinned_command_receives_eof_not_caller_source.stderr.log",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_opaque_pinned_command_receives_eof_not_caller_source.stderr.log",
+      "sha256": "765639f6e31add7c799c9bd7405cc867c6403011194af586d1c3e229e8894e97",
+      "mode": 436,
+      "size_bytes": 800
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_opaque_pinned_command_receives_eof_not_caller_source.stdout.log",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_opaque_pinned_command_receives_eof_not_caller_source.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_python_isolated_without_no_site_is_not_admitted.json",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_python_isolated_without_no_site_is_not_admitted.json",
+      "sha256": "a571a74226287ae261383ae949373c52f7fe92e0905d6c7741b42c5632858a63",
+      "mode": 436,
+      "size_bytes": 776
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_python_isolated_without_no_site_is_not_admitted.stderr.log",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_python_isolated_without_no_site_is_not_admitted.stderr.log",
+      "sha256": "67507f887dcc7f1bed7d2be20817e109459402bcf18976ee88e8c21d8f24a6d1",
+      "mode": 436,
+      "size_bytes": 714
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_python_isolated_without_no_site_is_not_admitted.stdout.log",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_python_isolated_without_no_site_is_not_admitted.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_python_stdin_source_is_refused.json",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_python_stdin_source_is_refused.json",
+      "sha256": "56585f41616f3eb116c2923560bc2eff2415ef9586f6891a51d23f4dfc4987df",
+      "mode": 436,
+      "size_bytes": 708
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_python_stdin_source_is_refused.stderr.log",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_python_stdin_source_is_refused.stderr.log",
+      "sha256": "262db0c31636a3e347ad8e2db00b37368af94f3817ee6227060e3912c3d1705e",
+      "mode": 436,
+      "size_bytes": 773
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_python_stdin_source_is_refused.stdout.log",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_python_stdin_source_is_refused.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_unpinned_python_directory_main_is_refused.json",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_unpinned_python_directory_main_is_refused.json",
+      "sha256": "c878742120d15703b56fb5990bef50b59095189021dfc8f46ffc5da0fd373ced",
+      "mode": 436,
+      "size_bytes": 752
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_unpinned_python_directory_main_is_refused.stderr.log",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_unpinned_python_directory_main_is_refused.stderr.log",
+      "sha256": "0d35bf904584a0ca10c0ea35dd28536e07bd23c2b14be47a888b3c340b3ffadc",
+      "mode": 436,
+      "size_bytes": 808
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-confirmed-test_unpinned_python_directory_main_is_refused.stdout.log",
+      "archive_path": "historical-records/input-v2-red-confirmed-test_unpinned_python_directory_main_is_refused.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_bash_stdin_source_is_refused.json",
+      "archive_path": "historical-records/input-v2-red-test_bash_stdin_source_is_refused.json",
+      "sha256": "6f519e7a719b0cd2e891dbb7d71e145d949ab6ab793fa62e50411a723d4b4a8a",
+      "mode": 436,
+      "size_bytes": 659
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_bash_stdin_source_is_refused.stderr.log",
+      "archive_path": "historical-records/input-v2-red-test_bash_stdin_source_is_refused.stderr.log",
+      "sha256": "ad15c073f3b84a643fdc5faf2834001568cff42ada933fd43dbf7a809dc2f548",
+      "mode": 436,
+      "size_bytes": 626
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_bash_stdin_source_is_refused.stdout.log",
+      "archive_path": "historical-records/input-v2-red-test_bash_stdin_source_is_refused.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_opaque_pinned_command_receives_eof_not_caller_source.json",
+      "archive_path": "historical-records/input-v2-red-test_opaque_pinned_command_receives_eof_not_caller_source.json",
+      "sha256": "8ff9f83007367b8d78509e930940ad2fc3a814c2258b5eb43f638670a8793413",
+      "mode": 436,
+      "size_bytes": 755
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_opaque_pinned_command_receives_eof_not_caller_source.stderr.log",
+      "archive_path": "historical-records/input-v2-red-test_opaque_pinned_command_receives_eof_not_caller_source.stderr.log",
+      "sha256": "d1f643fa0512fffcdf683ba80a4d16b9b1e99e550b39f9aa0aede810fae8e94d",
+      "mode": 436,
+      "size_bytes": 800
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_opaque_pinned_command_receives_eof_not_caller_source.stdout.log",
+      "archive_path": "historical-records/input-v2-red-test_opaque_pinned_command_receives_eof_not_caller_source.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_python_isolated_without_no_site_is_not_admitted.json",
+      "archive_path": "historical-records/input-v2-red-test_python_isolated_without_no_site_is_not_admitted.json",
+      "sha256": "fbacc5d8244a97c88bf0b54d7f041d72ac8256f5d53aec8fb9dece749fc2b014",
+      "mode": 436,
+      "size_bytes": 735
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_python_isolated_without_no_site_is_not_admitted.stderr.log",
+      "archive_path": "historical-records/input-v2-red-test_python_isolated_without_no_site_is_not_admitted.stderr.log",
+      "sha256": "c70ac7141549e9616098f2eaf7b55d6942fb08a635ac9044fef921bc5aa5e2fc",
+      "mode": 436,
+      "size_bytes": 714
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_python_isolated_without_no_site_is_not_admitted.stdout.log",
+      "archive_path": "historical-records/input-v2-red-test_python_isolated_without_no_site_is_not_admitted.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_python_stdin_source_is_refused.json",
+      "archive_path": "historical-records/input-v2-red-test_python_stdin_source_is_refused.json",
+      "sha256": "ca0d1f3879620306066dec0dcbfea963e1845a3bc5be77b44684b8a78bc31d0d",
+      "mode": 436,
+      "size_bytes": 667
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_python_stdin_source_is_refused.stderr.log",
+      "archive_path": "historical-records/input-v2-red-test_python_stdin_source_is_refused.stderr.log",
+      "sha256": "456eac7bb012bc892a3bcb6f0ac9589f0fb4a122a2cbcee47e9638e232371645",
+      "mode": 436,
+      "size_bytes": 632
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_python_stdin_source_is_refused.stdout.log",
+      "archive_path": "historical-records/input-v2-red-test_python_stdin_source_is_refused.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_unpinned_python_directory_main_is_refused.json",
+      "archive_path": "historical-records/input-v2-red-test_unpinned_python_directory_main_is_refused.json",
+      "sha256": "88c336c857d0ab1176d8ff1e040baea4fc94ad94d16410be95c1a504086c91ae",
+      "mode": 436,
+      "size_bytes": 711
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_unpinned_python_directory_main_is_refused.stderr.log",
+      "archive_path": "historical-records/input-v2-red-test_unpinned_python_directory_main_is_refused.stderr.log",
+      "sha256": "3678ba7d2c2607e90e58667fa79c17695a56c940267a66e3f178243d58db52ce",
+      "mode": 436,
+      "size_bytes": 665
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-red-test_unpinned_python_directory_main_is_refused.stdout.log",
+      "archive_path": "historical-records/input-v2-red-test_unpinned_python_directory_main_is_refused.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-site-no-site-corrected-confirm2.json",
+      "archive_path": "historical-records/input-v2-site-no-site-corrected-confirm2.json",
+      "sha256": "c78bb8d8e3a0e7740d2006db34c51db7b0589e4747d125e07f04ab0006d6944f",
+      "mode": 436,
+      "size_bytes": 820
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-site-no-site-corrected-confirm2.stderr.log",
+      "archive_path": "historical-records/input-v2-site-no-site-corrected-confirm2.stderr.log",
+      "sha256": "e0c71aef00636b1b821630e77a28e739165cad50f12d6e47808633cc2e2c4c07",
+      "mode": 436,
+      "size_bytes": 869
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-site-no-site-corrected-confirm2.stdout.log",
+      "archive_path": "historical-records/input-v2-site-no-site-corrected-confirm2.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-site-no-site-corrected-red.json",
+      "archive_path": "historical-records/input-v2-site-no-site-corrected-red.json",
+      "sha256": "68bb388a4b10f2f6f53480918b7bc670d184de4c209232b3c02c468a4c118daa",
+      "mode": 436,
+      "size_bytes": 810
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-site-no-site-corrected-red.stderr.log",
+      "archive_path": "historical-records/input-v2-site-no-site-corrected-red.stderr.log",
+      "sha256": "ab40bb27b0ffa5d4d076dffc789fa74af88798ac71e882c6896090c0788cd69d",
+      "mode": 436,
+      "size_bytes": 956
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v2-site-no-site-corrected-red.stdout.log",
+      "archive_path": "historical-records/input-v2-site-no-site-corrected-red.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v3-bash-fifo-red.stderr.log",
+      "archive_path": "historical-records/input-v3-bash-fifo-red.stderr.log",
+      "sha256": "2039d0aa096d441f8b53e88a32a226a467a97bcc876893e210b108cded6400d5",
+      "mode": 436,
+      "size_bytes": 1028
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v3-bash-fifo-red.stdout.log",
+      "archive_path": "historical-records/input-v3-bash-fifo-red.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v3-fifo-red-evidence.json",
+      "archive_path": "historical-records/input-v3-fifo-red-evidence.json",
+      "sha256": "12cd4b7598c36d3199034351e24b21d547f4b2103c26a02fc3836428ad0466c0",
+      "mode": 436,
+      "size_bytes": 2110
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v3-fifo-red.stderr.log",
+      "archive_path": "historical-records/input-v3-fifo-red.stderr.log",
+      "sha256": "1e617301f3e70c24f044ffbf8cbc4d4cd7932cd9e09ac52629a2a645792804cd",
+      "mode": 436,
+      "size_bytes": 1672
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v3-fifo-red.stdout.log",
+      "archive_path": "historical-records/input-v3-fifo-red.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v3-fifo-split-red-evidence.json",
+      "archive_path": "historical-records/input-v3-fifo-split-red-evidence.json",
+      "sha256": "ea819649a358dcba8713d6cac43d285f548236787402117ae6dc2fb636c2d4ea",
+      "mode": 436,
+      "size_bytes": 2099
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v3-python-fifo-red.stderr.log",
+      "archive_path": "historical-records/input-v3-python-fifo-red.stderr.log",
+      "sha256": "aa7d146f78d23ef1ba7476880d25f9ae788c24fda0b0f376ac6890be3f8e1d07",
+      "mode": 436,
+      "size_bytes": 1036
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v3-python-fifo-red.stdout.log",
+      "archive_path": "historical-records/input-v3-python-fifo-red.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-1.stderr.log",
+      "archive_path": "historical-records/input-v4-green-1.stderr.log",
+      "sha256": "d3bae7d7817dab7714d95f34c3cce1f5dda95c3f79861ff3edb6e5d8f186e458",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-1.stdout.log",
+      "archive_path": "historical-records/input-v4-green-1.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-2.stderr.log",
+      "archive_path": "historical-records/input-v4-green-2.stderr.log",
+      "sha256": "cc1ec72c455d00bbcda176e4c6924f23084cde47e7d484d0675bde300cbcdf77",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-2.stdout.log",
+      "archive_path": "historical-records/input-v4-green-2.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-3.stderr.log",
+      "archive_path": "historical-records/input-v4-green-3.stderr.log",
+      "sha256": "d05d7b542253bfbcd41bfc2487ed0bf0ef97fd902140d6a1ef5d82f8e496a2a7",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-3.stdout.log",
+      "archive_path": "historical-records/input-v4-green-3.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-4.stderr.log",
+      "archive_path": "historical-records/input-v4-green-4.stderr.log",
+      "sha256": "91979d0184a85394a31bc4de57918feaf50293e2be86fff19ce3874557943d5d",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-4.stdout.log",
+      "archive_path": "historical-records/input-v4-green-4.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-5.stderr.log",
+      "archive_path": "historical-records/input-v4-green-5.stderr.log",
+      "sha256": "4770d8a76bd7bab0cd6634baad89f7499a146fa0e95b79e50ca96f71e4771a77",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-5.stdout.log",
+      "archive_path": "historical-records/input-v4-green-5.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-6.stderr.log",
+      "archive_path": "historical-records/input-v4-green-6.stderr.log",
+      "sha256": "ce74792a384c6f6abf412f35611b275b5baaca26a133f02157b337e353c98823",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-6.stdout.log",
+      "archive_path": "historical-records/input-v4-green-6.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-7.stderr.log",
+      "archive_path": "historical-records/input-v4-green-7.stderr.log",
+      "sha256": "f2bc42bc97eb5e7e317ed7fb4f8c98a4f5dfc7483bb3e5397d9612332380a9a9",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-green-7.stdout.log",
+      "archive_path": "historical-records/input-v4-green-7.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-python-dash-red-evidence.json",
+      "archive_path": "historical-records/input-v4-python-dash-red-evidence.json",
+      "sha256": "e3bbe2d269611b13632c61e7740542d55969e890dda714ad6e2531a23a654a00",
+      "mode": 436,
+      "size_bytes": 1467
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-python-dash-red.stderr.log",
+      "archive_path": "historical-records/input-v4-python-dash-red.stderr.log",
+      "sha256": "4305dd86cfd5a1d09b75272fb5b23431510efba1fb92d8f12233b87653945f26",
+      "mode": 436,
+      "size_bytes": 842
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v4-python-dash-red.stdout.log",
+      "archive_path": "historical-records/input-v4-python-dash-red.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v5-python-dash-green.stderr.log",
+      "archive_path": "historical-records/input-v5-python-dash-green.stderr.log",
+      "sha256": "1321b6d5836fb9224d3a94490e291ea66a509975207830b8fbd5e933f654ff59",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-v5-python-dash-green.stdout.log",
+      "archive_path": "historical-records/input-v5-python-dash-green.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "mode": 436,
+      "size_bytes": 0
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/journal-terminal-green.log",
+      "archive_path": "historical-records/journal-terminal-green.log",
+      "sha256": "1a99c57eda7ec900dc74204d3f2acb6bf019ee9b6a64ae5e9a3e13fd02bdee12",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/journal-terminal-red-guard.py",
+      "archive_path": "historical-records/journal-terminal-red-guard.py",
+      "sha256": "7545caaa135bca79b90332940851f8c9ef641d04b2693cfbb10e6fe2611b84a8",
+      "mode": 436,
+      "size_bytes": 18124
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/journal-terminal-red-guard.sha256",
+      "archive_path": "historical-records/journal-terminal-red-guard.sha256",
+      "sha256": "7c8e7a39510e75f4507c4c29bda161e5239d7fb552fea1dbee57ba0099c302cd",
+      "mode": 436,
+      "size_bytes": 92
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/journal-terminal-red.log",
+      "archive_path": "historical-records/journal-terminal-red.log",
+      "sha256": "e8a7d546b60d82e198df198436e3ab523030b04d8b0990b9a7c8116f480c8bcc",
+      "mode": 436,
+      "size_bytes": 748
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v1/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green.json",
+      "archive_path": "historical-records/luna-candidate-v1/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green.json",
+      "sha256": "ca65ab6236c4be19bc161b0c2d8381d0a92acf081376c3cce2bd38c4a9c8af99",
+      "mode": 436,
+      "size_bytes": 110514
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v1/docs/process/task-run-guard.md",
+      "archive_path": "historical-records/luna-candidate-v1/docs/process/task-run-guard.md",
+      "sha256": "1081c1ca8f7f3b997e5c9ce8932026d56e5b4724af1da542f4cf4bd9ab162de7",
+      "mode": 436,
+      "size_bytes": 5326
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v1/scripts/review-matrix.json",
+      "archive_path": "historical-records/luna-candidate-v1/scripts/review-matrix.json",
+      "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+      "mode": 436,
+      "size_bytes": 630
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v1/scripts/run-task.sh",
+      "archive_path": "historical-records/luna-candidate-v1/scripts/run-task.sh",
+      "sha256": "dd1ddce57a3c257c6fad88330771409c786d59fb282a54ddb25962cf25e0ee6d",
+      "mode": 509,
+      "size_bytes": 55032
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v1/scripts/task-run-guard.py",
+      "archive_path": "historical-records/luna-candidate-v1/scripts/task-run-guard.py",
+      "sha256": "16ec3bb0bd0548d4e9b2a265190c4708b8b696b8a954d8eb1df0736fdaca309d",
+      "mode": 493,
+      "size_bytes": 19255
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v1/source-candidate-v1.json",
+      "archive_path": "historical-records/luna-candidate-v1/source-candidate-v1.json",
+      "sha256": "05917a0b6f54440cdb5dfe59f30afa14f986ac4b977e47abd4853ca5bad0a09c",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v1/tests/contract/workflow/task_run_guard_test.py",
+      "archive_path": "historical-records/luna-candidate-v1/tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "adb31ded2c044a1ff4cdeb6713ce7f8e59aa44513f66ec17f32e1752c156e6a7",
+      "mode": 436,
+      "size_bytes": 28028
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v2/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "archive_path": "historical-records/luna-candidate-v2/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "sha256": "79b6e4b631303c9e67c4783ab5d77b04a05d77d541134b1984947592f23eb095",
+      "mode": 436,
+      "size_bytes": 110516
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v2/docs/process/task-run-guard.md",
+      "archive_path": "historical-records/luna-candidate-v2/docs/process/task-run-guard.md",
+      "sha256": "af32aa83b3ac3c0d8d06ed6e1d2aa932ffe5a2b29b10eef188e6fb5e413d22f9",
+      "mode": 436,
+      "size_bytes": 6043
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v2/scripts/review-matrix.json",
+      "archive_path": "historical-records/luna-candidate-v2/scripts/review-matrix.json",
+      "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+      "mode": 436,
+      "size_bytes": 630
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v2/scripts/run-task.sh",
+      "archive_path": "historical-records/luna-candidate-v2/scripts/run-task.sh",
+      "sha256": "3c4c647097443d7fd4d6b32ef0e8f68cad07d5f0a1cb2b558d9e9adb145b2081",
+      "mode": 509,
+      "size_bytes": 55033
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v2/scripts/task-run-guard.py",
+      "archive_path": "historical-records/luna-candidate-v2/scripts/task-run-guard.py",
+      "sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73",
+      "mode": 493,
+      "size_bytes": 23161
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v2/source-candidate-v2.json",
+      "archive_path": "historical-records/luna-candidate-v2/source-candidate-v2.json",
+      "sha256": "113b061606609e645d35934ba42f044d378e2d5e8ac3cacbeae44d5a8ddb6e19",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v2/tests/contract/workflow/task_run_guard_test.py",
+      "archive_path": "historical-records/luna-candidate-v2/tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "37d61baa344977a3a2a701782f786678ae053b3b030188179c9c0f6b1562ce6e",
+      "mode": 436,
+      "size_bytes": 35886
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v3/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "archive_path": "historical-records/luna-candidate-v3/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "sha256": "c020e72d01df76f15fa4115ff7867108464ec4e513002df776ea167fa42a6591",
+      "mode": 436,
+      "size_bytes": 110518
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v3/docs/process/task-run-guard.md",
+      "archive_path": "historical-records/luna-candidate-v3/docs/process/task-run-guard.md",
+      "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b",
+      "mode": 436,
+      "size_bytes": 6896
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v3/scripts/review-matrix.json",
+      "archive_path": "historical-records/luna-candidate-v3/scripts/review-matrix.json",
+      "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+      "mode": 436,
+      "size_bytes": 630
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v3/scripts/run-task.sh",
+      "archive_path": "historical-records/luna-candidate-v3/scripts/run-task.sh",
+      "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b",
+      "mode": 509,
+      "size_bytes": 55034
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v3/scripts/task-run-guard.py",
+      "archive_path": "historical-records/luna-candidate-v3/scripts/task-run-guard.py",
+      "sha256": "064c7e271e80b60b4ac848b3f9483af0c9459e51a1fc2b5a2bf404738c577b86",
+      "mode": 493,
+      "size_bytes": 24386
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v3/source-candidate-v3.json",
+      "archive_path": "historical-records/luna-candidate-v3/source-candidate-v3.json",
+      "sha256": "b10afc448c31bf621a17e6fbe053fa3f5c381d8bb2004d84dc9fdca52ae77f67",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v3/tests/contract/workflow/task_run_guard_test.py",
+      "archive_path": "historical-records/luna-candidate-v3/tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "df4407459fe31b4e2b00a96fa55811eb8a4bb3dd8f3e2702444944af7fe7090e",
+      "mode": 436,
+      "size_bytes": 42783
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v4/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "archive_path": "historical-records/luna-candidate-v4/.scratch/reports/2026-10-13-fresh-session/guard/baseline-driver-green-v2.json",
+      "sha256": "cf916c49d5f46c59bfabad458a14e3cb221d3c9e1cc642fb28f75fbcbebdf5d4",
+      "mode": 436,
+      "size_bytes": 110518
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v4/docs/process/task-run-guard.md",
+      "archive_path": "historical-records/luna-candidate-v4/docs/process/task-run-guard.md",
+      "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b",
+      "mode": 436,
+      "size_bytes": 6896
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v4/scripts/review-matrix.json",
+      "archive_path": "historical-records/luna-candidate-v4/scripts/review-matrix.json",
+      "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+      "mode": 436,
+      "size_bytes": 630
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v4/scripts/run-task.sh",
+      "archive_path": "historical-records/luna-candidate-v4/scripts/run-task.sh",
+      "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b",
+      "mode": 509,
+      "size_bytes": 55034
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v4/scripts/task-run-guard.py",
+      "archive_path": "historical-records/luna-candidate-v4/scripts/task-run-guard.py",
+      "sha256": "0a88f3b8938c599a8017519bed1e1f6c52d1e1d23d77cc72271a5f6717ff9938",
+      "mode": 493,
+      "size_bytes": 24400
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v4/source-candidate-v4.json",
+      "archive_path": "historical-records/luna-candidate-v4/source-candidate-v4.json",
+      "sha256": "16a019e1ff6c92652c51a2db4d3a68e8bab5f52e9bf22307204f54374bdbdaad",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v4/tests/contract/workflow/task_run_guard_test.py",
+      "archive_path": "historical-records/luna-candidate-v4/tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "6838d9db81d5b62e12d174735500db43b078dd01c1b69e531d32e32978da9286",
+      "mode": 436,
+      "size_bytes": 44581
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v5/docs/process/task-run-guard.md",
+      "archive_path": "historical-records/luna-candidate-v5/docs/process/task-run-guard.md",
+      "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b",
+      "mode": 436,
+      "size_bytes": 6896
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v5/scripts/review-matrix.json",
+      "archive_path": "historical-records/luna-candidate-v5/scripts/review-matrix.json",
+      "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+      "mode": 436,
+      "size_bytes": 630
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v5/scripts/run-task.sh",
+      "archive_path": "historical-records/luna-candidate-v5/scripts/run-task.sh",
+      "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b",
+      "mode": 509,
+      "size_bytes": 55034
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v5/scripts/task-run-guard.py",
+      "archive_path": "historical-records/luna-candidate-v5/scripts/task-run-guard.py",
+      "sha256": "66d02bb9fd735760eb9208ba3e250681763083f93a0c9168b4ad82c29ccd41b2",
+      "mode": 493,
+      "size_bytes": 24494
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v5/source-candidate-v5.json",
+      "archive_path": "historical-records/luna-candidate-v5/source-candidate-v5.json",
+      "sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v5/source-luna-v5-tests.log",
+      "archive_path": "historical-records/luna-candidate-v5/source-luna-v5-tests.log",
+      "sha256": "64099a3c962b8984741091c83218b8681286f7b65f97499e1066b6e375477d66",
+      "mode": 436,
+      "size_bytes": 157
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v5/source-luna-v5.json",
+      "archive_path": "historical-records/luna-candidate-v5/source-luna-v5.json",
+      "sha256": "b89f731e8bff898e60436575e8eba02e5f81d4b5f7861a708d1ad205ff27bdcd",
+      "mode": 436,
+      "size_bytes": 6497
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v5/tests/contract/workflow/task_run_guard_test.py",
+      "archive_path": "historical-records/luna-candidate-v5/tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "7ae9ed666b6ba9bb01b32e55e27029ef88b6c480e6340a8d35041a887b972efc",
+      "mode": 436,
+      "size_bytes": 45625
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/plan-astra-v1.json",
+      "archive_path": "historical-records/plan-astra-v1.json",
+      "sha256": "298c9c73e9813a9735a97a977f39518227644bc533e51b8f99bb3867cf592229",
+      "mode": 436,
+      "size_bytes": 235
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/plan-astra-v1.md",
+      "archive_path": "historical-records/plan-astra-v1.md",
+      "sha256": "5a21e55ec4429524b082a221c967bf7beee45889cc8a70bc6e26de88bbbb722e",
+      "mode": 436,
+      "size_bytes": 2253
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/plan-astra-v2.json",
+      "archive_path": "historical-records/plan-astra-v2.json",
+      "sha256": "83860db99763927185578e474f5a944cc2a3f62d2d54614f2f85174acdb69502",
+      "mode": 436,
+      "size_bytes": 235
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/plan-astra-v2.md",
+      "archive_path": "historical-records/plan-astra-v2.md",
+      "sha256": "abf223105b3c410e92c714c1c7d65d71c5902ad32437ecec85629205b6d0133f",
+      "mode": 436,
+      "size_bytes": 1259
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/plan-astra-v3.json",
+      "archive_path": "historical-records/plan-astra-v3.json",
+      "sha256": "42565b4ac90af7d64c41a5972af742f2bf804f96e0b5fd957fb335c225b21fda",
+      "mode": 436,
+      "size_bytes": 235
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/plan-astra-v3.md",
+      "archive_path": "historical-records/plan-astra-v3.md",
+      "sha256": "da7d3f5a30f8b88a6e32a6f596339960ec8a47fb69108f5565ef484e9ca42e82",
+      "mode": 436,
+      "size_bytes": 1712
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/plan-luna-v1.json",
+      "archive_path": "historical-records/plan-luna-v1.json",
+      "sha256": "ed9c7fd1e2635c73501915ab75c65955676b57eb470287b4c3096dd50b91f2aa",
+      "mode": 436,
+      "size_bytes": 1194
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/plan-luna-v2.json",
+      "archive_path": "historical-records/plan-luna-v2.json",
+      "sha256": "452edc5d7d9f3decdd23da024869d657cd4f33645cfebf78b311af6c73fa926b",
+      "mode": 436,
+      "size_bytes": 1192
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/plan-luna-v3.json",
+      "archive_path": "historical-records/plan-luna-v3.json",
+      "sha256": "6467ac241c81679af6343cfbc3ac2f786b870959656b9ca680998d80e8bb93af",
+      "mode": 436,
+      "size_bytes": 233
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/post-v2-test_attempt_record_short_write_completes_before_dispatch.log",
+      "archive_path": "historical-records/post-v2-test_attempt_record_short_write_completes_before_dispatch.log",
+      "sha256": "c4dcc6746a9685d7866e962209e25c6aa18c4fc7675589c4771b2420838c567e",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/post-v2-test_attempt_record_short_write_never_dispatches.log",
+      "archive_path": "historical-records/post-v2-test_attempt_record_short_write_never_dispatches.log",
+      "sha256": "14b63d78fcbb17f1c428ebcc63c325b673ec0321555e36e596548a2e30b34cb9",
+      "mode": 436,
+      "size_bytes": 1556
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/post-v2-test_deadline_expiring_during_validation_never_dispatches.log",
+      "archive_path": "historical-records/post-v2-test_deadline_expiring_during_validation_never_dispatches.log",
+      "sha256": "09b1a175da44773abe5c9bd35d747413d1f537ebf4873d48f21f9cf6042f5eeb",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/post-v2-test_driver_argument_binding_uses_correct_run_argv_position.log",
+      "archive_path": "historical-records/post-v2-test_driver_argument_binding_uses_correct_run_argv_position.log",
+      "sha256": "aa3e57ae7be01669c483a9205961a3c36a3f8b42ee78c2e52381a9cea82fbc08",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/post-v2-test_fifo_script_input_refuses_before_dispatch.log",
+      "archive_path": "historical-records/post-v2-test_fifo_script_input_refuses_before_dispatch.log",
+      "sha256": "01ea3ce05c65a071b16df1696af750218b7168afc9a09d0dcde0562590f63c84",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/post-v2-test_hook_partial_environment_and_hostile_path_are_blocked.log",
+      "archive_path": "historical-records/post-v2-test_hook_partial_environment_and_hostile_path_are_blocked.log",
+      "sha256": "502f26d30bc9ab922621b05b4a0e1f242c105ea656d5176bf5f15325ff430cc8",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/post-v2-test_identity_or_attempt_write_error_refuses_without_dispatch.log",
+      "archive_path": "historical-records/post-v2-test_identity_or_attempt_write_error_refuses_without_dispatch.log",
+      "sha256": "7d6f3f2b0c75a7272e3e136f4ef3512eefcb357922e433d272431e599c2b9d6e",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/post-v2-test_policy_malformed_field_types_refuse_with_78.log",
+      "archive_path": "historical-records/post-v2-test_policy_malformed_field_types_refuse_with_78.log",
+      "sha256": "b3863de40bdc191d8cc001e14a618e30d250c9733ba0897709962f097e9e0f0a",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/postdeadline-journal-green.log",
+      "archive_path": "historical-records/postdeadline-journal-green.log",
+      "sha256": "332f36abc3e798aa30a8257f3610720547db068bc915d9e379d946a903193a5d",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/postdeadline-journal-red-guard.py",
+      "archive_path": "historical-records/postdeadline-journal-red-guard.py",
+      "sha256": "24e44666d8b4a45d7eda034830e37f589996d1faa8461584521a221192e401a5",
+      "mode": 493,
+      "size_bytes": 19164
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/postdeadline-journal-red-guard.sha256",
+      "archive_path": "historical-records/postdeadline-journal-red-guard.sha256",
+      "sha256": "d2d828afdd055d70dfb89d65af0b3c415b11fdc7c758350a1065116469aec102",
+      "mode": 436,
+      "size_bytes": 92
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/postdeadline-journal-red.log",
+      "archive_path": "historical-records/postdeadline-journal-red.log",
+      "sha256": "0bc911ca3a9372449cb611ee5731e4ef61791b41b31e4b489abc2c2beaf94848",
+      "mode": 436,
+      "size_bytes": 758
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-dash-sentinel-v4-guard.py",
+      "archive_path": "historical-records/pre-dash-sentinel-v4-guard.py",
+      "sha256": "0a88f3b8938c599a8017519bed1e1f6c52d1e1d23d77cc72271a5f6717ff9938",
+      "mode": 493,
+      "size_bytes": 24400
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-dash-sentinel-v4-tests.py",
+      "archive_path": "historical-records/pre-dash-sentinel-v4-tests.py",
+      "sha256": "6838d9db81d5b62e12d174735500db43b078dd01c1b69e531d32e32978da9286",
+      "mode": 436,
+      "size_bytes": 44581
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-fifo-v3-guard.py",
+      "archive_path": "historical-records/pre-fifo-v3-guard.py",
+      "sha256": "064c7e271e80b60b4ac848b3f9483af0c9459e51a1fc2b5a2bf404738c577b86",
+      "mode": 493,
+      "size_bytes": 24386
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-fifo-v3-tests.py",
+      "archive_path": "historical-records/pre-fifo-v3-tests.py",
+      "sha256": "df4407459fe31b4e2b00a96fa55811eb8a4bb3dd8f3e2702444944af7fe7090e",
+      "mode": 436,
+      "size_bytes": 42783
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-input-v2-doc.md",
+      "archive_path": "historical-records/pre-input-v2-doc.md",
+      "sha256": "af32aa83b3ac3c0d8d06ed6e1d2aa932ffe5a2b29b10eef188e6fb5e413d22f9",
+      "mode": 436,
+      "size_bytes": 6043
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-input-v2-guard.py",
+      "archive_path": "historical-records/pre-input-v2-guard.py",
+      "sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73",
+      "mode": 493,
+      "size_bytes": 23161
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-input-v2-run-task.sh",
+      "archive_path": "historical-records/pre-input-v2-run-task.sh",
+      "sha256": "3c4c647097443d7fd4d6b32ef0e8f68cad07d5f0a1cb2b558d9e9adb145b2081",
+      "mode": 509,
+      "size_bytes": 55033
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-input-v2-source-hashes.txt",
+      "archive_path": "historical-records/pre-input-v2-source-hashes.txt",
+      "sha256": "ba3f4a89ac337173e11007bbcc2d17a6e19e3c1d8353153e1479b14ad34f03e5",
+      "mode": 436,
+      "size_bytes": 388
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-input-v2-tests.py",
+      "archive_path": "historical-records/pre-input-v2-tests.py",
+      "sha256": "37d61baa344977a3a2a701782f786678ae053b3b030188179c9c0f6b1562ce6e",
+      "mode": 436,
+      "size_bytes": 35886
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-split-fifo-tests.py",
+      "archive_path": "historical-records/pre-split-fifo-tests.py",
+      "sha256": "b07dae0aaf440954ff499272ba44b43513aabe11f466c1f24713625b6ca36d9c",
+      "mode": 436,
+      "size_bytes": 44810
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-actual-red-test_attempt_record_short_write_never_dispatches.log",
+      "archive_path": "historical-records/pre-v2-actual-red-test_attempt_record_short_write_never_dispatches.log",
+      "sha256": "7e89f978be2cbbf26cabe54bdd318d6422f5ba1e8dd4d1c70de93424fc4f49d6",
+      "mode": 436,
+      "size_bytes": 666
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-actual-red-test_deadline_expiring_during_validation_never_dispatches.log",
+      "archive_path": "historical-records/pre-v2-actual-red-test_deadline_expiring_during_validation_never_dispatches.log",
+      "sha256": "99d62380d7553533761f727b63539d75823259dc1475e585d082eda0874dd3bf",
+      "mode": 436,
+      "size_bytes": 1977
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-actual-red-test_driver_argument_binding_uses_correct_run_argv_position.log",
+      "archive_path": "historical-records/pre-v2-actual-red-test_driver_argument_binding_uses_correct_run_argv_position.log",
+      "sha256": "8f0e118256a91e1758b8899752c6c90c87c3393c3bc5439073da6d2c918466b9",
+      "mode": 436,
+      "size_bytes": 800
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-actual-red-test_fifo_script_input_refuses_before_dispatch.log",
+      "archive_path": "historical-records/pre-v2-actual-red-test_fifo_script_input_refuses_before_dispatch.log",
+      "sha256": "a53781e0ac9180891bd5893f12730e55e5d4d4b7aaebab5deb2ed53397add7d1",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-actual-red-test_hook_partial_environment_and_hostile_path_are_blocked.log",
+      "archive_path": "historical-records/pre-v2-actual-red-test_hook_partial_environment_and_hostile_path_are_blocked.log",
+      "sha256": "bea978647b19fd843a9f21262ecfaac3c8b7fed8b6dd6f7dccc63bc04fbbe217",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-actual-red-test_policy_malformed_field_types_refuse_with_78.log",
+      "archive_path": "historical-records/pre-v2-actual-red-test_policy_malformed_field_types_refuse_with_78.log",
+      "sha256": "ec66f69ede6c54cdd05053f240cf404da348321183a942b79e8ac69d641439a3",
+      "mode": 436,
+      "size_bytes": 1607
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-guard.py",
+      "archive_path": "historical-records/pre-v2-guard.py",
+      "sha256": "16ec3bb0bd0548d4e9b2a265190c4708b8b696b8a954d8eb1df0736fdaca309d",
+      "mode": 493,
+      "size_bytes": 19255
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-red-bash-env.log",
+      "archive_path": "historical-records/pre-v2-red-bash-env.log",
+      "sha256": "2cba2e4f353ad63e38b57414e7c436d61dc5950a80f455505c9e6538cfc884aa",
+      "mode": 436,
+      "size_bytes": 667
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-red-test_attempt_record_short_write_never_dispatches.log",
+      "archive_path": "historical-records/pre-v2-red-test_attempt_record_short_write_never_dispatches.log",
+      "sha256": "778ced123cbabd65bc38fcc86627d2d059f7a987f36d2af11a823386391729ec",
+      "mode": 436,
+      "size_bytes": 499
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-red-test_deadline_expiring_during_validation_never_dispatches.log",
+      "archive_path": "historical-records/pre-v2-red-test_deadline_expiring_during_validation_never_dispatches.log",
+      "sha256": "2bc3541f94465aa293cdc0a9099877a4fc8d7b2d090a37136b8eeb795ff6bfe3",
+      "mode": 436,
+      "size_bytes": 526
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-red-test_driver_argument_binding_uses_correct_run_argv_position.log",
+      "archive_path": "historical-records/pre-v2-red-test_driver_argument_binding_uses_correct_run_argv_position.log",
+      "sha256": "bc66869fbeace3bc44f0bdd6022e3ace4f9b095a6537dc9777fb1ad6aa0d163d",
+      "mode": 436,
+      "size_bytes": 532
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-red-test_fifo_script_input_refuses_before_dispatch.log",
+      "archive_path": "historical-records/pre-v2-red-test_fifo_script_input_refuses_before_dispatch.log",
+      "sha256": "5d55462199116644ab351b58a7197b6a0b073382cc4e856181039532cc850e00",
+      "mode": 436,
+      "size_bytes": 493
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-red-test_policy_malformed_field_types_refuse_with_78.log",
+      "archive_path": "historical-records/pre-v2-red-test_policy_malformed_field_types_refuse_with_78.log",
+      "sha256": "06d1c27457b07a632764f6c079ebf3894b19bbe69ef8566da9f0540f8dc38b82",
+      "mode": 436,
+      "size_bytes": 499
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-replay-test_attempt_record_short_write_never_dispatches.log",
+      "archive_path": "historical-records/pre-v2-replay-test_attempt_record_short_write_never_dispatches.log",
+      "sha256": "5e785dffa8156b47f7948390c4d2175a78f90c6b816ae8fad2e8a659e5c6a5e0",
+      "mode": 436,
+      "size_bytes": 666
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-replay-test_deadline_expiring_during_validation_never_dispatches.log",
+      "archive_path": "historical-records/pre-v2-replay-test_deadline_expiring_during_validation_never_dispatches.log",
+      "sha256": "0764a5dc906fc0f4ae604998e223caffa5bea8f752875a720a82b8d2c0b1aedc",
+      "mode": 436,
+      "size_bytes": 779
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-replay-test_fifo_script_input_refuses_before_dispatch.log",
+      "archive_path": "historical-records/pre-v2-replay-test_fifo_script_input_refuses_before_dispatch.log",
+      "sha256": "67492c14dc597dcf07b4cad5de03c7f36afaced2410bec63027a5a3278d74a0a",
+      "mode": 436,
+      "size_bytes": 660
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-replay-test_hook_partial_environment_and_hostile_path_are_blocked.log",
+      "archive_path": "historical-records/pre-v2-replay-test_hook_partial_environment_and_hostile_path_are_blocked.log",
+      "sha256": "e70ea08f2c59331b71faf981429a5e85378e25d998108f45c7d3dd78f965d83b",
+      "mode": 436,
+      "size_bytes": 675
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-replay-test_identity_or_attempt_write_error_refuses_without_dispatch.log",
+      "archive_path": "historical-records/pre-v2-replay-test_identity_or_attempt_write_error_refuses_without_dispatch.log",
+      "sha256": "bb36a8c6a41f38577066f05aa49dd065a526208e6eafac90a43ec960a6eee5bc",
+      "mode": 436,
+      "size_bytes": 1927
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-replay-test_policy_malformed_field_types_refuse_with_78.log",
+      "archive_path": "historical-records/pre-v2-replay-test_policy_malformed_field_types_refuse_with_78.log",
+      "sha256": "a7ed722a0a7692b2969a49fd46d3790b2a6a772e47a804cf8942ade91f840cc3",
+      "mode": 436,
+      "size_bytes": 1442
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-reproduced-red-test_attempt_record_short_write_never_dispatches.log",
+      "archive_path": "historical-records/pre-v2-reproduced-red-test_attempt_record_short_write_never_dispatches.log",
+      "sha256": "e39c589e9ed6cf13bf5fea27c56bdc80cda5dcbdf2dcf6e0794b586bb2030635",
+      "mode": 436,
+      "size_bytes": 666
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-reproduced-red-test_deadline_expiring_during_validation_never_dispatches.log",
+      "archive_path": "historical-records/pre-v2-reproduced-red-test_deadline_expiring_during_validation_never_dispatches.log",
+      "sha256": "d04c87242440bc128f34d21859f9f042f60cc25a3f1885531ceca94dd4e96fff",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-reproduced-red-test_fifo_script_input_refuses_before_dispatch.log",
+      "archive_path": "historical-records/pre-v2-reproduced-red-test_fifo_script_input_refuses_before_dispatch.log",
+      "sha256": "01ea3ce05c65a071b16df1696af750218b7168afc9a09d0dcde0562590f63c84",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-reproduced-red-test_hook_partial_environment_and_hostile_path_are_blocked.log",
+      "archive_path": "historical-records/pre-v2-reproduced-red-test_hook_partial_environment_and_hostile_path_are_blocked.log",
+      "sha256": "22ad8cd7d24fb98c2d358623ec8e4c7c74f76a7e51bff6d2e6eb7c30622972d2",
+      "mode": 436,
+      "size_bytes": 675
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-reproduced-red-test_policy_malformed_field_types_refuse_with_78.log",
+      "archive_path": "historical-records/pre-v2-reproduced-red-test_policy_malformed_field_types_refuse_with_78.log",
+      "sha256": "79fc1f45d58a4149112048b23031f1a4e0f8898da1c0e8d48e1823cdd020b8f7",
+      "mode": 436,
+      "size_bytes": 1442
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-run-task.sh",
+      "archive_path": "historical-records/pre-v2-run-task.sh",
+      "sha256": "dd1ddce57a3c257c6fad88330771409c786d59fb282a54ddb25962cf25e0ee6d",
+      "mode": 509,
+      "size_bytes": 55032
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-source-hashes.txt",
+      "archive_path": "historical-records/pre-v2-source-hashes.txt",
+      "sha256": "c459677e7cd3032779e54ce079eeecc01f1ca442579111211cdb3c654afd583b",
+      "mode": 436,
+      "size_bytes": 388
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/preservation-before.json",
+      "archive_path": "historical-records/preservation-before.json",
+      "sha256": "80a8c8a2c09bfb5ad5d5518f6783df30700f027eb8d4a594f0672bccee19a795",
+      "mode": 436,
+      "size_bytes": 6004
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/program-input-repair-plan-v1.md",
+      "archive_path": "historical-records/program-input-repair-plan-v1.md",
+      "sha256": "d1d56bed6989675147641a1695ef6926e866a196cb4b22b1b3dd4459e78a7d4d",
+      "mode": 436,
+      "size_bytes": 6689
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/program-input-repair-plan-v2.md",
+      "archive_path": "historical-records/program-input-repair-plan-v2.md",
+      "sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+      "mode": 436,
+      "size_bytes": 7754
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/reanalysis-astra-v1.json",
+      "archive_path": "historical-records/reanalysis-astra-v1.json",
+      "sha256": "55e2c67c6b6396add64452c34c43d947dd7abaeb86d503bf9f7f414c975a7e40",
+      "mode": 436,
+      "size_bytes": 235
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/reanalysis-luna-v1.json",
+      "archive_path": "historical-records/reanalysis-luna-v1.json",
+      "sha256": "da288356476cf4b9fc491c1d7e93d2f40c211055068b0308fbf862b8ae9b6fb5",
+      "mode": 436,
+      "size_bytes": 233
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/remaining-argument-check-repair-plan-v1.json",
+      "archive_path": "historical-records/remaining-argument-check-repair-plan-v1.json",
+      "sha256": "2946effef05cb4713b7162bfd2e95bb30b64c02a0a2380cc6f0d200952a191f7",
+      "mode": 436,
+      "size_bytes": 1469
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-green-fifo.log",
+      "archive_path": "historical-records/repair-green-fifo.log",
+      "sha256": "cdd45671c523b4f61c957572a903998481884f5ff505ba373d977f4cddd5db22",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-green-monotonic-2.log",
+      "archive_path": "historical-records/repair-green-monotonic-2.log",
+      "sha256": "3ac55568bbd98ddc561efff318249aff26db63683440d28bb4fd4e710ca6acc3",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-green-monotonic.log",
+      "archive_path": "historical-records/repair-green-monotonic.log",
+      "sha256": "813a5befb6aa50c7a838df912fce8779c7e5447996da1b5c8086a3aa157cb48f",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-green-postcondition.log",
+      "archive_path": "historical-records/repair-green-postcondition.log",
+      "sha256": "1f20b4bb09e92cbcce01708cba7f639a6af4cf5f0fada2ca4293503ee06b0027",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-green-postdeadline.log",
+      "archive_path": "historical-records/repair-green-postdeadline.log",
+      "sha256": "b38b33bbabe4eb378089b4816bf71b67f5d60dd2ed7d79ec8e603e1f9a250389",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-green-scriptpin.log",
+      "archive_path": "historical-records/repair-green-scriptpin.log",
+      "sha256": "a53781e0ac9180891bd5893f12730e55e5d4d4b7aaebab5deb2ed53397add7d1",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-green-sigterm.log",
+      "archive_path": "historical-records/repair-green-sigterm.log",
+      "sha256": "808a12d3019fc70550f762687e4dab5f7e485597b1940569170ae335a88fd329",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-fifo.log",
+      "archive_path": "historical-records/repair-red-fifo.log",
+      "sha256": "5bef071109c1a0d06433116be9193de838f0c4618ad6deba0bbbddd98ff30389",
+      "mode": 436,
+      "size_bytes": 1693
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-guard.py",
+      "archive_path": "historical-records/repair-red-guard.py",
+      "sha256": "ffe83e25302ce9a48aa56c24c6a28415611420adebdda5f86695777f534127e1",
+      "mode": 436,
+      "size_bytes": 16640
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-guard.sha256",
+      "archive_path": "historical-records/repair-red-guard.sha256",
+      "sha256": "1eb7bd55f611838bb5f38df44be3904cb239286d7d1f6ce1c3ec18477c5dfd7d",
+      "mode": 436,
+      "size_bytes": 92
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-monotonic-2.log",
+      "archive_path": "historical-records/repair-red-monotonic-2.log",
+      "sha256": "c0ac873c2d9a1f9a97f7c68fd57fe172053e22b177857344fcfc904efa42e9ae",
+      "mode": 436,
+      "size_bytes": 660
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-monotonic-valid.log",
+      "archive_path": "historical-records/repair-red-monotonic-valid.log",
+      "sha256": "2a7bc712afde2c8aadb95d1f73addaad3275ea5348f8e45521663b9d9b86f87c",
+      "mode": 436,
+      "size_bytes": 1634
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-monotonic.log",
+      "archive_path": "historical-records/repair-red-monotonic.log",
+      "sha256": "1df83a1667598a9f1ed45b85da05c822583375fcd0e9e8665efa02444eef1ba0",
+      "mode": 436,
+      "size_bytes": 158
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-postcondition.log",
+      "archive_path": "historical-records/repair-red-postcondition.log",
+      "sha256": "a3351f67ebd82f71f9f2d05add859e813d12a98a9702ca0343d288c516765cc6",
+      "mode": 436,
+      "size_bytes": 660
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-postdeadline-2.log",
+      "archive_path": "historical-records/repair-red-postdeadline-2.log",
+      "sha256": "2f2e92585b8d95e22c8f98e1198fece524a9e80d0ddc16d73d02be519db30c02",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-postdeadline-3.log",
+      "archive_path": "historical-records/repair-red-postdeadline-3.log",
+      "sha256": "2f2e92585b8d95e22c8f98e1198fece524a9e80d0ddc16d73d02be519db30c02",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-postdeadline-4.log",
+      "archive_path": "historical-records/repair-red-postdeadline-4.log",
+      "sha256": "d8c967ce08d45e05a99714686288fa373600c0a5c29c8866390f18fef74d69b2",
+      "mode": 436,
+      "size_bytes": 678
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-postdeadline.log",
+      "archive_path": "historical-records/repair-red-postdeadline.log",
+      "sha256": "b3c5983926a835c62919618a45b88217fab4e92ee34b62717d7d0e373c28c604",
+      "mode": 436,
+      "size_bytes": 98
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-scriptpin.log",
+      "archive_path": "historical-records/repair-red-scriptpin.log",
+      "sha256": "7ce87fb676acd12e5eefd4cf0c174b32cf53efe1ebbc226db27701d6362105be",
+      "mode": 436,
+      "size_bytes": 657
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-sigterm.log",
+      "archive_path": "historical-records/repair-red-sigterm.log",
+      "sha256": "a3de4d0e283974ea788f2d2cfe92db9c7ed4bf7dadcb759a398f4a298854ddba",
+      "mode": 436,
+      "size_bytes": 663
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-tests.py",
+      "archive_path": "historical-records/repair-red-tests.py",
+      "sha256": "d0fd7084a9d89ecb946b0218fba105f0549993781a923c74b990ad906b5b78b1",
+      "mode": 436,
+      "size_bytes": 23074
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/repair-red-tests.sha256",
+      "archive_path": "historical-records/repair-red-tests.sha256",
+      "sha256": "fb08ea631b832be882a86eab0dd19c5583d94dccecaed705970ca055bf809ef6",
+      "mode": 436,
+      "size_bytes": 113
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v1-tests.log",
+      "archive_path": "historical-records/source-astra-v1-tests.log",
+      "sha256": "8afcbcff4d9611981b3eb9a6554f711ef519d643e8b2ce423e40ab9e82b9a6e8",
+      "mode": 436,
+      "size_bytes": 122
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v1.json",
+      "archive_path": "historical-records/source-astra-v1.json",
+      "sha256": "30fa71f949064e2ec7414b850d626c5196141d015ec0c552889b944ae3b0e699",
+      "mode": 436,
+      "size_bytes": 7249
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v2-before.json",
+      "archive_path": "historical-records/source-astra-v2-before.json",
+      "sha256": "2dd08011e10be5a7bd25cd2c673d7184b816b40c8ca91c0206c5e60027fb7d2a",
+      "mode": 436,
+      "size_bytes": 920
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v2-tests.log",
+      "archive_path": "historical-records/source-astra-v2-tests.log",
+      "sha256": "09bc0900b87a157a136df1911e23ecfe1699a470c6dec48c718f8848283589bd",
+      "mode": 436,
+      "size_bytes": 148
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v2.json",
+      "archive_path": "historical-records/source-astra-v2.json",
+      "sha256": "d231dba81bda4fd43c3bdd688f0ca2a48a162379a5c0705e51ed87c2a273cedc",
+      "mode": 436,
+      "size_bytes": 8285
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v3-tests.log",
+      "archive_path": "historical-records/source-astra-v3-tests.log",
+      "sha256": "4e4c13de9ff55fdcc4104f5dc25a52064fbcab3fbdc8ed31403f1338945b2cac",
+      "mode": 436,
+      "size_bytes": 154
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v3.json",
+      "archive_path": "historical-records/source-astra-v3.json",
+      "sha256": "b2b8d6efb8886f3964db626195f3d6dfe4499592c1267be22c960335fc1b9ddc",
+      "mode": 436,
+      "size_bytes": 9803
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v4-before.json",
+      "archive_path": "historical-records/source-astra-v4-before.json",
+      "sha256": "d4afac5e97f57405bbb353ad99717f44347095a279e3fc585483ee1abde59dd7",
+      "mode": 436,
+      "size_bytes": 764
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v4-tests.log",
+      "archive_path": "historical-records/source-astra-v4-tests.log",
+      "sha256": "35c0d59127b4a659bfd008118ef1faaa8b5a7d2fb3df269893c77111474a1911",
+      "mode": 436,
+      "size_bytes": 156
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v4.json",
+      "archive_path": "historical-records/source-astra-v4.json",
+      "sha256": "20a93adfa4dcb54dee757550bd6a98114e66c0f8d6fce8050ef8cedf2fa7467d",
+      "mode": 436,
+      "size_bytes": 8932
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v5-tests.log",
+      "archive_path": "historical-records/source-astra-v5-tests.log",
+      "sha256": "826503e265ab84aca11efd0443879ad9d76dcfb63ef24551614795bc468f531d",
+      "mode": 436,
+      "size_bytes": 157
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v5.json",
+      "archive_path": "historical-records/source-astra-v5.json",
+      "sha256": "ba6828094002ddf5a151791b1ac3ac4cea46d4bde06b50faf9086e9927325489",
+      "mode": 436,
+      "size_bytes": 10450
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-candidate-v1.diff",
+      "archive_path": "historical-records/source-candidate-v1.diff",
+      "sha256": "ca5fc6474f9e28dd505afeb93c3c00b49c50032d3953be3371d4733677e0fdc8",
+      "mode": 436,
+      "size_bytes": 55017
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-candidate-v1.json",
+      "archive_path": "historical-records/source-candidate-v1.json",
+      "sha256": "05917a0b6f54440cdb5dfe59f30afa14f986ac4b977e47abd4853ca5bad0a09c",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-candidate-v2.diff",
+      "archive_path": "historical-records/source-candidate-v2.diff",
+      "sha256": "ba1c3c76c5ad92725ed37cc840dacebb008f2f294d1b53e1e21b13f989e7e887",
+      "mode": 436,
+      "size_bytes": 67717
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-candidate-v2.json",
+      "archive_path": "historical-records/source-candidate-v2.json",
+      "sha256": "113b061606609e645d35934ba42f044d378e2d5e8ac3cacbeae44d5a8ddb6e19",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-candidate-v3.diff",
+      "archive_path": "historical-records/source-candidate-v3.diff",
+      "sha256": "e4eb56a46d7ea6dc01877321273650b7408c6aa3fc9f249f4b81b155ede58ce6",
+      "mode": 436,
+      "size_bytes": 76849
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-candidate-v3.json",
+      "archive_path": "historical-records/source-candidate-v3.json",
+      "sha256": "b10afc448c31bf621a17e6fbe053fa3f5c381d8bb2004d84dc9fdca52ae77f67",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-candidate-v4.json",
+      "archive_path": "historical-records/source-candidate-v4.json",
+      "sha256": "16a019e1ff6c92652c51a2db4d3a68e8bab5f52e9bf22307204f54374bdbdaad",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-candidate-v5.json",
+      "archive_path": "historical-records/source-candidate-v5.json",
+      "sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+      "mode": 436,
+      "size_bytes": 945
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v1-tests.log",
+      "archive_path": "historical-records/source-luna-v1-tests.log",
+      "sha256": "ccb5440ca37d061c03e4ccee061e14eaa3f9976fcfef84b0be51045059801f1a",
+      "mode": 436,
+      "size_bytes": 122
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v1.json",
+      "archive_path": "historical-records/source-luna-v1.json",
+      "sha256": "7b4970e8541ed2fe154ea4a4d13fce0d89096270665a33b538c06aa397804d60",
+      "mode": 436,
+      "size_bytes": 2363
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v2-tests.log",
+      "archive_path": "historical-records/source-luna-v2-tests.log",
+      "sha256": "bf66540829bb04bd5cf44753ade3463b3e07aa55ed384dbd1c290b5307012d2e",
+      "mode": 436,
+      "size_bytes": 148
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v2.json",
+      "archive_path": "historical-records/source-luna-v2.json",
+      "sha256": "bc7021d286dea312fc805c8023724b51e0749faf4603fb3971100c80e2fad94b",
+      "mode": 436,
+      "size_bytes": 3892
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v3-tests.log",
+      "archive_path": "historical-records/source-luna-v3-tests.log",
+      "sha256": "bfb665dac990c5be10326089d26acdacb3efc738421832d4cd0eda484c8d788d",
+      "mode": 436,
+      "size_bytes": 154
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v3.json",
+      "archive_path": "historical-records/source-luna-v3.json",
+      "sha256": "c0362779f678ef3ee1270817063b2c70f7376110142ab869daa9bfcd09e2d588",
+      "mode": 436,
+      "size_bytes": 3350
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v4-tests.log",
+      "archive_path": "historical-records/source-luna-v4-tests.log",
+      "sha256": "d709a2df52c2f7b04250f84ecb7af78eb9f61418953246b2c47424305cc88d45",
+      "mode": 436,
+      "size_bytes": 156
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v4.json",
+      "archive_path": "historical-records/source-luna-v4.json",
+      "sha256": "777f4248ee6a06eef01908bd6e3d02cbec15d966ee4824361262ac8a3172f05c",
+      "mode": 436,
+      "size_bytes": 6018
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/stopped-result-v1.json",
+      "archive_path": "historical-records/stopped-result-v1.json",
+      "sha256": "a3d4b28e9fe63fd472157a453270626761235bbec0e0383a6ec8c0ed941ee056",
+      "mode": 436,
+      "size_bytes": 2929
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/summary-v3.md",
+      "archive_path": "historical-records/summary-v3.md",
+      "sha256": "864c8158416e3097702f0f367aec602d31071c3357184c8aa368b470220189e6",
+      "mode": 436,
+      "size_bytes": 1408
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/summary-v4.md",
+      "archive_path": "historical-records/summary-v4.md",
+      "sha256": "94192bb8483ea8f60048fdce753d080fe397e40a1b0a4290f420c933efc43947",
+      "mode": 436,
+      "size_bytes": 1172
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/summary-v5.md",
+      "archive_path": "historical-records/summary-v5.md",
+      "sha256": "fd3f0cdb57b2b1b71170703982b1fc8e3a6219ebf9807530318365461fabc9d2",
+      "mode": 436,
+      "size_bytes": 766
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/t218-blocked-draft-check-v1.json",
+      "archive_path": "historical-records/t218-blocked-draft-check-v1.json",
+      "sha256": "6c4b56f448ea838e7c151a3158e90b2651ea1356b03b6eb7147f26c81e099d47",
+      "mode": 436,
+      "size_bytes": 1104
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/t218-blocked-policy.draft.json",
+      "archive_path": "historical-records/t218-blocked-policy.draft.json",
+      "sha256": "4fe0fe87e679cebd188aa7f43601858006905e26fa5afbd84b40dad0121fc158",
+      "mode": 436,
+      "size_bytes": 5145
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/t218-blocked-policy.draft.sha256",
+      "archive_path": "historical-records/t218-blocked-policy.draft.sha256",
+      "sha256": "e651f63850e3ac6f53858a170239fb99a0aa87fce20f45f61d0778cdbd992168",
+      "mode": 436,
+      "size_bytes": 65
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/tests-first.py",
+      "archive_path": "historical-records/tests-first.py",
+      "sha256": "3bd837d5ea85b8fa13bde2acfcb07b13977864d70723e1c4589dc206f72e2790",
+      "mode": 436,
+      "size_bytes": 10047
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/tests-first.sha256",
+      "archive_path": "historical-records/tests-first.sha256",
+      "sha256": "cbcef14c165dcf0f1a181f6b1d6fefc75a17767ae13d7dc1ff04161fa7ae87c2",
+      "mode": 436,
+      "size_bytes": 113
+    },
+    {
+      "original_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/whole-path-reanalysis-v1.md",
+      "archive_path": "historical-records/whole-path-reanalysis-v1.md",
+      "sha256": "94940a4faa1c4cc4db67357ee87d007921b184716f136f5820c6348a1b9bc8be",
+      "mode": 436,
+      "size_bytes": 6608
+    }
+  ],
+  "limitations": "This inventory freezes actual bytes available at adoption preparation. It does not invent contemporaneous sequencing, certify all past claims, or turn retrospective evidence into historical RED."
+}

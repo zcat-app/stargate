@@ -1,0 +1,66 @@
+{
+  "schema": "task-run-guard-source-review-v2",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "candidate_sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+  "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+  "overall_verdict": "ESCALATE",
+  "functional_source_assessment": {
+    "status": "APPROVE",
+    "finding_count": 0,
+    "scope": "Exact four-source v5 candidate and unchanged review-matrix support. Reviewed bootstrap, closed Python and Bash interpreter forms, stdin and sentinel handling, source and argument pins, strict policy/review schema, phase and argv binding, journal identity/durability/bounds/accounting, monotonic deadlines, child group termination, successful postchecks, and documented runtime trust limits.",
+    "assessment": "The focused v5 change rejects the exact Python script token '-' before journal mutation or child dispatch while retaining ./- as a directly pinned script path and literal '-' after a script as a script argument. The accepted source contract is otherwise met: recognized interpreter identities use closed startup forms, Python requires both isolation and -S, Bash requires -p, selected scripts are directly pinned regular non-symlink files, child stdin is DEVNULL, and original guarded-driver arguments are bound exactly. Policy/review/candidate pins, action phase and argv, bounded append-only journal state, deadline accounting, process-group cleanup, and post-success pin checks were reviewed in the complete source. Documentation accurately limits the guard to its pinned inputs and known entrypoints and does not claim dependency discovery, containment, or tamperproof journaling.",
+    "findings": []
+  },
+  "workflow_evidence_assessment": {
+    "status": "UNMET",
+    "finding_count": 1,
+    "new_repair_evidence": "The retained v4 Python dash-sentinel evidence records an actual behavioral RED on unchanged v4: exact script-position '-' was admitted, returned 0, and mutated the journal; the expected result was refusal 78 without journal mutation. The source-phase authorization verifies this RED before v5 source edits. The exact focused selector then passed on v5, and the complete authorized contract suite passed. Earlier FIFO and program-input repairs also have retained actual pre-edit REDs and greens.",
+    "historical_gaps": "The valid-policy driver baseline required before the original implementation is absent or not a valid-policy behavioral record; the required v2 behavioral RED was not established before its source edits. Later replay and the present repairs cannot establish that historical ordering.",
+    "waiver_or_activation": "None. The accepted plan retains historical_gaps_waived=false and activation_authorized=false. Constitution VII/VIII remain binding; the accepted plan does not permit retrospective evidence to repair the ordering gap."
+  },
+  "findings": [
+    {
+      "severity": "BLOCKER",
+      "category": "mandatory_workflow_evidence",
+      "property": "Constitution VII requires an actual behavioral failing result before AI implementation, and Constitution VIII makes unresolved mandatory evidence blocking. The accepted program-input-repair plan explicitly preserves the earlier historical gaps and bars retrospective evidence from satisfying them.",
+      "evidence": "The prior source-luna-v4.json records that the retained baseline was not the required valid-policy behavioral preimplementation record and that the original v2 behavioral RED was not established before source edits. The current plan hash is 2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac and explicitly states historical missing evidence cannot be repaired by this work. The v5 dash-sentinel RED and green, earlier FIFO/program-input REDs and greens, and this passing suite establish only their respective later repairs.",
+      "falsifier": "Produce independently verifiable contemporaneous valid-policy driver-baseline and v2 behavioral-RED records that predate the respective source edits, if they exist. Otherwise keep this mandatory evidence gap explicit and obtain a concrete maintainer/governance disposition. Retrospective probes, passing tests, source approval, or a waiver cannot falsify the historical ordering gap or waive Constitution VII."
+    }
+  ],
+  "executed_test_counts": {
+    "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py",
+    "executions": 57,
+    "passed": 57,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "unique_test_methods": 37,
+    "duplicate_inherited_executions": 20,
+    "log": "source-luna-v5-tests.log",
+    "note": "The 20 GuardCase methods execute once in GuardCase and again through RepairRegressions; 16 methods are specific to RepairRegressions and one is the driver baseline."
+  },
+  "unchanged_source": {
+    "manifest_sha256_before_and_after": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+    "plan_sha256_before_and_after": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+    "four_sources_verified_after": [
+      {"path": "scripts/task-run-guard.py", "mode": 493, "sha256": "66d02bb9fd735760eb9208ba3e250681763083f93a0c9168b4ad82c29ccd41b2"},
+      {"path": "scripts/run-task.sh", "mode": 509, "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b"},
+      {"path": "tests/contract/workflow/task_run_guard_test.py", "mode": 436, "sha256": "7ae9ed666b6ba9bb01b32e55e27029ef88b6c480e6340a8d35041a887b972efc"},
+      {"path": "docs/process/task-run-guard.md", "mode": 436, "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b"}
+    ],
+    "support_path": "scripts/review-matrix.json",
+    "support_mode": 436,
+    "support_sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+    "source_edits": false,
+    "extra_probes": false,
+    "verify_or_unrelated_tests": false,
+    "native_network_vm_docker_index_stage_commit_activation_ticket_or_worktree_actions": false
+  },
+  "limitations": [
+    "Only the authorized task-run guard contract suite ran; scripts/verify.sh and unrelated suites did not run.",
+    "Functional source approval does not attest backend identity, historical tests-first compliance, containment, or journal tamper resistance.",
+    "The unresolved mandatory historical evidence gap blocks overall approval and does not authorize activation, commit, dependent T218 execution, or completion claims."
+  ]
+}

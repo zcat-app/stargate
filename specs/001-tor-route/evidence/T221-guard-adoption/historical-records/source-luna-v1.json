@@ -1,0 +1,31 @@
+{
+  "schema": "task-run-guard-source-review-v1",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "verdict": "REWORK",
+  "candidate_sha256": "05917a0b6f54440cdb5dfe59f30afa14f986ac4b977e47abd4853ca5bad0a09c",
+  "plan_sha256": "bc6ad792747145843bee993f6e8d17e0959f7f01fd89c4d6e1647efbce522156",
+  "findings": [
+    {
+      "severity": "MAJOR",
+      "evidence": "scripts/task-run-guard.py:315-346 computes a global monotonic deadline before validation and journal work, but then unconditionally calls Popen after writing the attempt. If pin validation, lock/accounting, or journal I/O consumes the remaining budget, the command still starts; max(0.001, remaining) only bounds the subsequent wait. The action can therefore perform side effects after the session deadline.",
+      "property": "The approved command must not be launched after the original session deadline, and command duration must fit the remaining budget.",
+      "falsifier": "Show that every execution rechecks the remaining monotonic budget immediately before spawn and refuses without launching when it is exhausted; include a regression that delays validation or journal accounting until past the deadline and asserts the child marker is absent."
+    },
+    {
+      "severity": "MAJOR",
+      "evidence": "scripts/task-run-guard.py:273-278 uses one os.write(data) and ignores the returned byte count. A short write can leave a partial identity/attempt/result record while append_record returns normally. In the attempt case, run then proceeds to Popen despite not having durably recorded the complete pre-spawn attempt, undermining persistent attempt accounting.",
+      "property": "Every launch must have a complete, durable attempt record written before spawn; accounting failures must refuse launch.",
+      "falsifier": "Demonstrate a write-all loop or equivalent full-length check that refuses before spawn on incomplete journal writes, with a focused regression simulating a short write and asserting the command marker remains absent."
+    }
+  ],
+  "executed_test_counts": {
+    "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py",
+    "total": 22,
+    "passed": 22,
+    "failed": 0,
+    "log": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v1-tests.log"
+  },
+  "source_copy_unchanged": true
+}

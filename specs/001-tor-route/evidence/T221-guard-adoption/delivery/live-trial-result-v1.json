@@ -1,0 +1,110 @@
+{
+  "schema": "T221-guard-adoption-live-trial-result-v1",
+  "client_date": "2026-10-14",
+  "client_timezone": "Europe/Prague",
+  "closed_utc": "2026-10-13T22:55:03.279664+00:00",
+  "result": "BOUNDED_GUARD_TRIAL_PASS",
+  "amendment_applied_locally": true,
+  "amendment_manifest": {
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/amendment-candidate-v2.json",
+    "sha256": "657d63385b3e9c987bea73e506563d52bf913a80f9885f6de26a5cbff6905500",
+    "mode": 436
+  },
+  "amendment_reviews": [
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/amendment-astra-v2.json",
+      "sha256": "6a01c4e41f2e2b9b1349175881a1cc37bbdbcbbf3026a1509abf934eae6610d2",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/amendment-luna-v2.json",
+      "sha256": "c099620e2f378d6f6a00785945c0b419ee1c68fc99f725f236d7449e236ed47e",
+      "mode": 436
+    }
+  ],
+  "trial_plan": {
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/plan-v2.md",
+    "sha256": "c881fe3c84506486b68d7c6ee4fc0b24ae5c467f6f35b06673db50f12504d2d0",
+    "mode": 436
+  },
+  "trial_plan_reviews": [
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/trial-plan-astra-v2.json",
+      "sha256": "584ac28735281fcfb4ba503547eb6869c5a6a040dfedc52dd1d0690e697ac29b",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/trial-plan-luna-v2.json",
+      "sha256": "f8e1c77b154ce45fd8f026fe692318c0f5fbc0064342e8ee4aa53ea044c19206",
+      "mode": 436
+    }
+  ],
+  "policy": {
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/live-trial-policy.json",
+    "sha256": "3826934f7e488f411c27471b1533e8f0407016d74d684712457f7e4127b65b50",
+    "mode": 436
+  },
+  "journal": {
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/live-trial.journal.jsonl",
+    "sha256": "5312197ac9e96354062d5d2affef977afe092ed060fc0af95896b18f9cac83cf",
+    "mode": 384
+  },
+  "policy_deadline_extended": false,
+  "attempts": 1,
+  "failed_attempts": 0,
+  "successful_results": 1,
+  "driver_refusal": {
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/live-driver-refusal-v1.json",
+    "sha256": "ec399eab7154dc1bbfcd8301b62bfa560027188b474593267b35929818e7ab8b",
+    "mode": 436
+  },
+  "enabled_command_result": {
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/live-regression-result-v1.json",
+    "sha256": "fdb8b4d9c310a89e250e43a12f4af1080377caf227f2348bc2c89439219bec36",
+    "mode": 436
+  },
+  "tests": {
+    "executions": 57,
+    "distinct_defined_methods": 37,
+    "passed_executions": 57,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "inherited_duplicate_executions": 20
+  },
+  "post_run_check": {
+    "argv": [
+      "/usr/bin/python3",
+      "-IBS",
+      "/home/claudia/stargate-t208/scripts/task-run-guard.py",
+      "check",
+      "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/live-trial-policy.json",
+      "3826934f7e488f411c27471b1533e8f0407016d74d684712457f7e4127b65b50",
+      "regression"
+    ],
+    "exit": 0,
+    "stdout": "task-run-guard: admitted\n",
+    "stderr": "",
+    "journal_unchanged": true
+  },
+  "preservation": {
+    "all_385_candidate_pins_match": true,
+    "all_357_amendment_paths_match": true,
+    "all_348_historical_records_and_archive_bytes_modes_unchanged": true,
+    "original_26_preservation_pins": "25 unchanged; tasks preserves original bytes as prefix and only the reviewed T221 append",
+    "both_git_indices_unchanged": true,
+    "four_private_T218_source_files_unchanged": true,
+    "four_guard_source_files_unchanged": true,
+    "integration_head": "cb3af686d8aaca6f703689e50437b8c90d7c6fad"
+  },
+  "t218_implementation_started": false,
+  "t218_qualification": "NOT RUN",
+  "t218_completion_gate": "Automatic predecessor completion carrier and exact publication boundary remain unresolved; existing unknown/late refusal retained. Guard disposition supplies no T218 contract amendment.",
+  "ticket_lifecycle": "T221 in-review; no driver completion/delivery claimed",
+  "staging_commit_push": false,
+  "excluded_tickets": [
+    "T078",
+    "T079"
+  ],
+  "limitations": "Local opt-in invocation trial only; unrestricted direct tool/collaboration calls, escaped/daemon work, universal containment and future command admission remain outside this guard. No full-tree GREEN or native/backend qualification claimed."
+}

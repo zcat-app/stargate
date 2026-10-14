@@ -1,0 +1,13 @@
+F
+======================================================================
+FAIL: test_unpinned_python_directory_main_is_refused (__main__.RepairRegressions.test_unpinned_python_directory_main_is_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 609, in test_unpinned_python_directory_main_is_refused
+    self.assertFalse((self.root / "marker").exists(), "unpinned directory __main__.py actually executed; marker proves admission")
+AssertionError: True is not false : unpinned directory __main__.py actually executed; marker proves admission
+
+----------------------------------------------------------------------
+Ran 1 test in 0.260s
+
+FAILED (failures=1)

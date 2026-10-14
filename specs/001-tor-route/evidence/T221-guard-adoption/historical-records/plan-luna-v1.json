@@ -1,0 +1,15 @@
+{
+  "schema": "task-run-guard-review-v1",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "verdict": "REWORK",
+  "plan_sha256": "3fd1f7c36404183222238108d5b86dc1db64b5bb0de0f466bd9b2a8a488c6b4d",
+  "findings": [
+    {
+      "severity": "MAJOR",
+      "evidence": "The plan requires an opt-in shell hook to delegate to the guard, but does not specify a trusted absolute interpreter for launching task-run-guard.py. A hook implemented as `python3 scripts/task-run-guard.py ...` resolves `python3` through inherited PATH before the guard can validate any policy or executable pins. A PATH entry controlled by the session can therefore substitute code at the admission boundary. The clause that executable/script inputs must be pinned does not state how the bootstrap interpreter is selected or protected before policy validation.",
+      "falsifier": "Amend the plan to require a fixed absolute trusted interpreter for the hook and define its trust/pinning assumption. Add an affected regression that puts a fake python3 first on PATH and proves the hook does not execute it; then demonstrate the real driver-admission RED/GREEN route with that same hook invocation."
+    }
+  ]
+}

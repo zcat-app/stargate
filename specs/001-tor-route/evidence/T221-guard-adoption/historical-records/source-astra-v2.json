@@ -1,0 +1,100 @@
+{
+  "schema": "task-run-guard-source-review-v1",
+  "role": "astra",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "verdict": "ESCALATE",
+  "candidate_sha256": "113b061606609e645d35934ba42f044d378e2d5e8ac3cacbeae44d5a8ddb6e19",
+  "plan_sha256": "94940a4faa1c4cc4db67357ee87d007921b184716f136f5820c6348a1b9bc8be",
+  "findings": [
+    {
+      "severity": "MAJOR",
+      "category": "functional_source",
+      "property": "The interpreter script input must be a directly pinned regular file, including when the approved interpreter path is resolved.",
+      "evidence": "scripts/task-run-guard.py:192-196 recognizes only the literal /usr/bin/python3 for Python script-position validation. However pin() at 72-75 forbids symlink paths, and /usr/bin/python3 resolves to /usr/bin/python3.12 in this review environment; tests/contract/workflow/task_run_guard_test.py:48-50 accordingly pins and executes the resolved path. An action argv of [resolved_python, directory] skips script_index validation. The initial isfile loop ignores directories and the later loop explicitly permits them at 215-216. Python executes directory/__main__.py, whose bytes and mode are not required in candidate pins. All postvalidation repeats the same omission. This permits an executable program input to escape the exact regular-source pin contract. Source analysis only; no additional runtime probe was authorized or executed.",
+      "falsifier": "Before any further authorized source repair, preserve a focused behavioral regression using the resolved system Python and a temporary directory containing a harmless marker __main__.py that is absent from candidates. Require refusal 78 before attempt/dispatch and marker absence; retain a healthy directly pinned regular-script control. Ensure interpreter identification and script-position validation apply to the resolved executable form actually allowed by pin admission."
+    },
+    {
+      "severity": "BLOCKER",
+      "category": "mandatory_workflow_evidence",
+      "property": "Constitution VII and the exact plans require genuine behavioral failing evidence before AI implementation; Constitution VIII prohibits completion with unresolved mandatory evidence.",
+      "evidence": "implementation-plan-v3.md required a valid disabled-policy real-driver behavioral baseline before hook implementation. evidence.json and evidence-v2.json explicitly state the historical baseline used an absent /disabled/policy.json and zero hash, while baseline-valid-policy-replay.json explicitly identifies its valid-policy run as POST-IMPLEMENTATION replay. whole-path-reanalysis-v1.md then required actual current-source behavioral RED before v2 repairs. The initial pre-v2-red-test_deadline_expiring_during_validation_never_dispatches.log contains AttributeError for a missing GuardCase method, not a property failure; evidence-v2.json classifies all corrected preserved-v1 behavioral replays as after source work began. Those replays are useful retrospective evidence but cannot meet the historical ordering. No user/root waiver is recorded, and ordinary risk acceptance cannot waive the constitution.",
+      "falsifier": "Produce independently verifiable contemporaneous valid-policy baseline and v2 behavioral RED records predating the respective source changes, if such records actually exist. Otherwise this historical requirement is not repairable by replay or relabeling: preserve the gap and seek the applicable maintainer/governance disposition. Do not claim source/task completion or T218 authorization from a green suite or retrospective evidence."
+    }
+  ],
+  "functional_source_assessment": {
+    "status": "REWORK",
+    "finding_count": 1,
+    "note": "The functional source finding independently prevents approval. Mandatory historical evidence is recorded separately and strengthens the overall verdict to ESCALATE; this is not a functional APPROVE with an evidence caveat."
+  },
+  "workflow_evidence_assessment": {
+    "status": "UNMET",
+    "historical_valid_policy_baseline": "missing",
+    "v2_behavioral_red_before_source_edits": "not established; preserved corrected replays are retrospective",
+    "tests_first_compliance_certified": false,
+    "t218_approval_or_completion": false
+  },
+  "prior_findings_closure": [
+    {
+      "property": "Original deadline before launch and check completion",
+      "status": "addressed in inspected source",
+      "evidence": "Entry clocks persist through validation; run checks at lines 374,391,395,407 before spawn; check checks at 474. Supplied delayed-journal regression passed."
+    },
+    {
+      "property": "Complete durable journal append before spawn",
+      "status": "addressed in inspected source",
+      "evidence": "append_record lines 316-332 loops over short writes, refuses zero/error and fsync failures; attempt publication precedes spawn. Supplied short-write positive and prefix/zero/error refusal regressions passed."
+    },
+    {
+      "property": "Bash and Python startup boundary",
+      "status": "addressed for the explicitly supported forms",
+      "evidence": "Driver shebang /usr/bin/bash -p; fixed readlink and isolated Python hook; direct guard /usr/bin/python3 -IB. Documentation visibly excludes ordinary explicit bash and nonisolated Python invocation. Supplied hostile PATH/BASH_ENV/PYTHONPATH cases passed."
+    },
+    {
+      "property": "FIFO and special program inputs",
+      "status": "original FIFO case addressed; broader regular-script property remains open",
+      "evidence": "lstat loop rejects FIFO/device/symlink inputs; supplied real FIFO-script regression passed. The remaining directory/resolved-interpreter finding is separate above."
+    },
+    {
+      "property": "Finite typed policy fields",
+      "status": "named v1 malformed-field cases addressed",
+      "evidence": "Review role/model/effort string checks, blocked_reason string validation, finite timeout check, integer overflow refusal and env validation added. Supplied malformed-schema regression passed; this is not a claim of exhaustive malformed-input coverage."
+    },
+    {
+      "property": "Actual driver argument binding regression",
+      "status": "addressed",
+      "evidence": "Correct run POLICY SHA ACTION --driver PATH -- ARGS ordering at test lines 553-559 reaches mismatch text, requires no journal, and runs matching bash -p control successfully."
+    }
+  ],
+  "executed_test_counts": {
+    "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py",
+    "total": 48,
+    "passed": 48,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 26.59,
+    "log": "source-astra-v2-tests.log",
+    "distinct_defined_test_methods": 28,
+    "note": "20 GuardCase methods execute both directly and inherited by RepairRegressions; 48 executions do not mean 48 unique test properties."
+  },
+  "source_copy_unchanged": true,
+  "verification": {
+    "manifest_hash_verified_before_and_after": true,
+    "acceptance_plan_hash_verified": true,
+    "four_source_hashes_and_modes_verified_before_and_after": true,
+    "support_hash_and_observed_mode_verified_before_and_after": true,
+    "source_edits": false,
+    "extra_behavioral_probes": false,
+    "policies_created_by_reviewer": false,
+    "staging_or_commits_by_reviewer": false
+  },
+  "limitations": [
+    "Reviewer role/model/effort identify the requested session; no independent backend identity attestation is claimed.",
+    "Only the authorized affected test suite ran. No verify.sh, unrelated suites, native qualification, Docker, VM, network or host-policy action.",
+    "The approved test suite creates disposable fixture repositories and baseline output within its candidate copy; the four reviewed sources, manifest and support fixture remain unchanged.",
+    "Read old v1 negative reports and independently inspected actual evidence records; did not read implementation-summary/rationale or peer current source reports.",
+    "Opt-in invocation protection, trusted bootstrap/runtime, unrestricted same-UID/root bypass and best-effort process-group limits remain material. This is not host containment or T218 approval.",
+    "ESCALATE preserves the existing failed-gate history and does not authorize an additional source repair, policy installation or round reset."
+  ]
+}

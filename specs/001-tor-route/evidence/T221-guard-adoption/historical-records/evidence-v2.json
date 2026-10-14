@@ -1,0 +1,211 @@
+{
+  "schema": "task-run-guard-implementation-evidence-v1",
+  "plan": {
+    "path": ".scratch/reports/2026-10-13-fresh-session/guard/implementation-plan-v3.md",
+    "sha256": "bc6ad792747145843bee993f6e8d17e0959f7f01fd89c4d6e1647efbce522156",
+    "approvals": [
+      {
+        "path": "plan-astra-v3.json",
+        "sha256": "42565b4ac90af7d64c41a5972af742f2bf804f96e0b5fd957fb335c225b21fda",
+        "role": "astra",
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "APPROVE"
+      },
+      {
+        "path": "plan-luna-v3.json",
+        "sha256": "6467ac241c81679af6343cfbc3ac2f786b870959656b9ca680998d80e8bb93af",
+        "role": "luna",
+        "model": "gpt-6-luna",
+        "effort": "high",
+        "verdict": "APPROVE"
+      }
+    ]
+  },
+  "tests_first": {
+    "preserved_path": "tests-first.py",
+    "sha256": "3bd837d5ea85b8fa13bde2acfcb07b13977864d70723e1c4589dc206f72e2790",
+    "test_source_hash_record": "tests-first.sha256"
+  },
+  "final_sources": [
+    {
+      "path": "scripts/task-run-guard.py",
+      "sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73",
+      "mode": "0755"
+    },
+    {
+      "path": "scripts/run-task.sh",
+      "sha256": "3c4c647097443d7fd4d6b32ef0e8f68cad07d5f0a1cb2b558d9e9adb145b2081",
+      "mode": "0775"
+    },
+    {
+      "path": "tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "37d61baa344977a3a2a701782f786678ae053b3b030188179c9c0f6b1562ce6e",
+      "mode": "0664"
+    },
+    {
+      "path": "docs/process/task-run-guard.md",
+      "sha256": "af32aa83b3ac3c0d8d06ed6e1d2aa932ffe5a2b29b10eef188e6fb5e413d22f9",
+      "mode": "0664"
+    }
+  ],
+  "final_test": {
+    "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py",
+    "evidence_path": "final-suite-v2-final.log",
+    "result": "PASS",
+    "passed": 48,
+    "failed": 0,
+    "skipped": 0,
+    "note": "The RepairRegressions subclass inherits GuardCase tests, so some base cases execute twice; retained to preserve focused selector names."
+  },
+  "driver_admission": {
+    "original_pre_hook_baseline": {
+      "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py DriverAdmissionBaseline.test_driver_guard_baseline",
+      "report": "baseline-driver.json",
+      "result": "behavioral RED: real pre-hook driver returned 0 and emitted IMPLEMENT despite guard environment; original fixture used absent /disabled/policy.json and zero hash, so it is not the valid-policy baseline required by plan."
+    },
+    "valid_policy_pre_hook_replay": {
+      "report": "baseline-valid-policy-replay.json",
+      "result": "preserved pre-hook driver bytes, full-template ticket and structurally valid disabled policy; replay performed after implementation, not historical tests-first evidence; returned 0 and emitted IMPLEMENT."
+    },
+    "post_hook_green": {
+      "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py DriverAdmissionBaseline.test_driver_guard_baseline",
+      "report": "baseline-driver-green.json",
+      "log": "baseline-green-final.log",
+      "result": "PASS: current opt-in hook returned 78, blocked reason present, no IMPLEMENT prompt."
+    }
+  },
+  "repair_red_green": [
+    {
+      "property": "FIFO policy open is nonblocking",
+      "red": "repair-red-fifo.log",
+      "green": "repair-green-fifo.log"
+    },
+    {
+      "property": "post-run pin change remains sticky",
+      "red": "repair-red-postcondition.log",
+      "green": "repair-green-postcondition.log"
+    },
+    {
+      "property": "argv script input must be pinned",
+      "red": "repair-red-scriptpin.log",
+      "green": "repair-green-scriptpin.log"
+    },
+    {
+      "property": "SIGTERM cleans child process group and records interruption",
+      "red": "repair-red-sigterm.log",
+      "green": "repair-green-sigterm.log"
+    },
+    {
+      "property": "deadline budget survives backward wall-clock movement during validation",
+      "red": "repair-red-monotonic-2.log (pre-fix guard source hash in repair-red-guard.sha256)",
+      "green": "repair-green-monotonic-2.log"
+    },
+    {
+      "property": "late postcondition cannot return success",
+      "red": "repair-red-postdeadline-4.log (pre-fix guard source hash in repair-red-guard.sha256)",
+      "green": "repair-green-postdeadline.log"
+    },
+    {
+      "property": "journal terminal result/exit consistency and strict integer attempt ids",
+      "red": "journal-terminal-red.log (pre-fix source hash in journal-terminal-red-guard.sha256)",
+      "green": "journal-terminal-green.log"
+    },
+    {
+      "property": "late postcondition timeout is a valid sticky terminal record",
+      "red": "postdeadline-journal-red.log (pre-fix source hash in postdeadline-journal-red-guard.sha256)",
+      "green": "postdeadline-journal-green.log"
+    }
+  ],
+  "scope": {
+    "source_files_only": true,
+    "staging_or_commit": false,
+    "verify_sh_or_broad_suites": false,
+    "other_dirty_overlays_modified": false,
+    "independent_source_reviews": "pending root launch; implementation does not self-review",
+    "t218_profile_or_completion_claim": "not created or claimed; root owns the separately pinned blocked profile and source review"
+  },
+  "limits": [
+    "The guard only protects invocations routed through its hook; direct other tools, collaboration mechanisms, and unrestricted same-UID/root actions can bypass it.",
+    "Journal deletion or rewrite by an unrestricted same-UID operator is outside the boundary.",
+    "Process-group timeout/termination is best effort for ordinary processes; escaped descendants, daemon work, blocked kernel calls, and hard real-time cleanup are not contained or guaranteed."
+  ],
+  "rework_v2": {
+    "reanalysis": {
+      "path": "whole-path-reanalysis-v1.md",
+      "sha256": "94940a4faa1c4cc4db67357ee87d007921b184716f136f5820c6348a1b9bc8be"
+    },
+    "pre_v2_source_snapshot": [
+      {
+        "path": "pre-v2-guard.py",
+        "sha256": "16ec3bb0bd0548d4e9b2a265190c4708b8b696b8a954d8eb1df0736fdaca309d"
+      },
+      {
+        "path": "pre-v2-run-task.sh",
+        "sha256": "dd1ddce57a3c257c6fad88330771409c786d59fb282a54ddb25962cf25e0ee6d"
+      }
+    ],
+    "probe_provenance": {
+      "initial_selector_setup_failures": {
+        "logs": [
+          "pre-v2-red-test_deadline_expiring_during_validation_never_dispatches.log",
+          "pre-v2-red-test_fifo_script_input_refuses_before_dispatch.log",
+          "pre-v2-red-test_policy_malformed_field_types_refuse_with_78.log",
+          "pre-v2-red-test_attempt_record_short_write_never_dispatches.log",
+          "pre-v2-red-test_driver_argument_binding_uses_correct_run_argv_position.log",
+          "pre-v2-red-bash-env.log"
+        ],
+        "classification": "These first targeted invocations used GuardCase.<method> before the new methods were in that class; AttributeError/setup failures, not behavioral RED."
+      },
+      "v1_copy_behavioral_replays_after_source_work_began": [
+        {
+          "property": "deadline expiring during journal validation must not reach dispatch",
+          "command": "TASK_RUN_GUARD=<guard-report>/pre-v2-guard.py TASK_RUN_DRIVER=<guard-report>/pre-v2-run-task.sh /usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_deadline_expiring_during_validation_never_dispatches",
+          "log": "pre-v2-replay-test_deadline_expiring_during_validation_never_dispatches.log",
+          "classification": "Retrospective current-v1-copy replay; not tests-first evidence."
+        },
+        {
+          "property": "FIFO script input must be refused",
+          "command": "TASK_RUN_GUARD=<guard-report>/pre-v2-guard.py TASK_RUN_DRIVER=<guard-report>/pre-v2-run-task.sh /usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_fifo_script_input_refuses_before_dispatch",
+          "log": "pre-v2-replay-test_fifo_script_input_refuses_before_dispatch.log",
+          "classification": "Retrospective current-v1-copy replay; not tests-first evidence."
+        },
+        {
+          "property": "malformed review role, nonfinite timeout, huge scalar and invalid env types refuse",
+          "command": "TASK_RUN_GUARD=<guard-report>/pre-v2-guard.py TASK_RUN_DRIVER=<guard-report>/pre-v2-run-task.sh /usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_policy_malformed_field_types_refuse_with_78",
+          "log": "pre-v2-replay-test_policy_malformed_field_types_refuse_with_78.log",
+          "classification": "Role-type case showed uncaught TypeError/exit 1. Replay was after source work began."
+        },
+        {
+          "property": "zero write after partial attempt must not dispatch",
+          "command": "TASK_RUN_GUARD=<guard-report>/pre-v2-guard.py TASK_RUN_DRIVER=<guard-report>/pre-v2-run-task.sh /usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_attempt_record_short_write_never_dispatches",
+          "log": "pre-v2-replay-test_attempt_record_short_write_never_dispatches.log",
+          "classification": "Partial attempt returned success and launched child. Replay was after source work began."
+        },
+        {
+          "property": "identity/attempt write error after prefix must refuse",
+          "command": "TASK_RUN_GUARD=<guard-report>/pre-v2-guard.py TASK_RUN_DRIVER=<guard-report>/pre-v2-run-task.sh /usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_identity_or_attempt_write_error_refuses_without_dispatch",
+          "log": "pre-v2-replay-test_identity_or_attempt_write_error_refuses_without_dispatch.log",
+          "classification": "Replay was after source work began."
+        },
+        {
+          "property": "BASH_ENV must not run before driver admission",
+          "command": "TASK_RUN_GUARD=<guard-report>/pre-v2-guard.py TASK_RUN_DRIVER=<guard-report>/pre-v2-run-task.sh /usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_hook_partial_environment_and_hostile_path_are_blocked",
+          "log": "pre-v2-replay-test_hook_partial_environment_and_hostile_path_are_blocked.log",
+          "classification": "BASH_ENV marker ran before hook. Replay was after source work began."
+        }
+      ],
+      "corrected_driver_argv_coverage": {
+        "selector": "RepairRegressions.test_driver_argument_binding_uses_correct_run_argv_position",
+        "classification": "The v1 version was not established as a valid pre-fix RED; final control invokes correctly ordered run POLICY SHA ACTION --driver PATH -- ARGS, proves mismatch text/no attempt, and proves matching bash -p driver succeeds."
+      },
+      "green_evidence": "The final affected suite covers corrected regressions and the healthy controls; no claim that every v2 repair had behavioral RED before source edits."
+    },
+    "scope_limitations": [
+      "Original valid-policy preimplementation driver baseline requirement remains unfulfilled; later replay is not relabeled historical.",
+      "No T218 profile or completion claim.",
+      "No independent source review performed by implementer; new pair belongs to root.",
+      "Only affected suite and py_compile ran; no verify.sh, unrelated suites, staging, commit, or host actions."
+    ]
+  }
+}

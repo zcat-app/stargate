@@ -1,0 +1,132 @@
+{
+  "schema": "task-run-guard-implementation-evidence-v1",
+  "plan": {
+    "path": ".scratch/reports/2026-10-13-fresh-session/guard/implementation-plan-v3.md",
+    "sha256": "bc6ad792747145843bee993f6e8d17e0959f7f01fd89c4d6e1647efbce522156",
+    "approvals": [
+      {
+        "path": "plan-astra-v3.json",
+        "sha256": "42565b4ac90af7d64c41a5972af742f2bf804f96e0b5fd957fb335c225b21fda",
+        "role": "astra",
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "APPROVE"
+      },
+      {
+        "path": "plan-luna-v3.json",
+        "sha256": "6467ac241c81679af6343cfbc3ac2f786b870959656b9ca680998d80e8bb93af",
+        "role": "luna",
+        "model": "gpt-6-luna",
+        "effort": "high",
+        "verdict": "APPROVE"
+      }
+    ]
+  },
+  "tests_first": {
+    "preserved_path": "tests-first.py",
+    "sha256": "3bd837d5ea85b8fa13bde2acfcb07b13977864d70723e1c4589dc206f72e2790",
+    "test_source_hash_record": "tests-first.sha256"
+  },
+  "final_sources": [
+    {
+      "path": "scripts/task-run-guard.py",
+      "sha256": "16ec3bb0bd0548d4e9b2a265190c4708b8b696b8a954d8eb1df0736fdaca309d",
+      "mode": "0755"
+    },
+    {
+      "path": "scripts/run-task.sh",
+      "sha256": "dd1ddce57a3c257c6fad88330771409c786d59fb282a54ddb25962cf25e0ee6d",
+      "mode": "0775"
+    },
+    {
+      "path": "tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "adb31ded2c044a1ff4cdeb6713ce7f8e59aa44513f66ec17f32e1752c156e6a7",
+      "mode": "0664"
+    },
+    {
+      "path": "docs/process/task-run-guard.md",
+      "sha256": "1081c1ca8f7f3b997e5c9ce8932026d56e5b4724af1da542f4cf4bd9ab162de7",
+      "mode": "0664"
+    }
+  ],
+  "final_test": {
+    "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py",
+    "evidence_path": "final-suite-frozen-candidate.log",
+    "result": "PASS; rerun after final test-source hash change",
+    "passed": 22,
+    "failed": 0,
+    "skipped": 0
+  },
+  "driver_admission": {
+    "original_pre_hook_baseline": {
+      "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py DriverAdmissionBaseline.test_driver_guard_baseline",
+      "report": "baseline-driver.json",
+      "result": "behavioral RED: real pre-hook driver returned 0 and emitted IMPLEMENT despite guard environment; original fixture used absent /disabled/policy.json and zero hash, so it is not the valid-policy baseline required by plan."
+    },
+    "valid_policy_pre_hook_replay": {
+      "report": "baseline-valid-policy-replay.json",
+      "result": "preserved pre-hook driver bytes, full-template ticket and structurally valid disabled policy; replay performed after implementation, not historical tests-first evidence; returned 0 and emitted IMPLEMENT."
+    },
+    "post_hook_green": {
+      "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py DriverAdmissionBaseline.test_driver_guard_baseline",
+      "report": "baseline-driver-green.json",
+      "log": "baseline-green-final.log",
+      "result": "PASS: current opt-in hook returned 78, blocked reason present, no IMPLEMENT prompt."
+    }
+  },
+  "repair_red_green": [
+    {
+      "property": "FIFO policy open is nonblocking",
+      "red": "repair-red-fifo.log",
+      "green": "repair-green-fifo.log"
+    },
+    {
+      "property": "post-run pin change remains sticky",
+      "red": "repair-red-postcondition.log",
+      "green": "repair-green-postcondition.log"
+    },
+    {
+      "property": "argv script input must be pinned",
+      "red": "repair-red-scriptpin.log",
+      "green": "repair-green-scriptpin.log"
+    },
+    {
+      "property": "SIGTERM cleans child process group and records interruption",
+      "red": "repair-red-sigterm.log",
+      "green": "repair-green-sigterm.log"
+    },
+    {
+      "property": "deadline budget survives backward wall-clock movement during validation",
+      "red": "repair-red-monotonic-2.log (pre-fix guard source hash in repair-red-guard.sha256)",
+      "green": "repair-green-monotonic-2.log"
+    },
+    {
+      "property": "late postcondition cannot return success",
+      "red": "repair-red-postdeadline-4.log (pre-fix guard source hash in repair-red-guard.sha256)",
+      "green": "repair-green-postdeadline.log"
+    },
+    {
+      "property": "journal terminal result/exit consistency and strict integer attempt ids",
+      "red": "journal-terminal-red.log (pre-fix source hash in journal-terminal-red-guard.sha256)",
+      "green": "journal-terminal-green.log"
+    },
+    {
+      "property": "late postcondition timeout is a valid sticky terminal record",
+      "red": "postdeadline-journal-red.log (pre-fix source hash in postdeadline-journal-red-guard.sha256)",
+      "green": "postdeadline-journal-green.log"
+    }
+  ],
+  "scope": {
+    "source_files_only": true,
+    "staging_or_commit": false,
+    "verify_sh_or_broad_suites": false,
+    "other_dirty_overlays_modified": false,
+    "independent_source_reviews": "pending root launch; implementation does not self-review",
+    "t218_profile_or_completion_claim": "not created or claimed; root owns the separately pinned blocked profile and source review"
+  },
+  "limits": [
+    "The guard only protects invocations routed through its hook; direct other tools, collaboration mechanisms, and unrestricted same-UID/root actions can bypass it.",
+    "Journal deletion or rewrite by an unrestricted same-UID operator is outside the boundary.",
+    "Process-group timeout/termination is best effort for ordinary processes; escaped descendants, daemon work, blocked kernel calls, and hard real-time cleanup are not contained or guaranteed."
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "schema": "task-run-guard-source-phase-authorization-v1",
+  "epoch": 1791928911.8276029,
+  "pre_source_v4_verified": true,
+  "pre_edit_actual_behavioral_red_verified": true,
+  "red_evidence_sha256": "e3bbe2d269611b13632c61e7740542d55969e890dda714ad6e2531a23a654a00",
+  "repair": "Reject exact script-position stdin sentinel dash even when a regular file with that name is pinned. Preserve ./- file paths and literal dash after actual script. Existing approved closed-form contract only.",
+  "allowed_paths": [
+    "scripts/task-run-guard.py",
+    "tests/contract/workflow/task_run_guard_test.py"
+  ],
+  "activation_authorized": false,
+  "history_exception_authorized": false
+}

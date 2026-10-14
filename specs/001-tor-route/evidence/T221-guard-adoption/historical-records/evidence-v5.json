@@ -1,0 +1,52 @@
+{
+  "schema": "task-run-guard-source-evidence-v5",
+  "timestamp_utc": "2026-10-13T22:02:41.765749+00:00",
+  "authorization": "dash-source-phase-authorization-v1.json",
+  "red_evidence": "input-v4-python-dash-red-evidence.json",
+  "repair": "Reject exact dash token at interpreter script position; path ./- remains an ordinary pinned file and literal dash after a script remains an ordinary argument.",
+  "focused_green": {
+    "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_python_dash_sentinel_is_not_a_pinned_script",
+    "exit_code": 0,
+    "collected": 1,
+    "stdout_log": "input-v5-python-dash-green.stdout.log",
+    "stderr_log": "input-v5-python-dash-green.stderr.log"
+  },
+  "affected_suite": {
+    "command": "/usr/bin/python3 -B -I tests/contract/workflow/task_run_guard_test.py",
+    "exit_code": 0,
+    "collected": 57,
+    "passed": 57,
+    "failed": 0,
+    "skipped": 0,
+    "duration_seconds": 26.58,
+    "stderr": "Ran 57 tests in 26.580s; OK"
+  },
+  "final_sources": {
+    "scripts/task-run-guard.py": {
+      "sha256": "66d02bb9fd735760eb9208ba3e250681763083f93a0c9168b4ad82c29ccd41b2",
+      "mode": "0755",
+      "size_bytes": 24494
+    },
+    "scripts/run-task.sh": {
+      "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b",
+      "mode": "0775",
+      "size_bytes": 55034
+    },
+    "tests/contract/workflow/task_run_guard_test.py": {
+      "sha256": "7ae9ed666b6ba9bb01b32e55e27029ef88b6c480e6340a8d35041a887b972efc",
+      "mode": "0664",
+      "size_bytes": 45625
+    },
+    "docs/process/task-run-guard.md": {
+      "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b",
+      "mode": "0664",
+      "size_bytes": 6896
+    }
+  },
+  "scope": {
+    "only_guard_and_existing_contract_test_in_scope": "tests already held authorized sentinel regression; no change during source phase",
+    "no_driver_or_docs_edits": true,
+    "no_activation_or_historical_waiver": true
+  },
+  "limitations": "Historical evidence gaps remain unresolved; this is not activation or containment."
+}

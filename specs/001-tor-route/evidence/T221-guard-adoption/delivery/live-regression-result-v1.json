@@ -1,0 +1,21 @@
+{
+  "schema": "T221-live-guarded-regression-v1",
+  "argv": [
+    "/usr/bin/python3",
+    "-IBS",
+    "/home/claudia/stargate-t208/scripts/task-run-guard.py",
+    "run",
+    "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/live-trial-policy.json",
+    "3826934f7e488f411c27471b1533e8f0407016d74d684712457f7e4127b65b50",
+    "regression"
+  ],
+  "policy_sha256": "3826934f7e488f411c27471b1533e8f0407016d74d684712457f7e4127b65b50",
+  "returncode": 0,
+  "elapsed_seconds": 28.66243815422058,
+  "test_executions": 57,
+  "stdout_log": "live-regression.stdout.log",
+  "stderr_log": "live-regression.stderr.log",
+  "journal_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/live-trial.journal.jsonl",
+  "automatic_retry": false,
+  "t218_qualification": false
+}

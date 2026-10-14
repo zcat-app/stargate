@@ -1,0 +1,10 @@
+E
+======================================================================
+ERROR: test_fifo_script_input_refuses_before_dispatch (unittest.loader._FailedTest.test_fifo_script_input_refuses_before_dispatch)
+----------------------------------------------------------------------
+AttributeError: type object 'GuardCase' has no attribute 'test_fifo_script_input_refuses_before_dispatch'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

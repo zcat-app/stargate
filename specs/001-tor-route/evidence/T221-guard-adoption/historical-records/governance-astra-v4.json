@@ -1,0 +1,42 @@
+{
+  "schema": "task-run-guard-governance-proposal-review-v1",
+  "role": "astra",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "proposal_sha256": "d15bcf5614141b4541d7443797e3ac98a58a4070790202115e29c4d481557ce0",
+  "candidate_sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+  "verdict": "APPROVE-PROPOSAL",
+  "approval_scope": "Approval of the exact decision proposal only. No maintainer approval, governance amendment approval, source implementation approval, adoption, activation, completion or historical compliance is implied.",
+  "findings": [],
+  "assessment": {
+    "review_claims_verified": "Both cited v5 source reports have the stated raw hashes and candidate identity. Each records functional APPROVE with zero functional findings, overall ESCALATE and historical workflow evidence UNMET. Each reports 57 passing executions, zero failures/errors/skips, and 37 distinct methods. The proposal accurately describes these distinct assessments.",
+    "normative_scope": "The exact proposed VII insertion permits one historical disposition for the named four-file candidate while requiring permanent NONCOMPLIANT labels. It neither rewrites the source reports nor purports to establish missing chronology. Later repairs remain subject to ordinary tests-first rules.",
+    "adoption_conditions": "Functional source/security approval and a separately authorized governed historical disposition are distinct prerequisites. The proposal explicitly requires maintainer approval, a dedicated ticket, and the amendment own exact-candidate governance codereview and independent redteam. This removes any ambiguity that a source review or this proposal consultation alone could adopt the exception.",
+    "frozen_candidate": "The manifest and all four source bytes/modes still match their stated identities. The adoption/usage note now belongs in separate governed records, avoiding an implicit edit to the already pinned usage document. Changes to any bound file require renewed manifest and affected review.",
+    "historical_and_external_boundaries": "Original source-v2 and current source-v5 negative overall verdicts remain intact. No T218/R14j, runtime/route, protected-host, native qualification/backend/retry, T078/T079 or review-matrix guarantee is relaxed. The exception does not certify containment or release readiness.",
+    "constitutional_basis": "The Constitution hash remains unchanged. VII historical evidence cannot be supplied by replay; VIII ordinary risk acceptance cannot waive a principle. Governance supports only an explicit maintainer-authorized amendment under the stated procedure."
+  },
+  "required_follow_through_if_authorized": [
+    "Record the actual maintainer decision before creating/applying the dedicated governed amendment; this review does not provide that decision.",
+    "Preserve the historical records and original overall verdicts durably, inventory every missed historical property and retrospective probe with content identity, and retain later repairs tests-first evidence separately.",
+    "Review the complete amendment candidate through its own required codereview and independent redteam; retain ordinary exact-tree verify.sh and affected-check obligations. The historical exception does not waive those obligations.",
+    "Keep the four-file manifest unchanged through adoption or obtain renewed exact binding and affected reviews for any byte or mode change, including the usage document. Apply dated governance records and consistency updates within the authorized scope."
+  ],
+  "verification": {
+    "proposal_raw_sha256_verified": true,
+    "manifest_raw_sha256_verified": true,
+    "four_source_hashes_and_modes_verified": true,
+    "constitution_sha256": "161689898ef7e594734e7def94a850f2e1b28982017c9d43b0640debf9ca65a1",
+    "source_astra_v5_sha256": "ba6828094002ddf5a151791b1ac3ac4cea46d4bde06b50faf9086e9927325489",
+    "source_luna_v5_sha256": "b89f731e8bff898e60436575e8eba02e5f81d4b5f7861a708d1ad205ff27bdcd",
+    "prior_reports_modified": false
+  },
+  "limitations": [
+    "Proposal review only; no live operation, tests, broad suite, source/policy/amendment/ticket/index/worktree changes, activation or delegation. Only this requested report was written.",
+    "Read the exact v4 proposal and its cited source-v5 reports to verify its factual assertions. Did not read a current governance peer report or source-writer rationale.",
+    "Source-review outcomes and test counts are verified as statements in the hash-bound reports, not independently rerun or independently re-reviewed source correctness.",
+    "Reused the earlier independent historical evidence and constitutional assessment after confirming Constitution identity remained unchanged.",
+    "Role/model/effort identify the assigned review session; independent backend identity attestation is unavailable.",
+    "No actual user policy approval, final governed amendment candidate, amendment review completion or adoption is established."
+  ]
+}

@@ -1,0 +1,13 @@
+F
+======================================================================
+FAIL: test_late_postcondition_cannot_return_success (__main__.GuardCase.test_late_postcondition_cannot_return_success)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 249, in test_late_postcondition_cannot_return_success
+    self.assertIn("previous command completion is uncertain", journal.stderr)
+AssertionError: 'previous command completion is uncertain' not found in 'task-run-guard: REFUSED: invalid journal result\n'
+
+----------------------------------------------------------------------
+Ran 1 test in 3.374s
+
+FAILED (failures=1)

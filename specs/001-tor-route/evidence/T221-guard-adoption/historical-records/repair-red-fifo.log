@@ -1,0 +1,28 @@
+F
+======================================================================
+FAIL: test_fifo_policy_refuses_without_blocking (__main__.GuardCase.test_fifo_policy_refuses_without_blocking)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 144, in test_fifo_policy_refuses_without_blocking
+    out, err = proc.communicate(timeout=1)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/usr/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/usr/bin/python3', '-B', '-I', '/home/claudia/stargate-t208/scripts/task-run-guard.py', 'check', '/tmp/task-run-guard-2ixj97pi/policy.fifo', '0000000000000000000000000000000000000000000000000000000000000000', 'safe']' timed out after 1 seconds
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 148, in test_fifo_policy_refuses_without_blocking
+    self.fail("guard blocked opening a FIFO policy")
+AssertionError: guard blocked opening a FIFO policy
+
+----------------------------------------------------------------------
+Ran 1 test in 1.242s
+
+FAILED (failures=1)

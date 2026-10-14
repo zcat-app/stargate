@@ -1,0 +1,10 @@
+E
+======================================================================
+ERROR: test_deadline_expiring_during_validation_never_dispatches (unittest.loader._FailedTest.test_deadline_expiring_during_validation_never_dispatches)
+----------------------------------------------------------------------
+AttributeError: type object 'GuardCase' has no attribute 'test_deadline_expiring_during_validation_never_dispatches'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

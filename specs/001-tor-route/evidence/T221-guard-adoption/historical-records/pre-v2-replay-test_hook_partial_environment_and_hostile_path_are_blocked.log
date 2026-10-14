@@ -1,0 +1,13 @@
+F
+======================================================================
+FAIL: test_hook_partial_environment_and_hostile_path_are_blocked (__main__.RepairRegressions.test_hook_partial_environment_and_hostile_path_are_blocked)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 410, in test_hook_partial_environment_and_hostile_path_are_blocked
+    self.assertFalse(marker.exists())
+AssertionError: True is not false
+
+----------------------------------------------------------------------
+Ran 1 test in 0.129s
+
+FAILED (failures=1)

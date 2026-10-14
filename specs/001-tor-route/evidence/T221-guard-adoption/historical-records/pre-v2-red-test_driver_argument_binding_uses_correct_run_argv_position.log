@@ -1,0 +1,10 @@
+E
+======================================================================
+ERROR: test_driver_argument_binding_uses_correct_run_argv_position (unittest.loader._FailedTest.test_driver_argument_binding_uses_correct_run_argv_position)
+----------------------------------------------------------------------
+AttributeError: type object 'GuardCase' has no attribute 'test_driver_argument_binding_uses_correct_run_argv_position'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.000s
+
+FAILED (errors=1)

@@ -1,0 +1,41 @@
+{
+  "schema": "task-run-guard-source-review-v1",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "candidate_sha256": "b10afc448c31bf621a17e6fbe053fa3f5c381d8bb2004d84dc9fdca52ae77f67",
+  "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+  "verdict": "APPROVE",
+  "functional_source_assessment": {
+    "verdict": "APPROVE",
+    "summary": "The four changed source paths implement the approved bounded command-input contract. Python launch admission uses the resolved running interpreter identity and requires isolated plus no-site startup before one directly pinned regular script. Bash admission requires the resolved system Bash with -p and one directly pinned regular script. Unsupported source forms are refused before journal mutation; all child processes receive DEVNULL stdin. Driver argument binding remains exact. Journal bounds, short-write handling, deadlines, process-group cleanup, and postcondition pin checks are present and covered by the affected suite.",
+    "scope_limitations": "The approved OS interpreter, standard library, Bash, readlink, and opaque pinned binaries remain trusted runtime inputs. The guard does not discover or pin arbitrary dependencies, semantically inspect opaque binaries, or provide a sandbox or process containment. These limits are documented in docs/process/task-run-guard.md.",
+    "source_copy_unchanged": true
+  },
+  "workflow_evidence_assessment": {
+    "status": "UNMET",
+    "summary": "The new input-source repair has the five recorded behavioral REDs, explicit source-phase authorization, identical focused GREEN selectors, and this independent affected-suite run. Historical v1/v2 workflow evidence gaps remain unresolved; evidence-v3.json explicitly preserves the invalid original driver baseline and retrospective-only replays. This review does not approve historical compliance, T218 readiness/completion, guard activation, or dependent execution."
+  },
+  "findings": [
+    {
+      "severity": "BLOCKER",
+      "property": "Historical workflow evidence and activation authority",
+      "evidence": "evidence-v3.json records that the original valid-policy preimplementation driver baseline requirement remains unfulfilled, and classifies later replay as retrospective. The approved repair plan says historical evidence gaps are not waived and does not authorize guard activation or dependent T218 execution.",
+      "falsifier": "A separately authorized governance decision and independently reviewed evidence that resolves the identified historical gap could change this workflow assessment; neither is present in the reviewed material."
+    }
+  ],
+  "execution": {
+    "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py",
+    "working_copy": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v3",
+    "log": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-luna-v3-tests.log",
+    "exit_code": 0,
+    "collected_and_passed": 54,
+    "failed": 0,
+    "distinct_test_methods": 35,
+    "duplicate_inherited_executions": 20
+  },
+  "candidate_integrity": {
+    "manifest_sha256": "b10afc448c31bf621a17e6fbe053fa3f5c381d8bb2004d84dc9fdca52ae77f67",
+    "source_and_support_hashes_and_modes_match_manifest_before_and_after": true
+  }
+}

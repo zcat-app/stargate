@@ -1,0 +1,13 @@
+F
+======================================================================
+FAIL: test_opaque_pinned_command_receives_eof_not_caller_source (__main__.RepairRegressions.test_opaque_pinned_command_receives_eof_not_caller_source)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 637, in test_opaque_pinned_command_receives_eof_not_caller_source
+    self.assertEqual(r.stdout, b"", "opaque pinned child received caller-controlled stdin")
+AssertionError: b'opaque caller-fed source\n' != b'' : opaque pinned child received caller-controlled stdin
+
+----------------------------------------------------------------------
+Ran 1 test in 0.167s
+
+FAILED (failures=1)

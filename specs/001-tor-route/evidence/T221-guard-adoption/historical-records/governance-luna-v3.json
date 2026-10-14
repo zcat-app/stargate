@@ -1,0 +1,30 @@
+{
+  "schema": "task-run-guard-governance-proposal-review-v1",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "proposal_path": "evidence-governance-proposal-v3.md",
+  "proposal_sha256": "ec151f07ab64537643b47574f1e20bab72bfbba47f1cc38d649c117c74bed3bc",
+  "verdict": "REWORK",
+  "findings": [
+    {
+      "severity": "MAJOR",
+      "category": "stale_review_condition",
+      "property": "The adoption condition must distinguish exact-candidate functional source approval from the overall workflow-evidence verdict, and the draft must state the current v5 evidence accurately.",
+      "evidence": "The proposal says, 'Source v5 independent functional/security review is a mandatory condition; this draft does not assert its result before reports arrive.' The supplied v5 evidence records 57 passed, 0 failed, and 0 skipped. The available exact-candidate source-luna-v5.json binds to manifest SHA 92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459 and reports functional_source_assessment.status APPROVE with zero findings, while overall_verdict ESCALATE solely because historical workflow evidence remains unmet. The proposal's normative clause requires 'exact-candidate independent source/security approval' without specifying whether that means functional assessment or overall verdict. Requiring overall approval would be impossible while the historical gap this amendment addresses remains in the overall verdict; failing to distinguish them could imply broader evidence compliance than exists.",
+      "correction": "Replace the stale pending-reports sentence with the exact v5 review/test result and state that functional source/security approval is distinct from the overall workflow-evidence disposition. Make the normative adoption condition require independent approval of the exact candidate's functional source/security assessment and affected tests, while preserving the overall historical-evidence ESCALATE and permanent NONCOMPLIANT labels until and unless the maintainer approves this governed disposition. Do not claim tests-first compliance or overall source/workflow approval.",
+      "blocking": true
+    }
+  ],
+  "assessment": {
+    "proposal_identity": "The raw SHA256 of source-candidate-v5.json matches the proposed manifest hash.",
+    "source_scope": "The four paths and hashes in the proposal match source-candidate-v5.json. Modes match after conversion from manifest decimal modes: 493=0755, 509=0775, and 436=0664 for both test and documentation files. The manifest also binds the support review-matrix hash.",
+    "history": "The v5 evidence records a pre-edit v4 behavioral RED, a focused v5 green, and a 57-test affected-suite pass. These later repairs do not establish the missing original valid-policy driver baseline or v2 pre-edit behavioral RED; the proposal correctly retains those historical gaps and does not relabel replay.",
+    "governance": "The proposal correctly presents two alternatives, identifies the one-time protection delta, requires a dedicated ticket if the maintainer selects the governed path, binds the amendment to an exact candidate, and preserves T218, native, routing, release, runtime, and host-containment boundaries. Constitution VII requires tests-first and treats replay as retrospective; VIII keeps unresolved mandatory evidence blocking; pre-release Governance requires the maintainer's explicit decision, a dedicated ticket recording alternatives/delta/affected documents/exact candidate, and independent codereview/redteam for governance-impacting amendments."
+  },
+  "limitations": [
+    "This review evaluates the governance proposal and recorded evidence, not source implementation correctness beyond checking the candidate manifest bindings.",
+    "No user or maintainer approval is inferred; this review does not authorize a Constitution amendment, ticket, activation, or source change.",
+    "The reviewed source-luna-v5 report records the exact candidate's functional approval and overall historical-evidence escalation; the v5 evidence inventory independently binds the candidate and affected-suite results."
+  ]
+}

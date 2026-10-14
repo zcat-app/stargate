@@ -1,0 +1,17 @@
+{
+  "selector": "test_python_isolated_without_no_site_is_not_admitted",
+  "command": [
+    "/usr/bin/python3",
+    "-B",
+    "-I",
+    "tests/contract/workflow/task_run_guard_test.py",
+    "RepairRegressions.test_python_isolated_without_no_site_is_not_admitted"
+  ],
+  "started_utc": "2026-10-13T21:40:22Z",
+  "ended_utc": "2026-10-13T21:40:22Z",
+  "returncode": 1,
+  "pre_source_sha256": "47036279c407284855ec41fbda636c30282b90222480c64e229e65075417ce73",
+  "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+  "stdout_log": "input-v2-red-test_python_isolated_without_no_site_is_not_admitted.stdout.log",
+  "stderr_log": "input-v2-red-test_python_isolated_without_no_site_is_not_admitted.stderr.log"
+}

@@ -1,0 +1,8 @@
+{
+  "schema": "maintainer-guard-amendment-authorization-v1",
+  "user_message": "authorize it and lets try it in wild",
+  "client_date": "2026-10-14",
+  "client_timezone": "Europe/Prague",
+  "proposal_sha256": "d15bcf5614141b4541d7443797e3ac98a58a4070790202115e29c4d481557ce0",
+  "scope": "Exact one-time historical sequencing disposition for guard source manifest 92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459 and a bounded local guarded trial. No T218 completion, backend, native protected-policy, privacy-routing or future tests-first waiver."
+}

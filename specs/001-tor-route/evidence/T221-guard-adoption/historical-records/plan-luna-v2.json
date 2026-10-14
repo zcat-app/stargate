@@ -1,0 +1,15 @@
+{
+  "schema": "task-run-guard-review-v1",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "verdict": "REWORK",
+  "plan_sha256": "37455514dd9ff5f5b8380a9f5d18d280c731d91f2cb3332e55459adb342e9b8c",
+  "findings": [
+    {
+      "severity": "MAJOR",
+      "evidence": "V2 resolves the Python and readlink PATH-substitution issue, but run-task.sh currently starts with `#!/usr/bin/env bash` (scripts/run-task.sh:1). When launched as `scripts/run-task.sh ...`, `/usr/bin/env` selects bash from inherited PATH before the guard hook can run. This conflicts with the plan's assertion that bash is a trusted bootstrap input rather than an attacker-selected PATH entry, and leaves a PATH-substitution route outside the planned hostile-PATH regression.",
+      "falsifier": "Specify a supported trusted-bash entry path before the hook (for example, an absolute /usr/bin/bash shebang for direct script invocation), and add a regression with a fake bash first on PATH proving direct run-task.sh invocation reaches the guard without executing it. If bash selection is intentionally outside scope, narrow the bootstrap claim and document that invocation precondition explicitly."
+    }
+  ]
+}

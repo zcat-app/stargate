@@ -1,0 +1,13 @@
+F
+======================================================================
+FAIL: test_policy_malformed_field_types_refuse_with_78 (__main__.RepairRegressions.test_policy_malformed_field_types_refuse_with_78)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 528, in test_policy_malformed_field_types_refuse_with_78
+    self.assertEqual(r.returncode,78,(case,r.stdout,r.stderr))
+AssertionError: 1 != 78 : ('role', '', 'Traceback (most recent call last):\n  File "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-guard.py", line 421, in <module>\n    sys.exit(main(sys.argv[1:]))\n             ^^^^^^^^^^^^^^^^^^\n  File "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-guard.py", line 401, in main\n    policy, _ = validate(*rest)\n                ^^^^^^^^^^^^^^^\n  File "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/pre-v2-guard.py", line 134, in validate\n    if role not in expected_reviews or (row["model"], row["effort"]) != expected_reviews[role] or role in seen_roles or row["path"] in seen_paths:\n       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nTypeError: unhashable type: \'list\'\n')
+
+----------------------------------------------------------------------
+Ran 1 test in 0.156s
+
+FAILED (failures=1)

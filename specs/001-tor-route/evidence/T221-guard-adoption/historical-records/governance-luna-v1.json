@@ -1,0 +1,33 @@
+{
+  "schema": "task-run-guard-governance-proposal-review-v1",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "proposal_path": "evidence-governance-proposal-v1.md",
+  "proposal_sha256": "ab58c602302105e19ddf6c6e850698b22ac4544836c307702d4af0abf7211964",
+  "verdict": "APPROVE-PROPOSAL",
+  "findings": [
+    {
+      "severity": "LOW",
+      "category": "wording_precision",
+      "property": "Preserve the v2 review without presenting its verdict as the result for a later candidate.",
+      "evidence": "source-astra-v2.json and source-luna-v2.json bind their ESCALATE/REWORK findings to candidate_sha256 113b061606609e645d35934ba42f044d378e2d5e8ac3cacbeae44d5a8ddb6e19. The proposal correctly requires exact-candidate independent review of any final repaired candidate, but its opening says the v2 ESCALATE and all negative/history evidence 'remain binding.'",
+      "correction": "Retain the v2 reports and their historical conclusions as immutable records; clarify that their verdicts apply to that v2 hash. The missing test-order evidence and setup/replay chronology remain factual for the later candidate, while its source verdict must come from reviews of that exact candidate.",
+      "blocking": false
+    }
+  ],
+  "assessment": {
+    "options": "Two distinct options and their consequences are stated; neither implies approval.",
+    "protection_delta": "The proposal identifies the precise relaxation: a one-time adoption disposition despite known historical sequencing noncompliance. It preserves the permanent NONCOMPLIANT label and does not describe replay as historical RED evidence.",
+    "normative_text": "The proposed VII insertion names the past task/date, states the scope and conditions, binds coverage to the final reviewed manifest, and explicitly denies runtime, privacy-routing, T218, native qualification, release, and host-containment authority.",
+    "scope": "The four named files match both evidence inventories. A later exact-candidate manifest is correctly required because source-v2 has reviewer findings and is not the final repaired candidate.",
+    "governance_sequence": "The requirement for a dedicated ticket only after the maintainer elects the governed path is consistent with Governance; the ticket must then record the alternatives, protection delta, affected documents, and exact reviewed candidate before amendment work proceeds.",
+    "historical_evidence": "evidence.json and evidence-v2.json identify the original invalid-policy baseline and classify the valid-policy replay as post-implementation. evidence-v2.json classifies corrected v2 replays as after source work began. No evidence read supports claiming historical tests-first compliance.",
+    "untouched_guarantees": "The evidence records no T218 profile/completion claim, no routing or native qualification, no staging/commit, and document the guard's invocation and process limits. The proposal's exclusions match those records."
+  },
+  "limitations": [
+    "This is review of the governance proposal and cited factual records only, not source/security approval of a final repaired candidate.",
+    "Proposal approval is not maintainer approval, authorization to amend the Constitution, or implementation authority.",
+    "No source-writer chat or current peer governance report was consulted."
+  ]
+}

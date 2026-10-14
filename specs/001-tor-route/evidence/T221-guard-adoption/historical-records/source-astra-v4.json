@@ -1,0 +1,98 @@
+{
+  "schema": "task-run-guard-source-review-v1",
+  "role": "astra",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "verdict": "ESCALATE",
+  "candidate_sha256": "16a019e1ff6c92652c51a2db4d3a68e8bab5f52e9bf22307204f54374bdbdaad",
+  "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+  "functional_source_assessment": {
+    "status": "REWORK",
+    "finding_count": 1,
+    "security_assessment": "The repaired source-input, startup, inherited-stdin and special-path admission boundaries meet their scoped security requirements in inspected source and the supplied passing suite. The sole remaining source finding is a minor closed-form acceptance defect: the Python stdin sentinel can be admitted after -- when a pinned file literally named - exists. DEVNULL still prevents caller-fed execution.",
+    "not_a_claim": "This is not approval for activation, T218 or historical workflow completion."
+  },
+  "workflow_evidence_assessment": {
+    "status": "UNMET",
+    "historical_valid_policy_baseline": "Required original preimplementation valid-policy baseline is absent; later replay is retrospective.",
+    "v2_behavioral_red_before_source_edits": "Original selectors failed on missing test methods; corrected behavioral replays after implementation are retrospective.",
+    "v3_program_input_reds": "Five actual collected behavioral failures inspected; unchanged v2 source hashes and separate root authorization are recorded. Corresponding root identical-command green records match all five command arrays; failure and pass logs inspected.",
+    "v4_fifo_argument_reds": "Both collected Python and Bash FIFO-argument tests actually observed exit0/marker/journal mutation against unchanged v3, then exit78/no marker/no journal mutation under identical selector commands after the narrow repair; retained split RED and green logs inspected.",
+    "tests_first_compliance_certified": false,
+    "historical_gaps_waived": false,
+    "activation_authorized": false,
+    "t218_approval_or_completion": false
+  },
+  "findings": [
+    {
+      "severity": "MINOR",
+      "category": "functional_source",
+      "property": "Program-input-repair-plan-v2 closed Python form prohibits the - stdin source mode and requires the selected pinned script to execute.",
+      "evidence": "scripts/task-run-guard.py interpreter_script consumes optional -- at lines 129-130 and then calls pinned_script without rejecting argv[i] == \"-\". If cwd contains a directly pinned regular file named -, argv [resolved_python, -I, -S, --, -] therefore passes validation. Python retains the special stdin meaning of a filename equal to -, including after --; with DEVNULL the interpreter can exit successfully without running that pinned file. General file checks and postcondition validation also accept the existing pinned file. This is a narrow incorrect admission and success case, not unpinned source execution.",
+      "uncertainty": "Established by source control flow and Python stdin-sentinel semantics. No additional runtime probe was executed because this review was restricted to the specified suite. The existing suite lacks the pinned literal-name - plus -- case.",
+      "falsifier": "Before any repair, add and execute a focused regression with valid pinned resolved Python -I -S -- -, a pinned regular cwd/- file containing a harmless marker, and valid policy/review controls. Require refusal78 before journal mutation or child dispatch. Preserve a healthy ./- or absolute-path script control and literal - after an ordinary script. Reject only the actual selected Python stdin sentinel; no generic parser change or reopening of DEVNULL is required."
+    },
+    {
+      "severity": "BLOCKER",
+      "category": "mandatory_workflow_evidence",
+      "property": "Constitution VII requires actual behavioral failing evidence before AI implementation; VIII keeps missing mandatory evidence blocking completion.",
+      "evidence": "evidence.json and evidence-v2.json expressly record the absent /disabled/policy.json plus zero hash original driver fixture, followed only by a postimplementation valid-policy replay. evidence-v2.json also classifies initial missing-method failures as setup errors and corrected source-v1-copy probes as retrospective after source work began. The five new program-input REDs and two FIFO-argument REDs are legitimate separately ordered evidence for those repairs, but do not supply the historical records. input-source-phase-authorization-v2.json and fifo-source-phase-authorization-v1.json expressly preserve no-waiver and no-activation boundaries.",
+      "uncertainty": "The retained records acknowledge the gaps; no independent contemporaneous records closing them were supplied. No governance amendment is authorized by this review.",
+      "falsifier": "Produce independently verifiable contemporaneous missing valid-policy baseline and behavioral RED records predating their respective source changes, if they exist. Otherwise preserve the history and obtain the applicable concrete maintainer/governance disposition. Retrospective replay and green tests cannot certify missing ordering or themselves waive VII."
+    }
+  ],
+  "prior_findings_closure": [
+    {
+      "property": "v3 skipped special-path argument checks",
+      "status": "CLOSED",
+      "evidence": "The empty argv[1:1] slice is replaced by argv[script_index + 1:]. The loop lstats existing arguments and rejects FIFO/device/socket/symlink inputs before journal opening. Python and Bash actual pre-edit FIFO REDs and current GREENs are inspected. Literal flag controls pass."
+    },
+    {
+      "property": "Known interpreter source, startup and inherited input",
+      "status": "Named security repairs retained",
+      "evidence": "Resolved system interpreter identities are recognized; scripts must be regular directly pinned no-symlink paths. Python requires isolation plus -S; Bash requires -p. Hook and direct guard use -IBS. Sole Popen uses DEVNULL. Named directory/inline/module/unsupported-option and inherited-input tests pass. The separate minor - sentinel edge does not restore inherited stdin."
+    },
+    {
+      "property": "Admission, exact argv, phase, JSON and pins",
+      "status": "Retained",
+      "evidence": "Exact raw policy hash, closed typed fields, duplicate-key refusal, required reviewer identities and plan hash, candidate hash/mode/regularity and exact driver argv binding remain enforced. Partial hook configuration refuses before driver state."
+    },
+    {
+      "property": "Time, journal, exact child/group and postconditions",
+      "status": "Retained",
+      "evidence": "Entry monotonic deadline spans admission; launch checks occur after journal replay and complete fsynced attempt append. Partial-write and failure paths refuse dispatch. Locked append-only budget replay and sticky uncertainty remain. Exact child wait, remaining group cleanup, timeout/interruption, unchanged pins and postcondition time checks pass the authorized suite."
+    }
+  ],
+  "executed_test_counts": {
+    "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py",
+    "total": 56,
+    "passed": 56,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 27.726,
+    "log": "source-astra-v4-tests.log",
+    "distinct_defined_test_methods": 36,
+    "note": "20 GuardCase methods run directly and inherited by RepairRegressions; 15 additional repair methods and one baseline method yield 56 executions."
+  },
+  "source_copy_unchanged": true,
+  "verification": {
+    "manifest_hash_verified_before_and_after": true,
+    "acceptance_plan_hash_verified_before_and_after": true,
+    "four_source_hashes_and_modes_verified_before_and_after": true,
+    "support_hash_and_mode_verified_before_and_after": true,
+    "support_mode_octal": "0664",
+    "before_inventory": "source-astra-v4-before.json",
+    "source_edits": false,
+    "extra_behavioral_probes": false,
+    "current_peer_verdict_or_implementation_summary_read": false,
+    "delegation": false
+  },
+  "limitations": [
+    "Role/model/effort identify the requested reviewer session, not independent backend identity attestation.",
+    "Only the authorized affected suite ran; no verify.sh, unrelated suite, native qualification, Docker, VM, network, production ticket, index or worktree action was run. The suite creates disposable fixture repositories and baseline reports inside the review copy.",
+    "Trusted runtime/stdlib/loader and approved opaque commands remain outside automatic dependency discovery. This is an opt-in command guard, not containment.",
+    "Unrestricted same-UID/root changes, journal rewrite/deletion, escaped descendants, blocked kernel calls and hard real-time cleanup remain documented exclusions.",
+    "This verdict preserves earlier negative gates and authorizes no review-count reset, activation, commit, historical approval or dependent T218 execution."
+  ]
+}

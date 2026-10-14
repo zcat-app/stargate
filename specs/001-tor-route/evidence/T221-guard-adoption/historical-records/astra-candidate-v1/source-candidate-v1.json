@@ -1,0 +1,30 @@
+{
+  "plan_sha256": "bc6ad792747145843bee993f6e8d17e0959f7f01fd89c4d6e1647efbce522156",
+  "schema": "task-run-guard-candidate-v1",
+  "sources": [
+    {
+      "mode": 493,
+      "path": "scripts/task-run-guard.py",
+      "sha256": "16ec3bb0bd0548d4e9b2a265190c4708b8b696b8a954d8eb1df0736fdaca309d"
+    },
+    {
+      "mode": 509,
+      "path": "scripts/run-task.sh",
+      "sha256": "dd1ddce57a3c257c6fad88330771409c786d59fb282a54ddb25962cf25e0ee6d"
+    },
+    {
+      "mode": 436,
+      "path": "tests/contract/workflow/task_run_guard_test.py",
+      "sha256": "adb31ded2c044a1ff4cdeb6713ce7f8e59aa44513f66ec17f32e1752c156e6a7"
+    },
+    {
+      "mode": 436,
+      "path": "docs/process/task-run-guard.md",
+      "sha256": "1081c1ca8f7f3b997e5c9ce8932026d56e5b4724af1da542f4cf4bd9ab162de7"
+    }
+  ],
+  "support": {
+    "path": "scripts/review-matrix.json",
+    "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8"
+  }
+}

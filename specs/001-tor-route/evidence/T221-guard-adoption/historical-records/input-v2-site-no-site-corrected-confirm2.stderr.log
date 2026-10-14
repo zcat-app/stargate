@@ -1,0 +1,20 @@
+F
+======================================================================
+FAIL: test_python_isolated_without_no_site_is_not_admitted (__main__.RepairRegressions.test_python_isolated_without_no_site_is_not_admitted)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 653, in test_python_isolated_without_no_site_is_not_admitted
+    self.assertEqual(observed, expected,
+AssertionError: Tuples differ: (0, '0\n', True, True) != (78, '', False, False)
+
+First differing element 0:
+0
+78
+
+- (0, '0\n', True, True)
++ (78, '', False, False) : -I-only must refuse before site-enabled script execution or journal mutation
+
+----------------------------------------------------------------------
+Ran 1 test in 0.191s
+
+FAILED (failures=1)

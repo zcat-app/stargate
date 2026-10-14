@@ -1,0 +1,82 @@
+{
+  "schema": "task-run-guard-source-review-v2",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "candidate_sha256": "16a019e1ff6c92652c51a2db4d3a68e8bab5f52e9bf22307204f54374bdbdaad",
+  "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+  "additional_accepted_plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+  "overall_verdict": "ESCALATE",
+  "functional_source_assessment": {
+    "status": "APPROVE",
+    "finding_count": 0,
+    "scope": "Exact four-source candidate; admission, time/deadline, pins, strict JSON, journal identity/accounting/append, child process-group cleanup and postcondition checks; interpreter startup and source paths; stdin; preservation of script arguments.",
+    "assessment": "The reviewed implementation meets the accepted program-input and remaining-argument repair contracts. Python requires isolated and no-site startup; Bash requires privileged mode; selected scripts are directly pinned regular files; child stdin is DEVNULL; literal arguments after the script remain ordinary arguments; existing path checks now cover those arguments, including special files. The prior v3 empty-slice defect is fixed by checking argv[script_index + 1:]. Existing admission and bounded-execution checks reviewed against the candidate remain consistent with the accepted source scope and docs.",
+    "findings": []
+  },
+  "workflow_evidence_assessment": {
+    "status": "UNMET",
+    "finding_count": 1,
+    "historical_valid_policy_driver_baseline": "missing; retained baseline was not the required valid-policy behavioral preimplementation record; later valid-policy replay is retrospective.",
+    "historical_v2_behavioral_red": "not established before its source edits; corrected/replayed results cannot establish historical ordering.",
+    "new_program_input_red_green": "five actual collected behavioral reds against unchanged source v2 and identical-command green evidence are retained; two FIFO argument reds against unchanged source v3 and seven corresponding green selectors are retained. These support the new repairs but do not repair the earlier historical gaps.",
+    "waiver_or_activation": "none. The accepted plans state historical_gaps_waived=false and activation_authorized=false; no T218 approval/completion is implied."
+  },
+  "findings": [
+    {
+      "severity": "BLOCKER",
+      "category": "mandatory_workflow_evidence",
+      "property": "Constitution VII requires genuine behavioral failing evidence before AI implementation; Constitution VIII makes unresolved mandatory evidence blocking. The accepted plan explicitly preserves the earlier historical gaps and forbids retrospective evidence from satisfying them.",
+      "evidence": "The inspected prior exact-source review source-astra-v3.json records the original valid-policy driver baseline as missing and the required v2 pre-edit behavioral RED as not established; the retained original evidence used a missing/disabled policy baseline, a pre-v2 AttributeError/setup failure, and later valid-policy replay. The accepted program-input-repair-plan-v2.md says these gaps remain unmet and cannot be repaired by this work. Current input-program-red-evidence-v3.json, input-root-identical-green-v1.json, input-v3-fifo-split-red-evidence.json and input-green-evidence-v4.json demonstrate later scoped source fixes only.",
+      "falsifier": "Produce independently verifiable contemporaneous valid-policy driver-baseline and v2 behavioral-RED records that predate their respective source edits, if they actually exist. Otherwise keep the gap explicit and obtain the applicable concrete maintainer/governance disposition; retrospective probes, green tests, or source approval do not falsify the historical ordering gap."
+    }
+  ],
+  "executed_test_counts": {
+    "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py",
+    "total": 56,
+    "passed": 56,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "log": "source-luna-v4-tests.log",
+    "note": "56 unittest executions include 20 inherited GuardCase tests executed again through RepairRegressions; the candidate adds two focused FIFO script-argument tests."
+  },
+  "unchanged_source": {
+    "manifest_sha256_before_and_after": "16a019e1ff6c92652c51a2db4d3a68e8bab5f52e9bf22307204f54374bdbdaad",
+    "plan_sha256_before_and_after": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+    "four_sources_verified_before_and_after": [
+      {
+        "path": "scripts/task-run-guard.py",
+        "mode": 493,
+        "sha256": "0a88f3b8938c599a8017519bed1e1f6c52d1e1d23d77cc72271a5f6717ff9938"
+      },
+      {
+        "path": "scripts/run-task.sh",
+        "mode": 509,
+        "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b"
+      },
+      {
+        "path": "tests/contract/workflow/task_run_guard_test.py",
+        "mode": 436,
+        "sha256": "6838d9db81d5b62e12d174735500db43b078dd01c1b69e531d32e32978da9286"
+      },
+      {
+        "path": "docs/process/task-run-guard.md",
+        "mode": 436,
+        "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b"
+      }
+    ],
+    "support_path": "scripts/review-matrix.json",
+    "support_mode": 436,
+    "support_sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+    "source_edits": false,
+    "extra_probes": false,
+    "verify_or_unrelated_tests": false,
+    "native_network_vm_docker_or_index_ticket_worktree_actions": false
+  },
+  "limitations": [
+    "The single specified affected contract suite ran; no verify.sh, unrelated suites, native qualification, network, VM or Docker checks ran.",
+    "This is an independent source review artifact, not backend identity attestation or historical tests-first certification.",
+    "Functional approval does not authorize guard activation, commit, dependent T218 execution or completion claims while mandatory historical evidence remains unresolved."
+  ]
+}

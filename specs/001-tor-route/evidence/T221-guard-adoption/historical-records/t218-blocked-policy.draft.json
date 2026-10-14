@@ -1,0 +1,130 @@
+{
+  "actions": {
+    "implement": {
+      "argv": [
+        "/usr/bin/bash",
+        "-p",
+        "/home/claudia/stargate-t208/scripts/run-task.sh",
+        "T218"
+      ],
+      "blocked_reason": "T218 implementation BLOCKED: automatic predecessor completion carrier remains unresolved; existing strict unknown/late refusal guarantees remain binding. Guard adoption also awaits the explicit historical-evidence governance decision.",
+      "cwd": "/home/claudia/stargate-t208",
+      "enabled": false,
+      "env": {
+        "LANG": "C",
+        "LC_ALL": "C",
+        "PATH": "/usr/bin:/bin",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "phase": "T218_COMPLETION_CONTRACT_GATE",
+      "timeout_seconds": 60
+    }
+  },
+  "candidates": [
+    {
+      "mode": 493,
+      "path": "/home/claudia/stargate-t208/scripts/task-run-guard.py",
+      "sha256": "66d02bb9fd735760eb9208ba3e250681763083f93a0c9168b4ad82c29ccd41b2"
+    },
+    {
+      "mode": 509,
+      "path": "/home/claudia/stargate-t208/scripts/run-task.sh",
+      "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/bin/bash",
+      "sha256": "bc5945feb8bd26203ebfafea5ce1878bb2e32cb8fb50ab7ae395cfb1e1aaaef1"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/bin/python3.12",
+      "sha256": "e50d468e8b0adfb05733f5b87b3cff34829c4a8c1aea50c865aa8bdfe4bb150f"
+    },
+    {
+      "mode": 493,
+      "path": "/usr/bin/readlink",
+      "sha256": "4c6117ae99adf14e90ee49c860ca6f827db657423d0d0b3e4f6eb29d39daebe0"
+    },
+    {
+      "mode": 436,
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-candidate-v5.json",
+      "sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459"
+    },
+    {
+      "mode": 436,
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-astra-v5.json",
+      "sha256": "ba6828094002ddf5a151791b1ac3ac4cea46d4bde06b50faf9086e9927325489"
+    },
+    {
+      "mode": 436,
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/luna-candidate-v5/source-luna-v5.json",
+      "sha256": "b89f731e8bff898e60436575e8eba02e5f81d4b5f7861a708d1ad205ff27bdcd"
+    },
+    {
+      "mode": 384,
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/t218-bounded-pilot-result.json",
+      "sha256": "24abc86dd9f6f7af4e2c455ce364d090e08a1fa2c8faabc7e78d559ff9f7c30e"
+    },
+    {
+      "mode": 436,
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/t218-bounded-pilot-feasibility-astra.md",
+      "sha256": "d612e1bcc8194e041bcf0c70b7a6c1c2d87cd284068b6dc20d5d1c0c5e8381b8"
+    },
+    {
+      "mode": 436,
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/t218-bounded-pilot-feasibility-luna.md",
+      "sha256": "37a79eed5e6c05ca8dd0ebda42919cfbc9ad3fcc155fb345ba52a86cfd308aa3"
+    },
+    {
+      "mode": 436,
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T218/implementation/tests/integration/egress_observer_test.go",
+      "sha256": "5fd1b4d1f938e4ffa67e58dba56d740ba0722bc97c45d815cd75e3500832307a"
+    },
+    {
+      "mode": 436,
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T218/implementation/tests/integration/egress_observer_readiness_test.go",
+      "sha256": "91f04e0ed622bac8490c6948ca589428228bc347732503036d4c5fba39ad4f7d"
+    },
+    {
+      "mode": 493,
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T218/implementation/scripts/t218-readiness-run.py",
+      "sha256": "c923aa32ceb6e6f67fe06bfc6e6f5388f3e5da340478465676e559dcbe9cfaa0"
+    },
+    {
+      "mode": 436,
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T218/implementation/scripts/test_t218_readiness_run.py",
+      "sha256": "2dbc67b114139a08f13c1b15164c2d7233ab8d7e0bb33bfb68328059094e4f9e"
+    }
+  ],
+  "deadline_epoch": 1791932942,
+  "journal_path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/t218-blocked-draft.journal.jsonl",
+  "maximum_attempts": 3,
+  "maximum_failed_attempts": 3,
+  "phase": "T218_COMPLETION_CONTRACT_GATE",
+  "plan": {
+    "mode": 436,
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/program-input-repair-plan-v2.md",
+    "sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac"
+  },
+  "reviews": [
+    {
+      "effort": "high",
+      "mode": 436,
+      "model": "gpt-6-astra",
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-plan-astra-v2.json",
+      "role": "astra",
+      "sha256": "c9756319c715d3892484c2a7e28fd08b8f4dc767b08b94c072d8f11956b94911"
+    },
+    {
+      "effort": "high",
+      "mode": 436,
+      "model": "gpt-6-luna",
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/input-plan-luna-v2.json",
+      "role": "luna",
+      "sha256": "d72c9bab37d46a52446c2b628cee1c22dca0e0d7407d3c3613ac29c6ae20a8bf"
+    }
+  ],
+  "run_id": "T218-draft-blocked-2026-10-13",
+  "schema": "task-run-guard-policy-v1"
+}

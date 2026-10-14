@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/bash -p
 # Copyright 2026 The Stargate Authors
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -62,6 +62,23 @@
 #                                         # history and records aborted_attempts
 
 set -euo pipefail
+
+# Opt-in admission happens before git, argument parsing or transient state.
+# Fixed system paths keep PATH and Python startup hooks outside bootstrap.
+if [ "${STARGATE_GUARD_POLICY+x}${STARGATE_GUARD_SHA256+x}${STARGATE_GUARD_ACTION+x}" != "" ]; then
+  if [ -z "${STARGATE_GUARD_POLICY:-}" ] || [ -z "${STARGATE_GUARD_SHA256:-}" ] || [ -z "${STARGATE_GUARD_ACTION:-}" ]; then
+    echo "run-task: incomplete task-run guard configuration" >&2
+    exit 78
+  fi
+  DRIVER_PATH="$(/usr/bin/readlink -f -- "$0")" || {
+    echo "run-task: cannot resolve driver path" >&2
+    exit 78
+  }
+  GUARD_PATH="${DRIVER_PATH%/*}/task-run-guard.py"
+  exec /usr/bin/python3 -IBS "$GUARD_PATH" run \
+    "$STARGATE_GUARD_POLICY" "$STARGATE_GUARD_SHA256" "$STARGATE_GUARD_ACTION" \
+    --driver "$DRIVER_PATH" -- "$@"
+fi
 
 cd "$(git rev-parse --show-toplevel)"
 

@@ -1,0 +1,9 @@
+{
+  "schema": "task-run-guard-phase-authorization-suspension-v1",
+  "recorded_epoch": 1791927769.2973833,
+  "supersedes": "input-source-phase-authorization-v1.json",
+  "source_authorization_dispatched": false,
+  "production_edits": false,
+  "state": "TESTS_ONLY",
+  "reason": "Root fixture inspection found final site-startup assertion incorrectly demanded output after required refusal. Correct test and reexecute unchanged v2 before source permission; keep old record immutable."
+}

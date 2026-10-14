@@ -1,0 +1,19 @@
+{
+  "schema": "task-run-guard-source-phase-authorization-v1",
+  "authorized_epoch": 1791927738.0945036,
+  "authorized_by": "root after actual RED-log/test-fixture inspection",
+  "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+  "red_evidence_sha256": "56d73b564d24dff12cb8de684dbb2b8acfc8ff458a283635fb54c8a8cd895b95",
+  "immutable_production_source_v2_verified": true,
+  "collected_valid_behavioral_reds": 5,
+  "setup_errors_excluded": true,
+  "allowed_paths": [
+    "scripts/task-run-guard.py",
+    "scripts/run-task.sh",
+    "tests/contract/workflow/task_run_guard_test.py",
+    "docs/process/task-run-guard.md"
+  ],
+  "historical_evidence_waived": false,
+  "guard_activation_authorized": false,
+  "dependent_t218_authorized": false
+}

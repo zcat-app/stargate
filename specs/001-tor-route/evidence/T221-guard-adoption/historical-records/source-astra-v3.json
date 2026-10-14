@@ -1,0 +1,98 @@
+{
+  "schema": "task-run-guard-source-review-v1",
+  "role": "astra",
+  "model": "gpt-6-astra",
+  "effort": "high",
+  "verdict": "ESCALATE",
+  "candidate_sha256": "b10afc448c31bf621a17e6fbe053fa3f5c381d8bb2004d84dc9fdca52ae77f67",
+  "plan_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac",
+  "findings": [
+    {
+      "severity": "MAJOR",
+      "category": "functional_source",
+      "property": "Preserve the existing general regular/special path argument checks while recognizing literal arguments after an interpreter script (program-input-repair-plan-v2.md, contract 2).",
+      "evidence": "scripts/task-run-guard.py:239-252 replaces the prior unconditional lstat argument loop with values = argv[1:] if script_index is None else argv[1:1]. For every recognized Python or Bash script, argv[1:1] is empty. The earlier loop at 225-230 only checks os.path.isfile, so it ignores FIFOs, devices, sockets and dangling symlinks. Therefore an otherwise healthy pinned resolved Python -I -S SCRIPT /absolute/input.fifo, or Bash -p SCRIPT /absolute/input.fifo, is admitted despite the explicit nonregular input and absent pin. The pinned script could read that unpinned stream; even a harmless script that only writes its marker would demonstrate prohibited admission. DEVNULL protects fd 0, not this explicit argument. The v2-to-v3 diff establishes this as a removed check, not a request for arbitrary dependency discovery. The existing FIFO-script regression covers the script position only, and the literal-argument table has no special-file argument case.",
+      "uncertainty": "Confirmed by complete admission-path source analysis and the v2-to-v3 diff. No extra behavioral probe was run because only the supplied suite was authorized. This is a scoped contract regression; it is not a claim of containment bypass against an untrusted arbitrary approved script.",
+      "falsifier": "In any authorized repair, first preserve an actual behavioral RED against v3 using a valid supported pinned Python -I -S script and an existing FIFO as a later argument, then the equivalent Bash -p case. Require exit 78 before journal mutation or the harmless script marker. Preserve the existing healthy literal -m/-/-c argument controls and pinned regular-input controls. Restore special-path checking for actual script arguments without treating those literal flags as interpreter source modes; no generic parser/framework is needed."
+    },
+    {
+      "severity": "BLOCKER",
+      "category": "mandatory_workflow_evidence",
+      "property": "Constitution VII requires genuine behavioral failing evidence before AI implementation; Constitution VIII keeps unresolved mandatory evidence blocking completion.",
+      "evidence": "evidence.json and evidence-v2.json identify the original driver baseline as absent /disabled/policy.json plus a zero hash, not the required valid-policy preimplementation baseline. The valid-policy replay is explicitly postimplementation. The pre-v2 deadline RED log is an AttributeError for a missing GuardCase method, and corrected v2 replays remain retrospective. The new input-program-red-evidence-v3.json does establish five collected behavioral failures against unchanged source v2, followed by a separate root source authorization and identical-argv green records; it does not supply either missing historical record. input-source-phase-authorization-v2.json expressly states historical_evidence_waived=false, guard_activation_authorized=false and dependent_t218_authorized=false.",
+      "uncertainty": "The inspected retained records explicitly acknowledge the gaps. No independent historical records satisfying the missing ordering were supplied, and no governance amendment is currently authorized by this review.",
+      "falsifier": "Supply independently verifiable contemporaneous valid-policy driver baseline and v2 behavioral RED records predating their respective source changes, if they actually exist. Otherwise preserve the gaps and obtain the applicable concrete maintainer/governance disposition. Retrospective replay, green tests, source approval or ordinary risk acceptance cannot certify the missing historical compliance."
+    }
+  ],
+  "functional_source_assessment": {
+    "status": "REWORK",
+    "finding_count": 1,
+    "note": "The historical evidence gap is not the only blocker: the new empty argument slice independently prevents functional approval. The previously reported resolved-interpreter directory and inherited-stdin failure paths are repaired."
+  },
+  "mandatory_workflow_evidence_assessment": {
+    "status": "UNMET",
+    "historical_valid_policy_baseline": "missing; retained valid-policy replay is retrospective",
+    "v2_behavioral_red_before_source_edits": "not established; retained corrected replays are retrospective",
+    "v3_program_input_reds": "five actual collected behavioral failures inspected; unchanged source v2 hashes and separate root authorization recorded",
+    "v3_identical_command_green": "all five pre/post command arrays match in input-program-red-evidence-v3.json and input-root-identical-green-v1.json; all ten corresponding failure/pass logs inspected",
+    "fixture_change": "Default fixture action strengthened to resolved Python -I -S; this is an authorized fixture adaptation, not a RED by itself. Guard subprocess entry calls were strengthened to -B -I -S. Root retained separate identical parent-argv reruns after the first green batch added -S.",
+    "tests_first_compliance_certified": false,
+    "guard_activation_authorized": false,
+    "t218_approval_or_completion": false
+  },
+  "prior_findings_closure": [
+    {
+      "property": "Resolved system interpreter and directly pinned regular script",
+      "status": "original v2 directory finding addressed",
+      "evidence": "interpreter_script recognizes realpath(sys.executable) and realpath(/usr/bin/bash); pinned_script requires the selected script to exist, be regular, have no symlink resolution change and appear directly in candidate pins. Direct directory, FIFO and symlink script inputs are rejected by this source path. The new special-argument regression is separate."
+    },
+    {
+      "property": "Startup and inherited input",
+      "status": "named repairs addressed",
+      "evidence": "Python allowlist requires isolated and no-site startup; Bash requires -p; driver hook and guard shebang include -IBS; the sole child Popen sets stdin=DEVNULL. Named inline/module/stdin/unsupported option forms are refused before journal opening; literal flags after a script are retained."
+    },
+    {
+      "property": "Exact argv, phase, approval identity, pins and typed schema",
+      "status": "retained in inspected source and supplied tests",
+      "evidence": "validate retains exact policy and report schemas, duplicate-key refusal, required reviewer pair, exact plan hash, bounded finite values, phase matching and directly pinned executable checks. run binds driver argv exactly before journal opening. Pin changes prevent success."
+    },
+    {
+      "property": "Journal caps, complete durable append, deadline, exact wait and process group",
+      "status": "prior named findings remain addressed",
+      "evidence": "append_record loops over partial writes and refuses no-progress/error before dispatch. Entry clocks span validation and journal work; launch checks remain immediately before Popen. Journal identity/budgets and sticky uncertainty are replayed. Child wait, owned group checks and postcondition deadline checks remain. Authorized short-write, deadline, concurrency, timeout, interruption, leftover group and changed-pin tests passed."
+    }
+  ],
+  "executed_test_counts": {
+    "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py",
+    "total": 54,
+    "passed": 54,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 0,
+    "elapsed_seconds": 26.545,
+    "log": "source-astra-v3-tests.log",
+    "distinct_defined_test_methods": 34,
+    "note": "20 GuardCase methods execute both directly and inherited by RepairRegressions; 13 additional RepairRegressions methods and one baseline method yield 54 executions."
+  },
+  "source_copy_unchanged": true,
+  "verification": {
+    "manifest_hash_verified_before_and_after": true,
+    "acceptance_plan_hash_verified_before_and_after": true,
+    "four_source_hashes_and_modes_verified_before_and_after": true,
+    "support_hash_and_observed_mode_verified_before_and_after": true,
+    "support_mode_octal": "0664",
+    "source_edits": false,
+    "extra_behavioral_probes": false,
+    "policies_created_by_reviewer": false,
+    "staging_or_commits_by_reviewer": false,
+    "current_peer_report_or_implementation_summary_read": false
+  },
+  "limitations": [
+    "Role/model/effort identify the requested reviewer session; this report is not independent backend identity attestation.",
+    "Only the specified affected suite ran. No verify.sh, unrelated suites, native qualification, Docker, VM, network, live policy action or additional probe was run.",
+    "The authorized suite creates disposable fixture repositories and baseline output within the review copy; the source files, support and manifest remained byte- and mode-identical.",
+    "The OS interpreter, standard library, loader and approved opaque executable remain trusted runtime inputs. Pinning configured executables and selected scripts is not semantic dependency discovery or a sandbox.",
+    "Opt-in invocation, unrestricted same-UID/root journal or source manipulation, escaped descendants, blocked kernel calls and best-effort group cleanup remain the documented trust limits.",
+    "This verdict preserves previous negative gates. It authorizes neither further repairs, a review-count reset, guard activation, commit nor dependent T218 execution."
+  ]
+}

@@ -1,0 +1,27 @@
+[
+  {
+    "path": "scripts/task-run-guard.py",
+    "sha256": "0a88f3b8938c599a8017519bed1e1f6c52d1e1d23d77cc72271a5f6717ff9938",
+    "mode": 493
+  },
+  {
+    "path": "scripts/run-task.sh",
+    "sha256": "a753e4aff562eca9693662058736738f11f03fc06ea431fec6b5cae772b39a1b",
+    "mode": 509
+  },
+  {
+    "path": "tests/contract/workflow/task_run_guard_test.py",
+    "sha256": "6838d9db81d5b62e12d174735500db43b078dd01c1b69e531d32e32978da9286",
+    "mode": 436
+  },
+  {
+    "path": "docs/process/task-run-guard.md",
+    "sha256": "18e11fc7f7a74d25ea6afd09d013710170584858cd40d7da4714616016739e7b",
+    "mode": 436
+  },
+  {
+    "path": "scripts/review-matrix.json",
+    "sha256": "a0b1c73a28fe959520d6b1a75cad8f567b2baa105f2513b14463a3f393787ef8",
+    "mode": 436
+  }
+]

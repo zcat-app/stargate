@@ -1,0 +1,55 @@
+{
+  "schema": "task-run-guard-fifo-remaining-argument-red-v1",
+  "plan": {
+    "path": "remaining-argument-check-repair-plan-v1.json",
+    "approved_contract_sha256": "2e51465f126811ac21dff822f787a8c22f9fd38218e87b6cdb55a39f5b0bd2ac"
+  },
+  "timestamp_utc": "2026-10-13T21:55:04.387149+00:00",
+  "unchanged_source": {
+    "path": "scripts/task-run-guard.py",
+    "sha256": "064c7e271e80b60b4ac848b3f9483af0c9459e51a1fc2b5a2bf404738c577b86",
+    "expected_sha256": "064c7e271e80b60b4ac848b3f9483af0c9459e51a1fc2b5a2bf404738c577b86"
+  },
+  "test_snapshot_before_edit": {
+    "path": "pre-fifo-v3-tests.py",
+    "sha256": "df4407459fe31b4e2b00a96fa55811eb8a4bb3dd8f3e2702444944af7fe7090e"
+  },
+  "test_after_edit_sha256": "b07dae0aaf440954ff499272ba44b43513aabe11f466c1f24713625b6ca36d9c",
+  "command": "/usr/bin/python3 -B -I -S tests/contract/workflow/task_run_guard_test.py RepairRegressions.test_interpreter_script_arguments_reject_special_paths",
+  "exit_code": 1,
+  "collected_tests": 1,
+  "stdout_log": "input-v3-fifo-red.stdout.log",
+  "stderr_log": "input-v3-fifo-red.stderr.log",
+  "observations": [
+    {
+      "interpreter": "resolved system Python",
+      "healthy_literal_argument_control": "exit 0; marker created",
+      "fifo_argument_actual": {
+        "exit": 0,
+        "marker_created": true,
+        "journal_mutated": true
+      },
+      "expected": {
+        "exit": 78,
+        "marker_created": false,
+        "journal_mutated": false
+      }
+    },
+    {
+      "interpreter": "resolved system Bash",
+      "healthy_literal_argument_control": "exit 0; marker created",
+      "fifo_argument_actual": {
+        "exit": 0,
+        "marker_created": true,
+        "journal_mutated": true
+      },
+      "expected": {
+        "exit": 78,
+        "marker_created": false,
+        "journal_mutated": false
+      }
+    }
+  ],
+  "classification": "behavioral RED against unchanged source-v3: the actual guard admitted both recognized-interpreter commands, dispatched marker scripts, and mutated the journal despite a real FIFO as a trailing script argument.",
+  "source_edits_performed": false
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "T221-amendment-application-v1",
+  "timestamp_utc": "2026-10-13T22:53:01.233351+00:00",
+  "maintainer_authorization": {
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/maintainer-authorization.json",
+    "sha256": "931dd6588d9b8c233e918b98bff294ac6d0b53c012d9d1e7cb67f1810477372a",
+    "mode": 436
+  },
+  "candidate_manifest": {
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/amendment-candidate-v2.json",
+    "sha256": "657d63385b3e9c987bea73e506563d52bf913a80f9885f6de26a5cbff6905500",
+    "mode": 436
+  },
+  "plan": {
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/plan-v2.md",
+    "sha256": "c881fe3c84506486b68d7c6ee4fc0b24ae5c467f6f35b06673db50f12504d2d0",
+    "mode": 436
+  },
+  "amendment_reviews": [
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/amendment-astra-v2.json",
+      "sha256": "6a01c4e41f2e2b9b1349175881a1cc37bbdbcbbf3026a1509abf934eae6610d2",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/adoption-2026-10-14/amendment-luna-v2.json",
+      "sha256": "c099620e2f378d6f6a00785945c0b419ee1c68fc99f725f236d7449e236ed47e",
+      "mode": 436
+    }
+  ],
+  "all_357_applied_bytes_modes_match": true,
+  "guard_source_manifest": {
+    "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/source-candidate-v5.json",
+    "sha256": "92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459",
+    "mode": 436
+  },
+  "four_guard_sources_unchanged": true,
+  "historical_sequences": "NONCOMPLIANT permanently; source overall ESCALATE unchanged",
+  "adoption_scope": "Exact opt-in source-v5 guard only; future tests-first and T218/native/runtime/release gates unchanged",
+  "ticket_status": "in-review; no driver lifecycle completion claimed",
+  "staged_or_committed": false,
+  "trial_run": false
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "task-run-guard-draft-check-v1",
+  "created_epoch": 1791929518.5820892,
+  "argv": [
+    "/usr/bin/python3",
+    "-IBS",
+    "/home/claudia/stargate-t208/scripts/task-run-guard.py",
+    "check",
+    "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/guard/t218-blocked-policy.draft.json",
+    "4fe0fe87e679cebd188aa7f43601858006905e26fa5afbd84b40dad0121fc158",
+    "implement"
+  ],
+  "policy_sha256": "4fe0fe87e679cebd188aa7f43601858006905e26fa5afbd84b40dad0121fc158",
+  "exit_code": 78,
+  "stdout": "",
+  "stderr": "task-run-guard: REFUSED: T218 implementation BLOCKED: automatic predecessor completion carrier remains unresolved; existing strict unknown/late refusal guarantees remain binding. Guard adoption also awaits the explicit historical-evidence governance decision.\n",
+  "journal_absent": true,
+  "preserved_file_count": 26,
+  "preservation_matches": true,
+  "final_source_manifest_matches": true,
+  "integration_head": "cb3af686d8aaca6f703689e50437b8c90d7c6fad",
+  "adopted": false,
+  "activation_authorized": false,
+  "t218_implementation_started": false
+}

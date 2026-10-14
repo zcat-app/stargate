@@ -256,7 +256,9 @@ the human pair or the AI agent is doing the typing.
   failing tests derived from the spec (`specs/NNN-feature/spec.md`)
   *before* it writes implementation. Then drive the implementation to
   green. Do not accept code without tests. This is Constitution
-  Principle VII; it has no AI exception.
+  Principle VII. Its one-time T221 disposition covers only the exact past guard
+  candidate and preserves historical NONCOMPLIANT evidence; there is no future
+  AI exception.
 - **AI-generated code carries the same review burden.** Per-ticket review runs
   through `scripts/review-task.sh`: one GLM and one Codex reviewer, each
   covering correctness and adversarial security in the same single-gate pass.

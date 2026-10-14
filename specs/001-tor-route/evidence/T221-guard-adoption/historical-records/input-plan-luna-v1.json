@@ -1,0 +1,22 @@
+{
+  "schema": "task-run-guard-review-v1",
+  "role": "luna",
+  "model": "gpt-6-luna",
+  "effort": "high",
+  "verdict": "REWORK",
+  "plan_sha256": "d1d56bed6989675147641a1695ef6926e866a196cb4b22b1b3dd4459e78a7d4d",
+  "findings": [
+    {
+      "severity": "MAJOR",
+      "category": "program_input_boundary",
+      "property": "The supported isolated Python action must not execute unpinned site startup code before its directly pinned script.",
+      "evidence": "The contract requires -I (or a grouped equivalent) so caller/site startup code cannot be another executable source. Python -I implies -E, -P and -s, but does not imply -S. The system site module still runs at interpreter initialization; its global .pth executable lines and sitecustomize can execute code before the pinned script. Those files are not required to be in the candidate pins. Thus the plan's startup-source claim is stronger than the specified argv form. This is confirmed by Python's command-line and site documentation: -I disables the user site, while -S disables importing site; site documents that .pth import lines execute at startup and sitecustomize may perform arbitrary customization.",
+      "falsifier": "Require -S together with -I in the closed supported Python form, add -S to the explicit option allowlist, and test that the accepted action has site disabled; or narrow the contract to caller-controlled environment/user-site startup and explicitly put system site initialization under the trusted runtime boundary. Keep the direct script pin and all four source-v2 behavioral REDs."
+    }
+  ],
+  "assessment": {
+    "source_v2_findings": "The resolved-interpreter directory case, Python stdin source, Bash stdin source, and inherited stdin for opaque commands are each addressed with concrete refusals or DEVNULL and focused behavioral REDs before source edits.",
+    "workflow_boundary": "Correctly preserves the missing historical evidence, does not treat replay as historical RED, and grants neither governance waiver nor activation/T218 authorization.",
+    "feasibility": "The test-only stage and root inspection boundary are concrete and feasible; suite fixture changes and actual marker-based REDs are specified."
+  }
+}

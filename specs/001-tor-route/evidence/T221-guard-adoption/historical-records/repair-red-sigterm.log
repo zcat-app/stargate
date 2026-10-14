@@ -1,0 +1,13 @@
+F
+======================================================================
+FAIL: test_sigterm_stops_child_group_and_records_sticky_attempt (__main__.GuardCase.test_sigterm_stops_child_group_and_records_sticky_attempt)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/claudia/stargate-t208/tests/contract/workflow/task_run_guard_test.py", line 186, in test_sigterm_stops_child_group_and_records_sticky_attempt
+    self.assertEqual(guard.returncode, 130)
+AssertionError: -15 != 130
+
+----------------------------------------------------------------------
+Ran 1 test in 0.372s
+
+FAILED (failures=1)

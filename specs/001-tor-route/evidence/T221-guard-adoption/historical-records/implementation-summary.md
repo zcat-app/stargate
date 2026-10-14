@@ -1,0 +1,11 @@
+# Task-run guard implementation handoff
+
+Implemented the standard-library policy validator, exact-command runner, bounded journal, opt-in first-entry hook, focused contract suite, and usage/limits documentation. The hook is active when any of the three guard environment variables is present and runs with fixed `/usr/bin/python3 -B -I`, `/usr/bin/readlink`, and `/usr/bin/bash` paths before the existing driver effects. It binds the action to the resolved driver and its original arguments.
+
+The final affected suite passed: 22 tests, 0 failures, 0 skips. The test-first source bytes are preserved at `tests-first.py` with SHA-256 `3bd837d5ea85b8fa13bde2acfcb07b13977864d70723e1c4589dc206f72e2790`. Full results and red/green repairs are in `evidence.json` and the adjacent logs.
+
+Baseline provenance is deliberately separated. `baseline-driver.json` is the historical pre-hook run: it called the real existing driver and recorded exit 0 plus the IMPLEMENT handoff, but used an absent policy path and a minimal fixture. `baseline-valid-policy-replay.json` replays the preserved pre-hook driver bytes with a full-template disposable ticket and valid disabled policy; it also emitted IMPLEMENT/exit 0, but happened after implementation and is not historical tests-first evidence. The current hook's valid full-template selector returned 78 with the configured block reason and no IMPLEMENT handoff; see `baseline-driver-green.json` and `baseline-green-final.log`.
+
+The four final source hashes and modes are listed in `evidence.json`. Plan v3 and both exact plan approvals match their recorded hashes. Fresh independent reviews of the final source candidate and the installed T218 blocked profile remain root-owned follow-up gates; neither is claimed complete here. No broad verification, unrelated suites, staging, commit, or overlay edits were performed.
+
+The guard is an opt-in invocation control. Collaboration tools, direct invocations that bypass the hook, and unrestricted same-UID/root actions are outside its boundary. Journal tampering by such an operator and process escape/blocked kernel calls are not prevented; process termination is best effort and is not a hard real-time or T218 lifecycle guarantee.
