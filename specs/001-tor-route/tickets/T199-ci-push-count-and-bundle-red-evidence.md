@@ -1,14 +1,14 @@
 ---
 id: T199
 title: 'Count continuation pushes; bundle-ref red; verify CI toolchains'
-status: pending
+status: escalated
 created: 2026-10-02
-last_updated: 2026-10-05
+last_updated: 2026-10-16
 source: "T191 round-2 review (GLM, two Minors), confirmed by the T191 developer's falsification; maintainer approved filing 2026-10-02. Item 3 from the T155 attempt-4 redteam (area 3 m7, survived falsification), maintainer approved 2026-10-03. Items 4-5 from the T155 r5 cumulative redteam (area 3 m1 gitleaks half, survived falsification 2026-10-05; area 3 m2 increment, Info), maintainer approved 2026-10-05"
 phase: "Foundation audit remediation"
 story: ''
 remediates: T191
-blocked_by: []
+blocked_by: [T228]
 parallel: true
 files_budget: 7   # ticket + STATUS.md + tests/contract/workflow/ci_inputs_test.sh + evidence/T199-tests-first.json;
                   # + .github/actions/setup-toolchain/action.yml (item 3, T155 attempt 4)
@@ -28,8 +28,8 @@ spec_refs:
   - tests/contract/workflow/ci_inputs_test.sh
   - .github/workflows/verify.yml
   - .github/workflows/docker-cadence.yml
-decision_refs: []
-reviews: {}
+decision_refs: ["SECURITY-DECISIONS.md#2026-10-16-proposed-finite-t199-ci-chronology-disposition-t228"]
+reviews: { round: 1, date: 2026-10-16, verdict: ESCALATE, findings: "GLM REWORK; Astra ESCALATE; original reports preserved in T228 historical evidence record", diff_stats: "snapshot 675c852f10044853859088be36ce8d5fdcc2f34f60638a888695cae8fee18fc1" }
 overrides: []
 aborted_attempts: []
 reopens: []
@@ -106,3 +106,10 @@ Any change to `.github/workflows/agent-task.yml` behaviour or to token separatio
 which workflows use it. Item 4 changes only how the `secret-scan` job obtains and verifies
 gitleaks, not the scan configuration (`.gitleaks.toml`) or which events run it. Item 5
 changes only the path filters of `docker-cadence.yml`, not what the job runs.
+
+
+## October 16 T199 source review disposition
+
+The actual T199 source candidate received its original round 1 review on snapshot `675c852f10044853859088be36ce8d5fdcc2f34f60638a888695cae8fee18fc1`, based on `9317d8468fec8477115c6ce952ca26acb56896b4`. GLM returned REWORK and Astra returned ESCALATE; the combined strongest verdict is ESCALATE. The review set and original complete reports are retained by the T228 historical chronology evidence record and its bound local import archive. The source candidate remains held; no second T199 source round or source commit is recorded here.
+
+T199 is escalated and blocked on T228 solely for the proposed governance disposition. This dependency does not repair or waive the push-scanner findings, approve T199 source, reset T199's cap, or permit adoption. After any exact accepted amendment, T199 still requires its ordinary source repairs, current-consumer controls, and remaining actual source review.

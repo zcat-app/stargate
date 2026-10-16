@@ -1,0 +1,168 @@
+{
+  "schema": 1,
+  "ticket": "T228",
+  "parent_ticket": "T199",
+  "prepared_date": "2026-10-16",
+  "historical_source_snapshot": "675c852f10044853859088be36ce8d5fdcc2f34f60638a888695cae8fee18fc1",
+  "historical_source_parent": "9317d8468fec8477115c6ce952ca26acb56896b4",
+  "historical_review_round": 1,
+  "original_verdict_sha256": {
+    "glm": "5a3b259eca1c0164fca3add3365283cdd48d0b21b3fe7d7e5f5be25485704a58",
+    "astra": "ae6c861a66d974fcefb7199424d4d8062b505deafc1b5f00323188a60417a729"
+  },
+  "original_evidence_sha256": "9ed06017e47ee3619d59c36f82592d8b0c5612af333958771c7f2518af1e3885",
+  "finite_entries": [
+    {
+      "path": ".github/actions/setup-toolchain/action.yml",
+      "step": "Install Go 1.26.3",
+      "step_sha256": "6ba1be4d4cde277df99bc5c48d16f0210539dccf552ade88225573014629ed66",
+      "step_bytes": 786,
+      "first_line": 13,
+      "file_sha256": "41b9e936fda5d76b878df77900793bfd063a4677b3aea441b61d5edbbf17d48b",
+      "historical_status": "NONCOMPLIANT",
+      "gap": "literal behavioral fixtures were added after this executable body",
+      "required_current_evidence": "real-current-body positive and independent property-specific negative controls; full source/security review; source defects fixed with ordinary genuine RED/GREEN",
+      "properties": [
+        "committed archive checksum before extraction/execution",
+        "private install directory and exported GOROOT/PATH",
+        "no cross-run executable cache"
+      ]
+    },
+    {
+      "path": ".github/actions/setup-toolchain/action.yml",
+      "step": "Install JDK 25.0.4+7",
+      "step_sha256": "a470e7526ca280dd6f492fd2a60ac313e0eb08fbcf6ec5ce4adde67df26d9a80",
+      "step_bytes": 928,
+      "first_line": 32,
+      "file_sha256": "41b9e936fda5d76b878df77900793bfd063a4677b3aea441b61d5edbbf17d48b",
+      "historical_status": "NONCOMPLIANT",
+      "gap": "literal behavioral fixtures were added after this executable body",
+      "required_current_evidence": "real-current-body positive and independent property-specific negative controls; full source/security review; source defects fixed with ordinary genuine RED/GREEN",
+      "properties": [
+        "committed archive checksum before extraction/execution",
+        "private JDK path and exported JAVA_HOME/PATH",
+        "no cross-run executable cache"
+      ]
+    },
+    {
+      "path": ".github/actions/setup-toolchain/action.yml",
+      "step": "Install Python 3.12.15",
+      "step_sha256": "1e41b54123366bdd3f2a022d2bdc506484ffd655f2031af0f407818224e82547",
+      "step_bytes": 1827,
+      "first_line": 52,
+      "file_sha256": "41b9e936fda5d76b878df77900793bfd063a4677b3aea441b61d5edbbf17d48b",
+      "historical_status": "NONCOMPLIANT",
+      "gap": "literal behavioral fixtures were added after this executable body",
+      "required_current_evidence": "real-current-body positive and independent property-specific negative controls; full source/security review; source defects fixed with ordinary genuine RED/GREEN",
+      "properties": [
+        "committed archive checksum before extraction/setup execution",
+        "private toolcache, setup working directory and library path",
+        "offline bundled-wheel pip setup and removal of inherited pip configuration",
+        "selected executable and exported environment; later Ubuntu-ID repair excluded"
+      ]
+    },
+    {
+      "path": ".github/actions/setup-toolchain/action.yml",
+      "step": "Install Node 20.20.2",
+      "step_sha256": "df9ce1f88c65d2774c95c89261045c465bb8372e156a25ec02da66dc667bbe22",
+      "step_bytes": 801,
+      "first_line": 91,
+      "file_sha256": "41b9e936fda5d76b878df77900793bfd063a4677b3aea441b61d5edbbf17d48b",
+      "historical_status": "NONCOMPLIANT",
+      "gap": "literal behavioral fixtures were added after this executable body",
+      "required_current_evidence": "real-current-body positive and independent property-specific negative controls; full source/security review; source defects fixed with ordinary genuine RED/GREEN",
+      "properties": [
+        "committed archive checksum before extraction/execution",
+        "private executable path export",
+        "no cross-run executable cache"
+      ]
+    },
+    {
+      "path": ".github/workflows/verify.yml",
+      "step": "Install gitleaks 8.24.3",
+      "step_sha256": "3d1ffe42194030a0c1aca40eb8f485503b3ed46adb7e3a028346ac58e4fb3bea",
+      "step_bytes": 932,
+      "first_line": 78,
+      "file_sha256": "afaa298e205e8a7e4744520172afb28da04a466ac73b48430e1cc5b7d360e2f8",
+      "historical_status": "NONCOMPLIANT",
+      "gap": "literal behavioral fixtures were added after this executable body",
+      "required_current_evidence": "real-current-body positive and independent property-specific negative controls; full source/security review; source defects fixed with ordinary genuine RED/GREEN",
+      "properties": [
+        "committed archive checksum before extraction/install",
+        "explicit selected binary and private path",
+        "no cross-run executable cache"
+      ]
+    },
+    {
+      "path": ".github/workflows/verify.yml",
+      "step": "Prepare scan range",
+      "step_sha256": "694db4d7ee9919ccf46da4c269c0bf7fae32a520403b16af7d5d6eb5d8e6b0f4",
+      "step_bytes": 2339,
+      "first_line": 97,
+      "file_sha256": "afaa298e205e8a7e4744520172afb28da04a466ac73b48430e1cc5b7d360e2f8",
+      "historical_status": "NONCOMPLIANT",
+      "gap": "literal behavioral fixtures were added after this executable body",
+      "required_current_evidence": "real-current-body positive and independent property-specific negative controls; full source/security review; source defects fixed with ordinary genuine RED/GREEN",
+      "properties": [
+        "push/PR/dispatch selection and empty/invalid/API failure handling",
+        "full commit-ID validation and bounded input-to-output scan range transport"
+      ]
+    },
+    {
+      "path": ".github/workflows/verify.yml",
+      "step": "Run gitleaks",
+      "step_sha256": "c7e702aafc75b4ddc4631481c0ebac22ddd7492066947ec543485b942515b1ee",
+      "step_bytes": 911,
+      "first_line": 137,
+      "file_sha256": "afaa298e205e8a7e4744520172afb28da04a466ac73b48430e1cc5b7d360e2f8",
+      "historical_status": "NONCOMPLIANT",
+      "gap": "literal behavioral fixtures were added after this executable body",
+      "required_current_evidence": "real-current-body positive and independent property-specific negative controls; full source/security review; source defects fixed with ordinary genuine RED/GREEN",
+      "properties": [
+        "fresh SARIF removal and selected binary invocation",
+        "single quoted range argument and scan exit/output preservation"
+      ]
+    },
+    {
+      "path": ".github/workflows/verify.yml",
+      "step": "Publish scan summary and PR comments",
+      "step_sha256": "614100bdfea282d94871ffa93c575f185efa3d6c739064c948891188d14bb3b0",
+      "step_bytes": 6131,
+      "first_line": 162,
+      "file_sha256": "afaa298e205e8a7e4744520172afb28da04a466ac73b48430e1cc5b7d360e2f8",
+      "historical_status": "NONCOMPLIANT",
+      "gap": "literal behavioral fixtures were added after this executable body",
+      "required_current_evidence": "real-current-body positive and independent property-specific negative controls; full source/security review; source defects fixed with ordinary genuine RED/GREEN",
+      "properties": [
+        "bounded SARIF parsing and invalid/missing report refusal",
+        "escaped summary metadata and no matched-secret rendering",
+        "event-scoped comment deduplication/error handling and report result"
+      ]
+    },
+    {
+      "path": ".github/workflows/verify.yml",
+      "step": "Return scan status",
+      "step_sha256": "a3b673142c6b6499e49bb9b757ce7a9726e0297182ac293cddb80eb2614e9544",
+      "step_bytes": 850,
+      "first_line": 258,
+      "file_sha256": "afaa298e205e8a7e4744520172afb28da04a466ac73b48430e1cc5b7d360e2f8",
+      "historical_status": "NONCOMPLIANT",
+      "gap": "literal behavioral fixtures were added after this executable body",
+      "required_current_evidence": "real-current-body positive and independent property-specific negative controls; full source/security review; source defects fixed with ordinary genuine RED/GREEN",
+      "properties": [
+        "scan/leak/error status propagation",
+        "summary/artifact failure cannot become scan success"
+      ]
+    }
+  ],
+  "exclusions": [
+    "push-scanner corrections and every other corrective or additional code change",
+    "any other installer/workflow/file/property",
+    "future code",
+    "deployed product privacy/runtime/native/browser/human/release gates",
+    "review verdicts or cap reset",
+    "permission expansion or source adoption approval",
+    "Later Ubuntu-ID correction has its own genuine pre-fix RED and is not accepted as missing chronology by this proposal"
+  ],
+  "state_at_preparation": "PROPOSED_NOT_ACCEPTED"
+}

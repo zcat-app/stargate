@@ -450,6 +450,11 @@ external team's hard-won AI-assisted workflow; adapted to stargate's
 Constitution + spec-kit context.
 
 
+### T228 finite T199 chronology disposition
+
+Only after explicit acceptance and adoption of the exact T228 amendment may its nine hash-bound historical CI step bodies/properties use retrospective current-consumer qualification. Preserve their NONCOMPLIANT original chronology, original snapshots, every rejected verdict and T199's actual round/cap. The exception accepts no source defect. Scanner fixes and every later corrective/additional implementation require ordinary genuine RED/fix/identical GREEN through their real executing entrypoints. A current green helper, an amendment approval or a new ticket ID cannot manufacture historical evidence, approve source or reset a source review. Complete affected behavioral controls and fresh exact independent functional/security source approval still precede integration; native/browser/platform/human/release gates retain their existing owners.
+
+
 ### T220 finite historical-evidence disposition
 
 After explicit acceptance and adoption of T222 only, the enumerated already-written T220 properties may use retrospective qualification. Retain NONCOMPLIANT past chronology, source freezes, failed reviews and truthful per-case classifications. Original source replays cannot create historical RED. The ordinary tests-first sequence applies to every later correction and additional implementation. Apply no exception merely because a source test is green; require exact approved source and complete current-consumer coverage before integration. A7/backend/native/live/host authority remain separate gates.

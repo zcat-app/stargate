@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 14 |
+| pending | 13 |
 | in-progress | 1 |
-| in-review | 0 |
-| escalated | 0 |
+| in-review | 1 |
+| escalated | 1 |
 | done | 230 |
 | deferred | 13 |
-| **total** | **258** |
+| **total** | **259** |
 
 ---
 
@@ -32,7 +32,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
-| T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
 | T225 | Establish the shared Go qualification admission component | Qualification reconciliation | ✓ |  |
 | T226 | Prepare and validate internal qualification artifacts | Qualification reconciliation | ✓ |  |
@@ -44,7 +43,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
+| T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | escalated | ✓ | Foundation audit remediation |
 | T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | in-progress | ✓ | Foundation audit remediation |
+| T228 | Review finite T199 CI chronology disposition | in-review | ✓ | Governance |
 
 ---
 

@@ -3116,6 +3116,11 @@ failure class. Tests-only and source require their own exact paired gates; affec
 apply. This target does not claim any source/native/live PASS or complete T218/T209/T034f.
 
 
+### T199 CI chronology disposition — 2026-10-16
+
+The proposed T228 amendment concerns only missing original behavioral test ordering for nine hash-bound historical CI installer/scan bodies. That ordering remains NONCOMPLIANT. After explicit acceptance of the exact independently reviewed amendment, retrospective current-body controls and fresh exact functional/security source approval may qualify those bodies for adoption; neither restores historical RED or accepts a scanner defect. Future corrections remain tests-first. This changes no deployed protection, token/route authority, platform or native/browser/human/release requirement. T199 remains held until its actual source findings and review gate close. Preparation or review alone is not maintainer acceptance. See the T228 historical chronology inventory.
+
+
 ### T220 historical chronology disposition — 2026-10-14
 
 T222 changes only treatment of two finite past tests-first gaps under Constitution VII. Historical NONCOMPLIANT labels remain; retrospective consumer tests never become historical RED. Current functionality still requires exact independent security/correctness review and all mandatory native/backend/A2/A7/host evidence. This grants no execution or protected-host authority and accepts no source defect. The trusted maintainer must explicitly accept the exact amendment; preparation or review alone is insufficient. See specs/001-tor-route/evidence/T220-historical-chronology-disposition.json.

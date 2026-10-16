@@ -41,6 +41,16 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
 
 ---
 
+## 2026-10-16 — Proposed finite T199 CI chronology disposition (T228)
+
+**State and authority.** The maintainer selected preparation after T199's actual round1 GLM REWORK/Astra ESCALATE. This entry becomes an accepted rationale only after explicit acceptance of the exact independently reviewed T228 amendment; preparation is not acceptance. The nine-entry historical inventory SHA256 is `c088d1191e0b532ef5c678e7e952ac09277a617bb4ddad3c37af69192c0f5a31`.
+
+**Decision and protection delta.** Permit considering only the bound already-written CI step bodies/properties for adoption despite missing original literal-body behavioral tests. Keep their original NONCOMPLIANT status, full original evidence/rejections and actual source round/cap. Retrospective current-body positive and independent property-specific negative tests plus fresh exact source/security approval are mandatory; no historical RED is restored. No code defect, scanner bypass or future correction is accepted by this permission.
+
+**Alternatives, residue and mitigation.** Strict HOLD retains the chronology requirement and prevents adopting these bodies; no authentic earlier literal-body evidence was found. Later tests cannot prove that tests drove the past implementation. Exact retained source/property pins, independent adversarial review and current actual-consumer falsifiers mitigate adoption risk without pretending that chronology exists. Ordinary tests-first applies to every repair/addition. There is no runtime/host/CI-dispatch/push/publication authority or deployed privacy/native/browser/human/release exception.
+
+**Owner and trigger.** Maintainer owns exact amendment acceptance; T199 owns current CI source repair/qualification. Re-evaluate on changed historical binding, an unlisted property, missing current control, new source/security finding, future code or proposed expansion. T228 does not replace T199, reset its cap or approve its code. The original T199 round1 snapshot and both original verdict hashes remain in the inventory.
+
 ## 2026-10-16 — Qualification artifacts, single-use candidates and retained exclusion
 
 **Authorization and scope.** The maintainer explicitly requested falsified options, independent

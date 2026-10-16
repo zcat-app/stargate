@@ -419,6 +419,7 @@ US2 and US3 ride on US1's surfaces; the same developer pairing carries through t
 
 
 - [X] T222 [Governance] Reconcile normal delivery of the already accepted exact finite T220 chronology disposition; verify the preserved acceptance, keep NONCOMPLIANT history and ordinary future tests-first. No repeated policy consent or source/native approval.
+- [ ] T228 [Governance] Review the exact finite T199 chronology proposal and durable original evidence; keep T199 source findings, ordinary review, and all runtime/native/release obligations in force. No source adoption or authority.
 - [ ] T223 [Foundation] Integrate actual prepared-artifact callers and bounded privileged intent/ACK transport after T225/T226 components, T227 platform qualification and T209 source hardening. Retire in-window BuildKit global-join target explicitly; preserve all failed parent/child counts and closed-episode authority.
 - [X] T224 [US1] Deliver the reviewed October16 qualification contract/design and coordinated ticket/dependency reconciliation; preserve Option A manual completion and historical decisions. No source/native authority from document delivery.
 
