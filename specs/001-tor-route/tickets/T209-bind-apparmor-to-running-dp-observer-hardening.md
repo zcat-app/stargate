@@ -1,28 +1,18 @@
 ---
 id: T209
-title: 'Bind DP AppArmor to the running DP; assert observer hardening'
-status: pending
+title: "Bind running-DP AppArmor and observer hardening at source"
+status: deferred
 created: 2026-10-05
-last_updated: 2026-10-05
+last_updated: 2026-10-16
 source: "T155 r5 cumulative redteam (index tree d6f46b9b): area 3 M1, narrowed to Minor by falsification 2026-10-05 (core is a duplicate of 989b8f9 A3-m4, 79d49e9 A3-M2 and the 694dbd8 moby verdict; one increment is new), area 3 m3 (survived as Minor), and the T191/T203 stale-statement orphans of area 3 m5/m6 moved here by the maintainer (\"Split to T209 (Recommended)\", 2026-10-05); maintainer approved filing as one deployment-confinement ticket 2026-10-05"
 phase: "Foundation audit remediation"
 story: ''
-blocked_by: []
+blocked_by:
+  - "T224"
+deferred_on: T224
+deferred_reason: spec-amend
 parallel: false
-files_budget: 21  # ticket + STATUS.md + evidence/T209-tests-first.json (overhead);
-                  # scripts/subcommands/init + its hermetic test under tests/contract/stargate-cli/ (named at START);
-                  # tests/contract/stargate-cli/t162_enforcement_test.sh (docker tier);
-                  # tests/live-e2e/local-topology/connect_refusal.py + test_connect_refusal.py;
-                  # tests/contract/compose/local_compose_test.sh;
-                  # tests/live-e2e/local-topology/observer.py + test_observer.py;
-                  # specs/001-tor-route/quickstart.md; THREAT-MODEL.md;
-                  # specs/000-architecture/spec.md (§9.1 steps 5 and 7, §9.2: init's new step and its exit code);
-                  # specs/001-tor-route/contracts/foundation-boundaries.md (only if the maintainer's decision in Acceptance 4 changes the contract);
-                  # Acceptance 8 (maintainer's "Split to T209"): data-plane/Makefile, data-plane/Dockerfile, control-plane/Dockerfile,
-                  # compose/env/local.env.example, tests/live-e2e/local-topology/README.md (quickstart.md and local_compose_test.sh already counted above)
-                  # + the test file holding Acceptance 8's grep check, if it is not one already counted (named at START)
-                  # SECURITY-DECISIONS.md (Acceptance 9, only with maintainer-approved wording); 20 -> 21 was raised for this path by
-                  # the T155 developer and reported to the maintainer on 2026-10-05 (not a maintainer-approved raise)
+files_budget: 21
 privacy_critical: true
 tests_first: []
 test_for: []
@@ -30,19 +20,19 @@ constitution_refs:
   - "III: Privacy-Preserving by Construction"
   - "V: Honest Threat Model"
   - "VII: Tests-First for Privacy-Critical and Contract Code"
-complexity: medium
-risk: medium
+complexity: high
+risk: high
 round_cap: 2
 spec_refs:
-  - specs/001-tor-route/contracts/foundation-boundaries.md
-  - specs/001-tor-route/quickstart.md
-  - specs/000-architecture/spec.md
-  - THREAT-MODEL.md
+  - "specs/001-tor-route/contracts/qualification-boundary.md"
+  - "specs/001-tor-route/design/qualification.md"
+  - "specs/001-tor-route/contracts/foundation-boundaries.md"
 decision_refs:
   - "2026-10-05 maintainer: \"Fold in, one new ticket\" (T155 r5 survivors; the running-DP AppArmor increment and the observer hardening assertions become this ticket)"
   - "2026-10-05 maintainer: \"Split to T209 (Recommended)\" (the T203 orphans and the Dockerfile/Makefile comments of area 3 m5/m6 are Acceptance 8 here, not T197)"
   - "2026-10-05 maintainer: \"Stale SD entry to T209 (Recommended)\" (Acceptance 9; the SECURITY-DECISIONS wording stays reserved for the maintainer)"
   - "SECURITY-DECISIONS 2026-09-20 (T162): the host administrator and Docker daemon are trusted; direct Compose starts are unsupported (read, not changed, by this ticket)"
+  - "2026-10-11 T209 R3 reassessment: preserve the full A7 native Local gate; extract one finite native image/actor/resource/result contract to T220 before T209 integration. Session-authorized affected-only source tests and fresh Astra/high plus Luna/high source checkpoints do not replace normal delivery review."
 reviews: {}
 overrides: []
 aborted_attempts: []
@@ -50,6 +40,78 @@ reopens: []
 redteam_findings: []
 clarity_check: {}
 ---
+
+# T209: Bind running-DP AppArmor and observer hardening at source
+
+## Context and analysis
+
+Retain T209's production source hardening and A3/A4/A8/A9 reserved maintainer decisions.
+The full native A7 and A2-live receipts move to T220 under the reviewed October16 contract.
+T209 may complete its source claims without pretending those live claims passed. T077/T080 and
+final closure retain direct T220 dependencies. Historical R1–R3 and later failures remain carried.
+
+## Acceptance — retained original identifiers
+
+1. **A1:** init reads the actual running DP's enforcing kernel AppArmor label after binding
+   container/PID/start/cgroup to the invoking kernel, refusing missing/wrong/unreadable identity
+   with DP stopped and the defined host-boundary exit. Preserve the production label, no inspect-
+   configuration shortcut. Meaningful hermetic negatives plus a successful control precede repair.
+2. **A2-source:** connect_refusal.py and installer predicates use actual kernel identity/label,
+   not `docker inspect .AppArmorProfile` or Python assert. Cover inspect-says-enforcing/kernel-
+   says-unconfined, wrong PID and missing identity through real source entrypoints. T220 owns
+   the separate real-image unconfined-DP Docker execution and A2-live receipt; full T162 cannot
+   substitute for that leg. This is ownership migration, not deletion of A2.
+3. **A3:** retain the supported-daemon wording decision. Return concrete quickstart/threat-model
+   sentences to the maintainer before changing reserved wording; currently drafted rootful,
+   invoking-kernel, no Desktop/rootless/remote scope is not silently adopted by this ticket edit.
+4. **A4:** retain the maintainer's constitutional self-refusal interpretation before code for it.
+   No source finding acceptance can waive the Constitution. If DP self-check/profile changes are
+   selected, reconcile contract, scope/budget and tests before implementation; do not hide them
+   in installer-only changes. This maintenance task does not decide that reserved choice.
+5. **A5:** removing any observer read_only, cap_drop ALL or no-new-privileges constraint fails
+   the real Compose source gate with a passing unmutated control; preserve network/socket checks.
+6. **A6:** observer boundary verdict rejects non-readonly rootfs, missing ALL drop, nonzero CapEff
+   or missing NoNewPrivs, independently of Python optimization. Source fixtures challenge each
+   field separately and preserve a valid positive. Actual native observations belong to T220.
+7. **A7 migration:** T220 exclusively owns the complete original native matrix, exact A2-live
+   and full T162 markers, source/image/capture/control/results, cleanup and separate host authority.
+   T209 source completion cannot certify it. Verify downstream native edges before delivery.
+8. **A8:** preserve the named Makefile/Dockerfile/env/README/quickstart corrections. Say T075/T081
+   evidence accurately; remove stale raw-cookie/subpath claims. Check actual producer topology,
+   not only a grep count. Return reserved quickstart/minimum-floor wording for the required
+   maintainer decision; no dependency/version floor change is implicit.
+9. **A9:** retain the append-only T094a stale observer/control-path correction as a reserved
+   maintainer wording decision. Prepare exact superseding text/backlink; write it only under the
+   existing authorization rule. Never rewrite the committed original decision body.
+10. Run affected source regressions and exact independent review; preserve old source candidates,
+    genuine/invalid evidence classifications and counts. No native test is relabelled source PASS.
+
+## Scope and completion
+
+Keep the original 21-path source budget and named source/doc/test families below; enumerate the
+exact union before START. No production profile/owner-rule or DP self-refusal change is included
+without A4 scope reconciliation. T220 owns all migrated native execution. No native/host action,
+VM creation, live PASS or source-episode reset is authorized by this refinement.
+
+## Execution and evidence boundary
+
+This is a ticket reconciliation, not authorization to execute source or native work. Root authors
+and independently reviews the exact implementation/experiment plan before dispatch. New code is
+spec-derived tests-first through real supported consumers: preserve genuine behavioral RED before
+implementation, identical GREEN afterward and affected regressions. Missing tool/import/API/build,
+invalid setup and a refusal stub are not the missing safety property's RED or healthy PASS.
+Retain every original candidate, verdict, actual review/episode count and NONCOMPLIANT chronology;
+new child IDs do not reset parent failures. Pure document work uses consistency/adversarial review.
+No automatic native/host authority, shared-tag repair, evidence deletion, VM for convenience or
+T078/T079 execution follows. Apply the applicable ticket review matrix and explicit session
+exceptions honestly; advisory plan approval is not the paired implementation/delivery gate.
+
+## Historical pre-reconciliation ticket body — preserved verbatim
+
+The original body below is byte-for-byte from its committed source. The separate October 11 lineage
+appendix after it is additional preserved history. Active acceptance and scope above govern new work.
+Historical approvals do not approve changed source or reset counts.
+
 
 # T209: Bind the DP's AppArmor confinement to the running DP; assert the observer's hardening
 
@@ -201,3 +263,34 @@ the CI gitleaks binary and the `docker-cadence` path filter (T199 items 4-5); th
 banner and §5.9 wording and `CLAUDE.md` (T197 item 6);
 the reproducibility gate itself (T075) and release digests (T081); any change to the
 AppArmor profile's existing rules or to the owner iptables rules.
+
+
+## 2026-10-11 A7 refinement and review lineage
+
+This ticket remains the owner of Acceptance 1–6 and 8–9 and final combined A7.
+T220 extracts one integrated native image, actor, effect, receipt,
+scenario-result and cleanup contract. T209 is deferred on T220 rather than
+completed or restarted. T081 is already done and is not a new prerequisite;
+the current active tree has no T219 ticket, and the scratch T219 browser-venue
+amendment is not required for T220. The graph is `T220 → T209`;
+T034a/T077 keep their existing dependencies and T080 keeps its T081/T077
+order. A4's constitutional reading and A9's append-only
+decision wording remain reserved to the maintainer, as do A3/A8 wording where
+the acceptance items say so. Private image names do not provide immutable
+source provenance or host containment, and no constitutional guarantee is
+relaxed. The ordinary default image identities stay `:local`.
+
+R1–R3 are failed source attempts, not a fresh round for T220. Preserve
+the staged R3 source at `f13a40c` plus patch SHA-256
+`e5e6850c6a6564b212e121741e7a795734125fdb38c762d26014afdd105f111b`,
+the available R2/R3 Astra and Luna verdicts/seals and tests-first artifacts
+under `.scratch/tmp/T209/`, and the R1 global redesign summary. Original R1
+individual verdict files were not found in the searched scratch/target paths;
+the summary is secondary evidence and does not replace them. The third failed
+gate triggered this reassessment. The original `round_cap: 2` remains recorded;
+the session-authorized three-failure reassessment does not erase or
+reclassify prior verdicts. T220 may receive affected-only tests and fresh
+Astra/high plus Luna/high source
+checkpoints under the session exception. Full `scripts/verify.sh` and the
+repository's normal GLM/Astra delivery gate remain outstanding. No source
+checkpoint authorizes the full live run or protected host-policy mutation.

@@ -13,13 +13,13 @@
 
 | Status | Count |
 |---|---|
-| pending | 14 |
+| pending | 15 |
 | in-progress | 0 |
 | in-review | 1 |
 | escalated | 0 |
-| done | 228 |
-| deferred | 8 |
-| **total** | **251** |
+| done | 229 |
+| deferred | 13 |
+| **total** | **258** |
 
 ---
 
@@ -29,16 +29,12 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T034a | Measure SC-003 in a supported browser on a Local-profile hos | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
-| T034f | Integration test for US1 acceptance-scenario 3 second assert | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP | ✓ |  |
 | T189 | Resolve surviving transport-area redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
 | T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
 | T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | Foundation audit remediation | ✓ | ✓ |
 | T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
-| T209 | Bind DP AppArmor to the running DP; assert observer hardenin | Foundation audit remediation | ✓ |  |
-| T215 | Instrument Docker cadence resource ownership | Integration | ✓ |  |
 
 ---
 
@@ -46,7 +42,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
-| T222 | Reconcile delivery of the accepted T220 chronology dispositi | in-review | ✓ | 6: Polish & Cross-Cutting Concerns |
+| T224 | Deliver the reviewed qualification contract and ticket recon | in-review | ✓ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
 
 ---
 
@@ -54,6 +50,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Reason | Blocked on |
 |---|---|---|---|
+| T034f | Measure authenticated onion component egress with prepared a | blocked-on-new-ticket | T218 |
 | T037 | Implement `control-plane/core/src/main/java/.../TorrcRendere | spec-amend | T089 |
 | T068 | Contract test `tests/contract/error-template/body_byte_match | decomposed | T071 |
 | T069 | Contract tests `tests/contract/error-template/reference_id_u | decomposed | T071 |
@@ -61,13 +58,17 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T140 | Enforce Tor package content integrity pins | decomposed | T160 |
 | T154 | Reconcile stale reviewer authentication guidance | decomposed | T156 |
 | T202 | Add a scoped host-direct live runner and fresh VM overlays | blocked-on-new-ticket | T212 |
+| T209 | Bind running-DP AppArmor and observer hardening at source | spec-amend | T224 |
 | T212 | Close Docker verification budgets, history and CI inputs | blocked-on-new-ticket | T215 |
+| T218 | Qualify single-use observer readiness with shared admission | blocked-on-new-ticket | T223 |
+| T220 | Qualify the complete artifact-native Local A2 and A7 matrix | blocked-on-new-ticket | T223 |
+| T223 | Integrate prepared-artifact callers and privileged intent tr | spec-amend | T224 |
 
 ---
 
 ## Done
 
-_228 ticket(s) done._
+_229 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -297,3 +298,4 @@ _228 ticket(s) done._
 - T217 — Make shipped Quarkus artifacts byte-reproducible
 - T219 — Amend SC-001 and SC-003 browser measurement venue
 - T221 — Adopt the exact guard under a one-time historical evidence disposition
+- T222 — Reconcile delivery of the accepted T220 chronology disposition

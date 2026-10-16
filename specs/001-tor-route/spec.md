@@ -82,14 +82,15 @@ v1 is filling in routes; if it does not, nothing else matters.
 extension installed and a bearer token pasted into the extension settings
 loads `https://duckduckgogg42xjoc72x3sjasowoarfbgcmvfimaftt6twagswzczad.onion/`
 (DuckDuckGo's v3 onion address, used as a stable reference target) and
-renders the page. A simultaneous `tcpdump` / Wireshark capture on the
-`lo` interface and on the host's egress NIC confirms:
-
-- No A or AAAA DNS query for any string ending in `.onion` is sent on
-  either interface during the session (Principle III — SOCKS5h).
-- Egress traffic from the host goes only to Tor guards (matched against
-  the current public Tor consensus); no direct connection to any IP not
-  in the consensus appears during this load.
+renders the page. Release-cadence component observations capture Tor in its
+network namespace, CP in its `network_mode: none` namespace, and DP OUTPUT
+attempts under T162's host-network/UID-5102 boundary. They check Tor SYNs
+against Tor's accepted microdescriptor consensus, CP's loopback-only packet
+surface, and the absence of prohibited DP attempts. DP NFLOG records are
+observed before the T162 verdict and do not prove a packet reached a physical
+NIC or hypervisor; those claims require capture at that vantage. The separate
+T034 DNS gate observes UDP/53 in its test namespace and does not establish
+browser-wide DNS absence.
 
 **Acceptance Scenarios**:
 
@@ -105,12 +106,49 @@ renders the page. A simultaneous `tcpdump` / Wireshark capture on the
    confirms Tor usage. (Equivalently, an integration test asserts the
    destination saw a Tor exit / onion endpoint, not the host's clearnet
    IP.)
-3. **Given** a Wireshark capture on `lo` and the host egress NIC for the
-   duration of the session, **When** the capture is analysed offline,
-   **Then** no plaintext DNS query for any `*.onion` name appears in
-   either capture, and no TCP connect to a destination outside the
-   current Tor consensus appears on the egress NIC during the routed
-   request window.
+3. **Given** the release-cadence T034f component observers during a routed
+   onion transfer, **When** the capture and OUTPUT-attempt records are
+   analysed, **Then** Tor TCP SYNs match IPv4 OR endpoints parsed from the same
+   cookie-authenticated ControlPort response that supplies validity metadata;
+   a repeat authenticated query after measurement has the same digest. CP emits
+   no observed non-loopback packet, and DP makes no
+   prohibited attributed IP attempt. Before real init, refuse any existing or
+   unreadable UID-5102 process/socket inventory and validate the complete
+   prepared-artifact closure plus independently expected pinned helper/tool
+   identities before real init. Do not discover or build in this artifact-only
+   native window; ordinary source-init retains its separate initializer/Buildx
+   discovery. Tor capture and authenticated
+   consensus metadata begin before routed controls and remain active through
+   post-workload controls and output quiescence. Positive attribution uses
+   distinct exact IPv4 reply controls before and after the >=120-second workload;
+   IPv4/IPv6 inverse-cgroup SYN controls appear exactly once in their respective
+   groups and reconcile with exact DROP deltas. IPv6 positive attribution is
+   not claimed as live calibrated. CP runtime mode is `none`; inventory every
+   interface and capture all of them (or prove `lo` is the only interface),
+   with exact loopback controls before and after the workload.
+
+   One continuous pair of NFLOG readers spans calibration, workload,
+   post-workload controls, and final DP shutdown. Freeze and terminate only the
+   verified UID-5102 DP cgroup after the post-control. Keep readers active until
+   all observed/inventoried DP TCP tuples, including TIME-WAIT rows with zero
+   UID/inode, disappear from the host tables and UDP sockets are closed; then
+   require CONFIG UNBIND ACK, same-socket nonblocking EAGAIN drain, sequence
+   continuity, zero ENOBUFS/MSG_TRUNC, exact post-drain record/counter equality,
+   and exact T162 DROP deltas. The helper verifies the independently expected
+   test-binary SHA-256 before socket open and requires kernel
+   `6.8.0-146-generic`, recording both. A frozen candidate manifest binds init,
+   Compose, build inputs, tools and running image identities; sanitized receipt
+   binds the same-run observation and exact cleanup/restoration evidence. CP
+   capture cannot detect a failed connect that emitted no packet. This
+   observation does not assert what a physical NIC or hypervisor saw; that
+   requires measurement at that vantage.
+
+T218 readiness is a prerequisite, not T034f acceptance. The
+[qualification boundary contract](contracts/qualification-boundary.md) defines source/platform/live
+stages, artifact-only runtime, single-use candidates, shared exclusion, deadlines and completion.
+Pre-init UID/socket and artifact checks precede init; production-DP identity and enforcing-label
+checks follow init. A SOCKS negotiation control is not routed application evidence. Existing source
+is not certified compliant, and original FAIL/NOT OBSERVED scenario records remain unchanged.
 
 ---
 
@@ -155,9 +193,9 @@ closed in that case.
 ### User Story 2 - Stream isolation per first-party domain (Priority: P2)
 
 When the user opens two different `.onion` services in two different
-tabs, each first-party origin gets its own Tor circuit. Visiting site A
-in one tab and site B in another does not let either site's exit-side
-observer correlate the user's visits across both.
+tabs, distinct full device/profile/initiating-site partitions must not share a Tor circuit. This
+prevents cross-partition circuit sharing; it does not promise protection against every correlation
+channel or require requests within one partition to use exactly one circuit.
 
 **Why this priority**: This is the privacy property Principle III pins as
 load-bearing for Tor: per-first-party stream isolation. The MVP (US1)
@@ -165,34 +203,25 @@ proves the path works; this story proves the **privacy claim**. Without
 it, two onion sites visited from the same browser share a circuit and the
 privacy property the spec advertises does not hold.
 
-**Independent Test**: With the local-profile stack running, simultaneously
-open two distinct `.onion` URLs in two tabs. Query the Tor sidecar's
-control port (cookie-authenticated, internal to the compose network) for
-the active circuit list, or inspect the sidecar's NEWNYM / STREAM event
-log. Assert that the two requests' SOCKS5 streams attached to **distinct
-circuit IDs**. Repeated with 10 distinct first-party `.onion` domains in
-sequence, assert ≥9 distinct circuits across the 10 visits (one allowance
-for legitimate circuit reuse within a short window for the same origin).
+**Independent Test**: Exercise the same reachable target through the data plane using distinct
+full partitions, so destination-specific rendezvous circuits cannot hide fused credentials. Bind
+successful streams to nonzero BUILT circuits through authenticated Tor control observations.
+Separately verify browser partition derivation and missing-context blocking under FR-002. A
+sidecar-only corpus count does not prove browser/data-plane coverage.
 
 **Acceptance Scenarios**:
 
-1. **Given** the local stack with the Tor sidecar's control port
-   reachable from the integration-test harness, **When** the harness
-   issues two CONNECT requests to two different `.onion` destinations
-   through port 8881 in parallel, with SOCKS5 username set to each
-   request's first-party domain (the extension does this; the test
-   simulates the extension), **Then** the Tor sidecar's `GETINFO
-   circuit-status` (or equivalent control-port query) reports two
-   different circuit IDs for the two streams.
-2. **Given** the same stack, **When** the harness issues 10 sequential
-   CONNECTs to 10 distinct first-party `.onion` domains over the course
-   of a short window (≤2 min), **Then** at least 9 distinct circuit IDs
-   appear across the 10 streams.
-3. **Given** the same stack, **When** the harness issues two CONNECTs to
-   the **same** first-party `.onion` domain (different resources on the
-   same origin) in parallel, **Then** the same circuit ID is used for
-   both — same-origin requests intentionally share a circuit (this is
-   the design, not a leak).
+1. Distinct full device/profile/initiating-site partitions to the same reachable target through
+   port 8881 MUST attach to disjoint circuit IDs. Vary each partition axis using the foundation
+   contract's identities, not bare destination strings as production usernames.
+2. The test MUST include a controlled credential-fusion discriminator. Its observations must
+   distinguish the correct forwarding path from a path collapsing distinct partitions; invalid
+   setup or inability to observe that distinction is not PASS or behavioral RED.
+3. Same-partition circuit reuse is permitted, not guaranteed. A pinned-version same-credential
+   sharing control may calibrate the discriminator; failure to observe that control makes that
+   run inconclusive, not proof of a product violation of a same-circuit guarantee.
+4. Preserve the existing 100-identity/95-circuit statistic as ancillary sidecar evidence only.
+   It cannot tolerate or excuse any observed cross-partition sharing in the required gate.
 
 ---
 
@@ -240,8 +269,8 @@ tests-first suite (Principle VII).
   payload is opaque.
 - **Concurrent requests against the same first-party domain**. Multiple
   parallel CONNECTs for resources under the same first-party `.onion`
-  share one circuit (same SOCKS5 username → `IsolateSOCKSAuth`
-  consolidates). Verified by US2 acceptance scenario 3.
+  may reuse a circuit with the same full partition identity. Tor may also choose a new
+  circuit; US2 scenario 3 is a calibration condition, not a same-circuit product guarantee.
 - **Tor circuit failure mid-request**. The upstream Tor circuit drops
   while bytes are in flight. The data plane MUST NOT retry the request
   itself (Principle I — it is not aware of HTTP semantics on the wire
@@ -304,10 +333,11 @@ tests-first suite (Principle VII) before implementation lands.
 - **FR-003**: The extension MUST set `proxyDNS: true` (Firefox
   WebExtensions `proxy.ProxyInfo`) in the descriptor it returns from
   `proxy.onRequest` so that DNS resolution is delegated to the
-  upstream SOCKS5 endpoint (SOCKS5h). **A privacy-critical test MUST
-  verify that no DNS query for any `.onion` hostname leaves the host's
-  network namespace during a routed Tor session** (US1 acceptance
-  scenario 3 encodes this).
+  upstream SOCKS5 endpoint (SOCKS5h). SC-003/T034a owns the complete real-browser DNS
+  measurement at its recorded loopback and egress capture points, with separate encrypted-DNS
+  hardening evidence. T034 is the narrower per-PR UDP/53 measurement in its test network namespace;
+  it does not establish browser-wide, TCP DNS, DoH or DoT absence. US1 scenario 3/T034f is the
+  separate component-egress/DP OUTPUT observation, not the DNS measurement.
 - **FR-004**: Non-Direct routing is fail-closed against a hardened
   target-browser profile. (a) The extension ships only in a release whose
   live-e2e hardening test (`tests/live-e2e/mullvad-browser-hardening/`) was
@@ -615,28 +645,16 @@ tests-first suite (Principle VII) before implementation lands.
   clean-checkout setup duration separately. Agent-driven automation is functional
   evidence only and cannot satisfy this human usability criterion. Measured by
   the T077 walkthrough; the existing VPS is an allowed remote venue.
-- **SC-002**: Over a run of **100 sequential CONNECTs, each labeled with
-  one of 100 distinct first-party `.onion` domains** from the synthetic
-  corpus published in `tests/integration/` — the corpus string is the
-  SOCKS5 username, the isolation key the extension sends in production
-  (FR-007) — the Tor sidecar reports **≥95 distinct circuit IDs** across
-  the 100 streams (allowing some legitimate reuse), read through the
-  control port (FR-012). This measures that stream isolation is in
-  effect end-to-end through the extension and the data plane.
-  *(Amended 2026-09-07, T061 escalation → amend-spec: the original
-  wording — CONNECTs addressed TO the corpus strings — is unmeasurable
-  on the pinned sidecar. Tor rejects the corpus addresses at parse
-  (their embedded 32-byte keys are not valid Ed25519 public points, so
-  the checksums valid per T063 A5 are beside the question), and for any
-  unpublished-but-well-formed address it defers circuit construction
-  until a descriptor arrives, which never does — no circuit exists to
-  count. Probe evidence: T061 ticket §Notes; decision record:
-  SECURITY-DECISIONS.md 2026-09-07. The isolation property, the corpus,
-  the scale, and the threshold are UNCHANGED; only the addressing
-  mechanism is corrected. The username is the isolation axis the shipped
-  config actually enforces — `IsolateSOCKSAuth` keys circuits on the SOCKS
-  auth identity, and the shipped torrc carries no destination-based
-  isolation directive (SECURITY-DECISIONS.md 2026-09-07, T058 entry).)*
+- **SC-002**: No observed Tor circuit may carry streams from distinct full authenticated-device,
+  browser-profile/context and initiating-site partitions. Required same-target evidence through
+  the data plane must bind successful streams to nonzero BUILT circuits, vary each partition axis,
+  and include a valid credential-fusion discriminator. FR-002/foundation browser derivation and
+  real-browser blocking evidence remain separate mandatory layers; direct sidecar tests cannot
+  establish them. Same-partition circuit reuse is permitted, not guaranteed. The historic T061
+  100 synthetic labels / >=95 distinct identity-tagged circuits remains an ancillary sidecar
+  statistic: it does not establish completed CONNECTs, production `sg1:` identities, browser/DP
+  forwarding or absence of cross-partition sharing. Historic results and the 2026-09-07 addressing
+  decision remain preserved; no leak is inferred solely from this acceptance correction.
 - **SC-003**: During a continuous **10-minute Mullvad Browser session
   loading only `.onion` content through repeated, demonstrably successful
   page loads** via a Local-profile Stargate stack, complete simultaneous captures on the
@@ -720,7 +738,8 @@ clarification round (`/speckit-clarify`) can revisit them deliberately.
   harness uses a synthetic corpus of 100 distinct onion-style address
   *strings* presented to the SOCKS5 layer as the per-connection
   isolation key (the SOCKS5 username, FR-007); the sidecar's per-label
-  circuit assignment is verified directly through the control port.
+  circuit assignment is observed directly through the control port as ancillary evidence only.
+  The required full-partition gate is SC-002; the corpus does not model production usernames.
   *(Amended 2026-09-07, T061 escalation → amend-spec: the prior claim
   that "reachability is not required … only that the Tor sidecar
   attempts distinct circuits" toward the corpus strings is false on the
@@ -788,6 +807,18 @@ per-principle Constitution Check and remaining-implementation-plan.md for owners
 The pre-audit “Met”/“Will be met” table is withdrawn; future reviews require mechanism,
 falsifier and actual evidence rather than planned tests presented as passed guarantees.
 
+### Qualification reconciliation boundary — 2026-10-16
+
+The [qualification boundary contract](contracts/qualification-boundary.md) replaces the T218
+reuse/revision/quota-bridge target with one authorization/attempt per candidate and an enduring
+shared exclusion domain. It retains trusted external completion observation, unknown-state
+blocking, immutable history, cumulative capacity, fixed safety caps and all separate native gates.
+Artifact production is outside runtime authority; source/install/rebuild coverage remains required
+elsewhere. This changes qualification mechanisms, not Constitution I–VIII or deployed routing.
+Implementation, platform capability, healthy timing, native results and human acceptance remain
+pending. Conflicting ticket scopes must be explicitly reconciled before dispatch; editing this
+spec does not reopen old episodes or change lifecycle state.
+
 ---
 
 ## Out of Scope (deferred to later feature specs)
@@ -809,3 +840,13 @@ Listed explicitly so the reader does not infer them into this slice:
 - IPFS / Kubo route (port 8883 reserved for v2; not bound in v1).
 - Cross-device sync of per-domain routing preferences.
 - Outbound notification channels (SimpleX, ntfy) — deferred to v1.5+.
+
+### Qualification evidence sequence — 2026-10-16
+
+See [Q1/Q7](contracts/qualification-boundary.md) for the retained real-consumer tests-first sequence.
+A finite platform-only observation precedes claims about a future artifact consumer. Establish each
+absent consumer through an executable behavior slice, then test its safety properties through the
+real entrypoint. Missing tooling/import/build/setup is not behavioral RED. Existing valid refusal
+is retrospective evidence, never weakened to create RED. Preserve all frozen candidates, failed
+verdicts and actual review/episode counts. New source requires ordinary tests-first and independent
+review; this normative change uses consistency checks and adversarial review.

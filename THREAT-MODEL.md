@@ -370,6 +370,168 @@ Unix fabric policy. T168 adds the process boundary below; owner rules remain
 installer-required defense in depth. T163's complete capture matrix below
 records the measured Local guest boundary.
 
+**T034f release-cadence observation boundary:** this test observes Tor packets
+inside Tor's network namespace, CP packets inside its `network_mode: none`
+namespace, and DP IP OUTPUT attempts before the T162 verdict. Its paired NFLOG
+rules are inserted before that verdict and therefore include attempts later
+dropped; they do not establish physical-interface transmission. Positive
+cgroup attribution is calibrated with bounded authenticated IPv4 loopback reply
+tuples before and after the workload. Tor capture and its accepted-consensus/T062
+snapshot start before any routed control and remain active through the post-
+workload calibration. Same-UID outside-subtree IPv4 and IPv6 controls
+must each produce exactly one SYN in the matching inverse group and an exact
+T162 DROP counter increment. IPv6-positive attribution is checked structurally
+and must remain unobserved during the run; no live IPv6-positive calibration
+claim is made. The measurement refuses pre-existing UID-5102 processes and
+socket entries, checks all four process UIDs, and continuously binds recursive
+DP subtree membership to PID start times. The test-only host identity helper
+uses `--pid=host --cgroupns=host` and its fixed program reads target-process
+UID, start time, cgroup, namespace links and socket-FD links, bound by
+independent container inspection and exact host-relative cgroup components.
+Discovery is separate; normal reads require a re-inspected PID and nonzero
+pinned start time. The helper cgroup namespace must match an independent
+host/rule-helper inspection. For the reviewed `apparmor=unconfined` helper
+configuration, host PID visibility plus `CAP_SYS_PTRACE`,
+`CAP_DAC_READ_SEARCH`, and Docker's seccomp configuration may permit reading
+or modifying host process state beyond that fixed program. The separate
+long-running monitor has `CAP_SYS_PTRACE` and can write within its exact
+mounted DP cgroup subtree. Both are trusted host-privileged test code; their
+fixed-program behavior, read-only `/proc` mount, dropped capabilities, and
+argument tests do not establish a kernel containment guarantee against
+compromise or mutation. They return only sanitized identity and socket
+metadata, never argv, environment, memory, maps, file contents, or unrelated
+FD links. The production DP remains under the unchanged enforcing
+`stargate-dp` profile and T162 rules. Maintainer acceptance of this residual
+authority is required before any live capability, observer, or monitor
+lifecycle probe. This qualification supports rootful Docker without
+user-namespace remapping only; rootless and remapped Docker hosts are
+unsupported and must fail preflight before init.
+Before init, UID/socket inventory and validated prepared-artifact checks run under the new
+qualification target; ordinary source-init retains its separate initializer/Buildx checks. Native
+artifact-mode init is refused until its new preflight/consumer is implemented and qualified. Actual-DP
+process identity and effective `stargate-dp (enforce)` qualification require
+the initialized production DP and therefore run after init. T218 records these
+as separate pre-init and post-init gates; it does not claim that all probes
+precede init. The helper returns only sanitized identity fields and in-memory
+socket inode/tuple data. Loss, truncation,
+counter/record drift, unknown membership, or monitor interruption invalidates
+the run. The inverse helper cannot create its socket until its UID, netns, PID
+start-time and cgroup membership pass; capture validation binds both ports.
+
+**Qualification boundary — required target, 2026-10-16:** T218/T220 share the enduring
+admission domain in `specs/001-tor-route/contracts/qualification-boundary.md`, with owners and
+interfaces in `specs/001-tor-route/design/qualification.md`. Source implementation and platform/live
+qualification are pending. The existing pinned-home reservation/enrollment roots remain; checkout,
+run ID and daemon/boot changes cannot bypass uncertain prior work. The selected shared Go admission
+component is the canonical state mutator; it must be established from private unapproved fixture
+code, not treated as integrated/qualified. T220's effect ledger is subordinate evidence. The
+coordinator owns imports/outer runtime and the Go readiness process exclusively owns its active
+readiness phase. The Python runner observes the prepared child through the retained six-frame
+protocol; it never owns cleanup, authority or readiness PASS. No extra recovery supervisor exists.
+
+Each candidate has one authorization and one attempt. A later candidate requires the same domain,
+retained original identities/evidence and a deliberate trusted-maintainer decision after actual
+successful owner AND observer completion; visible receipts cannot certify their own publisher.
+Cumulative byte/file/inode capacity is precharged across candidates; immutable evidence is never
+deleted/refunded to permit retry. Original held-directory identity, UID/mode/no-follow checks and
+state outside disposable workspace remain required. This is cooperative single-UID/trusted-maintainer
+exclusion, not malicious same-UID/cross-UID or hostile-root protection.
+
+All original DI35/DN20/G40, D120/A15/B33/C24/D35/E8 and E3/E5 caps/anchors remain design targets,
+not claims of current enforcement or measured healthy timing. No renewed nested deadline or cleanup
+after sole-owner death is promised. Unknown requests/ownership/durability retain pending and
+necessary enforcement. A later command/observer failure after provisional SETTLED publication may
+leave those bytes visible but cannot permit another admission; no dead owner must rewrite them.
+Privileged nested mutations require the current non-root phase owner's durable intent and exact
+operation ACK before dispatch; root workers cannot directly replace canonical or effect state.
+An already granted operation may arrive late after owner loss and remains unresolved/blocking. Quiet inventory, dead CLI, absent PID or generic daemon restart is not a
+settlement oracle. Recovery by daemon stop/reboot/disposable-runtime destruction is unqualified;
+no such command or VM creation is authorized here. Native fault tests require an approved venue
+with acceptable quarantine or supported terminal procedure before injecting response loss.
+
+Only private candidate plus exact external post-exit receipt may be produced by qualification.
+Canonical readiness publication follows exact-source-plus-receipt review and actual command
+completion. T218 readiness remains separate from authenticated T034f onion/egress acceptance.
+Residual helper privilege and the separate first-policy-mutation authority gate are unchanged.
+
+**Native artifact qualification — required target, 2026-10-16:** an artifact producer has
+no runtime daemon/socket credentials, policy access or writable channel to admitted inputs. Earlier
+builds/private tags alone do not establish this boundary. The validated finite closure includes
+all four services, key/volume helpers, probes, A2 variants, prepared Go binaries and actual tools.
+Internal candidates preserve signed-release validation and cannot claim to be signed releases.
+Imports are owned mutations: shared pending/exclusion precedes them. After imports, the workload
+window admits no load/build/pull/compile/retrieval, including nested init/recovery/T162 paths.
+Exact source-to-archive/OCI/config/payload/runtime bindings are required; a VCS label is insufficient.
+The exact image-load/offline-Compose behavior and platform separation remain unqualified.
+
+The native coordinator must preserve baseline containers/networks/volumes, shared image bindings
+and protected policy. Unknown runtime requests retain enforcement and block the whole overlapping
+domain. A cooperative maintenance lock does not contain privileged helpers or defeat uncooperative
+trusted administrators. T209 retains source assertions and reserved A3/A4/A9 decisions; T220 owns
+the migrated A2-live/A7 matrix only after exact ticket reconciliation, source/platform qualification
+and separate host authority. Artifact-only results cannot pass source install/rebuild or full
+T202/T212/T215 cadence/ownership obligations. Local-profile evidence on a VPS does not establish
+VPS-profile, physical-NIC or hypervisor behavior. Constitution III/T162 trust boundaries remain.
+
+
+The opt-in local identity qualification calls the same DP identity routine
+against a synthetic UID 5102:5100 target running the existing Go socket-target
+test directly. Its unique Compose project and `stargate-dp` service labels are
+compared against a separately inspected full container ID. The target alone
+uses host networking so the test can verify the host network namespace; its
+only sockets bind loopback. The container has no published ports, secrets,
+writable mounts or logs, and uses a read-only root, dropped capabilities,
+no-new-privileges, and bounded CPU, memory, PIDs and test lifetime. The
+qualification refuses a nonempty UID-5102 process inventory, checks firewall
+and AppArmor state before and after, and verifies exact container/helper
+absence. This is a local identity-path qualification, not an egress
+observation or a deployment network-boundary claim.
+
+Tor's OR endpoint set comes from the cookie-authenticated
+`GETINFO dir/status-vote/current/consensus-microdesc` response on the same
+ControlPort session as `consensus/valid-after`, `fresh-until`, and
+`valid-until`; the document and validity metadata are queried again after
+measurement and must retain the same digest and interval. The unauthenticated
+cached-consensus file is not an endpoint source.
+
+One continuous positive/inverse NFLOG pair spans calibration, workload,
+post-workload controls and final DP shutdown. The test retains exact packet
+tuples in memory and combines them with process-FD socket inventory before
+freezing and terminating only the verified DP cgroup. Because the local Compose
+profile uses host networking, the bounded socket watcher sees host-wide TCP/UDP
+table metadata (UID, endpoint addresses/ports, state and inode) while matching
+only saved run tuples. Its persisted result contains sanitized counts by
+protocol/state and completion, never endpoint addresses or ports. Unrelated
+host tuples do not block the check. Captured tuples remain tracked when Linux
+TIME-WAIT rows report UID and inode as zero. NFLOG readers remain active until
+all captured/inventoried TCP tuples and UDP sockets are absent; a late matching
+record remains observable and invalidates phase completion. Only then does the
+reader request CONFIG UNBIND, require the kernel ACK and drain the same socket
+nonblocking to EAGAIN. NFULA_CFG_FLAGS enables per-group NFULA_CFG_F_SEQ
+continuity; ENOBUFS, MSG_TRUNC, sequence gaps, incomplete helper IPC, or nonzero
+loss invalidate the observation. Final per-family/group firewall counters are
+snapshotted after this drain and must reconcile exactly with complete records
+independently. The bounded helper verifies the independently expected test
+binary SHA-256 before opening the netlink socket and requires kernel
+`6.8.0-146-generic`; both identities are recorded. CP's result is limited to no
+observed non-loopback packets; a failed connect that emits no packet is outside
+packet-capture evidence. Signal-aware cleanup is bounded and reports resource
+or policy restoration failure; SIGKILL and host failure are outside its
+guarantee. The observer does not change T162 enforcement or extend the Local
+topology claim to host NICs, hypervisors, IPv6-positive egress, LAN or VPS
+operation.
+
+The ControlPort parser bounds each line to 64 KiB, the aggregate reply to 8 MiB
+of actual CRLF wire bytes, and all status/continuation/data-block lines to one
+131,072-line counter before dot unstuffing. The pinned observed document is
+60,083 lines and 3,259,596 wire bytes. NFLOG polling assumes a maximum 200 ms
+scheduling gap and a measured bounded packet burst; effective receive buffer
+must be at least 256 KiB before bind. Buffer capacity is not proof of no loss:
+sequence continuity, ENOBUFS/MSG_TRUNC, tcpdump drops, and exact counter
+reconciliation remain separate checks. Init's atomic env-file replacement is
+restored by the bounded CHOWN helper without chmod after chown; completion
+requires exact UID/GID/mode and original-caller readability.
+
 **T168 process mechanism:** before proxy or IPC serving, the static pure-Go DP
 binds an ordinary TCP loopback listener with MPTCP disabled. It rejects other
 inherited sockets (including standard descriptors), unexpected anonymous handles
@@ -2854,6 +3016,117 @@ in subsequent revisions of this file.
 4. **Mullvad Browser fingerprint pool size** (§8.4). If we obtain a
    defensible estimate, update §5.7 to quote it; otherwise leave the
    honest "we do not know" wording.
+
+### T218 staged executable evidence sequence — 2026-10-13 reconciliation
+
+**Current qualification scope — 2026-10-16.** Qualification-boundary Q3–Q6 supersedes the reusable-reservation, same-candidate-reuse, repeated authority-writer-revision and quota-image-bridge mechanisms described below. They are historical, not supported operations in the current lifecycle. This narrow supersession preserves the tests-first sequence, original evidence chronology, Go ownership, fixed deadlines and caps, retained evidence, cumulative capacity accounting, and refusal on unknown or late outcomes. The October 13 establishment sequence records historical sequencing; it grants no new execution authority. The original dated text below remains preserved as history.
+
+This clause supersedes only R14j's evidence-baseline and sequencing rules, not
+its lifecycle, privacy, authority, deadlines, resource bounds or final proofs.
+Frozen R11, all rejected candidates, tests, seals, RED/GREEN records and verdicts
+remain unchanged historical evidence. New repairs bind exact current pre-fix
+implementation bytes and executable modes, HEAD, index/working overlays and
+explicit untracked source inputs in a preserved manifest before their RED.
+R11 is not silently relabelled as the baseline of later implementations.
+
+Tests-only batches may be staged between real consumer-establishment slices.
+Each batch receives fresh independent Astra/high and Luna 6/high approval on
+the same exact bytes before execution. Run that batch before its implementation;
+rerun the identical selector after implementation and directly affected regressions.
+A complete final tests-only diff is no longer required before the first
+establishment implementation. There is no exemption for new safety behavior.
+
+Executing an existing valid program that exits without its specified child,
+nonce/exit observation or transaction result can falsify only that absent
+establishment behavior. Prove that the program executed with valid setup, and
+retain independent child/transaction observations. A missing module, missing
+binary, import/build failure, invalid fixture or selector mismatch is setup
+failure, never behavioral RED. Source inspection is not executed RED. An
+establishment RED cannot prove later refusal, identity, deadline, witness,
+reservation or settlement safety. Existing correct refusal receives honest
+retrospective coverage; it is never weakened to manufacture RED.
+
+Establish the real strictly non-native Python spawn/pipe/wait observation
+consumer first, with a fixed harmless Go test-child selector, every native,
+helper and authority opt-in unset, a child-written fresh nonce and exact exit.
+This role uses the same production process adapter as later invocation and
+emits bounded, explicitly provisional attempt-bound observation only; it can
+never issue readiness eligibility, write a final readiness candidate, invoke
+native/helper roles, authorize effects or update reservation state. Its first
+slice implements launch/output/wait observation only, not source freezing,
+build provenance, witness validation or reservation safety. The normal
+readiness selector with all opt-ins unset must still refuse/skip before host
+operations. Source freezing/build binding, parent/binary identity, six-frame
+anchors/ACK, exit/output/receipt refusals and reservations get distinct
+preimplementation assertions through the then-established real consumers.
+
+Go owns the readiness lifecycle and live reservation transactions. Go's
+explicit bootstrap-only role owns private-state directory-relative creation,
+locking, durability and readback, and cannot enter readiness. Python may
+explicitly dispatch that role but cannot own authority, cleanup or settlement.
+A separate explicitly invoked maintainer writer appends/readbacks authority
+under the same stable lock; neither Python nor readiness invokes it
+automatically. Establish bootstrap creation and writer append/readback through
+real Go dispatch on authority-pinned private fixtures before their later
+stale/pending/concurrent/mode/no-follow/sync/crash refusal repairs. Fixture
+state is selected by explicit fixture authority, never ambient HOME/XDG.
+The current fake-preflight seam supports refusal/cleanup characterization;
+a successful fake preflight leaves candidate unset and is not a healthy
+full-readiness control. A structural owner regression proves ownership wiring
+only; it does not replace runtime safety REDs through real registered effects.
+
+All original acceptance remains mandatory: six bounded frames, retained Go
+anchors and exact ACKs, exact child/source/build identity, Go-only Finish and
+settlement, serialized reusable reservation and separate authority writer,
+private candidates and external post-exit receipt, DI35/DN20/G40 and immutable
+D120/A15/B33/C24/D35/E8 with cumulative E3/E5 and the 3.1s-at-4.1s
+discriminator. Unknown/late state refuses eligibility and retry and retains
+required enforcement/artifacts. No physical interruption claim is added.
+No host/Docker/policy authority, live PASS, T034f acceptance or T209 completion
+follows from this reconciliation or an establishment result.
+
+### T218 manual predecessor-admission reconciliation — 2026-10-14
+
+**Current qualification scope — 2026-10-16.** Qualification-boundary Q3–Q6 supersedes the healthy same-candidate reuse, repeated authority-writer revisions, and BEFORE/AFTER quota-image bridges described below; these are not supported in the current lifecycle. Preserve trusted manual observation of successful original Go and observer-command completion, Go lifecycle and settlement ownership, the shared exclusion domain, fixed deadlines and caps, retained evidence, cumulative capacity accounting, and refusal on missing, unknown, or late outcomes. The dated text below remains historical and does not authorize new execution.
+
+The binding detailed target is `specs/001-tor-route/contracts/t218-manual-predecessor-admission.md`.
+The maintainer approved this manual direction and said “run”; independent design approval is
+not source/live qualification. This supersedes only R14j's no-additional-decision rule for healthy
+same-generation reuse and defines the otherwise unresolved completion carrier. A deliberate
+trusted-maintainer literal per-operation decision, after personally observing successful original
+Go AND observer-command completion, names immutable bootstrap B, current writer W and last
+settlement S independently. Visible bytes or another complete/approved file never certify the
+publisher finished; failed/unknown/late observation forbids the next decision and admission.
+The CLI cannot authenticate human presence or an honest malicious same-UID operator; the
+existing cooperative trusted-maintainer boundary remains explicit.
+
+Go validates exact current authority, enrollment, locked state, source/resource/evidence identities
+and operation/next-operation binding before any effects. It opens at most three selected headers,
+not history search. New writer W2/W3 retains the original S unchanged and provides exact BEFORE/
+AFTER quota-image bridges; no immutable S must reference a future authority writer. The existing
+Go authority writer may precharge only explicit capacity counters/accounting identity under the
+stable lock, preserving every lifecycle/proof/owner/source/deadline/resource field. It cannot
+clear pending, transition lifecycle state, settle effects, own cleanup or grant readiness.
+Only the Go readiness owner commits pending and settles its effects. Missing/current-image or
+stale-writer mismatches, pending and capacity uncertainty still refuse. Live code never recreates,
+repairs, refunds, migrates, deletes or infers permission from old PID absence.
+
+The pinned evidence root is `<pinned-home>/.local/state/stargate/t218/evidence`, outside active
+effects and disposable workspace, created only by explicit bootstrap and bound in enrollment/
+authority. Preserve immutable prior bundles and original effects-parent device/inode/UID/mode/link
+facts from the original held FD. Reuse compares those to the fresh no-follow path/FD and exact
+absence. Conservatively precharge all producer/observer/temporary byte/file/inode envelopes in
+existing serialized reservation metadata, including quota updates and authority history; exact
+closed schemas and numerical sums are mandatory in the root implementation plan before tests.
+Capacity exhaustion refuses before effects, without an arbitrary fixed attempt-count ceiling.
+
+All original six frames, bounded launch/ACK/total sizes, Go-only lifecycle ownership, retained
+anchors, fixed DI35/DN20/G40/D120/A15/B33/C24/D35/E8/E3/E5 accounting, native resource/restoration
+controls, private candidate/receipt distinction and host-policy gate remain required. The durable
+manual tests-first matrix retains all original rows and adds the full publication/reference/quota
+failure class. Tests-only and source require their own exact paired gates; affected-only checks
+apply. This target does not claim any source/native/live PASS or complete T218/T209/T034f.
+
 
 ### T220 historical chronology disposition — 2026-10-14
 

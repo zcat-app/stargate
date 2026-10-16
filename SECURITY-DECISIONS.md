@@ -39,6 +39,57 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
   duplicate of THREAT-MODEL.md (the model) or the contract tests (the
   enforcement). Where a decision rests on a threat-model row, cite the row.
 
+---
+
+## 2026-10-16 — Qualification artifacts, single-use candidates and retained exclusion
+
+**Authorization and scope.** The maintainer explicitly requested falsified options, independent
+Astra proposal review, verified feedback and edits to specification/design/decisions. This is a
+normative qualification redesign, not source implementation, live authority or risk acceptance
+of existing source defects. Constitution I–VIII remain unchanged.
+
+**Decision.** The qualification boundary contract and design select artifact production without
+runtime authority, a complete immutable artifact closure, shared admission before imports, one
+source/authority identity and one attempt per candidate. Later candidates use the same domain and
+require independently observed owner/observer completion and a deliberate trusted manual decision.
+The shared Go state mutator is canonical; T220's ledger records effects without separate admission
+power. This component starts from private unapproved code and requires establishment/review.
+Privileged nested mutations use the existing non-root phase owner's bounded intent/ACK channel;
+root workers do not directly replace state. An already granted late operation remains blocking.
+Unknown state blocks; provisional settled bytes after late command failure cannot permit admission.
+Cumulative capacity and immutable history survive every candidate.
+
+**Alternatives and falsifiers.** Same-daemon prebuild/private tags leave authority channels;
+quiet inventories/dead clients/restart cannot establish generic external settlement. Dropping
+pending/quota/witness or starting a new directory loses required protection. Keeping every reuse/
+revision bridge preserves unnecessary supported operations. The offline renderer experiment
+rejects unchanged local-ID/internal-release reuse and source inspection identifies a helper pull;
+reuse only the bounded topology transformation with separate internal validation. Normal native
+request settlement and source-to-running-image identity remain actual qualification obligations.
+
+**Coverage delta.** In-window build/rebuild is removed from artifact-native qualification, not
+reported passed. Source install/rebuild and full T202/T212/T215 duties retain separate owners.
+T209 source assertions and A3/A4/A9 decisions remain; migrate A2-live/A7 to T220 and preserve direct
+native closure dependencies only through exact ticket reconciliation. SC-002 retains historic
+corpus evidence as ancillary and requires same-target full-partition/fusion-discriminating proof;
+same-partition sharing is permitted, not guaranteed. T034a/T077 may disclose Alpha-only coverage;
+stable Gecko153/MV2 remains a later v1 release gate. Admin and later routes remain product duties.
+
+**Residue, owner and trigger.** Maintainer owns native authority/manual decisions and reserved
+T209 policy choices. T223/T218 own specified source capabilities; T220 owns native matrix evidence.
+No platform/healthy timing/quota/settlement qualification is inferred. Uncertain requests quarantine
+the overlapping domain; no automatic repair, evidence deletion or fresh-root bypass. Daemon stop,
+reboot and guest destruction are unqualified alternatives; no VM is selected. Re-evaluate the
+specific boundary on a failed capability check, unsupported consumer, changed trust/source identity,
+changed evidence/capacity/deadline obligation or proposed automated recovery. Human release gates,
+T222's finite NONCOMPLIANT history and every failed review/count remain. No T078/T079 execution.
+
+**Supersession.** Supersedes only the October 14 T218 same-candidate reuse, repeated writer and
+quota-bridge mechanism. Its completion/manual trust, fixed caps and retained-evidence protections
+remain. The original decision body is preserved below. Exact proposal/review/adjudication evidence
+is retained under `.scratch/reports/2026-10-16-spec-design-reconciliation/`; review approval is
+limited to the bound normative candidate and never claims implementation/native approval.
+
 ### T222 — finite T220 historical chronology disposition (2026-10-14)
 
 This rationale becomes accepted only after the maintainer's explicit recorded acceptance of the exact reviewed candidate. Owner: Stargate maintainer; implementation owner: T220. The finite inventory binds initial-six missing raw RED/test-only snapshots and later path-stage caller-specific gaps. Protection delta: retrospective adoption may proceed despite those specific past chronology violations, which remain NONCOMPLIANT; no behavioral guarantee or future tests-first rule is relaxed. Alternatives: strict historical HOLD, or locating authentic original artifacts (none identified for these gaps). Residual exposure: retrospectively passing tests cannot prove which tests drove the past implementation; exact independent source review and complete current-consumer falsifiers are mandatory mitigations. Re-evaluate on changed source, any unlisted property, missing inventory binding, new privacy-critical repair or any native/backend/host guarantee change. No source findings, A2/A7/native/live result, host authority or release is accepted here.
@@ -53,7 +104,36 @@ This rationale becomes accepted only after the maintainer's explicit recorded ac
 
 **Owner and re-evaluation.** Maintainer owns the exception; the root orchestrator owns its execution records. Any byte/mode change beyond the pinned four-file candidate, future repair, adoption claim without required reviews, or attempt to apply it to T218/native/runtime work requires ordinary tests-first and new exact review; no automatic extension. See T221 and evidence/T221-guard-adoption/inventory.json.
 
----
+## 2026-10-14 — T218 manual predecessor admission and quota-image reconciliation
+
+Superseded by: 2026-10-16 — Qualification artifacts, single-use candidates and retained exclusion
+(mechanism clauses only; original body below remains verbatim).
+
+**Problem.** Current fresh admission cannot infer successful command/observer completion from
+visible bootstrap, authority, settled or receipt bytes after post-publication failures. The
+original directory identity and retained-history lookup also require exact evidence.
+
+**Authorized direction.** After the repeated goal specified a reviewed manual predecessor design
+with strict unknown/late refusal, the maintainer said “run”. The exact v2 design was independently
+approved by Astra/high and Luna6/high. This coordinated contract is a separate reviewed target,
+not source/native qualification or a constitutional risk override.
+
+**Delta.** Healthy subsequent operations require a deliberate trusted-maintainer literal decision
+based on actual completed prior Go and observer commands. It selects B/current W/original S
+independently. W captures exact quota BEFORE/AFTER bridges without rewriting S. The existing Go
+administrative writer gains only serialized capacity accounting; it cannot change lifecycle/proof/
+owner/source/deadline/resource fields, clear pending, settle effects, own cleanup or grant readiness.
+Unknown/late refusal, fixed caps and native authority remain strict. No self-certifying approval
+file, new actor/ledger, automatic recovery or human-presence authentication is claimed.
+
+**Residue and ownership.** Human availability now gates healthy reuse; lying/replay contrary to
+the trusted-maintainer premise is outside this cooperative guarantee. Maintainer owns the policy
+and native per-predecessor decisions; Go owns validation and lifecycle, Python only observation.
+Missing actual observation stops use. Root owns exact contracts/plans/evidence and independent
+review. Any automation of decisions, broadened quota writer fields, cap/authority change or
+missing source/receipt evidence requires renewed reviewed reconciliation and any new policy choice
+returns to the maintainer. See the manual contract and durable manual matrix. Original failures,
+negative verdicts and deferred/live NOT RUN results remain preserved.
 
 ## 2026-10-12 — Feature-preview artifacts and immutable source (T081)
 

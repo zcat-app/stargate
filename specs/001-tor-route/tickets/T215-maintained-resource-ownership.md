@@ -1,13 +1,17 @@
 ---
 id: T215                         # Ticket filed after allocator check through T214.
-title: "Instrument Docker cadence resource ownership"
+title: "Instrument full Docker cadence using shared operation ownership"
 status: pending
 created: 2026-10-09
-last_updated: 2026-10-09
+last_updated: 2026-10-16
 source: "T212 §Acceptance 8: separately declared prerequisite; independently reviewed source census"
 phase: "Integration"
 story: "-"
-blocked_by: [T211, T213]
+blocked_by:
+  - "T211"
+  - "T213"
+  - "T225"
+  - "T223"
 parallel: false
 files_budget: 44
 files_scope:
@@ -74,6 +78,8 @@ complexity: high
 risk: high
 round_cap: 3
 spec_refs:
+  - "specs/001-tor-route/contracts/qualification-boundary.md"
+  - "specs/001-tor-route/design/qualification.md"
   - "specs/001-tor-route/spec.md §FR-016"
 decision_refs:
   - "T212 §Acceptance 8: maintained adapter is a separately declared prerequisite"
@@ -86,6 +92,95 @@ reopens: []
 redteam_findings: []
 clarity_check: {}
 ---
+
+# T215: Instrument full Docker cadence using shared operation ownership
+
+## Context and retained scope
+
+Retain complete maintained producer instrumentation for T212's canonical Docker cadence and
+T202's forced-stop consumer. T225 now owns the common tests/dockerowner module/API/command;
+this ticket consumes it instead of creating a competing admission authority. T223 supplies the
+bounded privileged intent/ACK transport. The original broad source census and cadence obligations
+remain; they are not replaced by T220's narrower native matrix or T227's platform-only probe.
+
+## Analysis
+
+- Must hold: every reachable cadence mutation has exact durable pre-dispatch ownership; ordinary
+  verify does no daemon operation, while named cadence runs all required tiers with honest SKIPs.
+- Gated: actual producer entrypoints with controlled Docker/HTTP/policy tools and unchanged opt-ins.
+- Residue: full-cadence request drain/cache isolation, quotas, H/J and rollback need separate
+  evidence in T212/T202. A source owner adapter cannot establish those native properties.
+
+## Acceptance
+
+1. Retain the exact public named entrypoint STARGATE_TEST_TAGS=docker bash scripts/verify.sh,
+   workspace discovery, ordinary-user execution, existing per-module concurrency/race/vet/scanners
+   and all-SKIP refusal. Ordinary verify permits local Compose config rendering only, no daemon
+   API. Named mode dispatches every required daemon tier, not a new hidden opt-in subset.
+2. Repeat the full original source producer/cleanup/SDK/opt-in census at exact START. SDK calls
+   currently read-only remain so; do not invent a mutating SDK adapter. Cover all original nine
+   tagged Go suites, named shell tiers, init/key/volume/publisher helpers and host-policy writes.
+   Retain source identity, search expressions, exact line anchors and omitted-path dispositions
+   in evidence/T215-resource-ownership-inventory.md before implementation plans are approved.
+3. Use T225's public module/API and same canonical domain, deadlines, capacity and daemon identity.
+   T215's invocation/effect ledger is subordinate, never a second global gate. Native and cadence
+   operations that overlap policy/UID/runtime state cannot be admitted independently by new roots.
+   Build/CI tools remain outside deployed runtime authority; record their own source/build effects.
+4. Intent/ACK/durability precedes each actual CLI/Compose/policy mutation, including normal teardown;
+   returned IDs and generations bind the exact operation. Use T223's non-root phase-owner channel
+   for privileged nested callers; no root replacement of canonical/effect state. Unknown/torn
+   state remains preserved and blocking. The old automatic torn-tail repair allowance is retired:
+   do not erase uncertainty or infer no dispatch from a dead client/empty inventory.
+5. Retain original named-mode preflight before any daemon work: identity/locality, complete owner
+   context, original absolute deadlines and opt-in refusal for network/repro/existing-stack wire
+   mutation, with ground-check offline. Missing/malformed/partial context refuses; with owner
+   context entirely absent ordinary production init still writes no test-ownership artifacts.
+6. Keep unique project/name/label identity, exact foreign/baseline preservation and policy intent
+   for real init plus T162's host-global AppArmor only; its firewall controls stay in hostsim.
+   This ticket records ownership, not rescue cleanup or whole-table rollback. T202 consumes the
+   delivered API for forced-stop recovery only after real child/request settlement.
+7. Preserve redacted exported receipt and job-local raw logs. Explicitly test endpoint, host-path,
+   credential, argv/environment sentinels cannot enter uploads. The workflow supplies only the
+   declared state context and cannot upload raw target/verify.log or packet/user data.
+8. Before each correction, a valid real-producer controlled-tool falsifier demonstrates missing
+   intent/preflight/privacy behavior, then identical GREEN. Preserve framed/corrupt/concurrent,
+   lost-response/late-create, daemon substitution, partial start and exact policy ordering controls.
+   For absent APIs establish real executable consumers first; no import/compile failure is RED.
+9. Do not call source delivery full-cadence admission: T212 still needs bounded request drain OR
+   a qualified invocation-isolated daemon, cache isolation/hard quota, complete compile/runtime/
+   cleanup H/J within actual CI limits, and the privileged DNS complement; T202 still needs real
+   stop/rollback and broader live scenarios. T227 does not qualify this build-capable full cadence.
+10. Deliver the full affected source candidate with exact required native reviewer pair under
+    applicable repository rules, inventory and evidence/T215-tests-first.json. Preserve T212's
+    archived original tests/implementation/driver history and reviewed selective-RED-before-source
+    reopen sequence. No reset can manufacture prior chronology or erase failed attempts.
+
+## Scope and completion
+
+Retain the 44-path ceiling and original cadence consumer families, but shared-module establishment
+belongs to T225 and native transport to T223. Before START enumerate the exact post-prerequisite
+union; any API change returns to its owner/review rather than silently expanding this ticket.
+No actual Docker/service/host/VM execution, source-cadence weakening, cache pruning or rescue
+cleanup is part of this source ticket. Its completion alone still cannot pass T212 AC8/9.
+
+## Execution and evidence boundary
+
+This is a ticket reconciliation, not authorization to execute source or native work. Root authors
+and independently reviews the exact implementation/experiment plan before dispatch. New code is
+spec-derived tests-first through real supported consumers: preserve genuine behavioral RED before
+implementation, identical GREEN afterward and affected regressions. Missing tool/import/API/build,
+invalid setup and a refusal stub are not the missing safety property's RED or healthy PASS.
+Retain every original candidate, verdict, actual review/episode count and NONCOMPLIANT chronology;
+new child IDs do not reset parent failures. Pure document work uses consistency/adversarial review.
+No automatic native/host authority, shared-tag repair, evidence deletion, VM for convenience or
+T078/T079 execution follows. Apply the applicable ticket review matrix and explicit session
+exceptions honestly; advisory plan approval is not the paired implementation/delivery gate.
+
+## Historical pre-reconciliation ticket body — preserved verbatim
+
+The body below records the superseded direction and original evidence/approvals. Active acceptance
+and scope above govern new work. Historical approvals do not approve changed source or reset counts.
+
 
 # T215: Instrument Docker cadence resource ownership
 

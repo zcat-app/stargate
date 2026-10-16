@@ -3,11 +3,16 @@ id: T202
 title: "Add a scoped host-direct live runner and fresh VM overlays"
 status: deferred
 created: 2026-10-05
-last_updated: 2026-10-06
+last_updated: 2026-10-16
 source: "Post-T155 preparation; exact v2 approved for filing and execution on 2026-10-05"
 phase: "Foundation test infrastructure"
 story: "-"
-blocked_by: [T155, T210, T211, T212]
+blocked_by:
+  - "T155"
+  - "T210"
+  - "T211"
+  - "T212"
+  - "T220"
 deferred_reason: blocked-on-new-ticket
 deferred_on: T212
 parallel: false
@@ -44,6 +49,34 @@ clarity_check: {}
 ---
 
 # T202: Add a scoped host-direct live runner and fresh VM overlays
+
+## Binding October16 qualification alignment
+
+Retain every original wider selection, wire/reload/recovery/TLS/real-hour/partition and host-
+breaking scenario, control, deadline, rehearsal and evidence requirement below. The native
+Local A2/A7 matrix belongs to T220 and does not complete these wider rows. T212 full canonical
+cadence remains a prerequisite; T215 supplies maintained producer ownership, not stop proof.
+
+For any host-direct selection sharing native runtime/policy, consume the prepared artifact and
+shared admission/intent transport from the qualification contract/design. Supersede only the
+old allowance to rebuild/rebind :local tags inside that runtime window; source-install/rebuild
+coverage remains separately measured by the build-capable cadence/installation path. Preserve
+baseline/shared bindings, unresolved request blocking and original candidate/source identity.
+Before replay, record a row-by-row command/child/venue/artifact/owner map for every original
+selection and identify whether it is native-artifact or build/source cadence evidence. Unknown
+or host-breaking selections retain their existing stricter refusal/guest boundary.
+
+The T126/device/profile/site selections must meet current SC-002: same reachable target,
+full-partition identity/stream/circuit binding and credential-fusion discriminator. Keep the
+100-label/95-circuit corpus only as ancillary sidecar evidence. A failed same-partition sharing
+calibration makes that observation inconclusive/non-PASS, not proof the product guarantees one
+circuit per partition. Preserve completed historical measurements with their actual claim.
+
+The historical guest overlay authority below is not selection of a new VM for convenience. Use
+an actual qualified authorized venue; any necessary guest must retain backing/boot identity,
+external stop proof and original disks/evidence. Do not invent guest qualification from a cold
+compile timeout or call a T220 rescue drill all-scenario completion. Original wider caps and
+current tests remain; no source/native resumption or review-counter reset follows this edit.
 
 ## Context
 

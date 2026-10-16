@@ -1,7 +1,7 @@
 ---
 id: T222
 title: "Reconcile delivery of the accepted T220 chronology disposition"
-status: in-review
+status: done
 created: 2026-10-14
 last_updated: 2026-10-16
 source: tasks.md#T222
@@ -21,7 +21,7 @@ constitution_refs:
   - 'V: Honest Threat Model'
   - 'VII: Tests-First'
   - 'VIII: Independent Adversarial Review'
-reviews: {}
+reviews: { round: 2, date: 2026-10-16, verdict: APPROVE }
 overrides: []
 aborted_attempts: []
 reopens: []

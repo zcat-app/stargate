@@ -31,6 +31,17 @@ works end-to-end with SOCKS5h and stream isolation; (3) the contract-test gate
 (Principle IV) blocks merges that break the Tor surface Stargate depends on;
 (4) the Go data plane build produces a byte-reproducible artefact.
 
+## Qualification redesign — 2026-10-16
+
+The [qualification contract](contracts/qualification-boundary.md) and
+[selected qualification design](design/qualification.md) govern new T218/T220/T223 plans. They
+replace same-candidate reuse/revision bridges and in-window builds with single-use candidates,
+shared persistent admission and prepared artifacts from a producer without runtime authority.
+The design names canonical state mutation, phase owners, actual consumers and retained acceptance.
+Current source, platform capability and native results remain unqualified. Conflicting ticket
+acceptance must be reconciled before dispatch; no episode/review reset or implementation permission
+follows from this document. Existing T202/T212/T215 duties remain separate.
+
 ## Verification repair prerequisites — T202 deferred
 
 The maintainer authorized the reviewed repair plan's defer/prerequisite route after guest15's
@@ -475,3 +486,13 @@ the resolutions deliberately rather than accepting them implicitly.
     increment in `stargate.v1` proto now, in exchange for not bumping
     `stargate.v2` when the admin-UI feature wires the production
     caller. research.md §11.
+
+## Qualification Constitution Check — 2026-10-16
+
+See [DQ7](design/qualification.md#dq7-constitution-and-completion-checks). This changes qualification
+mechanisms and their coverage allocation, not deployed routing or Constitution guarantees.
+The historical manual decision still supplies trusted external completion observation; single-use
+removes same-candidate reuse/revision/bridge operations while retaining cross-candidate exclusion,
+cumulative capacity and unknown-state refusal. Build/runtime capability separation and native
+settlement/timing remain pending qualification. Documentation review cannot supply those results.
+The full preview/admin/product boundary and T078/T079 execution exclusion remain unchanged.

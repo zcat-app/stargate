@@ -1,5 +1,10 @@
 # Remaining implementation plan — feature 001
 
+> Historical September 12 queue below. Its counts/runnable claims are not the current board.
+> The 2026-10-16 [qualification design](design/qualification.md) supplies the current qualification
+> owner/dependency reconciliation target. Ticket frontmatter and explicit execution authority still
+> control dispatch; no old completed ticket is reopened by this historical queue.
+
 Updated 2026-09-12 after the foundation audit and **T156 constitution strengthening**.
 Ticket frontmatter is executable; this document supplies priority within the runnable set.
 Inventory after reviewed T160 delivery: **193 tickets: 130 done, 60 pending and

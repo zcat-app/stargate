@@ -3,11 +3,95 @@ id: T078
 title: 'Run the `stargate-redteam` agent against the completed feature branch '
 status: pending
 created: 2026-07-04
-last_updated: "2026-10-05"
+last_updated: 2026-10-16
 source: tasks.md#T078
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: ["T208", "T203", "T009", "T155", "T034a", "T034f", "T064", "T065", "T066", "T067", "T067a", "T067b", "T070", "T070a", "T070b", "T071", "T072", "T073", "T075", "T077", "T079a", "T080", "T081", "T109", "T110", "T111", "T112", "T114", "T119", "T120", "T121", "T123", "T124", "T126", "T132", "T134", "T135", "T136", "T137", "T138", "T139", "T160", "T141", "T142", "T143", "T144", "T145", "T146", "T147", "T148", "T149", "T150", "T151", "T152", "T153", "T156", "T157", "T158", "T159", "T161", "T189", "T190", "T191", "T196", "T197", "T198", "T199", "T200", "T201", "T204", "T205", "T206", "T209"]
+blocked_by:
+  - "T208"
+  - "T203"
+  - "T009"
+  - "T155"
+  - "T034a"
+  - "T034f"
+  - "T064"
+  - "T065"
+  - "T066"
+  - "T067"
+  - "T067a"
+  - "T067b"
+  - "T070"
+  - "T070a"
+  - "T070b"
+  - "T071"
+  - "T072"
+  - "T073"
+  - "T075"
+  - "T077"
+  - "T079a"
+  - "T080"
+  - "T081"
+  - "T109"
+  - "T110"
+  - "T111"
+  - "T112"
+  - "T114"
+  - "T119"
+  - "T120"
+  - "T121"
+  - "T123"
+  - "T124"
+  - "T126"
+  - "T132"
+  - "T134"
+  - "T135"
+  - "T136"
+  - "T137"
+  - "T138"
+  - "T139"
+  - "T160"
+  - "T141"
+  - "T142"
+  - "T143"
+  - "T144"
+  - "T145"
+  - "T146"
+  - "T147"
+  - "T148"
+  - "T149"
+  - "T150"
+  - "T151"
+  - "T152"
+  - "T153"
+  - "T156"
+  - "T157"
+  - "T158"
+  - "T159"
+  - "T161"
+  - "T189"
+  - "T190"
+  - "T191"
+  - "T196"
+  - "T197"
+  - "T198"
+  - "T199"
+  - "T200"
+  - "T201"
+  - "T204"
+  - "T205"
+  - "T206"
+  - "T209"
+  - "T202"
+  - "T212"
+  - "T215"
+  - "T218"
+  - "T220"
+  - "T222"
+  - "T223"
+  - "T224"
+  - "T225"
+  - "T226"
+  - "T227"
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: false
@@ -26,13 +110,21 @@ clarity_check: {}
 
 # T078: Run the `stargate-redteam` agent against the completed feature branch 
 
+## Binding October16 dependency reconciliation
+
+Retain direct blockers for the new source/platform/native owners and existing wider cadence
+and product repairs. A completed source-only T209 or T223 cannot bypass native A2/A7 or broader
+T202/T212/T215 evidence. This edit changes prerequisite metadata only: T078/T079 execution remains
+outside the authorized steps10–14 scope. Keep the existing cumulative reviewer fleet and all
+actual completed-candidate evidence requirements; no review is launched by this maintenance.
+
 ## Context
 
 Derived from `specs/001-tor-route/tasks.md` — see the full task body there. This
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical task summary (current acceptance/dependencies above govern):**
 >
 > Run the `stargate-redteam` agent against the completed feature branch (Principle VIII); findings either resolve in-feature or land in `SECURITY-DECISIONS.md` (T017) with explicit acceptance rationale.
 

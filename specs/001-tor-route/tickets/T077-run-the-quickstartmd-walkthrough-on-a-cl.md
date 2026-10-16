@@ -3,11 +3,28 @@ id: T077
 title: 'Run the first-time-human SC-001 quickstart walkthrough'
 status: pending
 created: 2026-07-04
-last_updated: "2026-10-11"
+last_updated: 2026-10-16
 source: tasks.md#T077
 phase: "6: Polish & Cross-Cutting Concerns"
 story: '-'
-blocked_by: ["T009", "T155", "T071", "T072", "T073", "T126", "T156", "T209", "T219"]
+blocked_by:
+  - "T009"
+  - "T155"
+  - "T071"
+  - "T072"
+  - "T073"
+  - "T126"
+  - "T156"
+  - "T209"
+  - "T219"
+  - "T220"
+  - "T034a"
+  - "T034f"
+  - "T200"
+  - "T201"
+  - "T189"
+  - "T190"
+  - "T197"
 parallel: false
 files_budget: 8   # TODO: tighten per task
 privacy_critical: true
@@ -26,13 +43,21 @@ clarity_check: {}
 
 # T077: Run the first-time-human SC-001 quickstart walkthrough
 
+## Binding October16 dependency reconciliation
+
+Keep direct T220 native qualification and final T034a/T034f measurement dependencies after
+T209 becomes source-only. Run the first-time-human walkthrough on the final product/profile
+remediations, with exact clean-checkout/source/browser identity. The original <5-minute human
+timer and separate setup-duration record remain; automation cannot supply the human witness.
+Alpha-only disclosure remains allowed and cannot establish stable-browser release support.
+
 ## Context
 
 Derived from `specs/001-tor-route/tasks.md` — see the full task body there. This
 ticket is the executable work unit; the tasks.md entry is the
 spec-kit plan that survives `/speckit-tasks` regeneration.
 
-> **Full task body (verbatim from tasks.md):**
+> **Historical task summary (current acceptance/dependencies above govern):**
 >
 > After T219, have a first-time human run the `quickstart.md` walkthrough in a private local or remote/virtual Linux x86_64 Mullvad Browser session, including on the existing VPS, with a fresh browser profile and clean git clone. Measure SC-001 wall-clock time from extension installation through token paste to rendered `.onion` page (<5 minutes), and record total clean-checkout setup duration separately in `tests/integration/quickstart_walkthrough.md`. Record venue, CPU and exact browser build/channel. Agent automation may provide functional evidence but cannot pass this human criterion. Depends on T219.
 

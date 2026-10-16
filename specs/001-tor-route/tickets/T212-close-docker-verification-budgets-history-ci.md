@@ -3,11 +3,15 @@ id: T212
 title: "Close Docker verification budgets, history and CI inputs"
 status: deferred
 created: 2026-10-06
-last_updated: 2026-10-09
+last_updated: 2026-10-16
 source: "T202 guest15 verification stop; reviewed repair plan final SHA256 cd5fc2e88e255bab31bfe34d34cc5e01f8200244d29d91810f588d0d190b637c; maintainer authorized prerequisite implementation"
 phase: "Foundation verification remediation"
 story: "-"
-blocked_by: [T211, T213, T215]
+blocked_by:
+  - "T211"
+  - "T213"
+  - "T215"
+  - "T227"
 parallel: false
 files_budget: 10
 files_scope:
@@ -54,6 +58,23 @@ clarity_check: {}
 ---
 
 # T212: Close Docker verification budgets, history and CI inputs
+## Binding October16 qualification alignment
+
+Retain every detailed Acceptance1–10 below, including full source compilation, race/vet/scanners,
+default package scheduling, authentic history/remote reachability, CI dependency triggers, complete
+canonical cadence and same-candidate privileged DNS complement. T220/T227 artifact-runtime results
+cannot replace this coverage. T215 source delivery is necessary but not sufficient admission.
+Use the shared canonical exclusion/privileged intent transport; do not duplicate its gate.
+
+Resolve full-cadence request drain OR a qualified invocation-isolated daemon, build/cache bounds,
+independent owned stop/rollback and actual complete H/J before any full run. The checked-in
+Docker CI job currently has timeout-minutes:120; the six-hour disposable failure ceiling below
+is not permission for CI to exceed its own limit. Derive and satisfy each applicable ceiling;
+no automatic widening, split standalones sold as one canonical run, or benchmark framework.
+If the full schedule cannot fit, report the actual admission failure under this ticket; do not
+retire its mandatory coverage or add another blocker with the same unresolved acceptance.
+T227's narrow native capability record is not that full-cadence qualification.
+
 ## Context
 
 After Tor helper and fixture repairs, close the aggregate verification envelope, genuine
