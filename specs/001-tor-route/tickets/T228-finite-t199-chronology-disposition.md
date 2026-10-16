@@ -1,7 +1,7 @@
 ---
 id: T228
 title: 'Review finite T199 CI chronology disposition'
-status: in-review
+status: done
 created: 2026-10-16
 last_updated: 2026-10-16
 source: tasks.md#T228
@@ -39,7 +39,10 @@ round_cap: 2
 spec_refs:
   - '.specify/memory/constitution.md §VII and Governance'
 decision_refs: []
-reviews: {}
+reviews:
+  round: 1
+  date: 2026-10-16
+  verdict: APPROVE
 overrides: []
 aborted_attempts: []
 reopens: []

@@ -15,9 +15,9 @@
 |---|---|
 | pending | 13 |
 | in-progress | 1 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 1 |
-| done | 230 |
+| done | 231 |
 | deferred | 13 |
 | **total** | **259** |
 
@@ -45,7 +45,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 |---|---|---|---|---|
 | T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | escalated | ✓ | Foundation audit remediation |
 | T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | in-progress | ✓ | Foundation audit remediation |
-| T228 | Review finite T199 CI chronology disposition | in-review | ✓ | Governance |
 
 ---
 
@@ -71,7 +70,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_230 ticket(s) done._
+_231 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -303,3 +302,4 @@ _230 ticket(s) done._
 - T221 — Adopt the exact guard under a one-time historical evidence disposition
 - T222 — Reconcile delivery of the accepted T220 chronology disposition
 - T224 — Deliver the reviewed qualification contract and ticket reconciliation
+- T228 — Review finite T199 CI chronology disposition
