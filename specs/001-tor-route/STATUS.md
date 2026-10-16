@@ -15,9 +15,9 @@
 |---|---|
 | pending | 15 |
 | in-progress | 0 |
-| in-review | 1 |
+| in-review | 0 |
 | escalated | 0 |
-| done | 229 |
+| done | 230 |
 | deferred | 13 |
 | **total** | **258** |
 
@@ -35,14 +35,15 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 | T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | Foundation audit remediation | ✓ | ✓ |
 | T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | Foundation audit remediation | ✓ | ✓ |
 | T201 | Durable STALE_CONFLICT marker: no changed push until recover | Foundation audit remediation | ✓ | ✓ |
+| T225 | Establish the shared Go qualification admission component | Qualification reconciliation | ✓ |  |
+| T226 | Prepare and validate internal qualification artifacts | Qualification reconciliation | ✓ |  |
+| T227 | Qualify the finite artifact and runtime platform boundary | Qualification reconciliation | ✓ |  |
 
 ---
 
 ## In flight
 
-| ID | Title | Status | Privacy | Phase |
-|---|---|---|---|---|
-| T224 | Deliver the reviewed qualification contract and ticket recon | in-review | ✓ | 3: User Story 1 — First-time onion service load (Priority: P1) 🎯 MVP |
+_(nothing in flight)_
 
 ---
 
@@ -68,7 +69,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_229 ticket(s) done._
+_230 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -299,3 +300,4 @@ _229 ticket(s) done._
 - T219 — Amend SC-001 and SC-003 browser measurement venue
 - T221 — Adopt the exact guard under a one-time historical evidence disposition
 - T222 — Reconcile delivery of the accepted T220 chronology disposition
+- T224 — Deliver the reviewed qualification contract and ticket reconciliation

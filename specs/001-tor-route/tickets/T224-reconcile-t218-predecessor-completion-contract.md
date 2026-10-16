@@ -1,7 +1,7 @@
 ---
 id: T224
 title: "Deliver the reviewed qualification contract and ticket reconciliation"
-status: in-review
+status: done
 created: 2026-10-15
 last_updated: 2026-10-16
 source: tasks.md#T224
@@ -62,8 +62,8 @@ spec_refs:
 decision_refs:
   - "2026-10-15 maintainer-selected Option A; source-bound disposition: .scratch/reports/2026-10-15-fresh-session/T218/T224-option-a-decision-20261015.md"
   - "T218 settled-reuse design gate: Astra REWORK; Luna APPROVE-DESIGN"
-reviews: {}
-overrides: []
+reviews: { round: 3, date: 2026-10-16, verdict: APPROVE-WITH-FIXES }
+overrides: [{"date": "2026-10-16", "by": "user", "decision": "Accept exact unchanged T224 round3 after canonical override escalation", "reason": "Accept Minor durable lifecycle-delta enumeration omission because exact deviations already bound and independently verified in retained handoff/checks; decline date-order finding because T221 and T218 both dated October14. No source/native/privacy defect or constitutional guarantee waived.", "snapshot": "12881f991a02bb71b30fd39a1dd63f16b92f735cb8fdcc57c65e2691e89cc76a", "source_commit": "67e2efc8e47c6fdb30e39a5bc692ff7787af3a14", "glm_verdict_sha256": "8684251d0ea7251827df40adc3d536cdc26afa4361bd365b38086d660a6ccaff", "astra_verdict_sha256": "b852d542abfb49b1c3eb9aeef6deba95e9c04f220e582b4d21571109b5e391ae"}]
 aborted_attempts: []
 reopens: []
 redteam_findings: []
