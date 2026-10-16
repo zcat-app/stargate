@@ -1961,19 +1961,13 @@ to Cloudflare) resolves hostnames over HTTPS *before* the proxy is
 consulted, leaking the lookup to the DoH provider — including for
 destinations that would otherwise be looked up inside Tor.
 
-**Mitigation**: the DoH-off guarantee is an **externally verified
-precondition** on the target-browser profile, not an extension-API claim.
-Stable Firefox WebExtensions do not expose `network.trr.mode` (sol-review
-B4), so the extension does NOT claim to read or set it. The profile is
-verified out-of-band — `network.trr.mode = 5` (TRR off) is asserted by
-the release-cadence live-e2e test `tests/live-e2e/mullvad-browser-hardening/`
-against a test profile that models the target browser's hardened defaults
-(architecture spec §14.5 Part 1).
-As defense-in-depth, `webRequest` rules block *known* DoH endpoints; this
-is a secondary net, not the primary guarantee (a custom DoH endpoint not
-in the blocklist is caught by the profile precondition, not by the
-blocklist). The hardening gate blocks non-Direct routing until the profile
-is verified (FR-004).
+DoH/DoT being disabled is an external browser-profile precondition, not an extension runtime
+guarantee. The shipped template sets `network.trr.mode=5`. The release-cadence Part 1 check
+verifies a `prefs.js` built only from that template, including absence of an enabled
+`network.dns.over_tls.*` setting. This source check does not prove the effective settings or
+network behavior of a running browser. Exact browser/profile release evidence remains pending
+until the required out-of-band checks complete. The extension cannot read these settings;
+its WebRTC gate cannot certify DoH/DoT. Post-verification drift remains the T091 residue.
 
 **Residual risk**: a custom DoH endpoint configured by another extension
 or by the user after the live-e2e verification is NOT caught at PR
@@ -1992,18 +1986,12 @@ of scope for v1.
 configurations in some browsers. A browser that quietly upgrades to h3
 for a destination would leak the connection outside the proxy.
 
-**Mitigation**: like DoH (§5.4), the HTTP/3-off guarantee is an
-**externally verified precondition** on the target-browser profile, not an
-extension-API claim. Stable Firefox WebExtensions do not expose
-`network.http.http3.enable` (sol-review B4), so the extension does NOT
-claim to read or set it. The profile is verified out-of-band —
-`network.http.http3.enable = false` is asserted by the release-cadence
-live-e2e test `tests/live-e2e/mullvad-browser-hardening/` against a test
-profile that models the target browser's hardened defaults (architecture
-spec §14.5 Part 1). With HTTP/3 off, all routed traffic uses TCP and is
-captured by the SOCKS5/HTTP-CONNECT listeners. (Other HTTP/3-related
-Firefox prefs such as `network.http.http3.enable_qlog` are not asserted by
-the test; if a future release needs them, it adds a grep then.)
+HTTP/3 being disabled is an external browser-profile precondition. The shipped template sets
+`network.http.http3.enable=false`; the release-cadence Part 1 check verifies that setting in a
+template-only `prefs.js`. Neither that source check nor the extension establishes effective
+settings or network behavior in a running browser. Exact browser/profile release evidence
+remains pending until the required out-of-band checks complete. Later changes require
+revalidation; the extension cannot detect drift in this preference.
 
 **Residual risk**: future browsers may add new transports (e.g., a
 WebTransport-over-QUIC variant) that the externally verified profile does

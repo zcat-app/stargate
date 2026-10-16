@@ -1,9 +1,9 @@
 ---
 id: T200
 title: 'Ship DoH-off and HTTP/3-off in the browser profile; truthful claims'
-status: pending
+status: in-progress
 created: 2026-10-03
-last_updated: "2026-10-03"
+last_updated: "2026-10-16"
 source: "T155 attempt 4 cumulative redteam (index tree 6e70e622): area 2 M1, narrowed to Minor by falsification (E1, E2 and live experiment X1); maintainer approved filing 2026-10-03"
 phase: "Foundation audit remediation"
 story: ''
@@ -26,7 +26,7 @@ spec_refs:
   - specs/001-tor-route/spec.md#FR-004
   - browser-profile/user.js
   - tests/live-e2e/mullvad-browser-hardening/README.md
-decision_refs: []
+decision_refs: ["user approval: reserved-decisions.md §T200 (SHA-256 2125e70c1f44e16c7d96c30a76fd64fdffafd8911ecc59f21f176b77d57995aa)"]
 reviews: {}
 overrides: []
 aborted_attempts: []
@@ -87,3 +87,10 @@ the foreign-extension inventory and DoH-blocklist prose (T197 item 3).
 ## Approved dependency reconciliation — 2026-10-03
 
 The approved T205 hardening-record repair precedes this ticket because acceptance 4 consumes the same notification behavior and hardening contract. Existing profile requirements and exact-wording approval remain in force.
+
+
+## Current lifecycle note
+
+The approved source and wording changes do not complete T200. Actual T186/T188 browser
+release evidence remains mandatory and has not been run; keep this ticket in progress until
+those required live probes pass and their evidence is recorded.

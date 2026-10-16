@@ -312,8 +312,11 @@ The extension audits the one hardening surface it can read at runtime, WebRTC
 (arch §14.5), whenever it starts. Mullvad Browser's own default has WebRTC
 **enabled**, so a profile without `browser-profile/user.js` fails the audit; the
 `user.js` from Step 3 sets `media.peerconnection.enabled=false`, so the audit passes.
-DoH, DoT and HTTP/3 cannot be read by an extension; they are verified outside it at
-each Stargate release (THREAT-MODEL §5.4, §5.5) and nothing here checks them.
+The shipped profile sets DoH off (`network.trr.mode=5`) and HTTP/3 off
+(`network.http.http3.enable=false`). The extension cannot read DoH, DoT or HTTP/3 settings.
+They require a separate check of the exact supported browser/profile at release cadence.
+A passing template check alone does not establish that browser result; until its evidence
+is recorded, release verification remains pending. Later profile changes require rechecking.
 
 If the audit fails, Stargate blocks every non-Direct route (`.onion` requests do not
 load) and:

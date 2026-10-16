@@ -39,6 +39,13 @@
 // extension compares the live settings with these values and warns on drift.
 // Live evidence: THREAT-MODEL T188.
 
+// DoH and HTTP/3 off (T200; Constitution Principle III). The extension
+// cannot read these preferences; the template-only release-cadence check
+// verifies their source values, while effective browser behavior remains a
+// separate external check (THREAT-MODEL 5.4/5.5).
+user_pref("network.trr.mode", 5);
+user_pref("network.http.http3.enable", false);
+
 // WebRTC off (T195; THREAT-MODEL 5.3). Mullvad Browser defaults
 // media.peerconnection.enabled to true, which closes the extension's WebRTC
 // gate and blocks every .onion request (fail-closed, but the route never

@@ -285,8 +285,8 @@ test('webrtcEnabledFailsClosedAndDialogNamesActualPref', { skip: !implPresent() 
       'dialog preserves the browser restart instruction'
     );
     assert.match(
-      payload.message, /verified outside the extension at each Stargate release/i,
-      'dialog preserves the release-only boundary for the remaining hardening surfaces'
+      payload.message, /WebRTC is the only hardening surface this extension can verify at runtime\. DoH, DoT and HTTP\/3 require separate browser-profile checks; this notification does not verify them\./i,
+      'dialog states the approved external-check boundary for DoH, DoT and HTTP/3'
     );
     assert.strictEqual(
       payload.requireInteraction, undefined,
@@ -311,11 +311,9 @@ test('failureDialogNeverClaimsDohDotHttp3RuntimeBlocks', { skip: !implPresent() 
   const recordText = recorded.storageSets
     .map((items) => JSON.stringify(items && items.hardening ? items.hardening.lastAuditResult : null))
     .join(' ');
-  assert.doesNotMatch(
-    dialogText, /\b(doh|dot|trr|http\/3|http3|quic)\b/i,
-    'dialog must NOT claim a runtime block on DoH/DoT/HTTP-3 — those are ' +
-      'release-cadence-verified (T091; arch §14.5 failure UX item 1); ' +
-      'claiming them at runtime is the false assurance T091 removed'
+  assert.match(
+    dialogText, /WebRTC is the only hardening surface this extension can verify at runtime\. DoH, DoT and HTTP\/3 require separate browser-profile checks; this notification does not verify them\./i,
+    'dialog states that DoH, DoT and HTTP/3 need external browser-profile checks'
   );
   assert.doesNotMatch(
     recordText, /\b(doh|dot|trr|http\/3|http3|quic)\b/i,
@@ -373,8 +371,8 @@ test('apiReadFailureFailsClosedWithoutThrowing', { skip: !implPresent() && IMPL_
       'unknown-state remediation preserves restart guidance'
     );
     assert.match(
-      payload.message, /verified outside the extension at each Stargate release/i,
-      'unknown-state dialog preserves the release-only hardening boundary'
+      payload.message, /WebRTC is the only hardening surface this extension can verify at runtime\. DoH, DoT and HTTP\/3 require separate browser-profile checks; this notification does not verify them\./i,
+      'unknown-state dialog states the approved external-check boundary'
     );
   }
 });

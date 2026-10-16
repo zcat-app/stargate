@@ -1318,8 +1318,18 @@ def main() -> int:
     for path in (args.browser, args.driver, args.extension):
         if not path.is_file():
             parser.error(f"missing file: {path}")
-    # T195: hardened sessions start from the shipped template's WebRTC value.
+    # T195/T200: sessions inherit shipped hardening inputs. T200 checks the
+    # template at this boundary so injected TRR values cannot mask an omitted
+    # source preference (Constitution III; T200 Acceptance 3).
+    SHIPPED_TEMPLATE_PREFS.clear()
     SHIPPED_TEMPLATE_PREFS.update(t188_template_prefs(args.profile_template) or {})
+    trr_mode = SHIPPED_TEMPLATE_PREFS.get("network.trr.mode")
+    # Python treats booleans and integral floats as equal to integers; the
+    # shipped Firefox preference must be encoded as integer 5 (T200/III).
+    if type(trr_mode) is not int or trr_mode != 5:
+        parser.error("--profile-template must set network.trr.mode=5")
+    if SHIPPED_TEMPLATE_PREFS.get("network.http.http3.enable") is not False:
+        parser.error("--profile-template must set network.http.http3.enable=false")
 
     report: dict[str, object] = {
         "command": sys.argv,

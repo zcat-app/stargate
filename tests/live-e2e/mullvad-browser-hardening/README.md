@@ -15,9 +15,11 @@ Stable Firefox WebExtensions APIs do **not** expose `network.trr.mode`
 those prefs at runtime — it gates only WebRTC
 (`privacy.network.peerConnectionEnabled`) and SOCKS5h (`proxy.ProxyInfo`).
 The DoH/DoT/HTTP-3 guarantee is an **externally verified precondition** on
-the target-browser profile, verified out-of-band against a test profile
-that models the target browser's hardened defaults. This directory is
-that out-of-band verification.
+the supported browser profile. Part 1 checks the shipped template values by
+reading a `prefs.js` created solely from `browser-profile/user.js`; it does not
+establish effective settings or network behavior in a running browser. Those
+browser/profile release checks remain pending until their separate evidence is
+recorded. This directory contains the source check and the separate live probes.
 
 **Pref-source caveat (redteam m1).** This test reads the profile's
 `prefs.js` `user_pref(...)` entries. Hardened distributions sometimes
@@ -79,14 +81,16 @@ controls). WebRTC is forced on only in the explicit negative-control session, wh
 also asserts that Gecko displays the failure notification.
 
 Properties 1–4 (the `prefs.js` reads) are **automated in `run.sh` (Part 1)**
-— these are the load-bearing checks, because the WebExtensions API does
-not expose prefs 1–3 and the `prefs.js` read is the ONLY verification for
-them. Property 4 is double-checked (profile pref + extension runtime
-gate). Property 4-runtime and property 6 require real-browser observations; the connection-level probes below
-cover their named scenarios. Observe the current runtime result and routing behavior, rather than
-reading an audit result from the obsolete `storage.local.hardening` key. Property 5's implementation
-and claim reconciliation remains T197's responsibility. A release-runner must account for the required
-coverage and its actual outcomes before tagging; `run.sh`'s GREEN covers only Part 1.
+against a template-only fixture. A passing Part 1 is source/template evidence,
+not a result for a running browser. Property 4 is double-checked (profile pref +
+extension runtime gate). Property 4-runtime and property 6 require real-browser
+observations; the connection-level probes below cover their named scenarios.
+The exact supported browser/profile check must be recorded separately at release
+cadence. Observe the current runtime result and routing behavior, rather than
+reading an audit result from the obsolete `storage.local.hardening` key. Property 5's
+implementation and claim reconciliation remains T197's responsibility. A release-runner
+must account for the required coverage and its actual outcomes before tagging;
+`run.sh`'s GREEN covers only Part 1.
 
 Properties 1–3 have **no hermetic substitute** (the WebExtensions API does
 not expose them); they are the load-bearing reason this live-e2e test

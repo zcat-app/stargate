@@ -59,9 +59,9 @@ var auditHardening = (function stargateHardening() {
             'routes remain blocked. To restore them, confirm ' +
             'media.peerconnection.enabled is false in about:config and restart ' +
             'the browser. ') + 'WebRTC is the ' +
-            'only hardening surface this extension can verify at runtime; ' +
-            'the rest of the hardened profile is verified outside the ' +
-            'extension at each Stargate release.';
+            'only hardening surface this extension can verify at runtime. ' +
+            'DoH, DoT and HTTP/3 require separate browser-profile checks; ' +
+            'this notification does not verify them.';
       await browser.notifications.create({
         type: 'basic',
         title: 'Stargate: non-Direct routing blocked',
