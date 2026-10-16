@@ -1,0 +1,147 @@
+{
+  "schema": "t220-historical-chronology-disposition-v1",
+  "proposed_not_accepted": true,
+  "prepared_epoch": 1791997475,
+  "source_census_pins": [
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/native_coordinator.py",
+      "sha256": "11f955435e39cdb1eed942757d612f2035dbeebcb0f0392301894768f2b887dd",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/native_supervisor.py",
+      "sha256": "5981e47c9bdc085b4825d06342619e1bf9738d97c022a67450c785560a6b7703",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/run.py",
+      "sha256": "327a4cf6869f2d39921b2110380731f4736c7902c57f713a3a1c2f7649621404",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/scripts/subcommands/init",
+      "sha256": "4041870dcb585f90f6e489aa6985e525c6adcfb735daf61ee28bade939b3b983",
+      "mode": 509
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/scripts/lib/compose.sh",
+      "sha256": "72f425c480bff06b2a92bae3a5a0fd06ac31e96dedbb927c25ae61414e1badac",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/observer.py",
+      "sha256": "fbdb92debbceae756a7bebd5a1f6749b15fff4fc49c96052771144fa774ba105",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/contract/internal/compose/compose.go",
+      "sha256": "c4039530751e386f3152f310661dff5cfdd24b83708dd2e31089c9e1a183adf1",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/contract/tor/port_exposure_test.go",
+      "sha256": "e70b964ce7024229846f9a0c6247336fd250258db057563d34f2d495aa35de2a",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/contract/stargate-cli/t162_enforcement_test.sh",
+      "sha256": "f50052b16825053d5f4d6103d263dd30166e08efe87840cd012957d8ce90c595",
+      "mode": 509
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/compose/docker-compose.local.yml",
+      "sha256": "ac29ea34989844c01a285fbdd123953a0f36b2eb91e5f3a4d3a9c6ce683f0d4e",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/test_native_coordinator.py",
+      "sha256": "6b2a5fcfb0032dfde70539ca2ab07c19e2f165ee75e2e0273668a207eb58e80a",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/test_run.py",
+      "sha256": "2fe627e709d530112a88f8413756f9527ff77470b9a6ed7a38f65f3523c4a36e",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/contract/internal/compose/compose_test.go",
+      "sha256": "f263d72b201465cd327474eb295c439d5f8227ebe9a760cb130a48ee5b28e28d",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/contract/stargate-cli/t209_native_launcher_test.sh",
+      "sha256": "7cccadbb2ba3d9da48760248bdcc90a61bb51c74570686a7d9184f366e1cc3dd",
+      "mode": 509
+    }
+  ],
+  "preserved_evidence": [
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/T220/manifest.json",
+      "sha256": "c81f71703c90417f2e091df8d96cb96e99e414fc7a3ace60a702e4ba4280e8b6",
+      "bytes": 4151
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/T220/two-defect-fixes-final-20261013T002414Z/manifest.json",
+      "sha256": "b8946e5c5b20c6d204287696797ad74bc2a0a38c432eb57a9a70ca0d78ac9f70",
+      "bytes": 4437
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/t220-initial-source-astra.md",
+      "sha256": "467fe79cf9a5618ae45cea1e3c26d374043c7c23266a69dcee11a1341c1b910e",
+      "bytes": 9674
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/t220-initial-source-luna.md",
+      "sha256": "23d45d55675e0b03b71cea45e61cc49875a9a4911689ace7abf29d3e59aea1b2",
+      "bytes": 4533
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/t220-third-slice-whole-model-reassessment-and-recovery-decision.md",
+      "sha256": "7f3cfaa93e8bea46f5b5f35cb2f927e2de7d3beb5a08669fd9cd45c502b9004c",
+      "bytes": 11076
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/t220-current-source-census-2026-10-14.json",
+      "sha256": "7e17b70a8e4e0f54f53568fcd4066e14bc1afbed4d20194004fac3bdee58528c",
+      "bytes": 12954
+    }
+  ],
+  "classes": [
+    {
+      "id": "initial-six",
+      "historical_status": "NONCOMPLIANT: missing original raw RED and intermediate tests-only bytes",
+      "properties": [
+        "pre-effect unqualified backend refusal",
+        "actor admission only after durable exact PID/start observation",
+        "relevant procfs uncertainty remains unknown",
+        "exact private image tag cleanup preserving shared bindings",
+        "observer and selected T162 actual env-file admission",
+        "native Go cleanup deferred to existing outer owner"
+      ],
+      "snapshot_manifest_sha256": "b8946e5c5b20c6d204287696797ad74bc2a0a38c432eb57a9a70ca0d78ac9f70",
+      "preimplementation_manifest_sha256": "c81f71703c90417f2e091df8d96cb96e99e414fc7a3ace60a702e4ba4280e8b6"
+    },
+    {
+      "id": "later-path-stage",
+      "historical_status": "NONCOMPLIANT for enumerated original caller-specific lexical/run-directory cases; genuine cases remain credited",
+      "properties": [
+        "observer.compose_prefix raw transport inputs",
+        "native_coordinator.RunState.compose_up raw file inputs",
+        "run.command up and compose_args transport inputs",
+        "run.selected_t162_test caller lexical inputs",
+        "run.selected_tor_test post-result run-directory receipt guard"
+      ],
+      "frozen_manifest_sha256": "163d1f275721de4826a9d78907c3bd4d8d9eee62985b2cbc5d465bd9bba0ff41",
+      "true_pretest_delta_sha256": "39ecfa4dc372ca227ce4d8c54d230278f0fe83ad19d19c1cdda249f740fd96c3"
+    }
+  ],
+  "excluded": [
+    "two subsequent safeguards with genuine RED/GREEN",
+    "current out-of-scope validator changes",
+    "all future corrections and implementation",
+    "backend feasibility or A7 change",
+    "A2/native/host authority/live acceptance",
+    "T218 or T034f completion"
+  ],
+  "retrospective_never_red": true
+}

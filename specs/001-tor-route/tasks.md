@@ -415,3 +415,5 @@ US2 and US3 ride on US1's surfaces; the same developer pairing carries through t
 - Avoid: vague tasks, two tasks writing the same file in parallel, cross-story dependencies that defeat independent testability.
 
 - [X] T221 Adopt only guard source manifest `92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459` under the maintainer-authorized one-time Constitution VII historical-evidence disposition. Preserve both missing chronology sequences as NONCOMPLIANT, every original overall ESCALATE, and a durable hash-listed evidence archive; obtain exact governance codereview and independent redteam, then run the bounded opt-in guard trial while T218 implementation remains blocked. No future tests-first, T218/native/backend/runtime/release exception.
+
+- [ ] T222 [Governance] Reconcile normal delivery of the already accepted exact finite T220 chronology disposition; verify the preserved acceptance, keep NONCOMPLIANT history and ordinary future tests-first. No repeated policy consent or source/native approval.

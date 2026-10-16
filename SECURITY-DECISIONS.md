@@ -39,6 +39,20 @@ that AGENTS.md, CONTRIBUTING.md §"Review escalations", and THREAT-MODEL.md
   duplicate of THREAT-MODEL.md (the model) or the contract tests (the
   enforcement). Where a decision rests on a threat-model row, cite the row.
 
+### T222 — finite T220 historical chronology disposition (2026-10-14)
+
+This rationale becomes accepted only after the maintainer's explicit recorded acceptance of the exact reviewed candidate. Owner: Stargate maintainer; implementation owner: T220. The finite inventory binds initial-six missing raw RED/test-only snapshots and later path-stage caller-specific gaps. Protection delta: retrospective adoption may proceed despite those specific past chronology violations, which remain NONCOMPLIANT; no behavioral guarantee or future tests-first rule is relaxed. Alternatives: strict historical HOLD, or locating authentic original artifacts (none identified for these gaps). Residual exposure: retrospectively passing tests cannot prove which tests drove the past implementation; exact independent source review and complete current-consumer falsifiers are mandatory mitigations. Re-evaluate on changed source, any unlisted property, missing inventory binding, new privacy-critical repair or any native/backend/host guarantee change. No source findings, A2/A7/native/live result, host authority or release is accepted here.
+
+## 2026-10-14 — T221 one-time historical guard evidence disposition
+
+**Finding.** Independent guard source-v2 and source-v5 reviews identify missing preimplementation valid-policy driver RED and source-v2 repair behavioral RED. Initial setup errors and later replay cannot establish required chronology. Original overall ESCALATE verdicts and the two NONCOMPLIANT properties remain permanent.
+
+**Maintainer decision.** The recorded session message “authorize it and lets try it in wild” authorizes the exact proposal SHA256 d15bcf5614141b4541d7443797e3ac98a58a4070790202115e29c4d481557ce0. The governed VII amendment permits adoption only of four-file source manifest 92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459 after functional source/security approval, affected tests and independently reviewed historical disposition. This is a constitutional amendment, not finding acceptance overriding an unchanged constitution.
+
+**Rationale and residue.** Functional source/security is independently approved by Astra/high and Luna/high. The historical breach cannot be repaired; source-only retrospective validation supports this specific local workflow tool while the evidence inventory retains the original failure/provenance gaps. This is an honest one-time weakening of past tooling sequencing, not future permission, host containment or T218 completion. Existing privacy/native/backend/runtime/release boundaries stay binding.
+
+**Owner and re-evaluation.** Maintainer owns the exception; the root orchestrator owns its execution records. Any byte/mode change beyond the pinned four-file candidate, future repair, adoption claim without required reviews, or attempt to apply it to T218/native/runtime work requires ordinary tests-first and new exact review; no automatic extension. See T221 and evidence/T221-guard-adoption/inventory.json.
+
 ---
 
 ## 2026-10-12 — Feature-preview artifacts and immutable source (T081)
@@ -1725,13 +1739,3 @@ their findings either resolve in-code (no entry needed) or land here as
 accepted-finding rationales.
 
 (No entries yet.)
-
-## 2026-10-14 — T221 one-time historical guard evidence disposition
-
-**Finding.** Independent guard source-v2 and source-v5 reviews identify missing preimplementation valid-policy driver RED and source-v2 repair behavioral RED. Initial setup errors and later replay cannot establish required chronology. Original overall ESCALATE verdicts and the two NONCOMPLIANT properties remain permanent.
-
-**Maintainer decision.** The recorded session message “authorize it and lets try it in wild” authorizes the exact proposal SHA256 d15bcf5614141b4541d7443797e3ac98a58a4070790202115e29c4d481557ce0. The governed VII amendment permits adoption only of four-file source manifest 92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459 after functional source/security approval, affected tests and independently reviewed historical disposition. This is a constitutional amendment, not finding acceptance overriding an unchanged constitution.
-
-**Rationale and residue.** Functional source/security is independently approved by Astra/high and Luna/high. The historical breach cannot be repaired; source-only retrospective validation supports this specific local workflow tool while the evidence inventory retains the original failure/provenance gaps. This is an honest one-time weakening of past tooling sequencing, not future permission, host containment or T218 completion. Existing privacy/native/backend/runtime/release boundaries stay binding.
-
-**Owner and re-evaluation.** Maintainer owns the exception; the root orchestrator owns its execution records. Any byte/mode change beyond the pinned four-file candidate, future repair, adoption claim without required reviews, or attempt to apply it to T218/native/runtime work requires ordinary tests-first and new exact review; no automatic extension. See T221 and evidence/T221-guard-adoption/inventory.json.

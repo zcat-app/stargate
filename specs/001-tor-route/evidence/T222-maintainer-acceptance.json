@@ -1,0 +1,160 @@
+{
+  "schema": "stargate-t222-maintainer-acceptance-v1",
+  "recorded_epoch": 1792001581,
+  "maintainer_message": "approve",
+  "context": "Explicit reply to request to approve exact reviewed T220 historical-evidence amendment; the preceding explanation specified initial-six and later transport gaps, permanent NONCOMPLIANT history, retrospective current-consumer tests, unchanged future tests-first/backend/native/host requirements.",
+  "candidate_manifest_sha256": "9595bb4509d0cc0dd8ec083ff771b08e17cb37278ab1546f0e84719ee0cf6c6f",
+  "candidate_patch_sha256": "ef2d0c79192ae2cf8ec49c5b55565edfe51005d7415468f109995459f9d9ded0",
+  "independent_reviews": [
+    {
+      "role": "astra",
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/t220-chronology-governance-final-candidate/astra-verdict.json",
+      "sha256": "e3534bbe0c0b1931b81f7ed8a58675adf283e96ddf1f8d093c634743812f9c29"
+    },
+    {
+      "role": "luna",
+      "path": "/home/claudia/stargate-t208/.scratch/reports/2026-10-13-fresh-session/t220-chronology-governance-final-candidate/luna-verdict.json",
+      "sha256": "251c9e526e2dadfa26b1304c7330f903c2434e70834a891b9dc94c2b392ad394"
+    }
+  ],
+  "adopted_normative_files": [
+    {
+      "path": ".specify/memory/constitution.md",
+      "before_sha256": "9427b94d8eea8e6718d675c58d08d1b7a050b0367cf316dd34c3833b253f5efb",
+      "before_exists": true,
+      "after_sha256": "49d92553a6d17f98c7bdbbfd61261ee0cba1f1b3fe312ce8de071cdf168c5153"
+    },
+    {
+      "path": "THREAT-MODEL.md",
+      "before_sha256": "84df3b0205d4773d1ae7a8032c540f2edc5bce18d9934cc57806a0cb30f25a16",
+      "before_exists": true,
+      "after_sha256": "c98f767e3cc62f20ddf62a3c60ef7d94c7fbd03a5a7914bf0abe90001f54d86f"
+    },
+    {
+      "path": "docs/process/workflow.md",
+      "before_sha256": "eb8d65457010d9d9dea46bc48687ed7b98ddb78291d9a1e1aca78fac7061ea7e",
+      "before_exists": true,
+      "after_sha256": "da86a0d3fec2443bcf564cc16a04849f3d2fa9c66411c7788ac86a32e5312ff1"
+    },
+    {
+      "path": "specs/001-tor-route/tasks.md",
+      "before_sha256": "f12d3f40a9325032501578d41dfd92f7a5c6a69df56e76cb51f947cb26f441e9",
+      "before_exists": true,
+      "after_sha256": "da389477e4c8299fc3c46a478219d42a406c971a18f5b7817082cc9d0b093a5d"
+    },
+    {
+      "path": "specs/001-tor-route/tickets/T220-own-native-local-qualification-effects-and-cleanup.md",
+      "before_sha256": "44b18f8f89de13cfa3569e78d4c863166c480b1c49efe03123aebd02e96bef83",
+      "before_exists": true,
+      "after_sha256": "fb712f229b83ef8fd05d2e530db3e8bcb4db0be5a31099811ec41fdf67ac16db"
+    },
+    {
+      "path": "specs/001-tor-route/evidence/T220-historical-chronology-disposition.json",
+      "before_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "before_exists": false,
+      "after_sha256": "62335f2859fe8444323c92c703775fd4eee637927cfb184cb4a6af0e19ff74f9"
+    },
+    {
+      "path": "specs/001-tor-route/tickets/T222-dispose-t220-historical-chronology.md",
+      "before_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "before_exists": false,
+      "after_sha256": "13f27318c38c1a9e7f74fc460a4f699dfb5c4b31feb101ad61a98115424b5f43"
+    },
+    {
+      "path": "SECURITY-DECISIONS.md",
+      "before_sha256": "073f1ddb72574b3fffdb111bce3cd16e44ba6c44bf6896d45722d13325da4374",
+      "before_exists": true,
+      "after_sha256": "d03ac83eb8041061dbd37779ea3de9460a1ff2d0cad7fbec5498ec388cb12b85"
+    }
+  ],
+  "source_pins": [
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/native_coordinator.py",
+      "sha256": "11f955435e39cdb1eed942757d612f2035dbeebcb0f0392301894768f2b887dd",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/native_supervisor.py",
+      "sha256": "5981e47c9bdc085b4825d06342619e1bf9738d97c022a67450c785560a6b7703",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/run.py",
+      "sha256": "327a4cf6869f2d39921b2110380731f4736c7902c57f713a3a1c2f7649621404",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/scripts/subcommands/init",
+      "sha256": "4041870dcb585f90f6e489aa6985e525c6adcfb735daf61ee28bade939b3b983",
+      "mode": 509
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/scripts/lib/compose.sh",
+      "sha256": "72f425c480bff06b2a92bae3a5a0fd06ac31e96dedbb927c25ae61414e1badac",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/observer.py",
+      "sha256": "fbdb92debbceae756a7bebd5a1f6749b15fff4fc49c96052771144fa774ba105",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/contract/internal/compose/compose.go",
+      "sha256": "c4039530751e386f3152f310661dff5cfdd24b83708dd2e31089c9e1a183adf1",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/contract/tor/port_exposure_test.go",
+      "sha256": "e70b964ce7024229846f9a0c6247336fd250258db057563d34f2d495aa35de2a",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/contract/stargate-cli/t162_enforcement_test.sh",
+      "sha256": "f50052b16825053d5f4d6103d263dd30166e08efe87840cd012957d8ce90c595",
+      "mode": 509
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/compose/docker-compose.local.yml",
+      "sha256": "ac29ea34989844c01a285fbdd123953a0f36b2eb91e5f3a4d3a9c6ce683f0d4e",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/test_native_coordinator.py",
+      "sha256": "6b2a5fcfb0032dfde70539ca2ab07c19e2f165ee75e2e0273668a207eb58e80a",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/live-e2e/local-topology/test_run.py",
+      "sha256": "2fe627e709d530112a88f8413756f9527ff77470b9a6ed7a38f65f3523c4a36e",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/contract/internal/compose/compose_test.go",
+      "sha256": "f263d72b201465cd327474eb295c439d5f8227ebe9a760cb130a48ee5b28e28d",
+      "mode": 436
+    },
+    {
+      "path": "/home/claudia/stargate-t208/.scratch/tmp/T220/luna-implementation/tests/contract/stargate-cli/t209_native_launcher_test.sh",
+      "sha256": "7cccadbb2ba3d9da48760248bdcc90a61bb51c74570686a7d9184f366e1cc3dd",
+      "mode": 509
+    }
+  ],
+  "indices_unchanged": [
+    {
+      "path": "/home/claudia/stargate/.git/worktrees/stargate-t208/index",
+      "sha256": "a6cd763bb26c18af6bdfba322ab85bad3563bc75eb21695755bdeb9b16847f3b"
+    },
+    {
+      "path": "/home/claudia/stargate/.git/worktrees/implementation4/index",
+      "sha256": "7195a1b85adbc9f0f80c7da7a79bd6ce7a365c4727e319acee558af78c191827"
+    }
+  ],
+  "past_history_remains_noncompliant": true,
+  "future_tests_first_unchanged": true,
+  "source_integration_approved": false,
+  "native_or_protected_policy_authority_granted": false,
+  "backend_or_a7_amended": false,
+  "t220_complete": false,
+  "goal_complete": false,
+  "proposal_metadata_note": "Frozen proposal inventory/manifest retain proposed_not_accepted=true as historical proposal bytes. This separate maintainer acceptance and adoption record establishes subsequent acceptance without rewriting that history."
+}

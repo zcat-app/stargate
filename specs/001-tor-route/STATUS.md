@@ -5,7 +5,7 @@
 > If this file disagrees with frontmatter, frontmatter wins; re-run
 > `scripts/regen-status.sh` to regenerate.
 
-**Last updated:** 2026-10-13
+**Last updated:** 2026-10-16
 
 ---
 
@@ -15,11 +15,11 @@
 |---|---|
 | pending | 14 |
 | in-progress | 0 |
-| in-review | 0 |
+| in-review | 1 |
 | escalated | 0 |
-| done | 227 |
+| done | 228 |
 | deferred | 8 |
-| **total** | **249** |
+| **total** | **251** |
 
 ---
 
@@ -44,7 +44,9 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## In flight
 
-_(nothing in flight)_
+| ID | Title | Status | Privacy | Phase |
+|---|---|---|---|---|
+| T222 | Reconcile delivery of the accepted T220 chronology dispositi | in-review | ✓ | 6: Polish & Cross-Cutting Concerns |
 
 ---
 
@@ -65,7 +67,7 @@ _(nothing in flight)_
 
 ## Done
 
-_227 ticket(s) done._
+_228 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -294,3 +296,4 @@ _227 ticket(s) done._
 - T216 — Exclude generated files from the root Docker context
 - T217 — Make shipped Quarkus artifacts byte-reproducible
 - T219 — Amend SC-001 and SC-003 browser measurement venue
+- T221 — Adopt the exact guard under a one-time historical evidence disposition

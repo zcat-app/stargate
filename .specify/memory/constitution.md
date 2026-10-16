@@ -12,6 +12,25 @@ The earlier amendment log is preserved in [constitution-history.md](constitution
 The Governance section below is the sole active procedure; conflicting historical procedure
 notes are superseded. No public release or external human review is claimed here.
 
+## Sync Impact Report — T222, 2026-10-14 (requires explicit acceptance)
+
+This proposed pre-release permission change is limited to the two finite past T220
+chronology classes inventoried in specs/001-tor-route/evidence/T220-historical-chronology-disposition.json.
+Initial-six and later caller-specific missing/invalid sequences remain NONCOMPLIANT.
+The protection delta permits retrospective current-consumer qualification only after
+explicit maintainer acceptance of the exact independently reviewed amendment. It
+never restores historical RED, accepts a source defect, permits unlisted code or
+weakens future tests-first. All current-consumer, exact independent source/security,
+backend/A2/A7/native/host/human/live/release requirements remain mandatory.
+Version 1.0.0 remains unchanged before public release. Downstream consistency changes
+are the T220/T222 tickets and tasks, finite inventory, THREAT-MODEL, workflow, and
+SECURITY-DECISIONS rationale. Existing T221/T218 decision bodies are relocated verbatim
+above the reserved bottom section to reconcile pre-existing ordering drift; no
+historical decision content or acceptance changes. AGENTS, CONTRIBUTING, ticket
+schema and implementation contracts retain ordinary VII/VIII and need no additional
+exception text. No source, role, actor, review matrix, runtime effect or authority
+changes. T221 and T156 sync reports remain unchanged and historical.
+
 ## Sync Impact Report — T221, 2026-10-14
 
 Maintainer authorization is recorded in T221's evidence inventory. This one-time pre-release
@@ -290,6 +309,8 @@ historical tests-first compliance. Pure normative-document changes use consisten
 independent adversarial review; they do not invent a runtime red/green sequence.
 
 One-time pre-release disposition for the 2026-10-13 task-run guard: the initial guard and its source-v2 rework lack part of the required preimplementation behavioral evidence. Those records MUST remain labelled NONCOMPLIANT; retrospective reproduction MUST NOT be described as historical tests-first evidence. Only this past workflow-tool implementation may be adopted after exact-candidate independent FUNCTIONAL source/security approval, directly affected tests, and an immutable evidence inventory identifying every missed requirement, original failure and retrospective probe. The exception covers only scripts/task-run-guard.py, its opt-in scripts/run-task.sh hook, tests/contract/workflow/task_run_guard_test.py, and docs/process/task-run-guard.md as bound by reviewed source manifest SHA256 92f22269dcb809e3008c5890777cfdb245e886cd61e6f1df0fdaa097def3b459. Every later repair and any change beyond that manifest remains subject to the ordinary tests-first rule. This disposition grants no privacy-routing, protected-host, sidecar/backend, native qualification, T218 completion, release or runtime authority.
+
+One-time pre-release T220 historical chronology disposition (2026-10-14): only the already-written initial six repair classes and later caller-specific transport checks enumerated in specs/001-tor-route/evidence/T220-historical-chronology-disposition.json may be considered for adoption without their missing original preimplementation behavioral evidence. Their historical sequence remains NONCOMPLIANT permanently; later tests, replay or source inspection MUST NOT be labelled historical RED. The exception is limited to the listed properties in the exact historical snapshots and current source-census pins. It permits retrospective current-consumer qualification only after explicit maintainer acceptance of the independently reviewed T222 amendment. Every affected real entrypoint must obtain canonical positive and independent property-specific negative coverage, and the exact resulting source must receive fresh independent functional and adversarial approval before integration. Existing source findings and unauthorized scope changes are not accepted. All corrective or additional source changes require the ordinary tests-first rule. Immutable original failures, genuine RED/GREEN, invalid fixtures, candidate bytes and actual review counts remain preserved. No actor, backend, A2/A7, native/live, routing, host-policy, human witness, release or completion guarantee changes; absent mandatory evidence still blocks completion. This exception cannot authorize future code or an unlisted historical property.
 
 Each privacy claim names its positive control, falsifier and appropriate evidence layer.
 Required coverage cannot disappear through executable-bit changes, workspace omissions or skips.

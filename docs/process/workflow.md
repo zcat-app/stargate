@@ -448,3 +448,8 @@ the check is wrong. Don't patch a one-off into a permanent rule.
 Process surface grows easily and shrinks only deliberately. Adopted from an
 external team's hard-won AI-assisted workflow; adapted to stargate's
 Constitution + spec-kit context.
+
+
+### T220 finite historical-evidence disposition
+
+After explicit acceptance and adoption of T222 only, the enumerated already-written T220 properties may use retrospective qualification. Retain NONCOMPLIANT past chronology, source freezes, failed reviews and truthful per-case classifications. Original source replays cannot create historical RED. The ordinary tests-first sequence applies to every later correction and additional implementation. Apply no exception merely because a source test is green; require exact approved source and complete current-consumer coverage before integration. A7/backend/native/live/host authority remain separate gates.
