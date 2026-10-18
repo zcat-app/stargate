@@ -3,6 +3,7 @@
 
 package app.zcat.stargate.persistence;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -33,6 +35,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import jakarta.transaction.UserTransaction;
+import org.flywaydb.core.Flyway;
 import org.jspecify.annotations.Nullable;
 
 import org.junit.jupiter.api.Test;
@@ -117,6 +120,317 @@ class SqliteTokenStateTest {
             return rs.getInt(1);
         } catch (SQLException e) {
             throw new IllegalStateException(e);
+        }
+    }
+
+    @Test
+    void flywayCreatesOneClearDurableDeliveryState() throws SQLException {
+        try (Connection c = dataSource.getConnection()) {
+            boolean present;
+            try (ResultSet tables = c.getMetaData().getTables(null, null, "auth_delivery", new String[] { "TABLE" })) {
+                present = tables.next();
+            }
+            assertTrue(present, "V003 creates the durable auth-delivery singleton");
+            try (Statement s = c.createStatement();
+                    ResultSet rows = s.executeQuery("SELECT id, state, generation FROM auth_delivery")) {
+                assertTrue(rows.next(), "the migration initializes the current state");
+                assertEquals(1, rows.getInt("id"));
+                assertEquals("CLEAR", rows.getString("state"));
+                assertEquals(0L, rows.getLong("generation"));
+                assertFalse(rows.next(), "the table stores one current state, not history");
+            }
+        }
+    }
+
+    @Test
+    void deliveryMarkerTransitionsAreExactDurableAndStaleIsAbsorbing() throws SQLException {
+        resetDeliveryMarker();
+        var clear = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0);
+        var unresolved = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 9);
+        var stale = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                TokenLoaderContract.GenerationStore.DeliveryState.STALE, 9);
+        assertEquals(clear, state.deliveryMarker(), "V003 starts at the single clear marker");
+        assertTrue(state.prearmDelivery(9), "a complete candidate can be durably armed");
+        assertEquals(unresolved, new SqliteTokenState(em, utx).deliveryMarker(),
+                "prearm survives a fresh adapter/connection");
+        assertFalse(state.acknowledgeDelivery(8), "an older or mismatched ACK cannot clear the marker");
+        assertTrue(state.recordStaleDelivery(9), "the matching stale refusal is persisted");
+        SqliteTokenState restarted = new SqliteTokenState(em, utx);
+        assertEquals(stale, restarted.deliveryMarker(), "the stale state survives a fresh adapter");
+        assertFalse(restarted.prearmDelivery(10), "STALE blocks a different generation");
+        assertFalse(restarted.acknowledgeDelivery(9), "a delayed ACK cannot clear STALE");
+        assertTrue(restarted.recordStaleDelivery(9), "recording the same stale state is idempotent");
+        assertEquals(stale, state.deliveryMarker());
+    }
+
+    @Test
+    void onlyExactAcknowledgementClearsUnresolvedAndKeepsSqliteDurable() throws SQLException {
+        resetDeliveryMarker();
+        assertTrue(state.prearmDelivery(12));
+        assertFalse(state.acknowledgeDelivery(11));
+        assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 12),
+                new SqliteTokenState(em, utx).deliveryMarker());
+        assertTrue(state.acknowledgeDelivery(12));
+        assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0),
+                new SqliteTokenState(em, utx).deliveryMarker());
+        assertEquals(1, countDeliveryRows(), "the table remains one current marker, not history");
+    }
+
+    @Test
+    void sqliteTransitionFailuresPreserveThePriorDurableMarker() throws SQLException {
+        resetDeliveryMarker();
+        executeSql("CREATE TRIGGER t201_fail_prearm BEFORE UPDATE ON auth_delivery "
+                + "WHEN OLD.state = 'CLEAR' AND NEW.state = 'UNRESOLVED' "
+                + "BEGIN SELECT RAISE(ABORT, 'injected prearm write failure'); END");
+        try {
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> state.prearmDelivery(29), "failed prearm is an ordinary storage failure");
+            assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0),
+                    new SqliteTokenState(em, utx).deliveryMarker(),
+                    "a failed prearm does not leave a partial unresolved marker");
+        } finally {
+            executeSql("DROP TRIGGER t201_fail_prearm");
+        }
+
+        assertTrue(state.prearmDelivery(29));
+        executeSql("CREATE TRIGGER t201_fail_terminal BEFORE UPDATE ON auth_delivery "
+                + "WHEN OLD.state = 'UNRESOLVED' AND NEW.state IN ('CLEAR', 'STALE') "
+                + "BEGIN SELECT RAISE(ABORT, 'injected terminal write failure'); END");
+        try {
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> state.acknowledgeDelivery(29), "failed ACK clear propagates as storage failure");
+            assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 29),
+                    new SqliteTokenState(em, utx).deliveryMarker(),
+                    "a failed ACK clear retains the committed restart barrier");
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> state.recordStaleDelivery(29), "failed stale persistence propagates as storage failure");
+            assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 29),
+                    new SqliteTokenState(em, utx).deliveryMarker(),
+                    "failed stale persistence retains the earlier unresolved marker across a fresh adapter");
+        } finally {
+            executeSql("DROP TRIGGER t201_fail_terminal");
+        }
+        SqliteTokenState restarted = new SqliteTokenState(em, utx);
+        assertFalse(restarted.prearmDelivery(30),
+                "a changed candidate cannot replace the retained marker after a simulated process restart");
+        assertFalse(restarted.acknowledgeDelivery(30),
+                "a mismatched ACK cannot erase the unresolved marker after a simulated process restart");
+        assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 29),
+                restarted.deliveryMarker());
+    }
+
+    private void executeSql(String sql) throws SQLException {
+        try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
+            statement.execute(sql);
+        }
+    }
+
+    @Test
+    void literalQuickstartRecoveryClearsOnlyMarkerOnRealFlywayV003Database(@TempDir Path dir)
+            throws Exception {
+        String snippet = quickstartRecoverySnippet();
+        Path db = dir.resolve("control.db");
+        createFlywayRecoveryFixture(db);
+        assertEquals("003", successfulV003Version(db),
+                "the positive fixture's schema identity comes from the production V003 migration");
+        try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + db);
+                Statement s = c.createStatement()) {
+            s.executeUpdate("INSERT INTO token_generation(generation) VALUES (41)");
+            s.executeUpdate("INSERT INTO configured_tokens(label,verifier) "
+                    + "VALUES ('fixture-label', X'010203')");
+            s.executeUpdate("UPDATE auth_delivery SET state='UNRESOLVED',generation=41 WHERE id=1");
+        }
+        var originalOwner = Files.getOwner(db);
+        var originalMode = Files.getPosixFilePermissions(db);
+
+        CapturedProcess unconfirmed = runRecoverySnippet(snippet, db, "NO");
+        assertTrue(unconfirmed.exitCode() != 0, "the literal confirmation is required");
+        assertEquals("UNRESOLVED", readMarkerState(db));
+
+        Path missing = dir.resolve("missing/control.db");
+        Files.createDirectories(missing.getParent());
+        CapturedProcess absent = runRecoverySnippet(snippet, missing, "CLEAR-UNRESOLVED-TOKEN-DELIVERY");
+        assertTrue(absent.exitCode() != 0, "mode=rw refuses a missing database");
+        assertFalse(Files.exists(missing), "recovery does not create a database");
+
+        CapturedProcess clear = runRecoverySnippet(snippet, db, "CLEAR-UNRESOLVED-TOKEN-DELIVERY");
+        assertEquals(0, clear.exitCode(), clear.output());
+        assertEquals("CLEAR", readMarkerState(db));
+        try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + db);
+                Statement s = c.createStatement()) {
+            try (ResultSet rows = s.executeQuery("SELECT generation FROM token_generation")) {
+                assertTrue(rows.next());
+                assertEquals(41L, rows.getLong(1));
+                assertFalse(rows.next());
+            }
+            try (ResultSet rows = s.executeQuery(
+                    "SELECT label,verifier FROM configured_tokens")) {
+                assertTrue(rows.next());
+                assertEquals("fixture-label", rows.getString(1));
+                assertArrayEquals(new byte[] { 1, 2, 3 }, rows.getBytes(2));
+                assertFalse(rows.next());
+            }
+        }
+        assertEquals(originalOwner, Files.getOwner(db));
+        assertEquals(originalMode, Files.getPosixFilePermissions(db));
+    }
+
+    @Test
+    void literalQuickstartSchemaProbeUsesControlDbPathAndSeparatesSchemaGuard(@TempDir Path dir)
+            throws Exception {
+        String snippet = quickstartRecoverySnippet();
+        Path db = dir.resolve("malformed/control.db");
+        createMalformedRecoveryFixture(db);
+        assertEquals("003", successfulV003Version(db), "the schema probe passes the independent version prerequisite");
+
+        CapturedProcess refused = runRecoverySnippet(snippet, db, "CLEAR-UNRESOLVED-TOKEN-DELIVERY");
+        assertTrue(refused.output().contains("refused: expected T201 V003 singleton schema"), refused.output());
+        assertTrue(refused.exitCode() != 0);
+        assertEquals("UNRESOLVED", readMarkerState(db));
+
+        String fullGuard = "if not version or not ddl or any(item not in normalized_ddl for item in required) "
+                + "or not {\"id\", \"state\", \"generation\"}.issubset(columns) or len(rows) != 1:";
+        String versionOnlyGuard = "if not version:";
+        assertEquals(1, occurrences(snippet, fullGuard), "the private mutant changes only the combined schema guard");
+        CapturedProcess mutant = runRecoverySnippet(snippet.replace(fullGuard, versionOnlyGuard), db,
+                "CLEAR-UNRESOLVED-TOKEN-DELIVERY");
+        if (snippet.contains("version='3'")) {
+            assertTrue(mutant.exitCode() != 0, "the pre-fix version predicate still blocks this control");
+            assertEquals("UNRESOLVED", readMarkerState(db));
+        } else {
+            assertEquals(0, mutant.exitCode(), mutant.output());
+            assertEquals("CLEAR", readMarkerState(db),
+                    "after the query-only fix, removing only schema checks lets this malformed control clear");
+        }
+    }
+
+    @Test
+    void literalQuickstartRejectsHeldWriterLockOnRealFlywayControlDb(@TempDir Path dir)
+            throws Exception {
+        String snippet = quickstartRecoverySnippet();
+        Path db = dir.resolve("locked/control.db");
+        Files.createDirectories(db.getParent());
+        createFlywayRecoveryFixture(db);
+        assertEquals("003", successfulV003Version(db), "the lock probe uses the production V003 migration");
+        try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + db);
+                Statement s = c.createStatement()) {
+            s.executeUpdate("UPDATE auth_delivery SET state='UNRESOLVED',generation=41 WHERE id=1");
+        }
+        try (Connection lock = DriverManager.getConnection("jdbc:sqlite:" + db);
+                Statement s = lock.createStatement()) {
+            lock.setAutoCommit(false);
+            s.executeUpdate("UPDATE auth_delivery SET state='UNRESOLVED',generation=41 WHERE id=1");
+            CapturedProcess refusedLock = runRecoverySnippet(snippet, db,
+                    "CLEAR-UNRESOLVED-TOKEN-DELIVERY");
+            assertTrue(refusedLock.exitCode() != 0 && refusedLock.exitCode() != 124 && refusedLock.exitCode() != 137,
+                    "SQLite must refuse before the outer timeout: " + refusedLock);
+            assertTrue(refusedLock.output().toLowerCase(java.util.Locale.ROOT).contains("locked"),
+                    "the literal must reach the SQLite lock failure, not an earlier schema guard: " + refusedLock);
+            assertTrue(refusedLock.elapsed().compareTo(java.time.Duration.ofSeconds(10)) < 0,
+                    "the existing outer ten-second bound remains effective");
+            assertEquals("UNRESOLVED", readMarkerState(db));
+            lock.rollback();
+        }
+    }
+
+    private static String quickstartRecoverySnippet() throws Exception {
+        Path root = Path.of("").toAbsolutePath();
+        while (root != null && !Files.isRegularFile(root.resolve("scripts/stargate"))) {
+            root = root.getParent();
+        }
+        assertNotNull(root, "repository root");
+        String doc = Files.readString(root.resolve("specs/001-tor-route/quickstart.md"));
+        String marker = "timeout 10s python3 - \"$DB_PATH\" CLEAR-UNRESOLVED-TOKEN-DELIVERY <<'PY'\n";
+        int start = doc.indexOf(marker);
+        assertTrue(start >= 0, "quickstart contains the literal bounded recovery snippet");
+        start += marker.length();
+        int end = doc.indexOf("\n   PY\n", start);
+        assertTrue(end > start, "quickstart recovery snippet has its terminator");
+        return doc.substring(start, end).stripIndent();
+    }
+
+    private static CapturedProcess runRecoverySnippet(String snippet, Path db, String confirmation) throws Exception {
+        long started = System.nanoTime();
+        Process process = new ProcessBuilder("timeout", "10s", "python3", "-", db.toString(), confirmation)
+                .redirectErrorStream(true).start();
+        try (var input = process.getOutputStream()) {
+            input.write(snippet.getBytes(StandardCharsets.UTF_8));
+        }
+        assertTrue(process.waitFor(11, TimeUnit.SECONDS), "bounded offline recovery snippet terminates");
+        if (process.isAlive()) {
+            process.destroyForcibly();
+            process.waitFor(1, TimeUnit.SECONDS);
+            throw new AssertionError("recovery snippet exceeded the 10-second bound");
+        }
+        byte[] output = process.getInputStream().readNBytes(16 * 1024);
+        return new CapturedProcess(process.exitValue(), new String(output, StandardCharsets.UTF_8),
+                java.time.Duration.ofNanos(System.nanoTime() - started));
+    }
+
+    private record CapturedProcess(int exitCode, String output, java.time.Duration elapsed) {
+    }
+
+    private static int occurrences(String text, String needle) {
+        int count = 0;
+        for (int from = 0; (from = text.indexOf(needle, from)) >= 0; from += needle.length()) {
+            count++;
+        }
+        return count;
+    }
+
+    private static String readMarkerState(Path db) throws SQLException {
+        try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + db);
+                Statement s = c.createStatement();
+                ResultSet rows = s.executeQuery("SELECT state FROM auth_delivery WHERE id=1")) {
+            assertTrue(rows.next());
+            return rows.getString(1);
+        }
+    }
+
+    private static void createFlywayRecoveryFixture(Path db) {
+        String url = "jdbc:sqlite:" + db.toAbsolutePath();
+        Flyway.configure().dataSource(url, "", "").load().migrate();
+    }
+
+    private static @Nullable String successfulV003Version(Path db) throws SQLException {
+        try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + db);
+                Statement s = c.createStatement();
+                ResultSet rows = s.executeQuery(
+                        "SELECT version FROM flyway_schema_history WHERE version='003' AND success=1")) {
+            return rows.next() ? rows.getString(1) : null;
+        }
+    }
+
+    private static void createMalformedRecoveryFixture(Path db) throws Exception {
+        java.nio.file.Files.createDirectories(db.getParent());
+        try (Connection c = DriverManager.getConnection("jdbc:sqlite:" + db);
+                Statement s = c.createStatement()) {
+            s.execute("CREATE TABLE flyway_schema_history(version TEXT, success INTEGER)");
+            s.execute("INSERT INTO flyway_schema_history VALUES ('003',1)");
+            s.execute("CREATE TABLE auth_delivery(id INTEGER,state TEXT,generation INTEGER)");
+            s.execute("INSERT INTO auth_delivery VALUES (1,'UNRESOLVED',41)");
+        }
+    }
+
+    private void resetDeliveryMarker() throws SQLException {
+        try (Connection c = dataSource.getConnection(); Statement s = c.createStatement()) {
+            s.executeUpdate("UPDATE auth_delivery SET state = 'CLEAR', generation = 0 WHERE id = 1");
+        }
+    }
+
+    private int countDeliveryRows() throws SQLException {
+        try (Connection c = dataSource.getConnection(); Statement s = c.createStatement();
+                ResultSet rows = s.executeQuery("SELECT COUNT(*) FROM auth_delivery")) {
+            rows.next();
+            return rows.getInt(1);
         }
     }
 
@@ -527,6 +841,26 @@ class T159SqliteCrashChild {
             public void record(long generation) {
                 delegate.record(generation);
                 blockAt(marker);
+            }
+
+            @Override
+            public TokenLoaderContract.GenerationStore.DeliveryMarker deliveryMarker() {
+                return delegate.deliveryMarker();
+            }
+
+            @Override
+            public boolean prearmDelivery(long generation) {
+                return delegate.prearmDelivery(generation);
+            }
+
+            @Override
+            public boolean acknowledgeDelivery(long generation) {
+                return delegate.acknowledgeDelivery(generation);
+            }
+
+            @Override
+            public boolean recordStaleDelivery(long generation) {
+                return delegate.recordStaleDelivery(generation);
             }
         };
     }

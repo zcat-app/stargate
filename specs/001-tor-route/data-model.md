@@ -173,17 +173,25 @@ requests holding the previous generation pointer complete against it;
 new requests pick up the new pointer. The previous pointer is then
 garbage-collected.
 
-**Durable authority handshake (T159).** A generation is acknowledged only as
+**Durable authority handshake (T159/T201).** A generation is acknowledged only as
 the exact `auth-set-v1` verifier multiset commitment after its snapshot is
 durable. Exact same-generation replay first rewrites the active snapshot, then
-is idempotently acknowledged; equal-generation
-different content and lower generations are conflicts. The CP replays an
-unchanged durable candidate at the same generation and never promotes rejected
-content by adding one to the DP's current generation. A coalescing local-IPC
-redelivery worker retries a pending exact candidate while the CP remains up, so
-DP restart does not require CP restart. After acknowledgment, the CP retains
-the latest non-stale exact authority in process memory and queues it once when
-the authenticated local channel becomes READY after a peer-side disconnect.
+is idempotently acknowledged; equal-generation different content and lower
+generations are conflicts. The CP never promotes rejected content by adding one
+to the DP's current generation. Before each reload RPC it commits one current
+`UNRESOLVED(G)` delivery marker for the complete persisted candidate. Only an
+exact authenticated acknowledgment followed by a committed conditional clear
+returns that marker to `CLEAR`. A stale refusal stops this CP process immediately
+and records `STALE(G)`; `STALE` is absorbing. If recording stale fails, the
+earlier `UNRESOLVED(G)` remains the restart barrier. A process starting with
+`UNRESOLVED` or `STALE` does not parse `tokens.yaml`, change credential rows or
+generation, or send tokens until the operator performs the explicit offline
+recovery in quickstart. An unreadable marker also blocks token loading and
+delivery. No file edit, timeout, reconnect or restart clears it. A coalescing
+local-IPC worker retries a pending exact candidate while its originating CP
+remains up, so DP restart does not require CP restart. After acknowledgment,
+the CP retains the latest non-stale exact authority in process memory and queues
+it once when the authenticated local channel becomes READY after a peer-side disconnect.
 The client's scheduled 55-second channel retirement creates a fresh readiness
 baseline and neither sends `ReloadTokens` nor rewrites the DP snapshot. This
 repairs a DP-only restart with lost/invalid snapshot state without periodic
@@ -324,19 +332,19 @@ Argon2id provided was unnecessary for a random token (THREAT-MODEL §5.14).
 ### 1.8 Control-plane generation record (`token_generation`)
 
 A single persisted row is the source of truth for the monotonic generation
-counter, so a CP restart can replay the persisted candidate at its assigned
-generation instead of restarting at 1 (which would be stale the moment the DP
-has accepted any generation ≥ 1 — sol-review M1).
+counter. A separate singleton delivery marker gates token loading and RPCs
+across restarts when the previous process may have received a stale refusal or
+lost its acknowledgment.
 
 | Concern            | Rule                                                                                                                                                                                |
 |--------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Shape              | `token_generation(generation INTEGER PRIMARY KEY)` singleton row in the CP SQLite DB (arch §6.7). The PRIMARY KEY column holds exactly one row, `generation`, the last-assigned value.     |
-| Read               | At CP start, `TokenLoader` reads `generation` and current `configured_tokens`. Exact unchanged verifier content replays that generation; changed content proposes `generation + 1`. |
-| Write              | After a successful changed `tokens.yaml` parse, the CP reserves the next generation before changing verifier rows, commits the full candidate, then issues durable `ReloadTokens`. A crash before row commit may consume a number but cannot bind new content to an old number. Delivery/ack loss leaves the exact candidate pending for same-generation replay/redelivery. |
-| Stale recovery | Refuse stale credential contents. No rejection, timeout, response field, or restart automatically promotes old content to `current + 1`. Explicit rollback is offline and operator-confirmed. |
+| Shape              | `token_generation(generation INTEGER PRIMARY KEY)` stores the last-assigned value. V003 adds one `auth_delivery(id=1,state,generation)` row constrained to `CLEAR(0)`, `UNRESOLVED(G>0)` or `STALE(G>0)`. |
+| Read               | A process first reads the required auth-delivery marker. Only `CLEAR` permits parsing `tokens.yaml` and reading `generation`/`configured_tokens`. Exact unchanged verifier content reuses its generation; changed content proposes `generation + 1`. `UNRESOLVED`/`STALE` or unreadable state blocks all token effects. |
+| Write              | After a successful changed `tokens.yaml` parse, the CP reserves the next generation before changing verifier rows and commits the full candidate. Before each actual reload RPC it durably prearms `UNRESOLVED(G)`. Only exact acknowledgment plus a committed conditional clear removes that gate. Same-process retry remains available; a process restart with `UNRESOLVED` requires explicit offline recovery. |
+| Stale recovery | A stale refusal stops token delivery and records absorbing `STALE(G)`; if that write fails, `UNRESOLVED(G)` remains the restart barrier. No rejection, timeout, response field, file edit, reconnect or restart promotes old content to `current + 1` or clears either gate. Recovery is explicit, offline and operator-confirmed. |
 | DB-wipe recovery | Missing CP authority does not authorize an empty or old list. T159 defines explicit recovery; retain valid DP state meanwhile. |
-| Delivery status (T187) | The running CP's current delivery state for its candidate is `PENDING` (no exact acknowledgment yet), `ACKNOWLEDGED(<generation>)` (exact durable acknowledgment) or `STALE_CONFLICT` (stale refusal; terminal for that CP process, never retried or renumbered). It is one overwritten ASCII line in the CP container's private `/tmp` tmpfs file `/tmp/stargate-control/auth-delivery` (mode 0600 in a 0700 directory; not the shared `/run/stargate` IPC volume or persistent `/var/lib/stargate`), removed at CP start, and the CP attempts to write `PENDING` before the initial RPC. UNKNOWN can also occur while a delivery is in flight if status publication fails. A failed replacement write withdraws the previous value (an obsolete state never reads as current) and is retried in the background until the latest state is written. `scripts/stargate status` reads it through `docker compose exec` and prints only validated vocabulary: an absent file is `UNKNOWN` (exit 50), an unreadable one is "state unavailable" (exit 20), and a Docker call that does not answer within its bound (`STARGATE_STATUS_TIMEOUT`, T193) stops the command with exit 70; none claims a lifecycle. No history, timestamp, label or count is recorded (Constitution III current-lifecycle-enum allowance). Stale-conflict recovery is the operator procedure in quickstart.md §"Stale-conflict recovery" (THREAT-MODEL §5.15). |
-| Durability         | The generation is durable state, not a cache. Losing it does NOT revoke clients (the DP keeps serving) and does NOT authorize automatic reseeding; use the explicit offline recovery procedure. A running CP redelivers its intact pending candidate when DP IPC returns and retains the latest acknowledged non-stale authority for one event-driven replay after a peer-side authenticated-channel disconnect. Scheduled local channel retirement sends no reload. |
+| Delivery status (T187/T201) | `PENDING` means unresolved delivery, including a restart barrier; it does not establish whether DP installed the candidate. `ACKNOWLEDGED(<generation>)` means exact acknowledgment plus committed local clear. `STALE_CONFLICT` means a stale refusal was durably recorded. The existing one-line CP-private volatile file, vocabulary validation and unavailable behavior remain unchanged; no history, timestamp, label or count is recorded. See quickstart.md §"Stale-conflict recovery" and THREAT-MODEL §5.15. |
+| Durability         | The generation and one `CLEAR`/`UNRESOLVED`/`STALE` delivery marker are durable state, not caches. Losing CP state does NOT revoke clients and does NOT authorize automatic reseeding; use explicit offline recovery. A running CP redelivers its intact pending candidate when DP IPC returns and retains the latest acknowledged non-stale authority for one event-driven replay after a peer-side authenticated-channel disconnect. Scheduled local channel retirement sends no reload. |
 
 ### 1.9 `configured_tokens` — the manual-YAML token record (T092 / sol-review M1)
 
@@ -469,12 +477,13 @@ transaction state. An invalid category raises a static error without echoing inp
 loader/parser tests can inspect transient caller arguments; those fixtures are not a storage
 contract or permission to retain them.
 
-T187: `enrolled`/`revoked` describe applied credential changes. The loader records them outside
-the candidate transaction, only after the DP acknowledges that exact generation, as standalone
-observations in the acknowledgment's hour. A pending delivery counts nothing until acknowledged
-while this CP runs; a stale refusal never counts; a CP restart before acknowledgment replays the
-same candidate with no diff, so that change is never counted (an undercount, never a premature
-success claim). A later reconnect re-acknowledgment does not count again.
+T187/T201: `enrolled`/`revoked` describe applied credential changes. The loader records them
+outside the candidate transaction, only after the DP returns the exact acknowledgment and the CP
+commits the matching local clear, as standalone observations in the acknowledgment's hour. A
+pending delivery counts nothing until that point while this CP runs; a stale refusal never counts.
+A CP restart with unresolved delivery blocks token loading and therefore does not later count that
+candidate; this may undercount, never claim success prematurely. A later reconnect re-acknowledgment
+does not count again.
 
 A transaction stores only a five-counter vector in transaction-local memory. Only a successful
 commit contributes it, using the UTC hour at completion. Rollback and rollback-only transactions

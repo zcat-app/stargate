@@ -2450,10 +2450,13 @@ provisioning, export, wipe, and rotation.
 
 **Required behavior and limit:** a DP with valid last acknowledged auth state continues
 admitting authenticated requests when CP is unavailable; its state has no expiry solely due
-to that outage. A revocation requested while delivery is unavailable remains **pending**, not
-effective. An operator must not be told it succeeded before DP acknowledges application.
-A client revoked only in the unreachable CP can therefore continue authenticating against
-retained DP state until the update arrives. The operator may stop the route to stop access.
+to that outage. A revocation requested while delivery is unavailable remains **unresolved**;
+the CP cannot infer whether the DP applied it. An operator must not be told it succeeded before
+the exact acknowledgment is observed and credential outcomes are verified. The DP installs a
+valid candidate before returning its acknowledgment, so a lost response can leave CP status
+pending even when the DP already admits the installed credentials. A client revoked only in the
+unreachable CP can therefore continue authenticating against retained DP state until the update
+arrives. The operator may stop the route to stop access.
 After acknowledged revocation, new admissions using that credential are denied; existing
 byte pipes may finish. Revocation does not claim to terminate established application sessions.
 
@@ -2464,18 +2467,41 @@ through `docker compose exec` from a CP-private tmpfs file (`/tmp/stargate-contr
 outside the DP-shared IPC volume) and prints only validated vocabulary with distinct exit codes.
 `PENDING` is published before the initial RPC; a failed replacement write withdraws the previous
 value and is retried, so an obsolete state never reads as current; an absent or unreadable file is
-reported as `UNKNOWN` or unavailable, never as a lifecycle claim.
-It carries no history, timestamp, label or count and is removed at CP start (Constitution III
-current-lifecycle-enum allowance); Docker-daemon access is the operator authentication, and anyone
-with it already controls the stack. `enrolled`/`revoked` operational counts are written only on
-the exact acknowledgment, never at candidate commit or on a stale refusal, so no persisted trace
-claims a pending or refused revocation succeeded. Residue: the status describes this CP process
-only. With the CP stopped, `status` reports the CP unavailable rather than the DP's generation, and
-a revocation still pending when the CP stops is never counted after restart (the replay has no
-diff). The status is advisory: a local process able to write the CP container's private `/tmp` could forge
-it, but such a process already has CP authority. `STALE_CONFLICT` is terminal for the CP process;
-recovery is the explicit operator procedure below (quickstart §"Stale-conflict recovery"), never
-automatic renumbering.
+reported as `UNKNOWN` or unavailable, never as a lifecycle claim. It carries no history, timestamp,
+label or count and is removed at CP start (Constitution III current-lifecycle-enum allowance);
+Docker-daemon access is the operator authentication, and anyone with it already controls the stack.
+`enrolled`/`revoked` operational counts are written only on the exact acknowledgment, never at
+candidate commit or on a stale refusal. The status is advisory: a local process able to write the
+CP container's private `/tmp` could forge it, but such a process already has CP authority.
+
+Before each token reload, the control plane durably records that delivery is
+unresolved. An exact acknowledgment clears that state in the originating process
+after its clear transaction commits. On a stale refusal the control plane
+immediately stops further token delivery and records a durable stale-conflict
+marker. If recording that outcome fails, the already-durable unresolved state
+remains the restart barrier; failure does not resume delivery in the current
+process. A stale conflict prevents further token pushes, including after
+control-plane restart or changes to tokens.yaml. If the control plane restarts
+with an unresolved delivery, it also makes no token push until explicit offline
+recovery: the preceding process may have received a stale refusal before it
+could persist that outcome. The existing PENDING value describes unresolved
+delivery; STALE_CONFLICT describes a recorded stale refusal. Neither is proof
+that a credential change was applied.
+
+This can require manual recovery after a control-plane crash during an update,
+including when its acknowledgment was lost. Restore known matching newer
+control-plane state, or stop both planes, verify the intended credentials,
+preserve the newer state, move the active data-plane snapshot aside and explicitly
+clear the control-plane delivery gate before normal durable reseeding. This
+deliberate rollback may reauthorize credentials in the selected state. After
+its active snapshot is moved aside, the data plane denies admission until valid
+authority is durably installed. It may then admit those credentials even if the
+acknowledgment is lost. The operator must not treat recovery as confirmed until
+the control plane observes the exact acknowledgment and credential outcomes are
+verified. Normal same-process retry and acknowledged peer-recovery replay remain
+supported; no timeout, file edit or ordinary restart clears a durable conflict
+or unresolved restart gate. Host/root rollback of all trusted state remains
+outside this guarantee.
 
 Valid durable snapshots support CP-down restart. Missing/corrupt/incompatible snapshots deny
 new admission. Supported crash/restart must not undo an acknowledged revocation, and ordinary
@@ -2502,11 +2528,10 @@ peers reseed, because the old implementation could acknowledge state that was ne
 Explicit rollback is offline: stop both planes (terminating byte pipes), preserve the newer
 matched state, restore the selected CP database/configuration plus matching pepper/IPC keys, move
 the active DP snapshot aside without editing it, then let matching peers reseed through the normal
-durable RPC. Admission stays denied until the exact acknowledgment is observed and credential
-outcomes are verified. This operator-confirmed procedure can deliberately reauthorize credentials
-from the selected backup. A lost response or post-rename storage error can leave application
-pending even if candidate bytes reached disk; exact replay rewrites current authority and resolves
-that ambiguity. SIGKILL and
+durable RPC. Admission stays denied until valid authority is durably installed. This operator-
+confirmed procedure can deliberately reauthorize credentials from the selected backup. A lost
+response or post-rename storage error can leave CP status unresolved even if candidate bytes reached
+disk; no automatic CP restart replay resolves that ambiguity. SIGKILL and
 local-filesystem probes do not prove every power-loss/filesystem implementation. Host/root or
 storage rollback of all trusted authority state remains outside the guarantee.
 

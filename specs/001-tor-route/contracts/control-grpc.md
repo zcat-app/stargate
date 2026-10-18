@@ -131,10 +131,17 @@ enum ApplyStatus {
 - The CP reserves a changed candidate's next generation before changing its
   stored verifier rows, then delivers only after the row transaction commits.
   A crash before row commit may consume a generation number; it cannot pair
-  new content with the old number. If the desired verifier multiset equals a
-  stored candidate, restart replays the same generation. Rejection, timeout,
-  missing/wrong acknowledgment, or crash stays pending and never adopts
-  `DP.current_generation + 1`. While the CP remains running, one coalescing
+  new content with the old number. Before each actual reload RPC, the CP
+  durably prearms one current `UNRESOLVED(G)` marker for the complete candidate.
+  Only the exact authenticated generation-and-commitment acknowledgment plus a
+  committed conditional clear removes it. A CP restart with `UNRESOLVED` or
+  `STALE` blocks token loading and delivery until explicit offline recovery;
+  unreadable marker state also blocks. A stale refusal immediately stops the
+  process and records absorbing `STALE(G)`; if recording fails, the prior
+  `UNRESOLVED(G)` remains the restart barrier. No file edit, timeout, reconnect,
+  or ordinary restart clears a gate. Rejection, timeout, missing/wrong
+  acknowledgment, or crash never adopts `DP.current_generation + 1`. While the
+  originating CP remains running, one coalescing
   redelivery worker retries the latest exact candidate over local IPC with
   exponential backoff capped at five seconds; stale conflict and client close
   terminate that candidate's retry. After acknowledgment, the running CP keeps
@@ -190,12 +197,17 @@ enum ApplyStatus {
 byte pipes), preserve the newer matched DP/CP/key state as the abort path,
 restore the selected CP database/configuration with its matching pepper and
 IPC keys, and move—not edit—the active DP snapshot out of the state directory.
-Start matching new peers; admission remains denied until the normal durable
-RPC reseeds and returns the exact acknowledgment. Verify intended credential
-outcomes before reopening service. This operator-confirmed action may
-reauthorize credentials present in the selected backup. Never hand-edit
-generation/commitment fields. Host/root rollback of all trusted state is not
-claimed safe.
+The operator-confirmed offline recovery procedure explicitly clears a retained
+CP `STALE` or `UNRESOLVED` delivery gate before the matching peers restart;
+ordinary restart, reconnect, and file edits never clear it. Start matching new
+peers and perform the normal durable reseed. The DP persists the exact candidate
+before it admits that generation; the CP reports `PENDING` until it receives the
+exact authenticated acknowledgment and commits its local clear. A lost response
+can therefore leave the CP inhibited even if the DP already installed the set.
+Verify intended credential outcomes before reopening service. This operator-
+confirmed action may reauthorize credentials present in the selected backup.
+Never hand-edit generation/commitment fields. Host/root rollback of all trusted
+state is not claimed safe.
 
 
 ### `WatchEvents`

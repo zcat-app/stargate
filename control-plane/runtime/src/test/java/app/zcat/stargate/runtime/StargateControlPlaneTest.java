@@ -3,6 +3,7 @@
 
 package app.zcat.stargate.runtime;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -28,13 +29,18 @@ import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.io.TempDir;
 
 import app.zcat.stargate.auth.HmacVerifierMinter;
@@ -57,6 +63,8 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import jakarta.inject.Inject;
+import jakarta.persistence.EntityManager;
+import jakarta.transaction.UserTransaction;
 import stargate.v1.ControlGrpc;
 import stargate.v1.ControlOuterClass;
 import stargate.v1.EventsOuterClass;
@@ -204,6 +212,66 @@ class StargateControlPlaneTest {
         return Files.exists(status) ? Files.readString(status, StandardCharsets.US_ASCII) : null;
     }
 
+    record StatusCommandResult(int exitCode, String output) {
+    }
+
+    private record RequestCensus(int count, boolean settled) {
+    }
+
+    private static RequestCensus awaitStableRequestCount(List<?> requests) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+        long stableSince = System.nanoTime();
+        int count = requests.size();
+        while (System.nanoTime() < deadline && System.nanoTime() - stableSince < TimeUnit.MILLISECONDS.toNanos(250)) {
+            Thread.sleep(20);
+            int current = requests.size();
+            if (current != count) {
+                count = current;
+                stableSince = System.nanoTime();
+            }
+        }
+        return new RequestCensus(count, System.nanoTime() - stableSince >= TimeUnit.MILLISECONDS.toNanos(250));
+    }
+
+    private StatusCommandResult statusCommandForFile(Path statusFile) throws Exception {
+        return statusCommandForFile(statusFile, tmp);
+    }
+
+    static StatusCommandResult statusCommandForFile(Path statusFile, Path tempRoot) throws Exception {
+        Path repo = Path.of("").toAbsolutePath();
+        while (repo != null && !Files.isRegularFile(repo.resolve("scripts/stargate"))) {
+            repo = repo.getParent();
+        }
+        assertNotNull(repo, "repository root with scripts/stargate");
+        String actualState = Files.readString(statusFile, StandardCharsets.US_ASCII).stripTrailing();
+        Path bin = Files.createDirectories(tempRoot.resolve("status-from-channel-bin"));
+        Path docker = bin.resolve("docker");
+        Files.writeString(docker, """
+                #!/bin/sh
+                case "$1" in
+                  info) exit 0 ;;
+                  compose)
+                    case "$*" in
+                      *" version"*) exit 0 ;;
+                      *" ps "*) echo 0123abcd; exit 0 ;;
+                      *" exec "*) printf '%s\\n' "$STUB_EXEC"; exit 0 ;;
+                    esac ;;
+                esac
+                exit 0
+                """);
+        docker.toFile().setExecutable(true);
+        var processBuilder = new ProcessBuilder("/bin/bash", repo.resolve("scripts/stargate").toString(), "status")
+                .redirectErrorStream(true);
+        processBuilder.environment().put("PATH", bin + ":/usr/bin:/bin");
+        processBuilder.environment().put("STUB_EXEC", actualState);
+        processBuilder.environment().put("STARGATE_ENV_FILE", tempRoot.resolve("local.env").toString());
+        processBuilder.environment().put("STARGATE_ENV_EXAMPLE", tempRoot.resolve("absent.env.example").toString());
+        Process process = processBuilder.start();
+        byte[] output = process.getInputStream().readNBytes(16 * 1024);
+        assertTrue(process.waitFor(30, TimeUnit.SECONDS), "bounded local status command exits");
+        return new StatusCommandResult(process.exitValue(), new String(output, StandardCharsets.UTF_8));
+    }
+
     private String awaitDeliveryStatus(String expected) throws Exception {
         return awaitDeliveryStatus(expected, Duration.ofSeconds(10));
     }
@@ -260,6 +328,18 @@ class StargateControlPlaneTest {
         final List<TokenLoaderContract.StoredToken> stored = new CopyOnWriteArrayList<>();
         long lastGeneration;
         volatile RuntimeException beginFailure;
+        volatile RuntimeException deliveryFailure;
+        volatile RuntimeException prearmFailure;
+        volatile RuntimeException acknowledgementFailure;
+        volatile RuntimeException staleFailure;
+        final AtomicInteger acknowledgementAttempts = new AtomicInteger();
+        final AtomicInteger staleAttempts = new AtomicInteger();
+        final AtomicInteger prearmAttempts = new AtomicInteger();
+        volatile java.util.concurrent.CountDownLatch prearmAttemptFinished;
+        volatile java.util.concurrent.CountDownLatch acknowledgementAttemptFinished;
+        volatile java.util.concurrent.CountDownLatch staleAttemptFinished;
+        volatile TokenLoaderContract.GenerationStore.DeliveryMarker delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0);
 
         @Override
         public java.util.Collection<TokenLoaderContract.StoredToken> storedTokens() {
@@ -299,6 +379,101 @@ class StargateControlPlaneTest {
         @Override
         public void record(long generation) {
             recorded.add(generation);
+            lastGeneration = generation;
+        }
+
+        @Override
+        public synchronized TokenLoaderContract.GenerationStore.DeliveryMarker deliveryMarker() {
+            RuntimeException failure = deliveryFailure;
+            if (failure != null) {
+                throw failure;
+            }
+            return delivery;
+        }
+
+        @Override
+        public synchronized boolean prearmDelivery(long generation) {
+            prearmAttempts.incrementAndGet();
+            try {
+                RuntimeException transitionFailure = prearmFailure;
+                if (transitionFailure != null) {
+                    throw transitionFailure;
+                }
+                RuntimeException failure = deliveryFailure;
+                if (failure != null) {
+                    throw failure;
+                }
+                if (delivery.state() == TokenLoaderContract.GenerationStore.DeliveryState.STALE
+                        || (delivery.state() == TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED
+                                && delivery.generation() != generation)) {
+                    return false;
+                }
+                delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, generation);
+                return true;
+            } finally {
+                java.util.concurrent.CountDownLatch finished = prearmAttemptFinished;
+                if (finished != null) {
+                    finished.countDown();
+                }
+            }
+        }
+
+        @Override
+        public synchronized boolean acknowledgeDelivery(long generation) {
+            acknowledgementAttempts.incrementAndGet();
+            try {
+                RuntimeException transitionFailure = acknowledgementFailure;
+                if (transitionFailure != null) {
+                    throw transitionFailure;
+                }
+                RuntimeException failure = deliveryFailure;
+                if (failure != null) {
+                    throw failure;
+                }
+                if (delivery.state() != TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED
+                        || delivery.generation() != generation) {
+                    return false;
+                }
+                delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0);
+                return true;
+            } finally {
+                java.util.concurrent.CountDownLatch finished = acknowledgementAttemptFinished;
+                if (finished != null) {
+                    finished.countDown();
+                }
+            }
+        }
+
+        @Override
+        public synchronized boolean recordStaleDelivery(long generation) {
+            staleAttempts.incrementAndGet();
+            try {
+                RuntimeException transitionFailure = staleFailure;
+                if (transitionFailure != null) {
+                    throw transitionFailure;
+                }
+                RuntimeException failure = deliveryFailure;
+                if (failure != null) {
+                    throw failure;
+                }
+                if (delivery.state() == TokenLoaderContract.GenerationStore.DeliveryState.STALE) {
+                    return delivery.generation() == generation;
+                }
+                if (delivery.state() != TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED
+                        || delivery.generation() != generation) {
+                    return false;
+                }
+                delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.STALE, generation);
+                return true;
+            } finally {
+                java.util.concurrent.CountDownLatch finished = staleAttemptFinished;
+                if (finished != null) {
+                    finished.countDown();
+                }
+            }
         }
     }
 
@@ -318,47 +493,116 @@ class StargateControlPlaneTest {
      * durable acknowledgment unless the stale fixture is selected. Records
      * every ReloadTokensRequest so the test can assert what crossed the wire.
      */
-    private static final class RecordingDp implements AutoCloseable {
+    static final class RecordingDp implements AutoCloseable {
+
+        private record UnavailableThenHeldRetry(
+                java.util.concurrent.CountDownLatch firstArrived,
+                java.util.concurrent.CountDownLatch releaseFirstFailure,
+                java.util.concurrent.CountDownLatch retryArrived,
+                java.util.concurrent.CountDownLatch releaseRetryAck) {
+        }
 
         final List<ControlOuterClass.ReloadTokensRequest> requests;
         final List<Long> completedGenerations;
         private final io.grpc.Server server;
         private final EpollEventLoopGroup boss;
         private final EpollEventLoopGroup workers;
+        private final java.util.concurrent.CountDownLatch requestArrived;
+        private final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
 
         private RecordingDp(io.grpc.Server server, EpollEventLoopGroup boss,
                 EpollEventLoopGroup workers, List<ControlOuterClass.ReloadTokensRequest> requests,
-                List<Long> completedGenerations) {
+                List<Long> completedGenerations, java.util.concurrent.CountDownLatch requestArrived) {
             this.server = server;
             this.boss = boss;
             this.workers = workers;
             this.requests = requests;
             this.completedGenerations = completedGenerations;
+            this.requestArrived = requestArrived;
         }
 
         static RecordingDp start(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub) throws Exception {
-            return start(dpSock, keysDir, dpPubPath, cpPub, false, false, null);
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, false, false, false, null);
         }
 
         /** T187: every reply waits for {@code release}, holding the RPC outstanding. */
         static RecordingDp startHeld(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub,
                 java.util.concurrent.CountDownLatch release) throws Exception {
-            return start(dpSock, keysDir, dpPubPath, cpPub, false, false, release);
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, false, false, false, release);
+        }
+
+        static RecordingDp startHeldObserved(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub,
+                java.util.concurrent.CountDownLatch release, java.util.concurrent.CountDownLatch arrived)
+                throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, false, false, false, release, arrived);
+        }
+
+        static RecordingDp startUnavailableThenHeldRetryObserved(Path dpSock, Path keysDir,
+                Path dpPubPath, Path cpPub,
+                java.util.concurrent.CountDownLatch firstArrived,
+                java.util.concurrent.CountDownLatch releaseFirstFailure,
+                java.util.concurrent.CountDownLatch retryArrived,
+                java.util.concurrent.CountDownLatch releaseRetryAck) throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, false, false, false,
+                    null, null, new UnavailableThenHeldRetry(
+                            firstArrived, releaseFirstFailure, retryArrived, releaseRetryAck));
+        }
+
+        static RecordingDp startHeldStale(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub,
+                java.util.concurrent.CountDownLatch release) throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, true, false, false, false, release);
+        }
+
+        static RecordingDp startHeldStaleObserved(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub,
+                java.util.concurrent.CountDownLatch release,
+                java.util.concurrent.CountDownLatch arrived) throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, true, false, false, false, release, arrived);
         }
 
         static RecordingDp startWithDelayedStaleThenOk(
                 Path dpSock, Path keysDir, Path dpPubPath, Path cpPub) throws Exception {
-            return start(dpSock, keysDir, dpPubPath, cpPub, true, false, null);
+            return start(dpSock, keysDir, dpPubPath, cpPub, true, false, false, false, null);
+        }
+
+        static RecordingDp startWrongGeneration(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub)
+                throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, false, true, false, null);
+        }
+
+        static RecordingDp startWrongCommitment(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub)
+                throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, false, false, true, null);
         }
 
         static RecordingDp startLegacy(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub)
                 throws Exception {
-            return start(dpSock, keysDir, dpPubPath, cpPub, false, true, null);
+            return start(dpSock, keysDir, dpPubPath, cpPub, false, true, false, false, null);
         }
 
         private static RecordingDp start(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub,
-                boolean delayedStaleThenOk, boolean legacyResponse,
+                boolean delayedStaleThenOk, boolean legacyResponse, boolean wrongGeneration,
+                boolean wrongCommitment,
                 java.util.concurrent.@org.jspecify.annotations.Nullable CountDownLatch hold) throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, delayedStaleThenOk, legacyResponse,
+                    wrongGeneration, wrongCommitment, hold, null);
+        }
+
+        private static RecordingDp start(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub,
+                boolean delayedStaleThenOk, boolean legacyResponse, boolean wrongGeneration,
+                boolean wrongCommitment,
+                java.util.concurrent.@org.jspecify.annotations.Nullable CountDownLatch hold,
+                java.util.concurrent.@org.jspecify.annotations.Nullable CountDownLatch arrived) throws Exception {
+            return start(dpSock, keysDir, dpPubPath, cpPub, delayedStaleThenOk, legacyResponse,
+                    wrongGeneration, wrongCommitment, hold, arrived, null);
+        }
+
+        private static RecordingDp start(Path dpSock, Path keysDir, Path dpPubPath, Path cpPub,
+                boolean delayedStaleThenOk, boolean legacyResponse, boolean wrongGeneration,
+                boolean wrongCommitment,
+                java.util.concurrent.@org.jspecify.annotations.Nullable CountDownLatch hold,
+                java.util.concurrent.@org.jspecify.annotations.Nullable CountDownLatch arrived,
+                @org.jspecify.annotations.Nullable UnavailableThenHeldRetry retryScript)
+                throws Exception {
             // The DP stand-in's identity: a cert carrying the pinned dp keypair,
             // derived through the public file-based path (deriveCpIdentity's CN
             // is cosmetic — §3 pins the public key, not the name).
@@ -381,6 +625,9 @@ class StargateControlPlaneTest {
                             public void reloadTokens(ControlOuterClass.ReloadTokensRequest request,
                                     StreamObserver<ControlOuterClass.ReloadTokensResponse> response) {
                                 captured.add(request);
+                                if (arrived != null) {
+                                    arrived.countDown();
+                                }
                                 if (hold != null) {
                                     try {
                                         hold.await(20, TimeUnit.SECONDS);
@@ -389,6 +636,33 @@ class StargateControlPlaneTest {
                                     }
                                 }
                                 int attempt = attempts.incrementAndGet();
+                                if (retryScript != null) {
+                                    var seen = attempt == 1 ? retryScript.firstArrived() : retryScript.retryArrived();
+                                    var release = attempt == 1
+                                            ? retryScript.releaseFirstFailure()
+                                            : retryScript.releaseRetryAck();
+                                    seen.countDown();
+                                    try {
+                                        if (!release.await(20, TimeUnit.SECONDS)) {
+                                            response.onError(io.grpc.Status.DEADLINE_EXCEEDED
+                                                    .withDescription("bounded retry fixture was not released")
+                                                    .asRuntimeException());
+                                            return;
+                                        }
+                                    } catch (InterruptedException interrupted) {
+                                        Thread.currentThread().interrupt();
+                                        response.onError(io.grpc.Status.CANCELLED
+                                                .withDescription("bounded retry fixture interrupted")
+                                                .asRuntimeException());
+                                        return;
+                                    }
+                                    if (attempt == 1) {
+                                        response.onError(io.grpc.Status.UNAVAILABLE
+                                                .withDescription("synthetic reconnect delivery failure")
+                                                .asRuntimeException());
+                                        return;
+                                    }
+                                }
                                 var reply = ControlOuterClass.ReloadTokensResponse.newBuilder();
                                 if (delayedStaleThenOk && attempt == 1) {
                                     reply.setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_STALE_GENERATION)
@@ -397,12 +671,16 @@ class StargateControlPlaneTest {
                                     reply.setAppliedGeneration(request.getGeneration())
                                             .setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_OK);
                                 } else {
-                                    reply.setAppliedGeneration(request.getGeneration())
-                                            .setCurrentGeneration(request.getGeneration())
+                                    long acknowledgedGeneration = request.getGeneration() + (wrongGeneration ? 1 : 0);
+                                    reply.setAppliedGeneration(acknowledgedGeneration)
+                                            .setCurrentGeneration(acknowledgedGeneration)
                                             .setStatus(ControlOuterClass.ApplyStatus.APPLY_STATUS_OK);
                                     if (request.hasDurable()) {
                                         reply.setAcknowledgmentVersion(1)
-                                                .setCommitment(request.getDurable().getCommitment());
+                                                .setCommitment(wrongCommitment
+                                                        ? com.google.protobuf.ByteString.copyFrom(
+                                                                repeat((byte) 0x4b, 32))
+                                                        : request.getDurable().getCommitment());
                                     }
                                 }
                                 response.onNext(reply.build());
@@ -425,11 +703,14 @@ class StargateControlPlaneTest {
                 workers.shutdownGracefully();
                 throw e;
             }
-            return new RecordingDp(server, boss, workers, captured, completed);
+            return new RecordingDp(server, boss, workers, captured, completed, arrived);
         }
 
         @Override
         public void close() {
+            if (!closed.compareAndSet(false, true)) {
+                return;
+            }
             server.shutdownNow();
             try {
                 server.awaitTermination(5, TimeUnit.SECONDS);
@@ -667,7 +948,7 @@ class StargateControlPlaneTest {
         Path keys = keysDir();
         Path dpSock = runDir().resolve("dp-late.sock");
         try (ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
-            GrpcReloadChannel channel = new GrpcReloadChannel(client);
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, new RecordingState());
             byte[] verifier = repeat((byte) 0x2a, 32);
             TokenLoaderContract.PushResult pending = channel.push(3L, List.of(verifier));
             assertEquals(0L, pending.currentGeneration(), "initial absent-DP delivery is pending");
@@ -807,7 +1088,7 @@ class StargateControlPlaneTest {
                 dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
         try (ReloadTokensClient client = shortLivedReloadClient(
                 keys, dpSock, Duration.ofMillis(500))) {
-            GrpcReloadChannel channel = new GrpcReloadChannel(client);
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, new RecordingState());
             try {
                 TokenLoaderContract.PushResult result = channel.push(8L,
                         List.of(repeat((byte) 0x48, 32)));
@@ -902,6 +1183,255 @@ class StargateControlPlaneTest {
                 }
                 assertEquals(1, rowCount(audit, "revoked"), "the acknowledged revocation counts once");
                 assertEquals(0, rowCount(audit, "enrolled"));
+            }
+        }
+    }
+
+    @Test
+    void staleReplyOnRetryWorkerPersistsConflictAndStopsFurtherDispatch() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-late-stale.sock");
+        RecordingState state = new RecordingState();
+        try (ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, state, deliveryStatus());
+            TokenLoaderContract.PushResult initial = channel.push(4L, List.of(repeat((byte) 0x2a, 32)));
+            assertFalse(initial.stale());
+            assertEquals(0L, initial.currentGeneration());
+            assertEquals("PENDING\n", readDeliveryStatus());
+            try (RecordingDp dp = RecordingDp.startWithDelayedStaleThenOk(
+                    dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"))) {
+                assertEquals("STALE_CONFLICT\n", awaitDeliveryStatus("STALE_CONFLICT\n"),
+                        "the retry worker records a stale refusal");
+                assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.STALE, 4), state.deliveryMarker());
+                Thread.sleep(250);
+                assertEquals(1, dp.requests.size(), "the retry worker stops after stale persistence");
+            }
+        }
+    }
+
+    @Test
+    void staleReplyOnAuthenticatedReconnectPersistsConflictAndStopsReplay() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-reconnect-stale.sock");
+        RecordingState state = new RecordingState();
+        try (RecordingDp first = RecordingDp.start(
+                    dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
+                ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, state, deliveryStatus());
+            TokenLoaderContract.PushResult acknowledged = channel.push(4L, List.of(repeat((byte) 0x2a, 32)));
+            assertEquals(4L, acknowledged.currentGeneration());
+            assertEquals(1, first.requests.size(), "the initial DP accepted and acknowledged the candidate");
+            assertEquals("ACKNOWLEDGED(4)\n", readDeliveryStatus());
+            first.close();
+            try (RecordingDp restarted = RecordingDp.startWithDelayedStaleThenOk(
+                    dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"))) {
+                assertEquals("STALE_CONFLICT\n", awaitDeliveryStatus("STALE_CONFLICT\n"),
+                        "an authenticated peer reconnect that refuses retained authority becomes terminal");
+                assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.STALE, 4), state.deliveryMarker());
+                Thread.sleep(250);
+                assertEquals(1, restarted.requests.size(), "a reconnect stale reply is never replayed again");
+            }
+        }
+    }
+
+    @Test
+    void authenticatedReconnectPublishesPendingWhenStaleMarkerWriteFails() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-reconnect-stale-write-failure.sock");
+        RecordingState state = new RecordingState();
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try (RecordingDp first = RecordingDp.start(dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
+                ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, state, deliveryStatus());
+            assertEquals(4L, channel.push(4L, List.of(repeat((byte) 0x2a, 32))).currentGeneration());
+            assertEquals("ACKNOWLEDGED(4)\n", readDeliveryStatus());
+            first.close();
+            state.staleFailure = new IllegalStateException("injected stale persistence failure");
+            state.staleAttemptFinished = new java.util.concurrent.CountDownLatch(1);
+            try (RecordingDp restarted = RecordingDp.startHeldStale(
+                    dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"), release)) {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+                while (restarted.requests.isEmpty() && System.nanoTime() < deadline) {
+                    Thread.sleep(20);
+                }
+                assertEquals(1, restarted.requests.size(), "the authenticated reconnect replay is held by the real RPC");
+                String heldStatus = awaitDeliveryStatus("PENDING\n", Duration.ofSeconds(3));
+                StatusCommandResult held = statusCommandForFile(deliveryStatus());
+                release.countDown();
+                boolean staleWriteAttempted = state.staleAttemptFinished.await(5, TimeUnit.SECONDS);
+                String terminal = readDeliveryStatus();
+                StatusCommandResult terminalStatus = statusCommandForFile(deliveryStatus());
+                int requestsAfterStale = restarted.requests.size();
+                TokenLoaderContract.PushResult stoppedPush = channel.push(4L,
+                        List.of(repeat((byte) 0x2a, 32)));
+                client.close();
+                TokenLoaderContract.PushResult restartedPush;
+                String restartedStatus;
+                StatusCommandResult restartedStatusCommand;
+                int requestsBeforeFreshPush;
+                int requestsAfterFreshPush;
+                try (ReloadTokensClient freshClient = ReloadTokensClient.create(keys, dpSock)) {
+                    GrpcReloadChannel freshChannel = new GrpcReloadChannel(freshClient, state, deliveryStatus());
+                    requestsBeforeFreshPush = restarted.requests.size();
+                    restartedPush = freshChannel.push(4L, List.of(repeat((byte) 0x2a, 32)));
+                    requestsAfterFreshPush = restarted.requests.size();
+                    restartedStatus = readDeliveryStatus();
+                    restartedStatusCommand = statusCommandForFile(deliveryStatus());
+                }
+                assertAll("stale persistence failure remains unresolved through channel restart",
+                        () -> assertEquals("PENDING\n", heldStatus,
+                                "the old ACK is withdrawn while replay remains outstanding"),
+                        () -> assertEquals(30, held.exitCode(), held.output()),
+                        () -> assertTrue(held.output().contains("PENDING"), held.output()),
+                        () -> assertTrue(staleWriteAttempted, "the actual stale persistence callback completed"),
+                        () -> assertEquals(1, state.staleAttempts.get()),
+                        () -> assertEquals("PENDING\n", terminal,
+                                "a failed stale write retains unresolved status"),
+                        () -> assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                                TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 4),
+                                state.deliveryMarker()),
+                        () -> assertEquals(30, terminalStatus.exitCode(), terminalStatus.output()),
+                        () -> assertTrue(terminalStatus.output().contains("PENDING"), terminalStatus.output()),
+                        () -> assertEquals(1, requestsAfterStale, "stale authority is not replayed again"),
+                        () -> assertEquals(0L, stoppedPush.currentGeneration()),
+                        () -> assertEquals(0L, restartedPush.currentGeneration()),
+                        () -> assertEquals(requestsBeforeFreshPush, requestsAfterFreshPush,
+                                "a fresh channel cannot dispatch while the durable marker is UNRESOLVED"),
+                        () -> assertEquals("PENDING\n", restartedStatus),
+                        () -> assertEquals(30, restartedStatusCommand.exitCode(), restartedStatusCommand.output()));
+            }
+        } finally {
+            release.countDown();
+        }
+    }
+
+    @Test
+    void authenticatedReconnectPublishesPendingWhenAckClearFails() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-reconnect-ack-clear-failure.sock");
+        RecordingState state = new RecordingState();
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try (RecordingDp first = RecordingDp.start(dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
+                ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, state, deliveryStatus());
+            assertEquals(4L, channel.push(4L, List.of(repeat((byte) 0x2a, 32))).currentGeneration());
+            assertEquals("ACKNOWLEDGED(4)\n", readDeliveryStatus());
+            first.close();
+            state.acknowledgementFailure = new IllegalStateException("injected ACK-clear failure");
+            state.acknowledgementAttemptFinished = new java.util.concurrent.CountDownLatch(1);
+            try (RecordingDp restarted = RecordingDp.startHeld(
+                    dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"), release)) {
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+                while (restarted.requests.isEmpty() && System.nanoTime() < deadline) {
+                    Thread.sleep(20);
+                }
+                assertEquals(1, restarted.requests.size(), "the authenticated reconnect replay is held by the real RPC");
+                String heldStatus = awaitDeliveryStatus("PENDING\n", Duration.ofSeconds(3));
+                StatusCommandResult held = statusCommandForFile(deliveryStatus());
+                release.countDown();
+                boolean acknowledgementAttempted = state.acknowledgementAttemptFinished.await(5, TimeUnit.SECONDS);
+                String terminal = readDeliveryStatus();
+                StatusCommandResult terminalStatus = statusCommandForFile(deliveryStatus());
+                int acknowledgementAttempts = state.acknowledgementAttempts.get();
+                client.close();
+                RequestCensus settledRequests = awaitStableRequestCount(restarted.requests);
+                TokenLoaderContract.PushResult restartedPush;
+                String restartedStatus;
+                StatusCommandResult restartedStatusCommand;
+                int requestsBeforeFreshPush;
+                int requestsAfterFreshPush;
+                try (ReloadTokensClient freshClient = ReloadTokensClient.create(keys, dpSock)) {
+                    GrpcReloadChannel freshChannel = new GrpcReloadChannel(freshClient, state, deliveryStatus());
+                    requestsBeforeFreshPush = settledRequests.count();
+                    restartedPush = freshChannel.push(4L, List.of(repeat((byte) 0x2a, 32)));
+                    requestsAfterFreshPush = restarted.requests.size();
+                    restartedStatus = readDeliveryStatus();
+                    restartedStatusCommand = statusCommandForFile(deliveryStatus());
+                }
+                assertAll("failed ACK clearing retains the restart barrier through channel restart",
+                        () -> assertEquals("PENDING\n", heldStatus,
+                                "the old ACK is withdrawn while replay remains outstanding"),
+                        () -> assertEquals(30, held.exitCode(), held.output()),
+                        () -> assertTrue(held.output().contains("PENDING"), held.output()),
+                        () -> assertTrue(acknowledgementAttempted,
+                                "the actual ACK-clear persistence callback completed"),
+                        () -> assertTrue(acknowledgementAttempts >= 2,
+                                "initial and reconnect ACK-clear attempts are observed"),
+                        () -> assertEquals("PENDING\n", terminal,
+                                "a failed ACK clear retains unresolved status"),
+                        () -> assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                                TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 4),
+                                state.deliveryMarker()),
+                        () -> assertEquals(30, terminalStatus.exitCode(), terminalStatus.output()),
+                        () -> assertTrue(terminalStatus.output().contains("PENDING"), terminalStatus.output()),
+                        () -> assertTrue(settledRequests.settled(),
+                                "the closed same-process retry worker is quiescent before fresh-channel observation"),
+                        () -> assertEquals(0L, restartedPush.currentGeneration()),
+                        () -> assertEquals(requestsBeforeFreshPush, requestsAfterFreshPush,
+                                "a fresh channel cannot dispatch while the durable marker is UNRESOLVED"),
+                        () -> assertEquals("PENDING\n", restartedStatus),
+                        () -> assertEquals(30, restartedStatusCommand.exitCode(), restartedStatusCommand.output()));
+            }
+        } finally {
+            release.countDown();
+        }
+    }
+
+    @Test
+    void authenticatedReconnectWithdrawsAcknowledgedBeforePrearmFailure() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-reconnect-prearm-failure.sock");
+        RecordingState state = new RecordingState();
+        try (RecordingDp first = RecordingDp.start(
+                    dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
+                ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, state, deliveryStatus());
+            assertEquals(4L, channel.push(4L, List.of(repeat((byte) 0x2a, 32))).currentGeneration());
+            assertEquals("ACKNOWLEDGED(4)\n", readDeliveryStatus());
+
+            var prearmFinished = new java.util.concurrent.CountDownLatch(1);
+            state.prearmFailure = new IllegalStateException("injected reconnect prearm failure");
+            state.prearmAttemptFinished = prearmFinished;
+            first.close();
+            try (RecordingDp restarted = RecordingDp.start(
+                    dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"))) {
+                String pending = awaitDeliveryStatus("PENDING\n", Duration.ofSeconds(3));
+                boolean failedPrearmObserved = prearmFinished.await(5, TimeUnit.SECONDS);
+                StatusCommandResult pendingCommand = statusCommandForFile(deliveryStatus());
+                int requestsBeforeStorageRecovery = restarted.requests.size();
+                int attemptsBeforeStorageRecovery = state.prearmAttempts.get();
+                state.prearmFailure = null;
+                state.prearmAttemptFinished = null;
+
+                long recoveryDeadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+                while (restarted.requests.isEmpty() && System.nanoTime() < recoveryDeadline) {
+                    Thread.sleep(20);
+                }
+                String acknowledged = awaitDeliveryStatus("ACKNOWLEDGED(4)\n", Duration.ofSeconds(10));
+                StatusCommandResult acknowledgedCommand = statusCommandForFile(deliveryStatus());
+                var markerAfterAck = state.deliveryMarker();
+                assertAll("reconnect prearm failure withdraws the old success claim and remains fail-closed",
+                        () -> assertEquals("PENDING\n", pending,
+                                "authenticated reconnect publishes PENDING before its fallible SQLite prearm"),
+                        () -> assertTrue(failedPrearmObserved,
+                                "the injected reconnect prearm failure was observed"),
+                        () -> assertTrue(attemptsBeforeStorageRecovery >= 2,
+                                "initial push and at least one reconnect prearm are observed"),
+                        () -> assertEquals(0, requestsBeforeStorageRecovery,
+                                "failed prearming dispatches no reconnect RPC"),
+                        () -> assertEquals(30, pendingCommand.exitCode(), pendingCommand.output()),
+                        () -> assertTrue(pendingCommand.output().contains("PENDING"), pendingCommand.output()),
+                        () -> assertEquals("ACKNOWLEDGED(4)\n", acknowledged),
+                        () -> assertEquals(1, restarted.requests.size(),
+                                "restored storage allows exactly one authenticated replay"),
+                        () -> assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                                TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0), markerAfterAck,
+                                "the exact replay ACK commits durable clear"),
+                        () -> assertEquals(0, acknowledgedCommand.exitCode(), acknowledgedCommand.output()),
+                        () -> assertTrue(acknowledgedCommand.output().contains("ACKNOWLEDGED(4)"),
+                                acknowledgedCommand.output()));
             }
         }
     }
@@ -1021,7 +1551,7 @@ class StargateControlPlaneTest {
         Path status = deliveryStatus();
         Path obstacle = status.resolveSibling(status.getFileName() + ".tmp").resolve("obstacle");
         try (ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
-            GrpcReloadChannel channel = new GrpcReloadChannel(client, status);
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, new RecordingState(), status);
             channel.push(2L, List.of(repeat((byte) 0x2a, 32)));
             assertEquals("PENDING\n", readDeliveryStatus(), "absent DP: delivery is pending");
 
@@ -1041,6 +1571,136 @@ class StargateControlPlaneTest {
                 assertEquals(1, dp.requests.size(), "stale authority is never resent");
             }
         }
+    }
+
+    @Test
+    void failedPrearmWriteNeverDispatchesRpc() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-prearm-failure.sock");
+        RecordingState state = new RecordingState();
+        state.prearmFailure = new IllegalStateException("injected prearm failure");
+        try (RecordingDp dp = RecordingDp.start(dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
+                ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, state, deliveryStatus());
+            TokenLoaderContract.PushResult result = channel.push(1L, List.of(repeat((byte) 0x2a, 32)));
+            assertFalse(result.stale());
+            assertEquals(0L, result.currentGeneration(), "a failed prearm is pending, not acknowledged");
+            Thread.sleep(250);
+            assertTrue(dp.requests.isEmpty(), "no initial or retry RPC crosses a failed durable prearm");
+            assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0), state.deliveryMarker());
+        }
+    }
+
+    @Test
+    void failedAckClearKeepsDurableBarrierAcrossChannelRestart() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-ack-clear-failure.sock");
+        RecordingState state = new RecordingState();
+        state.acknowledgementFailure = new IllegalStateException("injected ACK-clear failure");
+        try (RecordingDp dp = RecordingDp.start(dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"))) {
+            ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock);
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, state, deliveryStatus());
+            TokenLoaderContract.PushResult result = channel.push(1L, List.of(repeat((byte) 0x2a, 32)));
+            assertFalse(result.stale());
+            assertEquals(0L, result.currentGeneration(), "an ACK without durable local clear is not completion");
+            assertEquals("PENDING\n", readDeliveryStatus());
+            assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 1), state.deliveryMarker());
+            client.close();
+            int delivered = dp.requests.size();
+
+            try (ReloadTokensClient restartedClient = ReloadTokensClient.create(keys, dpSock)) {
+                GrpcReloadChannel restarted = new GrpcReloadChannel(restartedClient, state, deliveryStatus());
+                TokenLoaderContract.PushResult blocked = restarted.push(1L, List.of(repeat((byte) 0x2a, 32)));
+                assertFalse(blocked.stale());
+                assertEquals(0L, blocked.currentGeneration());
+                assertEquals(delivered, dp.requests.size(), "a restarted channel cannot replay unresolved authority");
+                assertEquals("PENDING\n", readDeliveryStatus());
+            }
+        }
+    }
+
+    @Test
+    void failedStaleWriteKeepsUnresolvedBarrierAcrossChannelRestart() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-stale-write-failure.sock");
+        RecordingState state = new RecordingState();
+        state.staleFailure = new IllegalStateException("injected stale persistence failure");
+        int delivered;
+        try (RecordingDp dp = RecordingDp.startWithDelayedStaleThenOk(
+                        dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"))) {
+            ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock);
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, state, deliveryStatus());
+            TokenLoaderContract.PushResult result = channel.push(1L, List.of(repeat((byte) 0x2a, 32)));
+            assertTrue(result.stale(), "the data plane's stale refusal remains visible to this call");
+            assertEquals("PENDING\n", readDeliveryStatus(),
+                    "failed stale persistence leaves the earlier unresolved status truthful");
+            assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 1), state.deliveryMarker());
+            assertEquals(0L, channel.push(1L, List.of(repeat((byte) 0x2a, 32))).currentGeneration(),
+                    "the stale latch refuses this channel's later push even though the fixture would next ACK");
+            assertEquals(1, dp.requests.size(), "a later exact ACK cannot be solicited after stale refusal");
+            client.close();
+            delivered = dp.requests.size();
+        }
+        // The DP is now absent: the persisted UNRESOLVED marker still blocks a
+        // fresh channel before it can probe or repopulate lost peer state.
+        try (ReloadTokensClient restartedClient = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel restarted = new GrpcReloadChannel(restartedClient, state, deliveryStatus());
+            assertEquals(0L, restarted.push(1L, List.of(repeat((byte) 0x2a, 32))).currentGeneration());
+            assertEquals(delivered, 1, "the original stale refusal was the only request before DP loss");
+            assertEquals("PENDING\n", readDeliveryStatus());
+        }
+    }
+
+    @Test
+    void nonExactAcknowledgementsLeaveDeliveryUnresolved() throws Exception {
+        Path keys = keysDir();
+        Path dpSock = runDir().resolve("dp-nonexact-ack.sock");
+        RecordingState state = new RecordingState();
+        List<java.util.function.Supplier<RecordingDp>> variants = List.of(
+                () -> uncheckedRecordingDp(() -> RecordingDp.startLegacy(
+                        dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"))),
+                () -> uncheckedRecordingDp(() -> RecordingDp.startWrongGeneration(
+                        dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"))),
+                () -> uncheckedRecordingDp(() -> RecordingDp.startWrongCommitment(
+                        dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"))));
+        for (java.util.function.Supplier<RecordingDp> variant : variants) {
+            state.delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0);
+            try (RecordingDp dp = variant.get();
+                    ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+                GrpcReloadChannel channel = new GrpcReloadChannel(client, state, deliveryStatus());
+                TokenLoaderContract.PushResult result = channel.push(3L, List.of(repeat((byte) 0x2a, 32)));
+                client.close();
+                assertEquals(0L, result.currentGeneration(), "legacy and mismatched ACKs remain pending");
+                assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 3), state.deliveryMarker());
+                assertEquals(1, dp.requests.size());
+                try (ReloadTokensClient restartedClient = ReloadTokensClient.create(keys, dpSock)) {
+                    GrpcReloadChannel restarted = new GrpcReloadChannel(
+                            restartedClient, state, deliveryStatus());
+                    assertEquals(0L, restarted.push(3L, List.of(repeat((byte) 0x2a, 32))).currentGeneration());
+                    assertEquals(1, dp.requests.size(),
+                            "legacy, wrong-generation, and wrong-commitment replies cannot clear restart inhibition");
+                    assertEquals("PENDING\n", readDeliveryStatus());
+                }
+            }
+        }
+    }
+
+    private static RecordingDp uncheckedRecordingDp(CheckedRecordingDpSupplier supplier) {
+        try {
+            return supplier.get();
+        } catch (Exception e) {
+            throw new IllegalStateException("test DP fixture failed to start", e);
+        }
+    }
+
+    @FunctionalInterface
+    private interface CheckedRecordingDpSupplier {
+        RecordingDp get() throws Exception;
     }
 
     /**
@@ -1079,6 +1739,7 @@ class StargateControlPlaneTest {
                 new Case("up", "PENDING", 30, "PENDING"),
                 new Case("up", "STALE_CONFLICT", 40, "STALE_CONFLICT"),
                 new Case("up", "ABSENT", 50, "UNKNOWN"),
+                new Case("up", "UNKNOWN", 50, "UNKNOWN"),
                 new Case("up", "fail", 20, "unavailable"),
                 new Case("down", "PENDING", 20, "not running"),
                 new Case("up", "PENDING leaked-label", 60, "unrecognised"));
@@ -1097,6 +1758,62 @@ class StargateControlPlaneTest {
             assertTrue(out.contains(c.shows()), c + " -> " + out);
             assertFalse(out.contains("no delivery attempted"), "never claims an unestablished lifecycle: " + out);
             assertFalse(out.contains("leaked-label"), "raw status content is never echoed: " + out);
+            if (c.exec().equals("ABSENT")) {
+                assertTrue(out.contains("no delivery state published"),
+                        "the absent-file sentinel remains distinct from published UNKNOWN: " + out);
+            }
+            if (c.exec().equals("UNKNOWN")) {
+                assertTrue(out.contains("delivery outcome cannot be established"),
+                        "published UNKNOWN reports only uncertainty: " + out);
+                assertFalse(out.contains("no delivery state published"),
+                        "published UNKNOWN is not described as an absent file: " + out);
+                assertFalse(out.contains("installed"),
+                        "published UNKNOWN makes no data-plane installation claim: " + out);
+            }
+            if (c.cp().equals("up") && c.exec().equals("PENDING")) {
+                assertTrue(out.contains("token delivery: PENDING (delivery is unresolved; credential application and revocation are not confirmed)"),
+                        "PENDING reports uncertainty rather than inferring the DP outcome: " + out);
+                assertFalse(out.contains("revocations are NOT effective yet"),
+                        "a lost ACK does not establish that the DP failed to apply credentials: " + out);
+            }
+            if (c.cp().equals("down")) {
+                assertTrue(out.contains("control plane: not running (token delivery state unavailable; the data plane routes using its existing valid credential state)"),
+                        "CP-down output makes no unsupported last-acknowledged claim: " + out);
+                assertFalse(out.contains("last acknowledged state"),
+                        "the DP may have installed a set whose ACK was lost: " + out);
+            }
+        }
+    }
+
+    @Test
+    void productionBootstrapPublishesUnknownWhenDeliveryMarkerCannotBeRead() throws Exception {
+        Path keys = keysDir();
+        pepperFile(TEST_PEPPER);
+        Path tokens = tokensFile("tokens:\n  - label: laptop\n    token: " + EXAMPLE_HEX + "\n");
+        Path dpSock = runDir().resolve("dp-marker-unavailable.sock");
+        RecordingState state = new RecordingState();
+        state.deliveryFailure = new IllegalStateException("injected delivery marker read failure");
+        RecordingAudit audit = new RecordingAudit();
+
+        try (RecordingDp dp = RecordingDp.start(dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
+                StargateControlPlane.BootHandle handle = StargateControlPlane.bootstrap(
+                        cfg(tokens, keys, dpSock), audit, state, state)) {
+            assertNotNull(handle, "a delivery marker read failure does not prevent CP startup");
+            assertEquals("UNKNOWN\n", awaitDeliveryStatus("UNKNOWN\n"),
+                    "the production channel publishes uncertainty while the status path is writable");
+
+            StatusCommandResult result = statusCommandForFile(deliveryStatus());
+            assertAll("published UNKNOWN remains truthful through the real status command",
+                    () -> assertEquals(50, result.exitCode(), result.output()),
+                    () -> assertTrue(result.output().contains("delivery outcome cannot be established"), result.output()),
+                    () -> assertFalse(result.output().contains("no delivery state published"), result.output()),
+                    () -> assertFalse(result.output().contains("installed"), result.output()),
+                    () -> assertTrue(state.upserts.isEmpty(), "no token rows are inserted"),
+                    () -> assertTrue(state.deletes.isEmpty(), "no token rows are deleted"),
+                    () -> assertTrue(state.recorded.isEmpty(), "no generation is recorded"),
+                    () -> assertEquals(0, rowCount(audit, "enrolled")),
+                    () -> assertEquals(0, rowCount(audit, "revoked")),
+                    () -> assertTrue(dp.requests.isEmpty(), "no delivery RPC reaches the data plane"));
         }
     }
 
@@ -1271,7 +1988,7 @@ class StargateControlPlaneTest {
         try (RecordingDp legacy = RecordingDp.startLegacy(dpSock, keys, keys.resolve("dp.pub"),
                         keys.resolve("cp.pub"));
                 ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
-            GrpcReloadChannel channel = new GrpcReloadChannel(client);
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, new RecordingState());
             TokenLoaderContract.PushResult result = channel.push(4L,
                     List.of(repeat((byte) 0x31, 32)));
             assertFalse(result.stale());
@@ -1404,7 +2121,7 @@ class StargateControlPlaneTest {
         Path keys = keysDir();
         // a real client dialing an ABSENT dp.sock: the connect fails immediately (ENOENT)
         try (ReloadTokensClient client = ReloadTokensClient.create(keys, runDir().resolve("no-dp.sock"))) {
-            GrpcReloadChannel channel = new GrpcReloadChannel(client);
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, new RecordingState());
             TokenLoaderContract.PushResult result = channel.push(3, List.of(repeat((byte) 0x2a, 32)));
             assertNotNull(result, "the transport failure is contained, never thrown (§1.8)");
             assertFalse(result.stale(), "a contained failure is not a stale rejection");
@@ -1445,11 +2162,419 @@ class T159ProductionAuthorityRecoveryTest {
     @Inject
     SqliteTokenState state;
 
+    @Inject
+    EntityManager entityManager;
+
+    @Inject
+    UserTransaction transaction;
+
+    private Map<String, byte[]> reconnectRacePriorRows = Map.of();
+    private long reconnectRacePriorGeneration;
+    private boolean restoreReconnectRaceState;
+
     @TempDir
     Path tmp;
 
+    @BeforeEach
+    void resetDeliveryMarker() throws Exception {
+        transaction.begin();
+        try {
+            entityManager.createNativeQuery(
+                    "UPDATE auth_delivery SET state = 'CLEAR', generation = 0 WHERE id = 1")
+                    .executeUpdate();
+            entityManager.createNativeQuery(
+                    "DELETE FROM configured_tokens WHERE label = 't201-reconnect-restart-marker'")
+                    .executeUpdate();
+            transaction.commit();
+        } catch (Exception failure) {
+            try {
+                transaction.rollback();
+            } catch (Exception ignored) {
+                failure.addSuppressed(ignored);
+            }
+            throw failure;
+        }
+    }
+
+    @AfterEach
+    void restoreReconnectRaceDatabase() throws Exception {
+        if (!restoreReconnectRaceState) {
+            return;
+        }
+        try {
+            Map<String, byte[]> currentRows = verifierRows(state.storedTokens());
+            boolean sameRows = currentRows.keySet().equals(reconnectRacePriorRows.keySet());
+            if (sameRows) {
+                for (String label : currentRows.keySet()) {
+                    if (!MessageDigest.isEqual(currentRows.get(label), reconnectRacePriorRows.get(label))) {
+                        sameRows = false;
+                        break;
+                    }
+                }
+            }
+            if (!sameRows) {
+                state.begin();
+                for (String label : currentRows.keySet()) {
+                    if (!reconnectRacePriorRows.containsKey(label)) {
+                        state.delete(label);
+                    }
+                }
+                for (Map.Entry<String, byte[]> row : reconnectRacePriorRows.entrySet()) {
+                    state.upsert(row.getKey(), row.getValue());
+                }
+                state.commit();
+            }
+            state.record(reconnectRacePriorGeneration);
+            transaction.begin();
+            try {
+                entityManager.createNativeQuery(
+                        "UPDATE auth_delivery SET state = 'CLEAR', generation = 0 WHERE id = 1")
+                        .executeUpdate();
+                transaction.commit();
+            } catch (Exception failure) {
+                try {
+                    transaction.rollback();
+                } catch (Exception ignored) {
+                    failure.addSuppressed(ignored);
+                }
+                throw failure;
+            }
+        } finally {
+            restoreReconnectRaceState = false;
+            reconnectRacePriorRows = Map.of();
+        }
+    }
+
+    @Test
+    void reconnectReplayAdmittedAfterAckClearSurvivesOlderCompletion() throws Exception {
+        Path keys = StargateControlPlaneTest.writeKeys(tmp);
+        Path dpSock = tmp.resolve("dp-ack-clear-reconnect-race.sock");
+        Path statusFile = tmp.resolve("auth-delivery");
+        var firstReplayArrived = new java.util.concurrent.CountDownLatch(1);
+        var releaseFirstReplayFailure = new java.util.concurrent.CountDownLatch(1);
+        var retryArrived = new java.util.concurrent.CountDownLatch(1);
+        var releaseRetryAck = new java.util.concurrent.CountDownLatch(1);
+        var pauseNextClear = new java.util.concurrent.atomic.AtomicBoolean();
+        var atClearBoundary = new java.util.concurrent.CountDownLatch(1);
+        var releaseOlderCompletion = new java.util.concurrent.CountDownLatch(1);
+        var initialResult = new AtomicReference<TokenLoaderContract.PushResult>();
+        var initialFailure = new AtomicReference<Throwable>();
+        assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0), state.deliveryMarker());
+
+        try (StargateControlPlaneTest.RecordingDp first = StargateControlPlaneTest.RecordingDp.start(
+                    dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
+                ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, state, statusFile, () -> {
+                if (pauseNextClear.compareAndSet(true, false)) {
+                    atClearBoundary.countDown();
+                    try {
+                        if (!releaseOlderCompletion.await(10, TimeUnit.SECONDS)) {
+                            throw new AssertionError("bounded ACK-clear test boundary was not released");
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError("ACK-clear test boundary interrupted", interrupted);
+                    }
+                }
+            });
+            byte[] verifier = StargateControlPlaneTest.repeat((byte) 0x2a, 32);
+            assertEquals(4L, channel.push(4L, List.of(verifier)).currentGeneration(),
+                    "retain the exact candidate for authenticated reconnect replay");
+            assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0), state.deliveryMarker(),
+                    "the initial exact ACK was committed to the real SQLite adapter");
+
+            pauseNextClear.set(true);
+            Thread olderCompletion = new Thread(() -> {
+                try {
+                    initialResult.set(channel.push(4L, List.of(verifier)));
+                } catch (Throwable failure) {
+                    initialFailure.set(failure);
+                }
+            }, "t201-initial-ack-completion");
+            olderCompletion.start();
+            assertTrue(atClearBoundary.await(10, TimeUnit.SECONDS),
+                    "initial exact ACK durably cleared UNRESOLVED before the local completion boundary");
+            assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0), state.deliveryMarker(),
+                    "the race boundary follows the committed SQLite clear");
+
+            first.close();
+            try (StargateControlPlaneTest.RecordingDp restarted =
+                    StargateControlPlaneTest.RecordingDp.startUnavailableThenHeldRetryObserved(
+                            dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"),
+                            firstReplayArrived, releaseFirstReplayFailure, retryArrived, releaseRetryAck)) {
+                assertTrue(firstReplayArrived.await(10, TimeUnit.SECONDS),
+                        "authenticated reconnect admitted and dispatched the retained generation");
+                String heldStatus = awaitStatus(statusFile, "PENDING\n", Duration.ofSeconds(3));
+                assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 4), state.deliveryMarker(),
+                        "the replay is durably prearmed in SQLite while its RPC remains held");
+
+                releaseOlderCompletion.countDown();
+                olderCompletion.join(TimeUnit.SECONDS.toMillis(5));
+                assertFalse(olderCompletion.isAlive(), "older initial completion is bounded");
+                assertEquals(null, initialFailure.get(), "initial push does not throw");
+                assertNotNull(initialResult.get());
+                assertFalse(initialResult.get().stale());
+                assertEquals(0L, initialResult.get().currentGeneration(),
+                        "the superseded ACK cannot report completed delivery");
+                assertEquals("PENDING\n", heldStatus);
+                assertEquals("PENDING\n", Files.readString(statusFile, StandardCharsets.US_ASCII),
+                        "the older completion cannot overwrite the replay's pending status");
+                StargateControlPlaneTest.StatusCommandResult pendingStatus =
+                        StargateControlPlaneTest.statusCommandForFile(statusFile, tmp);
+                assertEquals(30, pendingStatus.exitCode(), pendingStatus.output());
+                assertTrue(pendingStatus.output().contains("PENDING"), pendingStatus.output());
+
+                releaseFirstReplayFailure.countDown();
+                assertTrue(retryArrived.await(10, TimeUnit.SECONDS),
+                        "non-stale UNAVAILABLE leaves the replay queued for retry");
+                assertEquals(2, restarted.requests.size(),
+                        "the failed replay is followed by a separately dispatched retry");
+                var failedReplay = restarted.requests.get(0);
+                var retry = restarted.requests.get(1);
+                assertEquals(4L, failedReplay.getGeneration());
+                assertEquals(failedReplay.getGeneration(), retry.getGeneration(),
+                        "retry preserves the queued generation");
+                assertEquals(failedReplay.getDurable().getCommitment(), retry.getDurable().getCommitment(),
+                        "retry preserves the exact durable candidate commitment");
+                assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 4), state.deliveryMarker(),
+                        "a non-stale transport failure keeps SQLite unresolved while retry is held");
+                assertEquals("PENDING\n", Files.readString(statusFile, StandardCharsets.US_ASCII),
+                        "a non-stale transport failure cannot publish completion");
+                StargateControlPlaneTest.StatusCommandResult retryPendingStatus =
+                        StargateControlPlaneTest.statusCommandForFile(statusFile, tmp);
+                assertEquals(30, retryPendingStatus.exitCode(), retryPendingStatus.output());
+                assertTrue(retryPendingStatus.output().contains("PENDING"), retryPendingStatus.output());
+
+                releaseRetryAck.countDown();
+                assertEquals("ACKNOWLEDGED(4)\n", awaitStatus(
+                        statusFile, "ACKNOWLEDGED(4)\n", Duration.ofSeconds(10)),
+                        "only the replay's exact ACK completes delivery");
+                assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0), state.deliveryMarker(),
+                        "the replay ACK commits CLEAR in production SQLite");
+                StargateControlPlaneTest.StatusCommandResult acknowledgedStatus =
+                        StargateControlPlaneTest.statusCommandForFile(statusFile, tmp);
+                assertEquals(0, acknowledgedStatus.exitCode(), acknowledgedStatus.output());
+                assertEquals(List.of(4L), restarted.completedGenerations,
+                        "only the retry's exact ACK completes the replay");
+            } finally {
+                releaseFirstReplayFailure.countDown();
+                releaseRetryAck.countDown();
+                releaseOlderCompletion.countDown();
+            }
+        }
+    }
+
+    @Test
+    void olderAckCannotClearReconnectReplayBeforeDurableClear() throws Exception {
+        reconnectRacePriorRows = verifierRows(state.storedTokens());
+        reconnectRacePriorGeneration = state.lastGeneration();
+        restoreReconnectRaceState = true;
+        Path keys = StargateControlPlaneTest.writeKeys(tmp);
+        Path dpSock = tmp.resolve("dp-before-clear-reconnect-race.sock");
+        Path statusFile = tmp.resolve("auth-delivery");
+        Path tokensFile = tmp.resolve("tokens.yaml");
+        Path pepperFile = tmp.resolve("pepper.key");
+        Files.write(pepperFile, StargateControlPlaneTest.TEST_PEPPER);
+        Files.writeString(tokensFile,
+                "tokens:\n  - label: t201-reconnect-restart-marker\n    token: "
+                        + StargateControlPlaneTest.EXAMPLE_HEX + "\n",
+                StandardCharsets.UTF_8);
+        Path runDir = Files.createDirectories(tmp.resolve("run"));
+        var atBeforeClear = new java.util.concurrent.CountDownLatch(1);
+        var releaseOlderCompletion = new java.util.concurrent.CountDownLatch(1);
+        var pauseOlderClear = new java.util.concurrent.atomic.AtomicBoolean();
+        var replayArrived = new java.util.concurrent.CountDownLatch(1);
+        var releaseReplayStale = new java.util.concurrent.CountDownLatch(1);
+        var olderResult = new AtomicReference<TokenLoaderContract.PushResult>();
+        var olderFailure = new AtomicReference<Throwable>();
+        assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0), state.deliveryMarker());
+
+        try (StargateControlPlaneTest.RecordingDp first = StargateControlPlaneTest.RecordingDp.start(
+                    dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"));
+                ReloadTokensClient client = ReloadTokensClient.create(keys, dpSock)) {
+            GrpcReloadChannel channel = new GrpcReloadChannel(client, state, statusFile, () -> {
+                if (pauseOlderClear.compareAndSet(true, false)) {
+                    atBeforeClear.countDown();
+                    try {
+                        if (!releaseOlderCompletion.await(10, TimeUnit.SECONDS)) {
+                            throw new AssertionError("bounded pre-clear race boundary was not released");
+                        }
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new AssertionError("pre-clear race boundary interrupted", interrupted);
+                    }
+                }
+            }, () -> { });
+            byte[] verifier = StargateControlPlaneTest.repeat((byte) 0x2a, 32);
+            assertEquals(4L, channel.push(4L, List.of(verifier)).currentGeneration());
+            assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0), state.deliveryMarker(),
+                    "the initial production SQLite ACK clear commits before the race");
+
+            pauseOlderClear.set(true);
+            Thread olderCompletion = new Thread(() -> {
+                try {
+                    olderResult.set(channel.push(4L, List.of(verifier)));
+                } catch (Throwable failure) {
+                    olderFailure.set(failure);
+                }
+            }, "t201-older-ack-before-clear");
+            olderCompletion.start();
+            assertTrue(atBeforeClear.await(10, TimeUnit.SECONDS),
+                    "the older exact ACK is paused immediately before its durable clear");
+            first.close();
+            try (StargateControlPlaneTest.RecordingDp replay =
+                    StargateControlPlaneTest.RecordingDp.startHeldStaleObserved(
+                            dpSock, keys, keys.resolve("dp.pub"), keys.resolve("cp.pub"),
+                            releaseReplayStale, replayArrived)) {
+                assertTrue(replayArrived.await(10, TimeUnit.SECONDS),
+                        "authenticated reconnect replay reaches the held DP before old clear resumes");
+                var markerWithReplay = state.deliveryMarker();
+                String statusWithReplay = Files.readString(statusFile, StandardCharsets.US_ASCII);
+                StargateControlPlaneTest.StatusCommandResult cliWithReplay =
+                        StargateControlPlaneTest.statusCommandForFile(statusFile, tmp);
+
+                releaseOlderCompletion.countDown();
+                olderCompletion.join(TimeUnit.SECONDS.toMillis(5));
+                assertFalse(olderCompletion.isAlive(), "older exact-ACK completion is bounded");
+                assertEquals(null, olderFailure.get(), "older push does not throw");
+                assertNotNull(olderResult.get());
+                assertEquals(0L, olderResult.get().currentGeneration(),
+                        "the superseded initial ACK is not reported as completed");
+                var markerAfterOlderCompletion = state.deliveryMarker();
+                String statusAfterOlderCompletion = Files.readString(statusFile, StandardCharsets.US_ASCII);
+                StargateControlPlaneTest.StatusCommandResult cliAfterOlderCompletion =
+                        StargateControlPlaneTest.statusCommandForFile(statusFile, tmp);
+
+                releaseReplayStale.countDown();
+                String staleStatus = awaitStatus(statusFile, "STALE_CONFLICT\n", Duration.ofSeconds(10));
+                var markerAfterStale = state.deliveryMarker();
+                int replayRequestsBeforeRestart = replay.requests.size();
+                client.close();
+
+                long generationBeforeRestart = state.lastGeneration();
+                Map<String, byte[]> rowsBeforeRestart = verifierRows(state.storedTokens());
+                var cfg = new StargateControlPlane.BootConfig(tokensFile, pepperFile, keys,
+                        runDir.resolve("control.sock"), dpSock, runDir.resolve("observer.sock"),
+                        Duration.ofSeconds(10), statusFile);
+                String restartStatus;
+                try (StargateControlPlane.BootHandle ignored = StargateControlPlane.bootstrap(
+                        cfg, (action, target, detail) -> { }, state, state)) {
+                    restartStatus = Files.readString(statusFile, StandardCharsets.US_ASCII);
+                }
+                Map<String, byte[]> rowsAfterRestart = verifierRows(state.storedTokens());
+                assertAll("older ACK cannot remove the authenticated replay's production SQLite barrier",
+                        () -> assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                                TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 4), markerWithReplay),
+                        () -> assertEquals("PENDING\n", statusWithReplay),
+                        () -> assertEquals(30, cliWithReplay.exitCode(), cliWithReplay.output()),
+                        () -> assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                                TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 4),
+                                markerAfterOlderCompletion,
+                                "older ACK must not clear the replay's newly committed UNRESOLVED marker"),
+                        () -> assertEquals("PENDING\n", statusAfterOlderCompletion),
+                        () -> assertEquals(30, cliAfterOlderCompletion.exitCode(), cliAfterOlderCompletion.output()),
+                        () -> assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                                TokenLoaderContract.GenerationStore.DeliveryState.STALE, 4), markerAfterStale,
+                                "a stale replay persists over the unresolved restart barrier"),
+                        () -> assertEquals("STALE_CONFLICT\n", staleStatus),
+                        () -> assertEquals(replayRequestsBeforeRestart, replay.requests.size(),
+                                "changed-YAML bootstrap behind STALE issues no reload RPC"),
+                        () -> assertEquals(generationBeforeRestart, state.lastGeneration(),
+                                "changed-YAML bootstrap does not reserve a generation behind STALE"),
+                        () -> assertVerifierRowsEqual(rowsBeforeRestart, rowsAfterRestart),
+                        () -> assertEquals("STALE_CONFLICT\n", restartStatus));
+            } finally {
+                releaseReplayStale.countDown();
+                releaseOlderCompletion.countDown();
+            }
+        }
+    }
+
+    private static Map<String, byte[]> verifierRows(
+            java.util.Collection<TokenLoaderContract.StoredToken> rows) {
+        Map<String, byte[]> copy = new TreeMap<>();
+        for (TokenLoaderContract.StoredToken row : rows) {
+            copy.put(row.label(), row.verifier().clone());
+        }
+        return copy;
+    }
+
+    private static void assertVerifierRowsEqual(Map<String, byte[]> before, Map<String, byte[]> after) {
+        assertEquals(before.keySet(), after.keySet(), "credential row labels remain unchanged");
+        for (String label : before.keySet()) {
+            assertTrue(MessageDigest.isEqual(before.get(label), after.get(label)),
+                    "stored verifier row remains unchanged for " + label);
+        }
+    }
+
+    private String awaitStatus(Path statusFile, String expected, Duration within) throws Exception {
+        long deadline = System.nanoTime() + within.toNanos();
+        String seen = Files.exists(statusFile) ? Files.readString(statusFile, StandardCharsets.US_ASCII) : null;
+        while (!expected.equals(seen) && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+            seen = Files.exists(statusFile) ? Files.readString(statusFile, StandardCharsets.US_ASCII) : null;
+        }
+        return seen;
+    }
+
+    private static final class ObservedGenerationStore implements TokenLoaderContract.GenerationStore {
+        private final SqliteTokenState delegate;
+        private final AtomicInteger prearmAttempts = new AtomicInteger();
+        private final AtomicInteger prearmSuccesses = new AtomicInteger();
+
+        ObservedGenerationStore(SqliteTokenState delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public long lastGeneration() {
+            return delegate.lastGeneration();
+        }
+
+        @Override
+        public void record(long generation) {
+            delegate.record(generation);
+        }
+
+        @Override
+        public TokenLoaderContract.GenerationStore.DeliveryMarker deliveryMarker() {
+            return delegate.deliveryMarker();
+        }
+
+        @Override
+        public boolean prearmDelivery(long generation) {
+            prearmAttempts.incrementAndGet();
+            boolean accepted = delegate.prearmDelivery(generation);
+            if (accepted) {
+                prearmSuccesses.incrementAndGet();
+            }
+            return accepted;
+        }
+
+        @Override
+        public boolean acknowledgeDelivery(long generation) {
+            return delegate.acknowledgeDelivery(generation);
+        }
+
+        @Override
+        public boolean recordStaleDelivery(long generation) {
+            return delegate.recordStaleDelivery(generation);
+        }
+    }
+
     @Test
     void restoredProductionSqliteAuthorityCannotReauthorizeRevokedToken() throws Exception {
+        assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0), state.deliveryMarker(),
+                "the real production SQLite adapter starts with the migrated CLEAR marker");
         Path keys = StargateControlPlaneTest.writeKeys(tmp);
         Files.write(keys.resolve("pepper.key"), StargateControlPlaneTest.TEST_PEPPER);
         Path pepperFile = tmp.resolve("pepper.key");
@@ -1471,6 +2596,7 @@ class T159ProductionAuthorityRecoveryTest {
         // durable DB/configuration still contains generation 1 and the
         // credential that the newer DP authority revoked at generation 2.
         SqliteTokenState restored = state;
+        ObservedGenerationStore observed = new ObservedGenerationStore(restored);
         assertEquals(1L, restored.lastGeneration());
         assertEquals(List.of("restored-old"), restored.storedTokens().stream()
                 .map(TokenLoaderContract.StoredToken::label).toList());
@@ -1503,17 +2629,73 @@ class T159ProductionAuthorityRecoveryTest {
 
             var cfg = new StargateControlPlane.BootConfig(tokensFile, pepperFile, keys,
                     runDir.resolve("control.sock"), runDir.resolve("dp.sock"),
-                    runDir.resolve("observer.sock"), Duration.ofSeconds(10));
+                    runDir.resolve("observer.sock"), Duration.ofSeconds(10), runDir.resolve("auth-delivery"));
             try (StargateControlPlane.BootHandle ignored = StargateControlPlane.bootstrap(
-                    cfg, (action, target, detail) -> { }, restored, restored)) {
+                    cfg, (action, target, detail) -> { }, restored, observed)) {
+                assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.STALE, 1), restored.deliveryMarker(),
+                        "the real stale Go response is durably recorded by production SQLite");
+                assertEquals("STALE_CONFLICT\n", Files.readString(runDir.resolve("auth-delivery"),
+                        StandardCharsets.US_ASCII));
+                assertEquals(1, observed.prearmAttempts.get(), "the initial production RPC is preceded by one prearm");
+                assertEquals(1, observed.prearmSuccesses.get(), "the actual SQLite prearm succeeds");
                 assertEquals(1L, restored.lastGeneration(),
-                        "stale restored content is never relabeled above DP generation 2");
+                    "stale restored content is never relabeled above DP generation 2");
                 String current = Files.readString(stateDir.resolve("dp-snapshot.json"));
                 assertTrue(current.contains("\"generation\":2"));
                 assertTrue(current.contains("\"verifiers\":[]"));
                 assertFalse(current.contains(Base64.getEncoder().encodeToString(revokedVerifier)),
                         "the restored production CP must not reintroduce the revoked verifier");
             }
+
+            // The process restart is the critical boundary: the old channel's
+            // in-memory stale latch is gone, but this is the same production
+            // SQLite authority with both the old row and generation restored.
+            // Each startup receives a distinct valid edit retaining that
+            // credential. On the current implementation, generation 3
+            // overtakes the DP's generation 2 and the real Go process accepts
+            // the restored credential.
+            for (int edit = 1; edit <= 4; edit++) {
+                String addedToken = String.format("%032x", edit);
+                Files.writeString(tokensFile,
+                        "tokens:\n  - label: restored-old\n    token: "
+                                + StargateControlPlaneTest.EXAMPLE_HEX
+                                + "\n  - label: changed-" + edit + "\n    token: " + addedToken + "\n",
+                        StandardCharsets.UTF_8);
+                try (StargateControlPlane.BootHandle restarted = StargateControlPlane.bootstrap(
+                        cfg, (action, target, detail) -> { }, restored, observed)) {
+                    // Preserve each real transition as data for the final
+                    // assertion; do not stop at the first changed load.
+                    String status = Files.readString(runDir.resolve("auth-delivery"), StandardCharsets.US_ASCII);
+                    String snapshot = Files.readString(stateDir.resolve("dp-snapshot.json"));
+                    assertAll("changed-YAML restart " + edit + " remains inhibited by durable SQLite STALE",
+                            () -> assertEquals(1, observed.prearmAttempts.get(),
+                                    "a changed-YAML restart does not dispatch after durable STALE"),
+                            () -> assertEquals(1, observed.prearmSuccesses.get(),
+                                    "no new candidate is durably armed after STALE"),
+                            () -> assertEquals(new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                                    TokenLoaderContract.GenerationStore.DeliveryState.STALE, 1),
+                                    restored.deliveryMarker()),
+                            () -> assertEquals("STALE_CONFLICT\n", status),
+                            () -> assertEquals(1L, restored.lastGeneration()),
+                            () -> assertEquals(List.of("restored-old"), restored.storedTokens().stream()
+                                    .map(TokenLoaderContract.StoredToken::label).toList()),
+                            () -> assertTrue(snapshot.contains("\"generation\":2"), snapshot),
+                            () -> assertTrue(snapshot.contains("\"verifiers\":[]"), snapshot));
+                }
+            }
+
+            String afterChangedLoads = Files.readString(stateDir.resolve("dp-snapshot.json"));
+            assertTrue(afterChangedLoads.contains("\"generation\":2"),
+                    "restart after a stale refusal must not push a changed set that the DP accepts: "
+                            + afterChangedLoads);
+            assertTrue(afterChangedLoads.contains("\"verifiers\":[]"),
+                    "the stale credential remains absent from actual DP authority");
+            assertEquals(1L, restored.lastGeneration(),
+                    "changed YAML after restart cannot promote the restored CP generation");
+            assertEquals(List.of("restored-old"), restored.storedTokens().stream()
+                    .map(TokenLoaderContract.StoredToken::label).toList(),
+                    "blocked startup cannot mutate the durable credential rows");
         } finally {
             Files.write(tmp.resolve("stop"), new byte[0]);
             if (!dp.waitFor(5, TimeUnit.SECONDS)) {
@@ -1525,7 +2707,7 @@ class T159ProductionAuthorityRecoveryTest {
         String authResult = Files.readString(tmp.resolve("auth-result"));
         assertTrue(authResult.contains("generation=2"));
         assertTrue(authResult.contains("authorized=false"),
-                "the real Go verifier rejects the credential from the restored stale CP");
+                "the real Go verifier rejects the credential through all restarted CP attempts");
     }
 
     public static final class Profile implements QuarkusTestProfile {

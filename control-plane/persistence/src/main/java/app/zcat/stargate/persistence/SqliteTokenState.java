@@ -136,6 +136,101 @@ public class SqliteTokenState
         });
     }
 
+    @Override
+    public TokenLoaderContract.GenerationStore.DeliveryMarker deliveryMarker() {
+        return inTransaction(this::readDeliveryMarker);
+    }
+
+    @Override
+    public boolean prearmDelivery(long generation) {
+        requirePositiveGeneration(generation);
+        return inTransaction(() -> {
+            requireFullSynchronous();
+            TokenLoaderContract.GenerationStore.DeliveryMarker current = lockAndReadDeliveryMarker();
+            if (current.state() == TokenLoaderContract.GenerationStore.DeliveryState.STALE
+                    || (current.state() == TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED
+                            && current.generation() != generation)) {
+                return false;
+            }
+            int updated = em.createNativeQuery("UPDATE auth_delivery SET state = 'UNRESOLVED', generation = ?1 "
+                    + "WHERE id = 1 AND (state = 'CLEAR' OR (state = 'UNRESOLVED' AND generation = ?1))")
+                    .setParameter(1, generation)
+                    .executeUpdate();
+            return updated == 1;
+        });
+    }
+
+    @Override
+    public boolean acknowledgeDelivery(long generation) {
+        requirePositiveGeneration(generation);
+        return inTransaction(() -> {
+            requireFullSynchronous();
+            int updated = em.createNativeQuery("UPDATE auth_delivery SET state = 'CLEAR', generation = 0 "
+                    + "WHERE id = 1 AND state = 'UNRESOLVED' AND generation = ?1")
+                    .setParameter(1, generation)
+                    .executeUpdate();
+            return updated == 1;
+        });
+    }
+
+    @Override
+    public boolean recordStaleDelivery(long generation) {
+        requirePositiveGeneration(generation);
+        return inTransaction(() -> {
+            requireFullSynchronous();
+            TokenLoaderContract.GenerationStore.DeliveryMarker current = lockAndReadDeliveryMarker();
+            if (current.state() == TokenLoaderContract.GenerationStore.DeliveryState.STALE) {
+                return current.generation() == generation;
+            }
+            if (current.state() != TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED
+                    || current.generation() != generation) {
+                return false;
+            }
+            int updated = em.createNativeQuery("UPDATE auth_delivery SET state = 'STALE' "
+                    + "WHERE id = 1 AND state = 'UNRESOLVED' AND generation = ?1")
+                    .setParameter(1, generation)
+                    .executeUpdate();
+            return updated == 1;
+        });
+    }
+
+    private TokenLoaderContract.GenerationStore.DeliveryMarker lockAndReadDeliveryMarker() {
+        int locked = em.createNativeQuery("UPDATE auth_delivery SET id = id WHERE id = 1").executeUpdate();
+        if (locked != 1) {
+            throw new IllegalStateException("token store: delivery marker singleton is missing");
+        }
+        return readDeliveryMarker();
+    }
+
+    private TokenLoaderContract.GenerationStore.DeliveryMarker readDeliveryMarker() {
+        @SuppressWarnings("unchecked")
+        java.util.List<Object[]> rows = em.createNativeQuery(
+                "SELECT state, generation FROM auth_delivery WHERE id = 1").getResultList();
+        if (rows.size() != 1) {
+            throw new IllegalStateException("token store: delivery marker singleton is invalid");
+        }
+        try {
+            return new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.valueOf((String) rows.get(0)[0]),
+                    ((Number) rows.get(0)[1]).longValue());
+        } catch (RuntimeException invalid) {
+            throw new IllegalStateException("token store: delivery marker state is invalid", invalid);
+        }
+    }
+
+    private void requireFullSynchronous() {
+        Object value = em.createNativeQuery("PRAGMA synchronous").getSingleResult();
+        if (!(value instanceof Number number) || number.intValue() < 2) {
+            throw new IllegalStateException("token store: SQLite synchronous mode is weaker than FULL");
+        }
+    }
+
+    private static void requirePositiveGeneration(long generation) {
+        if (generation <= 0) {
+            throw new IllegalArgumentException("token delivery generation must be positive");
+        }
+    }
+
     // --- transaction plumbing -----------------------------------------------------
 
     /**

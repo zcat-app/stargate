@@ -140,6 +140,21 @@ public final class TokenLoader {
      * Principle II).
      */
     public void load() {
+        // A restart marker is authoritative before any config-file effect:
+        // changed, empty, missing, or malformed YAML cannot clear uncertainty
+        // or revive credentials without the explicit offline recovery action.
+        final TokenLoaderContract.GenerationStore.DeliveryMarker delivery;
+        try {
+            delivery = generations.deliveryMarker();
+        } catch (RuntimeException unavailable) {
+            // The caller remains healthy and the channel publishes UNKNOWN;
+            // unreadable authority must never permit a YAML-driven update.
+            return;
+        }
+        if (delivery.state() != TokenLoaderContract.GenerationStore.DeliveryState.CLEAR) {
+            return;
+        }
+
         Node root;
         try (Reader reader = Files.newBufferedReader(tokensYaml, StandardCharsets.UTF_8)) {
             root = new Yaml().compose(reader);

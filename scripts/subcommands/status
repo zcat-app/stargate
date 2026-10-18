@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # scripts/subcommands/status — `stargate status`: report the control plane's
-# CURRENT token-delivery state (T187; Constitution II failure table "Report
-# pending delivery, not success"; THREAT-MODEL §5.15).
+# CURRENT token-delivery state (T187/T201; Constitution II failure table
+# "Report pending delivery, not success"; THREAT-MODEL §5.15).
 #
 # WHAT IT READS: one fixed-vocabulary line the running control plane keeps in
 # its private volatile tmpfs file /tmp/stargate-control/auth-delivery, via the
@@ -18,24 +18,16 @@
 # value from the fixed vocabulary is ever printed, never raw file content.
 #
 # STATES:
-#   ACKNOWLEDGED(<generation>)  the data plane durably applied exactly this
-#                               control plane's current credential set; a
-#                               revocation in it is effective for new requests
-#   PENDING                     not acknowledged yet (data plane unreachable or
-#                               no exact acknowledgement); a revocation is NOT
-#                               effective and the DP keeps its last state
-#   STALE_CONFLICT              the data plane refused the credential set as
-#                               stale (it holds newer authority, e.g. after CP
-#                               state loss/restore); NOT applied and not retried.
-#                               Follow the stale-conflict recovery procedure in
-#                               specs/001-tor-route/quickstart.md
-#   UNKNOWN                     this control-plane process has published no
-#                               delivery state: it started no delivery
-#                               (tokens.yaml missing or invalid, or the CP
-#                               state store unavailable), it is still starting,
-#                               or its status write is failing. The CP attempts
-#                               to publish PENDING before its first delivery RPC.
-# UNKNOWN can also occur while a delivery is in flight if status publication fails.
+#   ACKNOWLEDGED(<generation>)  exact DP acknowledgement and committed CP clear
+#   PENDING                     delivery is unresolved; the DP may already have
+#                               installed the candidate if its ACK was lost
+#   STALE_CONFLICT              stale refusal was durably recorded; it blocks
+#                               token loading/delivery across CP restarts
+#   UNKNOWN                     the delivery outcome cannot be established;
+#                               for example, the CP cannot read its durable
+#                               delivery marker. This is a published status,
+#                               distinct from the ABSENT file sentinel below.
+# The CP attempts to publish PENDING before its first delivery RPC.
 #
 # EXIT CODES (stable contract surface, same style as `stargate init`):
 #   0   ACKNOWLEDGED
@@ -208,14 +200,15 @@ fi
 running="$(bounded_compose ps -q --status running "$CONTROL_SERVICE" </dev/null 2>/dev/null)"; rc=$?
 [ "$rc" -eq 124 ] && timed_out
 if [ -z "$running" ]; then
-  echo "control plane: not running (token delivery state unavailable; the data plane keeps its last acknowledged state)"
+  echo "control plane: not running (token delivery state unavailable; the data plane routes using its existing valid credential state)"
   exit "$EXIT_UNAVAILABLE"
 fi
 
-# Distinguish an absent file (the CP published nothing) from a failed read:
-# only the in-container sentinel means absent; any exec/read failure is
-# "unavailable" and claims nothing. The exec's own diagnostics are dropped so
-# nothing but the validated vocabulary below reaches the terminal.
+# Distinguish the absent-file sentinel (the CP published no current status)
+# from literal UNKNOWN (the CP published that it cannot establish the delivery
+# outcome) and from a failed read. Any exec/read failure is "unavailable" and
+# claims nothing. The exec's own diagnostics are dropped so nothing but the
+# validated vocabulary below reaches the terminal.
 # shellcheck disable=SC2016  # $1 expands inside the container's sh, by design.
 state="$(bounded_compose exec -T "$CONTROL_SERVICE" sh -c \
     'if [ -e "$1" ]; then cat -- "$1"; else echo ABSENT; fi' sh "$DELIVERY_STATUS_FILE" \
@@ -229,17 +222,21 @@ if [ "$state" = "ABSENT" ]; then
   echo "token delivery: UNKNOWN (no delivery state published by this control-plane process: it started no delivery, e.g. tokens.yaml missing or invalid; it is still starting; or its status write is failing)"
   exit "$EXIT_UNKNOWN"
 fi
+if [ "$state" = "UNKNOWN" ]; then
+  echo "token delivery: UNKNOWN (the delivery outcome cannot be established from the control plane's current status)"
+  exit "$EXIT_UNKNOWN"
+fi
 
 if [[ "$state" =~ ^ACKNOWLEDGED\(([1-9][0-9]{0,18})\)$ ]]; then
-  echo "token delivery: ACKNOWLEDGED(${BASH_REMATCH[1]}) (the data plane applied this credential set)"
+  echo "token delivery: ACKNOWLEDGED(${BASH_REMATCH[1]}) (exact data-plane acknowledgment and durable control-plane clear)"
   exit "$EXIT_ACKNOWLEDGED"
 fi
 case "$state" in
   PENDING)
-    echo "token delivery: PENDING (not yet acknowledged by the data plane; revocations are NOT effective yet)"
+    echo "token delivery: PENDING (delivery is unresolved; credential application and revocation are not confirmed)"
     exit "$EXIT_PENDING" ;;
   STALE_CONFLICT)
-    echo "token delivery: STALE_CONFLICT (the data plane refused this credential set as stale; NOT applied)"
+    echo "token delivery: STALE_CONFLICT (a stale refusal was durably recorded; token delivery is blocked)"
     echo "See the stale-conflict recovery procedure in specs/001-tor-route/quickstart.md."
     exit "$EXIT_STALE_CONFLICT" ;;
 esac

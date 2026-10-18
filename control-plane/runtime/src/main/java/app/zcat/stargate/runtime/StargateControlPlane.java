@@ -200,7 +200,8 @@ public class StargateControlPlane implements QuarkusApplication {
             monitor.start();
 
             TokenLoader loader = new TokenLoader(cfg.tokensYaml(), pepper, store, generations,
-                    audit, new GrpcReloadChannel(client, cfg.deliveryStatus()), new HmacVerifierMinter(pepper));
+                    audit, new GrpcReloadChannel(client, generations, cfg.deliveryStatus()),
+                    new HmacVerifierMinter(pepper));
             try {
                 loader.load(); // never throws on file input (FR-018); push happens inside, §1.7 last
             } catch (GrpcReloadChannel.IncompatiblePeerVersionException incompatiblePeer) {

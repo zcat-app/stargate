@@ -146,9 +146,9 @@ your token.
 
 ### Check token delivery (and revocation)
 
-A change to `tokens.yaml` — including removing a label to revoke it — is
-**not effective until the data plane acknowledges it**. Check the control
-plane's current delivery state (T187):
+A change to `tokens.yaml` — including removing a label to revoke it — may be
+installed before the CP observes the exact acknowledgment. Check the
+control plane's current delivery state (T187/T201):
 
 ```bash
 scripts/stargate status
@@ -156,39 +156,37 @@ scripts/stargate status
 
 | Output / exit | Meaning |
 |---|---|
-| `ACKNOWLEDGED(<generation>)` / 0 | The data plane durably applied exactly this credential set. A removed token is refused for new requests; already-open connections may finish. |
-| `PENDING` / 30 | Not acknowledged yet (typically the data plane is down or restarting). The control plane keeps redelivering while it runs; **a revocation is not effective yet**. Stop the route (`$COMPOSE stop stargate-dp`) if access must end now. |
-| `STALE_CONFLICT` / 40 | The data plane refused the set because it already holds a newer generation (typically after the control-plane database was lost or restored from an older backup). Nothing was applied and it is not retried. Follow the recovery below. |
-| `UNKNOWN` / 50 | This control-plane process has published no delivery state: it started no delivery (`tokens.yaml` missing or invalid, or its state store unavailable), it is still starting, or its status write is failing. The control plane attempts to publish `PENDING` before each delivery starts; UNKNOWN can also occur while a delivery is in flight if status publication fails. Check `tokens.yaml`, restart `stargate-control`, and check again. |
-| exit 20 | State unavailable: the control plane is not running or its status could not be read. Nothing is claimed about delivery; the data plane keeps serving its last acknowledged state. |
+| `ACKNOWLEDGED(<generation>)` / 0 | The data plane durably applied exactly this credential set before returning its exact acknowledgment, and the control plane committed the matching local clear. A removed token is refused for new requests; already-open connections may finish. |
+| `PENDING` / 30 | Delivery is unresolved. The DP may already have installed the candidate if its acknowledgment was lost. The current CP retries while it remains running; after a CP restart, this state blocks token loading and delivery until explicit offline recovery. It does not prove that a revocation has or has not taken effect. |
+| `STALE_CONFLICT` / 40 | The data plane refused the set as stale and the control plane durably recorded that refusal. It blocks token loading and delivery across restarts. Follow the recovery below. |
+| `UNKNOWN` / 50 | The delivery marker or status is unavailable, no delivery state has been published, or the process is still starting. An unreadable durable marker blocks token loading; UNKNOWN does not claim a lifecycle. |
+| exit 20 | State unavailable: the control plane is not running or its status could not be read. Nothing is claimed about delivery; the data plane continues using its existing valid credential state. |
 | exit 70 | Docker did not answer within `STARGATE_STATUS_TIMEOUT` seconds (default 10) on one of the command's calls; the command stops instead of hanging. Nothing is claimed about delivery. Check the Docker daemon, then run the command again. |
 
-The value is one current state kept in the control plane's private
-memory-backed `/tmp` (volatile, lost when its container stops); it
-records no history, timestamps, labels or counts. The hourly
-`enrolled`/`revoked` operational counts likewise include a change only once
-this running control plane observes the acknowledgement.
+The status file is one current value in the control plane's private memory-backed `/tmp`; it is
+not authority and records no history, timestamps, labels or counts. The durable delivery gate in
+the control-plane SQLite database is separate. The hourly `enrolled`/`revoked` operational counts
+include a change only after exact acknowledgment and committed local clear.
 
 #### Stale-conflict recovery
 
-`STALE_CONFLICT` never renumbers or forces the older set onto the data
-plane automatically, because doing so could silently re-authorize revoked
-tokens from an old backup (Constitution II; THREAT-MODEL §5.15). Choose one:
+Neither `STALE_CONFLICT` nor restart-inherited `PENDING` automatically sends changed token
+content. A stale refusal is durable; if a process exits while delivery is unresolved, the next
+process also blocks because the earlier CP may have received a stale refusal before it could
+persist that result. A lost acknowledgment may mean the DP already installed the candidate. No
+file edit, timeout, reconnect or ordinary restart clears this gate (Constitution II;
+THREAT-MODEL §5.15). Choose an explicit offline recovery path:
 
-1. **Restore the newer control-plane state (preferred).** If you still have
-   the `stargate-control-state` volume content that matches the data plane
-   (the state before the loss/restore), stop `stargate-control`, put that
-   content back (with the matching `stargate-control-config`, and the matching
-   `stargate-keys` pepper/IPC keys if those were replaced too), start it
-   again, and confirm
-   `scripts/stargate status` reports `ACKNOWLEDGED(<generation>)`. Then
-   re-apply any intended `tokens.yaml` change and check again.
-2. **Deliberately adopt the control plane's current set (explicit
-   rollback).** This can re-authorize tokens that the newer data-plane state
-   had revoked, so first make sure `tokens.yaml` lists only tokens you want
-   valid. Stop both planes (`$COMPOSE stop stargate-control stargate-dp`;
-   open connections end), then move the data plane's active snapshot aside
-   without editing it:
+1. **Restore the newer control-plane state (preferred).** Stop both planes. Restore the
+   `stargate-control-state` volume that matches the data plane, with its matching
+   `stargate-control-config` and `stargate-keys` pepper/IPC keys if those were replaced. If the
+   restored database still contains an unresolved or stale delivery marker, explicitly clear
+   only that marker using the procedure below. Start matching peers and wait for the exact
+   acknowledgment and verified credential outcomes before treating recovery as complete.
+2. **Deliberately adopt the selected control-plane set (explicit rollback).** This can
+   re-authorize credentials that the newer data-plane state had revoked. First verify the
+   intended `tokens.yaml`, preserve the newer CP/DP state, stop both planes (open connections
+   end), and move the active data-plane snapshot aside without editing it:
 
    ```bash
    # Resolve the volume by Compose label (never a guessed name); PROJECT is the
@@ -196,17 +194,82 @@ tokens from an old backup (Constitution II; THREAT-MODEL §5.15). Choose one:
    PROJECT=${STARGATE_PROJECT:-stargate}
    DP_VOL=$(docker volume ls -q --filter "label=com.docker.compose.project=${PROJECT}" \
      --filter "label=com.docker.compose.volume=stargate-dp-state")
-   echo "$DP_VOL"   # must be exactly one volume name; stop here otherwise
+   test "$(printf '%s\n' "$DP_VOL" | sed '/^$/d' | wc -l)" -eq 1 || { echo 'expected exactly one DP state volume' >&2; exit 1; }
    DP_STATE=$(docker volume inspect "$DP_VOL" --format '{{ .Mountpoint }}')
    sudo mv "${DP_STATE}/dp-snapshot.json" "${DP_STATE}/dp-snapshot.json.stale-conflict"
-   $COMPOSE start stargate-dp stargate-control
-   scripts/stargate status
    ```
 
-   The data plane admits nobody until the control plane reseeds it. Proceed
-   only after the status shows `ACKNOWLEDGED(<generation>)` and a removed
-   token is actually refused. Keep or securely delete the moved-aside file
-   deliberately; it holds verifiers of the newer state.
+   Resolve the unique matching `stargate-control-state` volume using the same Compose project
+   label and `label=com.docker.compose.volume=stargate-control-state`; identify its existing
+   `control.db`. Do not guess volume names or proceed if zero or multiple matches exist. After
+   preserving the original database owner and mode, run the
+   following bounded host operation as the database owner. It accepts only the fixed existing
+   `control.db` path and the literal confirmation operand. Root invocation imports Python's
+   SQLite module before entering the state-volume directory, chroots this one process to that
+   directory, clears supplementary groups, then drops to the database owner's GID/UID before
+   opening the fixed file. A matching nonroot database owner may run it without the identity
+   transition. It does not create a missing database or query credentials.
+
+   ```bash
+   DB_PATH=/resolved/existing/state-volume/control.db
+   timeout 10s python3 - "$DB_PATH" CLEAR-UNRESOLVED-TOKEN-DELIVERY <<'PY'
+   import os, sqlite3, stat, sys
+
+   db = os.path.abspath(sys.argv[1])
+   if len(sys.argv) != 3 or os.path.basename(db) != "control.db" or sys.argv[2] != "CLEAR-UNRESOLVED-TOKEN-DELIVERY":
+       raise SystemExit("refused: fixed path and explicit confirmation required")
+   info = os.stat(db, follow_symlinks=False)
+   if not stat.S_ISREG(info.st_mode):
+       raise SystemExit("refused: control.db must be a regular file")
+   owner_uid, owner_gid = info.st_uid, info.st_gid
+   root = os.path.dirname(db)
+   if os.geteuid() == 0:
+       os.chroot(root)
+       os.chdir("/")
+       os.setgroups([])
+       os.setgid(owner_gid)
+       os.setuid(owner_uid)
+       db = "/control.db"
+   else:
+       if os.geteuid() != owner_uid:
+           raise SystemExit("refused: run as the database owner")
+       os.chdir(root)
+       db = "control.db"
+
+   con = sqlite3.connect("file:" + db + "?mode=rw", uri=True, timeout=2.0)
+   try:
+       con.execute("PRAGMA busy_timeout=2000")
+       con.execute("PRAGMA synchronous=FULL")
+       version = con.execute("SELECT version FROM flyway_schema_history WHERE version='003' AND success=1").fetchone()
+       ddl = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='auth_delivery'").fetchone()
+       required = ("ID = 1", "STATE IN ('CLEAR','UNRESOLVED','STALE')", "GENERATION >= 0",
+                   "STATE = 'CLEAR' AND GENERATION = 0", "STATE IN ('UNRESOLVED','STALE') AND GENERATION > 0")
+       normalized_ddl = " ".join(ddl[0].upper().split()) if ddl and ddl[0] else ""
+       columns = {row[1] for row in con.execute("PRAGMA table_info(auth_delivery)")}
+       rows = con.execute("SELECT id,state,generation FROM auth_delivery").fetchall()
+       if not version or not ddl or any(item not in normalized_ddl for item in required) or not {"id", "state", "generation"}.issubset(columns) or len(rows) != 1:
+           raise SystemExit("refused: expected T201 V003 singleton schema")
+       row_id, state, generation = rows[0]
+       if row_id != 1 or state not in ("CLEAR", "UNRESOLVED", "STALE") or not isinstance(generation, int) or generation < 0:
+           raise SystemExit("refused: unknown delivery marker")
+       if (state == "CLEAR" and generation != 0) or (state != "CLEAR" and generation <= 0):
+           raise SystemExit("refused: invalid delivery marker")
+       con.execute("BEGIN IMMEDIATE")
+       con.execute("UPDATE auth_delivery SET state='CLEAR', generation=0 WHERE id=1")
+       con.commit()
+   finally:
+       con.close()
+   print("delivery gate cleared; restart matching peers and verify exact acknowledgment and credential outcomes")
+   PY
+   ```
+
+   After the explicit clear, start both matching peers and confirm `scripts/stargate status`
+   reports `ACKNOWLEDGED(<generation>)`; verify the intended credential outcomes. Moving the
+   DP snapshot aside makes the DP deny admission until valid authority is durably installed. A
+   lost response can still leave status `PENDING` even after DP installation, so do not treat
+   recovery as complete until the exact acknowledgment is observed.
+   Keep or securely delete the moved-aside file deliberately; it holds verifiers of the newer
+   state.
 
 ---
 

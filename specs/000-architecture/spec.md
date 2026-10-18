@@ -284,8 +284,11 @@ service Control {
   The data plane stores only the *current* generation; older generations
   are dropped (Principle III — no per-user history). **(T092 / sol-review
   B5+M1)** the verifier is `HMAC-SHA-256(pepper, token)` (no per-token
-  salt); `ReloadTokensResponse` carries `current_generation` so a stale CP
-  reconciles and retries. The detailed contract lives in
+  salt); `ReloadTokensResponse.current_generation` is diagnostic and never
+  authorizes CP renumbering. The CP durably prearms delivery before each RPC;
+  after restart, unresolved or stale delivery blocks token loading until
+  explicit offline recovery. Same-process retries and acknowledged peer
+  recovery remain supported. The detailed contract lives in
   `specs/001-tor-route/contracts/control-grpc.md` §"ReloadTokens" and the
   pepper/verifier lifecycle in `specs/001-tor-route/data-model.md` §1.
 - `StatusResponse { repeated ProtocolStatus per_protocol; AggregateCounters counters; }`  
@@ -469,13 +472,14 @@ CREATE TABLE token_generation (
 ```
 
 > Added by T092 / sol-review M1. The source of truth for the monotonic
-> `ReloadTokens` generation, so a control-plane restart proposes `last + 1`
-> instead of restarting at 1 (which would be stale the moment the data
-> plane accepted any generation ≥ 1 and would silently revoke every
-> client). Read at CP start; bumped after a successful `tokens.yaml` parse.
-> If the row is absent (CP DB wiped) the CP reconciles against the data
-> plane's reported `current_generation` rather than guessing. Full
-> semantics in `specs/001-tor-route/data-model.md` §1.8.
+> `ReloadTokens` generation. The CP reads it only after its durable auth-delivery
+> marker permits token loading, then bumps it after a successful `tokens.yaml`
+> parse. Before every actual reload RPC it commits `UNRESOLVED(G)`; exact
+> acknowledgment plus a committed conditional clear removes that marker. A CP
+> restart with `UNRESOLVED` or `STALE` does not replay or parse changed YAML
+> until explicit offline recovery. `current_generation` is diagnostic and does
+> not authorize renumbering. Full semantics are in
+> `specs/001-tor-route/data-model.md` §1.8.
 
 **What is deliberately NOT in this schema** (Principle III):
 

@@ -93,11 +93,44 @@ public final class TokenLoaderContract {
      */
     public interface GenerationStore {
 
+        /** The only durable token-delivery states; this is current state, not a history. */
+        enum DeliveryState {
+            CLEAR,
+            UNRESOLVED,
+            STALE
+        }
+
+        /** Current persisted gate and its candidate generation (zero only for CLEAR). */
+        record DeliveryMarker(DeliveryState state, long generation) {
+            public DeliveryMarker {
+                if (state == null || generation < 0
+                        || (state == DeliveryState.CLEAR && generation != 0)
+                        || (state != DeliveryState.CLEAR && generation == 0)) {
+                    throw new IllegalArgumentException("invalid token delivery marker");
+                }
+            }
+        }
+
         /** Last-assigned generation; {@code 0} = none (§1.8). */
         long lastGeneration();
 
         /** Persists the generation assigned to the load just written. */
         void record(long generation);
+
+        /** Reads the one durable delivery marker; storage/shape failures propagate. */
+        DeliveryMarker deliveryMarker();
+
+        /**
+         * Durably arms this complete candidate before an RPC. Returns false
+         * when an absorbing STALE or a different unresolved generation blocks it.
+         */
+        boolean prearmDelivery(long generation);
+
+        /** Clears only an UNRESOLVED marker for this exact acknowledged generation. */
+        boolean acknowledgeDelivery(long generation);
+
+        /** Records STALE only from the matching UNRESOLVED marker; STALE is absorbing. */
+        boolean recordStaleDelivery(long generation);
     }
 
     /**

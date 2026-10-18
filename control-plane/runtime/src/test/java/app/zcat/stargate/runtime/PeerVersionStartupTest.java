@@ -169,6 +169,8 @@ class PeerVersionStartupTest {
 
     private static final class State implements TokenLoaderContract.ConfiguredTokenStore,
             TokenLoaderContract.GenerationStore {
+        private TokenLoaderContract.GenerationStore.DeliveryMarker delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0);
         @Override public Collection<TokenLoaderContract.StoredToken> storedTokens() { return List.of(); }
         @Override public void begin() {}
         @Override public void upsert(String label, byte[] verifier) {}
@@ -176,5 +178,30 @@ class PeerVersionStartupTest {
         @Override public void commit() {}
         @Override public long lastGeneration() { return 0; }
         @Override public void record(long generation) {}
+        @Override public TokenLoaderContract.GenerationStore.DeliveryMarker deliveryMarker() { return delivery; }
+        @Override public boolean prearmDelivery(long generation) {
+            if (delivery.state() == TokenLoaderContract.GenerationStore.DeliveryState.STALE
+                    || (delivery.state() == TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED
+                            && delivery.generation() != generation)) return false;
+            delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, generation);
+            return true;
+        }
+        @Override public boolean acknowledgeDelivery(long generation) {
+            if (delivery.state() != TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED
+                    || delivery.generation() != generation) return false;
+            delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0);
+            return true;
+        }
+        @Override public boolean recordStaleDelivery(long generation) {
+            if (delivery.state() == TokenLoaderContract.GenerationStore.DeliveryState.STALE)
+                return delivery.generation() == generation;
+            if (delivery.state() != TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED
+                    || delivery.generation() != generation) return false;
+            delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.STALE, generation);
+            return true;
+        }
     }
 }
