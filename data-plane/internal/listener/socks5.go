@@ -117,6 +117,12 @@ type Deps struct {
 // It owns conn for the connection's whole life and closes it on every
 // path.
 func HandleConn(conn net.Conn, d *Deps) {
+	handleConn(conn, d, func() {})
+}
+
+// handleConn is the private serving path that can notify the accept owner
+// when framing completes, before the byte-pipe phase begins.
+func handleConn(conn net.Conn, d *Deps, framingComplete func()) {
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(inboundHandshakeTimeout))
 
@@ -126,7 +132,7 @@ func HandleConn(conn net.Conn, d *Deps) {
 	}
 	switch first[0] {
 	case socks5Version:
-		handleSOCKS5(conn, d)
+		handleSOCKS5(conn, d, framingComplete)
 	default:
 		// Unsupported ingress, including HTTP C, closes before auth,
 		// counters or upstream dial (T173; Constitution III). Silent close
@@ -139,7 +145,7 @@ func HandleConn(conn net.Conn, d *Deps) {
 // handleSOCKS5 runs the SOCKS5 path: method negotiation (RFC 1928 §3),
 // username/password sub-negotiation (RFC 1929), then the request-phase
 // read (RFC 1928 §4) and the forward handoff.
-func handleSOCKS5(conn net.Conn, d *Deps) {
+func handleSOCKS5(conn net.Conn, d *Deps, framingComplete func()) {
 	// -- Method negotiation: USERNAME/PASSWORD is the only method v1
 	// selects; a client not offering it (NO_AUTH-only, empty list) gets
 	// the exact 2-byte `05 FF` and a close — the data plane never
@@ -190,6 +196,7 @@ func handleSOCKS5(conn net.Conn, d *Deps) {
 		return
 	}
 
+	framingComplete()
 	// Byte-pipe phase from here: no idle deadline (contracts/
 	// socks5-auth.md §"Deadlines" — the connection lives until either
 	// end closes; T025b).

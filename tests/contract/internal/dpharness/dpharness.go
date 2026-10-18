@@ -36,6 +36,7 @@
 package dpharness
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net"
 	"os"
@@ -48,6 +49,12 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
+
+	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
 	"github.com/zcat-app/stargate/tests/contract/internal/fakecp"
 )
 
@@ -60,6 +67,9 @@ type Harness struct {
 	ProxyAddr        string // 127.0.0.1:<port>; STARGATE_LISTEN_ADDR
 	UpstreamAddr     string // loopback fake upstream (fake_socks5_tor); empty in tests that don't forward
 	IPCDir           string // dir hosting dp.sock + where control.sock is dialed
+	StateDir         string // private directory holding the acknowledged auth snapshot
+	TempDir          string // private /tmp directory passed to the child as TMPDIR
+	AbsTmpProbePath  string // one reserved absolute /tmp leaf observed without walking shared-host paths
 	KeysDir          string // inter-plane key set (T130: dp.sock dials need CP-shaped TLS creds)
 	Journal          *LockedBuffer
 	PID              int
@@ -67,6 +77,9 @@ type Harness struct {
 	// CP is the TLS fake control plane booted by WithControlPlane; nil
 	// otherwise. The DP dials it over the §4 mutual-pin TLS handshake.
 	CP *fakecp.Server
+	// RPCRequests records the actual DP-to-CP WatchEvents request payloads
+	// and incoming metadata when WithControlPlaneRequestCapture is selected.
+	RPCRequests *RPCRequestCapture
 }
 
 // Option configures Start at construction time. The zero Option set
@@ -78,8 +91,9 @@ type startConfig struct {
 	counterClock           *time.Time
 	countersDisabled       bool
 	beforeBoot             func(ipcDir string)
-	upstream               string // empty = use production default (tor:9050)
+	upstream               string // empty = use production default (unix:///run/stargate-tor/tor-socks.sock)
 	controlPlane           bool   // seed inter-plane keys + host the TLS fake CP
+	controlPlaneCapture    bool   // capture actual WatchEvents request messages/metadata
 	suppressFailureJournal bool
 }
 
@@ -120,10 +134,10 @@ func WithBeforeBoot(fn func(ipcDir string)) Option {
 	return func(c *startConfig) { c.beforeBoot = fn }
 }
 
-// WithUpstream overrides the production tor:9050 dial target with a
-// loopback address (typically the dial addr of a fake_socks5_tor.Server
-// from tests/integration). This is the test-defined choke point T047
-// and T050 must honour; the env-var interface it implies
+// WithUpstream overrides the production Unix adapter using the existing
+// synthetic loopback-to-Unix test fixture (typically the dial addr of a
+// fake_socks5_tor.Server from tests/integration). This is the test-defined
+// choke point T047 and T050 must honour; the env-var interface it implies
 // (STARGATE_TOR_SOCKS_ADDR) is the new contract surface this option pins.
 func WithUpstream(addr string) Option {
 	return func(c *startConfig) { c.upstream = addr }
@@ -146,6 +160,17 @@ func WithUpstream(addr string) Option {
 // more.
 func WithControlPlane() Option {
 	return func(c *startConfig) { c.controlPlane = true }
+}
+
+// WithControlPlaneRequestCapture hosts the same mutually-pinned TLS Events
+// service but retains each real WatchEvents request in a bounded private
+// capture for privacy contract tests. The observed fixture never injects
+// events, so the DP's ordinary request stream remains independent of CP data.
+func WithControlPlaneRequestCapture() Option {
+	return func(c *startConfig) {
+		c.controlPlane = true
+		c.controlPlaneCapture = true
+	}
 }
 
 // WithSuppressFailureJournal prevents raw child output from being printed
@@ -202,6 +227,29 @@ func Start(t *testing.T, opts ...Option) *Harness {
 	}
 	t.Cleanup(func() { os.RemoveAll(ipcDir) })
 	stateDir := t.TempDir()
+	var tempDir string
+	if cfg.controlPlaneCapture {
+		tempDir, err = os.MkdirTemp("/tmp", "stargate-contract-private-tmp-")
+		if err != nil {
+			t.Fatalf("create private /tmp observation directory: %v", err)
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(tempDir) })
+	}
+	var absTmpProbePath string
+	if cfg.controlPlaneCapture {
+		probe, err := os.CreateTemp("/tmp", "stargate-contract-absolute-tmp-probe-")
+		if err != nil {
+			t.Fatalf("reserve exact absolute /tmp observation path: %v", err)
+		}
+		absTmpProbePath = probe.Name()
+		if err := probe.Close(); err != nil {
+			t.Fatalf("close reserved absolute /tmp observation path: %v", err)
+		}
+		if err := os.Remove(absTmpProbePath); err != nil {
+			t.Fatalf("clear reserved absolute /tmp observation path: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Remove(absTmpProbePath) })
+	}
 	keysDir := t.TempDir()
 	// Write the test pepper to the keys dir so the booted DP's
 	// candidate-side HMAC (T044) and MintToken agree on the verifier
@@ -237,9 +285,12 @@ func Start(t *testing.T, opts ...Option) *Harness {
 		"STARGATE_LISTEN_ADDR="+proxyAddr,
 		"STARGATE_TRAFFIC_COUNTERS=true",
 	)
+	if tempDir != "" {
+		env = append(env, "TMPDIR="+tempDir)
+	}
 	if cfg.upstream != "" {
 		// Test-defined env-var interface: T047 / T050 must read this
-		// and override the production tor:9050 default when set.
+		// and override the production unix:///run/stargate-tor/tor-socks.sock default when set.
 		// The Unix adapter matches production; no DP destination DNS or TCP dial.
 		env = append(env, "STARGATE_TOR_SOCKS_ADDR="+UnixUpstream(t, cfg.upstream))
 	}
@@ -252,7 +303,10 @@ func Start(t *testing.T, opts ...Option) *Harness {
 	cmd.Env = env
 	cmd.Stderr = journal
 	cmd.Stdout = journal
-	if cfg.controlPlane {
+	var rpcRequests *RPCRequestCapture
+	if cfg.controlPlaneCapture {
+		rpcRequests = startControlPlaneRequestCapture(t, ipcDir, keysDir)
+	} else if cfg.controlPlane {
 		hCP = fakecp.StartTLS(t, ipcDir, keysDir)
 	}
 	if cfg.beforeBoot != nil {
@@ -288,12 +342,154 @@ func Start(t *testing.T, opts ...Option) *Harness {
 		ProxyAddr:        proxyAddr,
 		UpstreamAddr:     cfg.upstream,
 		IPCDir:           ipcDir,
+		StateDir:         stateDir,
+		TempDir:          tempDir,
+		AbsTmpProbePath:  absTmpProbePath,
 		KeysDir:          keysDir,
 		Journal:          journal,
 		PID:              cmd.Process.Pid,
 		Cmd:              cmd,
 		CP:               hCP,
+		RPCRequests:      rpcRequests,
 	}
+}
+
+const (
+	maxCapturedWatchRequests = 8
+	maxCapturedRPCBytes      = 16 << 10
+	maxCapturedMetadataItems = 64
+)
+
+// CapturedRPCRequest is one bounded, actual request received by the test CP.
+// Payload is the deterministic protobuf wire encoding; metadata is copied
+// from the authenticated stream context. Neither contains DP-local pointers.
+type CapturedRPCRequest struct {
+	Method   string
+	Payload  []byte
+	Metadata map[string][]string
+}
+
+// RPCRequestCapture is bounded by the finite WatchEvents connection cardinality
+// and fails closed if a capture is omitted or grows beyond test limits.
+type RPCRequestCapture struct {
+	mu       sync.Mutex
+	requests []CapturedRPCRequest
+	err      string
+}
+
+func (c *RPCRequestCapture) Snapshot() ([]CapturedRPCRequest, string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]CapturedRPCRequest, len(c.requests))
+	for i, req := range c.requests {
+		out[i] = CapturedRPCRequest{Method: req.Method, Payload: append([]byte(nil), req.Payload...), Metadata: make(map[string][]string, len(req.Metadata))}
+		for key, values := range req.Metadata {
+			out[i].Metadata[key] = append([]string(nil), values...)
+		}
+	}
+	return out, c.err
+}
+
+// Record observes one actual WatchEvents request received by the fake CP.
+func (c *RPCRequestCapture) Record(req *grpcpb.WatchEventsRequest, md metadata.MD) error {
+	payload, err := (proto.MarshalOptions{Deterministic: true}).Marshal(req)
+	if err != nil {
+		return c.fail("WatchEvents request capture marshal failed")
+	}
+	if len(payload) > maxCapturedRPCBytes || len(md) > maxCapturedMetadataItems {
+		return c.fail("WatchEvents request capture limit exceeded")
+	}
+	copyMD := make(map[string][]string, len(md))
+	items := 0
+	metadataBytes := 0
+	for key, values := range md {
+		items += 1 + len(values)
+		metadataBytes += len(key)
+		for _, value := range values {
+			metadataBytes += len(value)
+		}
+		copyMD[key] = append([]string(nil), values...)
+	}
+	if items > maxCapturedMetadataItems || metadataBytes > maxCapturedRPCBytes-len(payload) {
+		return c.fail("WatchEvents request capture limit exceeded")
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.err != "" {
+		return fmt.Errorf("%s", c.err)
+	}
+	if len(c.requests) >= maxCapturedWatchRequests {
+		c.err = "WatchEvents request capture limit exceeded"
+		return fmt.Errorf("%s", c.err)
+	}
+	c.requests = append(c.requests, CapturedRPCRequest{
+		Method:   "/stargate.v1.Events/WatchEvents",
+		Payload:  payload,
+		Metadata: copyMD,
+	})
+	return nil
+}
+
+// fail records a fixed-size observer error so rejected captures cannot be
+// mistaken for a complete snapshot and untrusted metadata cannot inflate the
+// retained diagnostic. This affects test evidence collection only.
+func (c *RPCRequestCapture) fail(message string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.err == "" {
+		c.err = message
+	}
+	return fmt.Errorf("%s", c.err)
+}
+
+type requestCaptureEventsServer struct {
+	grpcpb.UnimplementedEventsServer
+	capture *RPCRequestCapture
+}
+
+func (s *requestCaptureEventsServer) WatchEvents(req *grpcpb.WatchEventsRequest, stream grpcpb.Events_WatchEventsServer) error {
+	md, _ := metadata.FromIncomingContext(stream.Context())
+	if err := s.capture.Record(req, md); err != nil {
+		return err
+	}
+	<-stream.Context().Done()
+	return nil
+}
+
+func startControlPlaneRequestCapture(t *testing.T, ipcDir, keysDir string) *RPCRequestCapture {
+	t.Helper()
+	cpPriv, err := fakecp.LoadSigner(filepath.Join(keysDir, "cp.priv"))
+	if err != nil {
+		t.Fatalf("request-capture CP: load seeded cp.priv: %v", err)
+	}
+	cert, err := fakecp.SelfSigned(cpPriv, "stargate-cp")
+	if err != nil {
+		t.Fatalf("request-capture CP: derive pinned certificate: %v", err)
+	}
+	tlsConfig := &tls.Config{
+		Certificates:          []tls.Certificate{cert},
+		InsecureSkipVerify:    true, //nolint:gosec // exact peer pin below is the fixture trust decision
+		VerifyPeerCertificate: fakecp.PinVerifier(filepath.Join(keysDir, "dp.pub")),
+		ClientAuth:            tls.RequireAnyClientCert,
+		MinVersion:            tls.VersionTLS13,
+		NextProtos:            []string{"h2"},
+	}
+	socketPath := filepath.Join(ipcDir, "control.sock")
+	_ = os.Remove(socketPath)
+	lis, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("request-capture CP: listen on control.sock: %v", err)
+	}
+	srv := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
+	capture := &RPCRequestCapture{}
+	grpcpb.RegisterEventsServer(srv, &requestCaptureEventsServer{capture: capture})
+	go func() { _ = srv.Serve(lis) }()
+	t.Cleanup(func() {
+		srv.GracefulStop()
+		_ = lis.Close()
+		_ = os.Remove(socketPath)
+	})
+	return capture
 }
 
 // RequireFile content-gates a sub-test on a file existing. Skips (never

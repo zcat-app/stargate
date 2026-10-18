@@ -234,13 +234,8 @@ func runWithCounters(newCounters func() *audit.Counters) int {
 	// (FR-008).
 	acceptErr := make(chan error, 1)
 	go func() {
-		for {
-			conn, err := proxyLis.Accept()
-			if err != nil {
-				acceptErr <- err
-				return
-			}
-			go listener.HandleConn(conn, deps)
+		if err := listener.Serve(ctx, proxyLis, deps); err != nil {
+			acceptErr <- err
 		}
 	}()
 

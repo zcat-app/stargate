@@ -435,6 +435,12 @@ def main() -> int:
         if not pkgs:
             continue
         test_cmd = ["go", "test", "-json", "-count=1", "-race"]
+        # The contract module includes two 251s route-timeout tests before
+        # SC-005's required 60s authenticated hold. Go's package timeout
+        # covers the whole module invocation, so keep that suite's complete
+        # observation window intact (T189); other modules retain Go's default.
+        if mod == "tests/contract":
+            test_cmd += ["-timeout=12m"]
         if run_tags:
             test_cmd += ["-tags", ",".join(run_tags)]
         test_cmd.append("./...")

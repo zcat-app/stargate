@@ -164,7 +164,7 @@ Fields:
 |---------------|------------------|--------------------------------------------------------------------------------------|
 | `generation`  | `uint64`         | Monotonic; assigned by the control plane from its persisted record (§1.7).           |
 | `verifiers`   | `[]Verifier`     | The complete current set. Replaces the previous generation atomically.               |
-| `loadedAt`    | `time.Time`      | Current snapshot creation time; not an expiry or an event-history record. Never emitted to diagnostics. |
+| `loadedAt`    | `time.Time`      | Time when the last authority-changing generation was applied. Exact replay preserves it; it is not the time of the latest snapshot rewrite or an expiry timestamp. Never emitted to diagnostics. |
 
 Replacement semantics: the data plane's `tokenStore` holds a single
 `*Generation` pointer guarded by an atomic load/store. `ReloadTokens`

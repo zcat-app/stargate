@@ -7,46 +7,36 @@
 // Covers:
 //
 //	(a) no token bytes in any auth-failure response capture,
-//	(b) constant-time comparison — two distinct invalid passwords of
+//	(b) coarse timing sanity check — two distinct invalid passwords of
 //	    equal length yield close-to-equal latency distributions,
 //	(c) slot-invariance — auth-success outcome is independent of which
 //	    verifier slot matches,
-//	(d) no per-request journal entry on auth failure,
+//	(d) no auth-failure request data retained in state, descriptor targets,
+//	    private/absolute /tmp observations, or captured RPC payload/metadata,
 //	(e) rejection of same-host NO_AUTH-only clients (canonical gate
 //	    is T023's demux_test.go; re-asserted here for contract-document
 //	    completeness — the invariant's table row groups it under this
 //	    suite).
 //
-// Tests-first (Constitution Principle VII) for T044
-// (data-plane/internal/auth/token.go — HMAC-SHA-256 verification + the
-// constant-time comparison loop across the full token list). The test
-// self-skips until T042/T044/T045/T046/T050 land; once present, a
+// Tests-first (Constitution Principle VII) for T044 authentication
+// behavior. The full-set comparison requirement remains normative; neither
+// this timing band nor the reference helper establishes production loop coverage.
+// The test self-skips until T042/T044/T045/T046/T050 land; once present, a
 // leak regression is FAIL, not SKIP.
 //
 // T093 (T092 / sol-review B5+M1) note on the timing sub-tests (b)/(c):
-// the verifier is now HMAC-SHA-256 under a single shared pepper, NOT
-// argon2id. The candidate's tag is computed ONCE per request and
-// compared against every verifier (data-model.md §1.5); HMAC compare is
-// sub-microsecond, so a userland network-timing band CANNOT distinguish
-// a short-circuit from a full-scan loop the way the prior argon2id
-// cost model (4 × ~50 ms ops) could. The timing assertion (b) therefore
-// degenerates to a coarse sanity check (it still catches a length-
-// dependent early-out, which is milliseconds-scale); the slot-
-// invariance assertion (c) becomes a FUNCTIONAL check (auth succeeds at
-// every slot) whose timing band passes trivially under HMAC. The
-// load-bearing constant-time property — "the comparison loop visits
-// every verifier, no short-circuit on first match" — is NOT catchable
-// by these userland timing tests under HMAC and is redteam residue
-// (stargate-redteam + the data-plane/internal/auth unit test that
-// instruments the loop). T093's Go HMAC unit test pins the
-// one-hash-per-candidate + full-set-compare properties at the unit
-// level; this file keeps the leak-surface (a/d) and the coarse timing
-// (b/c) regression lines.
+// authentication now uses HMAC-SHA-256 under a shared pepper, not the
+// retired Argon2id design. The measured network timing includes loopback
+// and scheduling noise around the HMAC work.
+// These tests check response bytes, functional authentication outcomes and coarse network timing; they do not instrument production verifier visits.
+// An early return after the first matching verifier can preserve all tested authentication outcomes, and HMAC comparison work may be hidden by network and scheduling noise.
+// The separate HMAC unit tests execute a reference helper; they are not instrumentation of TokenVerifier.VerifyPassword.
+// The 25% median band permits up to three attempts; it is a coarse sanity check and does not prove a constant-time bound.
+// The full-set comparison requirement remains normative; neither this timing band nor the reference helper establishes production loop coverage.
 //
 // T024 already gates auth-SUCCESS byte shape; this file owns the
-// failure-path leak surface and the statistical constant-time / slot-
-// invariance assertions T024 explicitly deferred (see T024
-// §Out-of-scope).
+// failure-path leak surface and the coarse timing / slot-outcome checks
+// T024 explicitly deferred (see T024 §Out-of-scope).
 package socks5
 
 import (
@@ -54,21 +44,29 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"net"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
 	grpcpb "github.com/zcat-app/stargate/proto/stargate/v1/grpcpb"
 	"github.com/zcat-app/stargate/tests/contract/internal/dpharness"
+	"github.com/zcat-app/stargate/tests/integration"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 // timingMeasureRounds is the per-distribution sample count for the
-// constant-time sub-tests (the DP's HMAC work is ~1µs; the measured
+// timing-sanity sub-tests (the DP's HMAC work is ~1µs; the measured
 // ~80µs is loopback RTT and scheduling, so only sample count and
 // interleaving fight the noise). 32 rounds — sized for the retired
 // argon2id cost — left per-distribution medians swinging ±40% even
@@ -80,17 +78,15 @@ const timingMeasureRounds = 256
 // set of distributions whose medians sit within the band (or the last
 // attempt). Best-of-N is the fixture response to transient host load
 // (verify.sh runs sibling suites concurrently; observed medians swing
-// ±60% between attempts on a contended box). Detection-floor trade,
-// stated explicitly (r1 review Finding 2): the retry re-rolls NOISE, so
-// a deterministic gross leak — the ≥4× short-circuit class this band
-// exists for — is outside ±25% in every attempt and still fails; but a
-// MARGINAL real difference in the ~1.25-1.5× range can now pass if one
+// ±60% between attempts on a contended box). The 25% median band permits
+// up to three attempts; it is a coarse sanity check and does not prove a
+// constant-time bound. A marginal real difference can pass if one
 // attempt's noise compresses it inside the band, where the pre-lift
 // single-shot form would have failed. That residual weakening is the
-// accepted price of running a ±25% userland band on shared CI hardware
-// at all; the rigorous constant-time property remains pinned at the
-// unit level (data-plane/internal/auth). The band constants are
-// untouched.
+// accepted price of running a ±25% userland band on shared CI hardware.
+// The full-set comparison requirement remains normative; neither this
+// timing band nor the reference helper establishes production loop coverage.
+// The band constants are untouched.
 func measureUntilInBand(measure func() [][]time.Duration) [][]time.Duration {
 	var last [][]time.Duration
 	for attempt := 0; attempt < 3; attempt++ {
@@ -206,16 +202,11 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 	})
 
 	// (b) AuthFailure_ConstantTimeLatency_TwoInvalidPasswords: with one
-	// token loaded, time N=8 auth-failure attempts for each of two
-	// distinct invalid passwords (same length, differ in every byte to
-	// maximally expose any prefix-dependent timing leak). Assert the
-	// two latency distributions' medians are within 25% of each other.
-	//
-	// Best-effort per contract ("true constant-time verification is
-	// hard from userland") — the assertion catches GROSS timing
-	// variants (a fast-path for syntactically-invalid tokens, a
-	// length-dependent early-out) but not sub-microsecond leaks. The
-	// slot-invariance test (c) is the rigorous constant-time check.
+	// token loaded, sample 256 auth-failure attempts per measurement for
+	// each of two distinct invalid passwords of equal length. The two
+	// latency distributions' medians are compared within a coarse 25% band.
+	// These tests check response bytes, functional authentication outcomes and coarse network timing; they do not instrument production verifier visits.
+	// The 25% median band permits up to three attempts; it is a coarse sanity check and does not prove a constant-time bound.
 	t.Run("AuthFailure_ConstantTimeLatency_TwoInvalidPasswords", func(t *testing.T) {
 		requireAuth(t)
 		h := dpharness.Start(t)
@@ -280,20 +271,12 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 	// FAILURE for plainE (matches no slot). Assert all 5 latency
 	// distributions' medians are within 25% of the overall median.
 	//
-	// Under the prior argon2id cost model a short-circuit-on-first-match
-	// implementation produced a slot-0 vs slot-3 ratio of ~4× (1 vs 4
-	// argon2id ops ≈ 50 vs 200 ms) that failed the 25% band by a wide
-	// margin. T092 (sol-review B5+M1) retired argon2id for HMAC-SHA-256:
-	// the candidate's tag is computed ONCE and compared (constant-time)
-	// against all 4 verifiers, so HMAC auth is sub-microsecond and the
-	// userland timing band can no longer distinguish a short-circuit
-	// from a full scan. This sub-test now functions as a FUNCTIONAL
-	// slot-invariance check (auth SUCCEEDS at every slot, FAILS in the
-	// all-fail case) with a timing band that passes trivially under
-	// HMAC — see the file-header T093 note. The load-bearing constant-
-	// time property ("the loop visits every verifier, no short-circuit")
-	// is pinned at the unit level (data-plane/internal/auth) and is
-	// redteam residue here.
+	// T092 (sol-review B5+M1) retired the earlier Argon2id design for
+	// HMAC-SHA-256. This sub-test checks successful authentication for each
+	// matching credential and failure for a fifth nonmatching credential,
+	// plus a coarse median timing band. It does not count production loop visits.
+	// An early return after the first matching verifier can preserve all tested authentication outcomes, and HMAC comparison work may be hidden by network and scheduling noise.
+	// The full-set comparison requirement remains normative; neither this timing band nor the reference helper establishes production loop coverage.
 	//
 	// data-model.md §1.5; contracts/socks5-auth.md row "Slot-invariance
 	// across the token list".
@@ -315,11 +298,9 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 		hashC := dpharness.MintToken(t, plainC)
 		hashD := dpharness.MintToken(t, plainD)
 
-		// Five distributions over ONE token list: auth-success for the
-		// plaintext whose verifier sits at slot 0/1/2/3, then auth-failure
-		// for plainE, which matches no slot. A short-circuit-on-first-match
-		// implementation answers plainA (slot 0) faster than plainD (slot
-		// 3); the all-fail case scans the whole list.
+		// Five distributions over ONE token list: successful authentication for
+		// each matching credential at slots 0..3 and failure for plainE, which
+		// matches no slot. The network samples do not count production loop visits.
 		//
 		// One DP process for every distribution (T182 milestone flake):
 		// the previous design booted a fresh DP per slot (varying the list
@@ -393,21 +374,16 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 		assertMediansIndistinguishable(t, "slot-invariance N=4", distros, 0.25)
 	})
 
-	// (d) AuthFailure_NoPerRequestJournalEntry: with one token loaded,
-	// snapshot h.Journal before the attempt; send a distinctive PASSWD
-	// and a distinctive UNAME that auth-rejects; wait for 01 FF + close.
-	// Snapshot h.Journal after. Assert the post-snapshot delta contains
-	// none of: the offered PASSWD, the offered UNAME, the stored hash
-	// bytes. (No destination host is on the wire at auth-failure; the
-	// corpus scans for a placeholder destination anyway for forward-
-	// compatibility with a future parameterisation that reaches the
-	// request phase.)
+	// (d) AuthFailure_NoPerRequestRetainedChannel: observe the child's real
+	// standard-descriptor targets, harness-owned state/private-/tmp trees,
+	// the reserved absolute-/tmp path, and DP-to-CP WatchEvents payloads and
+	// metadata around a failed auth.
 	//
-	// contracts/socks5-auth.md row "No per-request log on auth failure";
+	// contracts/socks5-auth.md row "No per-request retained channel on auth failure";
 	// FR-008 (no per-request timestamp at finer than ≥1-hour bucket).
-	t.Run("AuthFailure_NoPerRequestJournalEntry", func(t *testing.T) {
+	t.Run("AuthFailure_NoPerRequestRetainedChannel", func(t *testing.T) {
 		requireAuth(t)
-		h := dpharness.Start(t)
+		h := dpharness.Start(t, dpharness.WithControlPlaneRequestCapture())
 
 		const (
 			realPlaintext = "0123456789abcdef0123456789abcdef"
@@ -420,7 +396,11 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 		stored := dpharness.MintToken(t, realPlaintext)
 		requireReloadOK(t, dpharness.Reload(t, h, 1, []*grpcpb.TokenVerifier{stored}), 1)
 
-		before := h.Journal.String()
+		assertDPStandardStreamsDiscarded(t, h.PID)
+		stateBefore := snapshotPrivateTree(t, h.StateDir)
+		tmpBefore := snapshotPrivateTree(t, h.TempDir)
+		absTmpBefore := snapshotAbsoluteTmpProbe(t, h.AbsTmpProbePath)
+		rpcBefore := waitCapturedRPCRequests(t, h.RPCRequests, 1)
 
 		conn := dialProxy(t, h)
 		defer conn.Close()
@@ -432,42 +412,46 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 				"precondition for the journal-scan test failed", reply, want)
 		}
 
-		after := h.Journal.String()
-		// Delta is the new content since the before-snapshot. Byte-
-		// offset slicing is safe here because the journal is ASCII text
-		// (DP stderr/stdout); a future binary journal sink would
-		// warrant re-grounding this scan (see §Analysis residue).
-		var delta string
-		if len(after) >= len(before) {
-			delta = after[len(before):]
-		} else {
-			// Journal shrank (unexpected; would indicate a harness
-			// bug). Scan the whole thing.
-			delta = after
+		stateAfter := snapshotPrivateTree(t, h.StateDir)
+		tmpAfter := snapshotPrivateTree(t, h.TempDir)
+		absTmpAfter := snapshotAbsoluteTmpProbe(t, h.AbsTmpProbePath)
+		time.Sleep(150 * time.Millisecond) // allow any incorrectly emitted follow-up RPC to reach the capture
+		rpcAfter := waitCapturedRPCRequests(t, h.RPCRequests, len(rpcBefore))
+		if !bytes.Equal(stateAfter, stateBefore) {
+			t.Errorf("authentication failure changed the retained state tree")
+		}
+		if !bytes.Equal(tmpAfter, tmpBefore) {
+			t.Errorf("authentication failure changed its private /tmp tree")
+		}
+		if !bytes.Equal(absTmpAfter, absTmpBefore) {
+			t.Errorf("authentication failure changed its reserved absolute /tmp observation path")
+		}
+		if !reflect.DeepEqual(rpcAfter, rpcBefore) {
+			t.Errorf("authentication failure changed the captured DP-to-CP RPC requests or metadata")
 		}
 
-		// Corpus scan: each secret MUST NOT appear in raw, hex, or
-		// base64 form in the delta. The destination host is scanned
-		// raw-only (it is not a secret that would be hex/base64-
-		// encoded by a logging layer).
-		deltaBytes := []byte(delta)
-		assertNoLeakCorpus(t, deltaBytes, "offered PASSWD plaintext", []byte(distinctPass))
-		assertNoLeakCorpus(t, deltaBytes, "offered UNAME", []byte(distinctUname))
-		assertNoLeakCorpus(t, deltaBytes, "stored HMAC verifier", stored.GetVerifier())
-		if bytes.Contains(deltaBytes, []byte(placeHolderDest)) {
-			t.Errorf("auth-failure journal delta contains the "+
-				"destination host %q — FR-008 / contracts/socks5-auth.md "+
-				"§\"No per-request log on auth failure\"; delta:\n%s",
-				placeHolderDest, delta)
+		corpus := []struct {
+			label string
+			bytes []byte
+		}{
+			{"state volume", stateAfter},
+			{"private /tmp", tmpAfter},
+			{"reserved absolute /tmp path", absTmpAfter},
+			{"DP-to-CP RPC payloads and metadata", capturedRPCBytes(rpcAfter)},
 		}
-		// Timestamp scan: FR-008 prohibits per-request timestamps at
-		// finer than ≥1-hour resolution. Any HH:MM:SS-shaped substring
-		// in the delta is a violation. The delta-scoping (not the
-		// whole journal) avoids false-positives from boot-log
-		// timestamps written before the auth attempt. A future binary
-		// journal sink or a Unix-epoch timestamp format would evade
-		// this regex — see §Analysis residue.
-		assertNoSubHourTimestamp(t, delta)
+		for _, channel := range corpus {
+			assertNoLeakCorpus(t, channel.bytes, channel.label+" / PASSWD", []byte(distinctPass))
+			assertNoLeakCorpus(t, channel.bytes, channel.label+" / UNAME", []byte(distinctUname))
+			if channel.label != "state volume" {
+				assertNoLeakCorpus(t, channel.bytes, channel.label+" / stored verifier", stored.GetVerifier())
+			}
+			if bytes.Contains(channel.bytes, []byte(placeHolderDest)) {
+				t.Errorf("%s contains the request destination placeholder", channel.label)
+			}
+			if channel.label != "state volume" {
+				assertNoSubHourTimestamp(t, string(channel.bytes))
+			}
+		}
 	})
 
 	// (e) SameHost_NoAuthOnly_Rejected: open SOCKS5, send the NO_AUTH-
@@ -498,6 +482,400 @@ func TestSOCKS5LeakInvariants(t *testing.T) {
 				got, want)
 		}
 		expectEOF(t, conn, "after 0xFF reply (NO_AUTH-only rejection)")
+	})
+}
+
+const (
+	maxObservedPrivateFiles = 64
+	maxObservedPrivateBytes = 1 << 20
+)
+
+func snapshotPrivateTree(t *testing.T, root string) []byte {
+	t.Helper()
+	if root == "" {
+		t.Fatal("private observation directory is empty")
+	}
+	var snapshot bytes.Buffer
+	entries := 0
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == root {
+			return nil
+		}
+		entries++
+		if entries > maxObservedPrivateFiles {
+			return fmt.Errorf("private observation tree exceeds %d entries", maxObservedPrivateFiles)
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(&snapshot, "PATH:%s\x00", rel)
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		switch {
+		case info.IsDir():
+			_, _ = snapshot.WriteString("DIR\x00")
+		case info.Mode()&os.ModeSymlink != 0:
+			target, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			_, _ = snapshot.WriteString("SYMLINK:")
+			_, _ = snapshot.WriteString(target)
+			_, _ = snapshot.Write([]byte{0})
+		case info.Mode().IsRegular():
+			if info.Size() > maxObservedPrivateBytes || int64(snapshot.Len())+info.Size() > maxObservedPrivateBytes {
+				return fmt.Errorf("private observation tree exceeds %d bytes", maxObservedPrivateBytes)
+			}
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			_, _ = snapshot.WriteString("FILE:")
+			_, _ = snapshot.Write(content)
+			_, _ = snapshot.Write([]byte{0})
+		default:
+			return fmt.Errorf("unsupported entry type in private observation tree: %s", rel)
+		}
+		if snapshot.Len() > maxObservedPrivateBytes {
+			return fmt.Errorf("private observation snapshot exceeds %d bytes", maxObservedPrivateBytes)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("capture bounded private observation tree: %v", err)
+	}
+	return snapshot.Bytes()
+}
+
+// snapshotAbsoluteTmpProbe observes one unique exact file path outside the
+// TMPDIR subtree. It deliberately never walks the shared host /tmp tree.
+func snapshotAbsoluteTmpProbe(t *testing.T, path string) []byte {
+	t.Helper()
+	if filepath.Dir(path) != "/tmp" {
+		t.Fatalf("absolute /tmp probe path = %q, want a direct child of /tmp", path)
+	}
+	content, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return []byte("ABSENT\x00")
+	}
+	if err != nil {
+		t.Fatalf("read exact absolute /tmp probe path: %v", err)
+	}
+	return append(append([]byte("FILE:"+filepath.Base(path)+"\x00"), content...), 0)
+}
+
+func writeAbsoluteTmpProbeFromChild(t *testing.T, path string, marker []byte) {
+	t.Helper()
+	cmd := exec.Command("/bin/sh", "-c", `printf '%s' "$1" > "$2"`, "sh", string(marker), path)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("child write to exact absolute /tmp path: %v (%s)", err, output)
+	}
+}
+
+func waitCapturedRPCRequests(t *testing.T, capture *dpharness.RPCRequestCapture, want int) []dpharness.CapturedRPCRequest {
+	t.Helper()
+	if capture == nil {
+		t.Fatal("DP-to-CP request capture was not enabled")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		requests, errText := capture.Snapshot()
+		if errText != "" {
+			t.Fatalf("DP-to-CP RPC capture failed: %s", errText)
+		}
+		if len(requests) >= want {
+			if len(requests) != want {
+				t.Fatalf("captured DP-to-CP WatchEvents requests = %d, want %d", len(requests), want)
+			}
+			return requests
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	requests, errText := capture.Snapshot()
+	t.Fatalf("captured %d DP-to-CP WatchEvents requests, want %d (capture error %q)", len(requests), want, errText)
+	return nil
+}
+
+func capturedRPCBytes(requests []dpharness.CapturedRPCRequest) []byte {
+	var out bytes.Buffer
+	for _, request := range requests {
+		_, _ = out.WriteString(request.Method)
+		_, _ = out.Write([]byte{0})
+		_, _ = out.Write(request.Payload)
+		_, _ = out.Write([]byte{0})
+		keys := make([]string, 0, len(request.Metadata))
+		for key := range request.Metadata {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			values := append([]string(nil), request.Metadata[key]...)
+			sort.Strings(values)
+			for _, value := range values {
+				_, _ = out.WriteString(key)
+				_, _ = out.Write([]byte{':'})
+				_, _ = out.WriteString(value)
+				_, _ = out.Write([]byte{0})
+			}
+		}
+	}
+	return out.Bytes()
+}
+
+func checkDPStandardStreams(pid int, readlink func(string) (string, error)) error {
+	for _, fd := range []int{1, 2} {
+		path := fmt.Sprintf("/proc/%d/fd/%d", pid, fd)
+		target, err := readlink(path)
+		if err != nil {
+			return fmt.Errorf("read DP fd %d target: %w", fd, err)
+		}
+		if target != os.DevNull {
+			return fmt.Errorf("DP fd %d resolves to %q, want %q", fd, target, os.DevNull)
+		}
+	}
+	return nil
+}
+
+func assertDPStandardStreamsDiscarded(t *testing.T, pid int) {
+	t.Helper()
+	if err := checkDPStandardStreams(pid, os.Readlink); err != nil {
+		t.Fatalf("data-plane stdout/stderr retention boundary: %v", err)
+	}
+}
+
+func TestT189RetainedChannelScannersHavePositiveControls(t *testing.T) {
+	marker := []byte("t189-positive-control-marker-7d3f92")
+	forms := [][]byte{
+		marker,
+		[]byte(hex.EncodeToString(marker)),
+		[]byte(base64.StdEncoding.EncodeToString(marker)),
+	}
+	for _, channel := range []string{"state volume", "private /tmp"} {
+		for index, form := range forms {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("positive-control-%d", index)), form, 0o600); err != nil {
+				t.Fatalf("seed %s positive control: %v", channel, err)
+			}
+			if capture := snapshotPrivateTree(t, dir); !containsLeakCorpus(capture, marker) {
+				t.Fatalf("%s capture missed seeded marker form %d", channel, index)
+			}
+		}
+	}
+	probe, err := os.CreateTemp("/tmp", "stargate-t189-positive-absolute-")
+	if err != nil {
+		t.Fatalf("reserve exact absolute /tmp positive-control path: %v", err)
+	}
+	probePath := probe.Name()
+	if err := probe.Close(); err != nil {
+		t.Fatalf("close absolute /tmp positive-control path: %v", err)
+	}
+	if err := os.Remove(probePath); err != nil {
+		t.Fatalf("clear absolute /tmp positive-control path: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Remove(probePath) })
+	absoluteMarker := []byte("t189-absolute-tmp-child-control-a84e")
+	absoluteBefore := snapshotAbsoluteTmpProbe(t, probePath)
+	if containsLeakCorpus(absoluteBefore, absoluteMarker) {
+		t.Fatal("absolute /tmp negative control was not clean before the child write")
+	}
+	writeAbsoluteTmpProbeFromChild(t, probePath, absoluteMarker)
+	absoluteAfter := snapshotAbsoluteTmpProbe(t, probePath)
+	if bytes.Equal(absoluteBefore, absoluteAfter) || !containsLeakCorpus(absoluteAfter, absoluteMarker) {
+		t.Fatal("exact absolute /tmp observer missed marker written by child process")
+	}
+	if err := os.Remove(probePath); err != nil {
+		t.Fatalf("remove absolute /tmp positive-control file: %v", err)
+	}
+	if clean := snapshotAbsoluteTmpProbe(t, probePath); !bytes.Equal(clean, absoluteBefore) {
+		t.Fatal("absolute /tmp negative control did not return to its clean snapshot")
+	}
+
+	payloadMarker := []byte("t189-rpc-payload-only-positive-control-5b1d")
+	payloadRequest := &grpcpb.WatchEventsRequest{}
+	unknown := protowire.AppendTag(nil, 100, protowire.BytesType)
+	unknown = protowire.AppendBytes(unknown, payloadMarker)
+	payloadRequest.ProtoReflect().SetUnknown(unknown)
+	payloadCapture := &dpharness.RPCRequestCapture{}
+	if err := payloadCapture.Record(payloadRequest, nil); err != nil {
+		t.Fatalf("Record payload-only positive control: %v", err)
+	}
+	payloadRequests, observerErr := payloadCapture.Snapshot()
+	if observerErr != "" || len(payloadRequests) != 1 {
+		t.Fatalf("payload-only Snapshot = (%d requests, error %q)", len(payloadRequests), observerErr)
+	}
+	if len(payloadRequests[0].Metadata) != 0 {
+		t.Fatalf("payload-only Snapshot unexpectedly included metadata: %v", payloadRequests[0].Metadata)
+	}
+	if !containsLeakCorpus(capturedRPCBytes(payloadRequests), payloadMarker) {
+		t.Error("RPC capture missed payload-only marker recorded through Record/Snapshot")
+	}
+
+	metadataMarker := []byte("t189-rpc-metadata-only-positive-control-d912")
+	metadataCapture := &dpharness.RPCRequestCapture{}
+	if err := metadataCapture.Record(&grpcpb.WatchEventsRequest{}, metadata.Pairs("x-t189-positive-control", string(metadataMarker))); err != nil {
+		t.Fatalf("Record metadata-only positive control: %v", err)
+	}
+	metadataRequests, observerErr := metadataCapture.Snapshot()
+	if observerErr != "" || len(metadataRequests) != 1 {
+		t.Fatalf("metadata-only Snapshot = (%d requests, error %q)", len(metadataRequests), observerErr)
+	}
+	if len(metadataRequests[0].Payload) != 0 {
+		t.Fatalf("metadata-only Snapshot unexpectedly included payload: %x", metadataRequests[0].Payload)
+	}
+	if !containsLeakCorpus(capturedRPCBytes(metadataRequests), metadataMarker) {
+		t.Error("RPC capture missed metadata-only marker recorded through Record/Snapshot")
+	}
+	if err := checkDPStandardStreams(42, func(string) (string, error) { return "/tmp/retained.log", nil }); err == nil {
+		t.Fatal("fd positive control accepted a retained regular-file target")
+	}
+}
+
+func TestT189SuccessPathNoPerRequestRetainedChannel(t *testing.T) {
+	const (
+		username = "t189-success-user-marker-17"
+		dest     = "t189-success-dest-marker-17.example.onion"
+	)
+	body := []byte("t189-success-payload-marker-17-opaque")
+
+	upstream := integration.NewServer(integration.AcceptAndRelay)
+	upstreamAddr, err := upstream.Start()
+	if err != nil {
+		t.Fatalf("start fake Tor upstream: %v", err)
+	}
+	t.Cleanup(func() { _ = upstream.Close() })
+
+	h := dpharness.Start(t, dpharness.WithUpstream(upstreamAddr), dpharness.WithControlPlaneRequestCapture())
+	if response := dpharness.Reload(t, h, 1, []*grpcpb.TokenVerifier{dpharness.MintToken(t, successPathPlaintext)}); response.GetStatus() != grpcpb.ApplyStatus_APPLY_STATUS_OK {
+		t.Fatalf("ReloadTokens status = %v, want APPLY_STATUS_OK", response.GetStatus())
+	}
+	assertDPStandardStreamsDiscarded(t, h.PID)
+	stateBefore := snapshotPrivateTree(t, h.StateDir)
+	tmpBefore := snapshotPrivateTree(t, h.TempDir)
+	absTmpBefore := snapshotAbsoluteTmpProbe(t, h.AbsTmpProbePath)
+	rpcBefore := waitCapturedRPCRequests(t, h.RPCRequests, 1)
+
+	conn := dialProxy(t, h)
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
+	doMethodNegotiation(t, conn)
+	if reply := doSubnegotiation(t, conn, username, successPathPlaintext); !bytes.Equal(reply, []byte{0x01, 0x00}) {
+		t.Fatalf("authentication reply = %x, want 01 00 before retained-channel observation", reply)
+	}
+	writeConnectRequest(t, conn, dest, 443)
+	if reply := readN(t, conn, 10); reply[0] != 0x05 || reply[1] != 0x00 {
+		t.Fatalf("successful CONNECT reply = %x, want success", reply)
+	}
+	if _, err := conn.Write(body); err != nil {
+		t.Fatalf("write opaque payload: %v", err)
+	}
+	echo := make([]byte, len(body))
+	if _, err := io.ReadFull(conn, echo); err != nil {
+		t.Fatalf("read echoed opaque payload: %v", err)
+	}
+	if !bytes.Equal(echo, body) {
+		t.Fatalf("payload echo = %q, want byte-identical payload", echo)
+	}
+	_ = conn.Close()
+
+	stateAfter := snapshotPrivateTree(t, h.StateDir)
+	tmpAfter := snapshotPrivateTree(t, h.TempDir)
+	absTmpAfter := snapshotAbsoluteTmpProbe(t, h.AbsTmpProbePath)
+	time.Sleep(150 * time.Millisecond)
+	rpcAfter := waitCapturedRPCRequests(t, h.RPCRequests, len(rpcBefore))
+	if !bytes.Equal(stateAfter, stateBefore) {
+		t.Error("successful CONNECT changed the retained state tree")
+	}
+	if !bytes.Equal(tmpAfter, tmpBefore) {
+		t.Error("successful CONNECT/payload changed the private /tmp tree")
+	}
+	if !bytes.Equal(absTmpAfter, absTmpBefore) {
+		t.Error("successful CONNECT/payload changed the reserved absolute /tmp observation path")
+	}
+	if !reflect.DeepEqual(rpcAfter, rpcBefore) {
+		t.Error("successful CONNECT/payload changed captured DP-to-CP requests or metadata")
+	}
+
+	for _, channel := range []struct {
+		label string
+		data  []byte
+	}{
+		{"state volume", stateAfter},
+		{"private /tmp", tmpAfter},
+		{"reserved absolute /tmp path", absTmpAfter},
+		{"DP-to-CP RPC payloads and metadata", capturedRPCBytes(rpcAfter)},
+	} {
+		for _, marker := range [][]byte{[]byte(username), []byte(successPathPlaintext), []byte(dest), body} {
+			if containsLeakCorpus(channel.data, marker) {
+				t.Errorf("%s retained successful-request marker %q", channel.label, marker)
+			}
+		}
+	}
+}
+
+func TestT189RPCRequestCaptureLimitErrorsAreStickyAndBounded(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		md   metadata.MD
+	}{
+		{
+			name: "metadata item limit",
+			md: func() metadata.MD {
+				md := metadata.MD{}
+				for i := 0; i <= 64; i++ {
+					md["x-observer-test-"] = append(md["x-observer-test-"], "x")
+				}
+				return md
+			}(),
+		},
+		{
+			name: "metadata byte limit",
+			md:   metadata.MD{"x-observer-test-": {strings.Repeat("x", 16<<10+1)}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			capture := &dpharness.RPCRequestCapture{}
+			if err := capture.Record(&grpcpb.WatchEventsRequest{}, nil); err != nil {
+				t.Fatalf("record initial request: %v", err)
+			}
+			if err := capture.Record(&grpcpb.WatchEventsRequest{}, tc.md); err == nil {
+				t.Fatal("oversized metadata unexpectedly recorded")
+			}
+			if err := capture.Record(&grpcpb.WatchEventsRequest{}, nil); err == nil {
+				t.Fatal("later valid request cleared the observer failure")
+			}
+			requests, observerErr := capture.Snapshot()
+			if observerErr == "" {
+				t.Fatal("Snapshot hid the rejected capture after a valid request had already been recorded")
+			}
+			if len(observerErr) > 96 {
+				t.Fatalf("observer error length = %d, want fixed bounded diagnostic", len(observerErr))
+			}
+			if len(requests) != 1 {
+				t.Fatalf("recorded requests = %d, want only the initial complete request", len(requests))
+			}
+		})
+	}
+
+	t.Run("request count overflow", func(t *testing.T) {
+		capture := &dpharness.RPCRequestCapture{}
+		for i := 0; i < 8; i++ {
+			if err := capture.Record(&grpcpb.WatchEventsRequest{}, nil); err != nil {
+				t.Fatalf("record request %d: %v", i, err)
+			}
+		}
+		if err := capture.Record(&grpcpb.WatchEventsRequest{}, nil); err == nil {
+			t.Fatal("request beyond the capture limit unexpectedly recorded")
+		}
+		requests, observerErr := capture.Snapshot()
+		if observerErr == "" || len(requests) != 8 {
+			t.Fatalf("Snapshot after count overflow = (%d requests, %q), want bounded complete prefix and sticky error", len(requests), observerErr)
+		}
 	})
 }
 
@@ -562,10 +940,9 @@ func timeSubnegotiation(t *testing.T, conn net.Conn, uname, passwd string) (time
 	return time.Since(start), reply
 }
 
-// median returns the 50th percentile of ds. Used by the constant-time
-// statistical assertions; median (not mean) is robust to the GC / CI-
-// noise outliers that would otherwise inflate a mean and mask a real
-// timing leak.
+// median returns the 50th percentile of ds for the coarse timing checks.
+// Median (not mean) is robust to GC and CI-noise outliers that would
+// otherwise inflate a mean.
 func median(ds []time.Duration) time.Duration {
 	s := append([]time.Duration(nil), ds...)
 	sort.Slice(s, func(i, j int) bool { return s[i] < s[j] })
@@ -580,26 +957,18 @@ func median(ds []time.Duration) time.Duration {
 	}
 }
 
-// assertMediansIndistinguishable asserts every distribution's median
-// is within ±threshold (as a fraction) of the mean-of-medians. Used by
-// the constant-time and slot-invariance tests with threshold=0.25:
-// a correct constant-time implementation clusters all medians tightly
-// (pass); a short-circuit-on-first-match implementation produces a
-// slot-0 vs slot-3 ratio of ~4× (fail by a wide margin).
-//
-// This is a BEST-EFFORT statistical check per contracts/socks5-auth.md
-// ("true constant-time verification is hard from userland") — it
-// surfaces the specific gross leaks the contract names, not sub-
-// microsecond timing variants. See §Analysis residue.
-// mediansWithinBand reports whether every distribution's median sits
-// within threshold of the overall median — the check
-// assertMediansIndistinguishable asserts, factored out so the timing
-// sub-tests can re-measure once on transient host load before failing
-// (verify.sh runs this package's suites alongside sibling packages'
-// DP-booting tests; boundary-crossing contention is a host property,
-// not a DP one, and one re-measure absorbs it while a real gross
-// short-circuit — the 4× argon2id-class leak the band exists for —
-// fails both attempts).
+// assertMediansIndistinguishable checks that each distribution's median
+// is within ±threshold (as a fraction) of the mean-of-medians. The 25%
+// median band permits up to three attempts; it is a coarse sanity check
+// and does not prove a constant-time bound.
+// An early return after the first matching verifier can preserve all tested authentication outcomes, and HMAC comparison work may be hidden by network and scheduling noise.
+// The full-set comparison requirement remains normative; neither this timing band nor the reference helper establishes production loop coverage.
+// mediansWithinBand reports whether each distribution's median lies
+// within threshold of the overall median. The test may re-measure up to
+// twice after the first attempt on transient host load (verify.sh runs
+// sibling DP-booting suites concurrently). Boundary-crossing contention
+// is a host property, not a DP one; re-measurement can also let a marginal
+// difference pass if noise moves it inside the band.
 func mediansWithinBand(distros [][]time.Duration, threshold float64) bool {
 	if len(distros) < 2 {
 		return false
@@ -682,6 +1051,22 @@ func assertNoLeakCorpus(t *testing.T, capture []byte, label string, secret []byt
 	if len(secret) == 0 {
 		return
 	}
+	if form := matchingLeakEncoding(capture, secret); form != "" {
+		t.Errorf("capture contains %s in %s form — "+
+			"FR-006 / contracts/socks5-auth.md §\"Forbidden behaviours\": "+
+			"server-side secrets MUST NOT appear in any response, log, or counter increment",
+			label, form)
+	}
+}
+
+func containsLeakCorpus(capture, secret []byte) bool {
+	return matchingLeakEncoding(capture, secret) != ""
+}
+
+func matchingLeakEncoding(capture, secret []byte) string {
+	if len(secret) == 0 {
+		return ""
+	}
 	encodings := []struct {
 		form string
 		data []byte
@@ -692,33 +1077,28 @@ func assertNoLeakCorpus(t *testing.T, capture []byte, label string, secret []byt
 	}
 	for _, enc := range encodings {
 		if bytes.Contains(capture, enc.data) {
-			t.Errorf("capture contains %s in %s form (%q) — "+
-				"FR-006 / contracts/socks5-auth.md §\"Forbidden "+
-				"behaviours\": server-side secrets MUST NOT appear in "+
-				"any response, log, or counter increment",
-				label, enc.form, string(enc.data))
+			return enc.form
 		}
 	}
+	return ""
 }
 
 // subHourTimestamp matches any HH:MM:SS-shaped substring — the
 // finest-than-hour timestamp format FR-008 prohibits in per-request
-// journal entries. Applied to the journal delta (not the whole
-// journal) so boot-log timestamps written before the event under test
-// do not false-positive.
+// retained channels. Applied to post-request observation bytes, not
+// baseline state, so boot-time timestamps do not false-positive.
 //
 // Known limitations (see §Analysis residue): Unix-epoch timestamps
 // (bare 10-digit numbers) are not matched — too broad a pattern would
-// false-positive on byte counts and port numbers. A future binary
-// journal sink would also evade this regex. T025a's loginvariants
-// allowlist is the proper home for exhaustive timestamp detection;
-// this regex backstops the obvious text-form case until T025a lands.
+// false-positive on byte counts and port numbers. Binary encodings also
+// evade this regex. T025a's loginvariants allowlist is the proper home
+// for exhaustive timestamp detection; this backstops obvious text forms.
 var subHourTimestamp = regexp.MustCompile(`\d{2}:\d{2}:\d{2}`)
 
-// assertNoSubHourTimestamp asserts delta (a journal's post-event
-// content) contains no timestamp at finer-than-hour resolution. FR-008
-// prohibits per-request timestamps finer than the ≥1-hour aggregate
-// bucket; any HH:MM:SS-shaped substring in the delta is a violation.
+// assertNoSubHourTimestamp checks that observed retained-channel bytes
+// contain no timestamp at finer-than-hour resolution. FR-008 prohibits
+// per-request timestamps finer than the ≥1-hour aggregate bucket; any
+// HH:MM:SS-shaped substring in the observation is a violation.
 func assertNoSubHourTimestamp(t *testing.T, delta string) {
 	t.Helper()
 	if loc := subHourTimestamp.FindStringIndex(delta); loc != nil {

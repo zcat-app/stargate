@@ -198,10 +198,8 @@ the operator-visible rotation event — see §6.
 
 ### 3.3 Failure behaviour
 
-- A peer cert whose extracted public key does not byte-equal the pinned
-  `<peer>.pub`: the TLS handshake is aborted with `alert: unknown ca` (the
-  standard TLS alert for cert-validation failure). No application RPC is
-  dispatched.
+- A peer certificate whose extracted public key does not byte-equal the pinned
+  `<peer>.pub` is rejected during the TLS handshake. No application RPC is dispatched.
 - A missing or unreadable `<peer>.pub`: treated as a startup error (CP) or
   silent degraded state (DP). The DP keeps routing against the upstream dial
   (Constitution Principle II); the CP fails fast.

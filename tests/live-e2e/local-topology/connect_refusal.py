@@ -7,6 +7,9 @@ Run as root on an already initialized disposable Local stack. The caller owns
 installation/cleanup. Only synthetic credentials are provisioned; socket traces
 contain Unix endpoint paths, never auth or application buffers.
 """
+
+if not __debug__:
+    raise RuntimeError("connect_refusal.py refuses optimized Python (-O/PYTHONOPTIMIZE)")
 import hashlib
 import json
 import os

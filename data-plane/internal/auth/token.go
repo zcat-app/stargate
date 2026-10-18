@@ -44,8 +44,8 @@ type Generation struct {
 	// HMAC-SHA-256 tag under the install-time pepper (§1.2). The set
 	// swaps as a unit; a stored verifier is never mutated in place.
 	Verifiers [][]byte
-	// LoadedAt is wall-clock when the generation was received — used
-	// only for restart journal logs (§1.3), never per-request.
+	// LoadedAt is time when the last authority-changing generation was applied.
+	// Exact replay preserves it; it is not the time of the latest snapshot rewrite or an expiry timestamp.
 	LoadedAt time.Time
 }
 

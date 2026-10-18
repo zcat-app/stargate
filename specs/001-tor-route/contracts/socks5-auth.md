@@ -83,10 +83,9 @@ VER ULEN UNAME PLEN PASSWD
 
 The data plane MUST:
 
-1. Read `UNAME` (1–255 bytes) as the *first-party domain* string used
-   for SOCKS5 stream isolation. It is NOT a credential. It is opaque
-   to the auth layer and is passed through verbatim to the upstream
-   Tor SOCKS5 connection (FR-007).
+1. Read `UNAME` (1–255 bytes) as the opaque SOCKS5 isolation username supplied by the client.
+   It is not a credential. The browser supplies the fixed 68-byte `sg1:` HMAC representation;
+   the data plane treats the username as opaque to authentication and passes it unchanged to Tor.
 2. Read `PASSWD` (1–255 bytes) as the candidate bearer token.
 3. Compute `verifier = HMAC-SHA-256(pepper, PASSWD)` under the
    install-time pepper (`/etc/stargate/keys/pepper.key`; data-model.md §1.5,
@@ -133,10 +132,22 @@ live in the table below (rows "Auth failure response is exactly
 | Methods response is exactly `0x05 0xFF` for clients offering only `0x00`           | Assert exact 2-byte response. Connection closes after.                                                                                                               |
 | Auth failure response is exactly `0x01 0xFF`                                       | Assert exact 2-byte response. Connection closes after.                                                                                                               |
 | Auth failure does not leak token bytes                                              | Capture all bytes the data plane writes between the client sending the password and the close. Assert no occurrence of the offered token bytes anywhere in the capture. |
-| Constant-time comparison                                                            | Statistical timing test: two distinct invalid passwords, same length, generate close-to-equal latency distributions. (Best-effort — true constant-time verification is hard from userland.) |
-| Slot-invariance across the token list (data-model.md §1.5 "constant-time across the full list") | With N=4 stored token hashes, the auth-pass latency distribution is statistically indistinguishable whether the matching token is at slot index 0, 1, 2, or 3 (and against the all-fail case). An early-exit-on-first-match loop would fail this assertion by producing monotonically increasing latency by slot index. |
-| No per-request log on auth failure                                                  | Tail the data plane's journal during the test; assert no entry containing the destination, the token, the username, or a per-request timestamp at finer than hour resolution. |
+| Constant-time comparison                                                            | Two distinct invalid well-formed passwords of equal length are sampled with a coarse 25% median timing band. This is a timing sanity check, not proof of constant-time execution or of a full production verifier scan. |
+| Slot-invariance across the token list (data-model.md §1.5 "constant-time across the full list") | With four stored verifiers, test successful authentication for each matching credential and failure for a fifth nonmatching credential, plus a coarse median timing band. An early return after a match can preserve these outcomes and pass this band; the test does not count production loop visits. |
+| No per-request retained channel on authentication failure or successful CONNECT/payload | Assert DP fds 1/2 resolve to `/dev/null`; compare state-volume and harness-owned private-temp snapshots plus actual captured DP-to-CP WatchEvents payload/metadata before and after both request flows. The temp observer also checks one exact unique absolute `/tmp` pathname outside `TMPDIR`, without walking shared-host `/tmp`. Independent payload-only and metadata-only controls traverse `RPCRequestCapture.Record/Snapshot`; any bounded sticky capture error fails the observation. Scan each retained channel for request markers and sub-hour timestamps where applicable. |
 | Same-host processes without a token cannot proxy                                    | Open a loopback TCP connection to 8881, send SOCKS5 with `0x05 0x01 0x00` (NO_AUTH only) → connection rejected.                                                       |
+
+The full-set comparison requirement in data-model §1.5 remains normative. These network tests and the separate reference-algorithm tests do not establish that the production verifier visits every entry or bound its timing side channel.
+
+### Inbound framing admission
+
+The data plane admits at most 200 concurrent inbound framing handlers. A
+handler holds its admission permit through method selection, authentication,
+and complete request framing; it releases the permit when framing ends or
+immediately before upstream forwarding. The 30-second inbound framing deadline
+remains, and there is no post-handshake idle deadline. The 200 × 64 KiB (12.5 MiB)
+engineering reservation for framing handler state is not a measured RSS value
+or an enforced process/kernel memory bound.
 
 ---
 
@@ -180,7 +191,7 @@ dial-and-handshake phase only:
 
 | Phase                                                                                         | Deadline | Mapped to        |
 |-----------------------------------------------------------------------------------------------|----------|------------------|
-| Open TCP to `tor:9050` + complete SOCKS5 method + auth (if any) + write request + read BND reply | **250 s** | `ROUTE_TIMEOUT`  |
+| Dial the fixed Tor Unix-socket adapter (`unix:///run/stargate-tor/tor-socks.sock`) + complete SOCKS5 method + auth (if any) + write request + read BND reply | **250 s** | `ROUTE_TIMEOUT`  |
 | Post-handshake (BND reply received; data plane is now a byte pipe)                            | **none** | n/a — long-lived |
 
 Rationale: the deadline is a finite backstop against a sidecar that never answers. It

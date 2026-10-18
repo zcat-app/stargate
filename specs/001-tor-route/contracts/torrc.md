@@ -49,7 +49,7 @@ SafeLogging 1
 
 | # | Invariant                                                                           | Why                                                                                                                                              |
 |---|-------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
-| 1 | `SocksPort` line contains both `IsolateClientAddr` and `IsolateSOCKSAuth`           | FR-011, Principle III — stream isolation by first-party domain depends on `IsolateSOCKSAuth`.                                                     |
+| 1 | `SocksPort` line contains both `IsolateClientAddr` and `IsolateSOCKSAuth`           | FR-011, Principle III — stream isolation uses the opaque SOCKS5 username through `IsolateSOCKSAuth`; the browser supplies an `sg1:` HMAC representation rather than the first-party domain itself.                                                     |
 | 2 | `SocksPort` is a Unix socket under `/run/tor-fabric/private/`, a Tor-owned 0700 directory | FR-007 — only the hardlinked 0660 socket in the DP fabric root is reachable by the DP group; there is no TCP SOCKS listener. |
 | 3 | `ControlSocket` is under `/var/lib/tor/control/`, a Tor-owned 0700 directory, with `CookieAuthentication 1` | Only Tor and its fixed internal publisher hold native control authority. CP and observer have no mount of this socket or cookie; Docker healthchecks remain disabled. |
 | 4 | `CookieAuthFileGroupReadable 1` remains with `CookieAuthentication 1` | Tor's cookie remains in its private DataDirectory. T203 removes the observer hardlink/mount; group readability grants no application-plane access. |
@@ -84,10 +84,10 @@ Go-only chain until dynamic config lands.
 
 ### `invariants_test.go`
 
-Parses the golden and asserts each invariant above individually,
-including row 11's `DataDirectory /var/lib/tor` directive. This test
-gives a clearer diff message than the byte-match test when a directive is
-missing or changed.
+Parses the golden and asserts each invariant above individually, including row 11's
+`DataDirectory /var/lib/tor` directive. For invariant 14 it also reads the shipped
+`sidecars/tor/torrc` source file. This test gives a clearer diff message than the byte-match
+test when a directive is missing or changed; it does not read the built image filesystem.
 
 ### `no_bridges_test.go`
 

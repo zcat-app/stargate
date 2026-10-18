@@ -1,28 +1,14 @@
 // Copyright 2026 The Stargate Authors
 // SPDX-License-Identifier: Apache-2.0
 
-// HMAC-SHA-256 verifier-contract unit tests (T093 acceptance #1; Constitution
-// Principle VII — tests-first for authentication). These pin the
-// algorithm-level properties the data-plane auth path (T044
-// internal/auth/token.go) MUST satisfy, derived from data-model.md §1.5
-// (amended by T092 / sol-review B5+M1):
-//
-//   - one candidate HMAC per request, compared across the full verifier set,
-//   - constant-time comparison (no short-circuit on first match),
-//   - malformed input rejected BEFORE any HMAC work,
-//   - no secret-bearing bytes in captured output.
-//
-// Why these live here as algorithm-contract tests (not against a
-// not-yet-existing auth.Verify API): the consuming impl ticket T044 is
-// pending, and Go's compile gate (go-workspace-gate.py) makes a test
-// referencing an absent symbol a hard FAIL. These tests therefore encode
-// the contract via stdlib crypto primitives (crypto/hmac, crypto/sha256,
-// crypto/subtle) — the executable specification T044's token.go must
-// conform to. T044 adds its own API-level unit tests against the real
-// verifier; the contract tests under tests/contract/ (T020 row 1–6,
-// leak_test.go) exercise the wired path end-to-end. The three layers
-// (algorithm contract here, API unit in T044, contract external in T020)
-// are complementary, not redundant.
+// HMAC-SHA-256 verifier reference-helper tests (T093 acceptance #1;
+// Constitution Principle VII — tests-first for authentication). The
+// separate HMAC unit tests execute a reference helper; they are not
+// instrumentation of TokenVerifier.VerifyPassword. These tests exercise
+// helper-level hash counts, comparison outcomes, malformed input and
+// captured output; they do not measure production verifier visits.
+// The full-set comparison requirement remains normative; neither this
+// timing band nor the reference helper establishes production loop coverage.
 //
 // The pepper constant below mirrors dpharness.TestPepper's role
 // (data-model.md §1.7: 32-byte install-time pepper); its value is
@@ -49,12 +35,11 @@ const verifierPepperLen = 32
 // tests. Deterministic so mint + verify agree without a runtime channel.
 var testPepper = bytes.Repeat([]byte{0x93}, verifierPepperLen)
 
-// countingHash wraps a hash.Hash and counts Sum calls, so the
-// one-HMAC-per-candidate property is observable: a verifier that hashed
-// the candidate N>1 times (or once per stored verifier) would trip the
-// counter. crypto/hmac.New returns a hash.Hash whose Write+Sum compute
-// the tag exactly once per Sum; wrapping it makes the call count the
-// load-bearing assertion rather than an implementation detail of hmac.
+// countingHash wraps a hash.Hash and counts Sum calls made by the
+// reference helper. It shows whether verifyCandidate computes one tag or
+// more than one; it does not count HMAC work in TokenVerifier.VerifyPassword.
+// crypto/hmac.New returns a hash.Hash whose Write+Sum compute the tag once
+// per Sum, so the helper's call count is directly observable.
 type countingHash struct {
 	inner  hash.Hash
 	sumCnt int
@@ -76,14 +61,16 @@ func mintVerifier(t *testing.T, pepper []byte, plaintext string) []byte {
 	return mac.Sum(nil)
 }
 
-// verifyCandidate is the reference data-plane auth decision: compute the
-// candidate's tag ONCE and compare it against every verifier with
-// ConstantTimeCompare, no short-circuit on first match (data-model.md
-// §1.5). It returns (matched, hmacCount) so the tests can assert both the
-// decision and the one-hash property. A short-circuiting implementation
-// would return early and is detectable here by the missing tail compares
-// (the visitAll test) — though userland timing cannot see it over the
-// network (leak_test.go file-header T093 note), this unit test CAN.
+// verifyCandidate is a reference helper: it computes one candidate tag and
+// compares it with each supplied verifier using ConstantTimeCompare. It
+// returns (matched, hmacCount) for assertions about this helper. The
+// separate HMAC unit tests execute a reference helper; they are not
+// instrumentation of TokenVerifier.VerifyPassword. An early return after
+// the first matching verifier can preserve all tested authentication
+// outcomes, and HMAC comparison work may be hidden by network and
+// scheduling noise. The full-set comparison requirement remains normative;
+// neither this timing band nor the reference helper establishes production
+// loop coverage.
 func verifyCandidate(pepper []byte, candidate string, verifiers [][]byte) (matched bool, hmacCount int) {
 	ch := &countingHash{inner: hmac.New(sha256.New, pepper)}
 	ch.Write([]byte(candidate))
@@ -98,11 +85,10 @@ func verifyCandidate(pepper []byte, candidate string, verifiers [][]byte) (match
 	return matched, ch.sumCnt
 }
 
-// TestOneHmacPerCandidate asserts the candidate's tag is computed exactly
-// ONCE regardless of the verifier-set size N (data-model.md §1.5; sol-
-// review B5: O(1) hash work per request, not O(N)). Under the retired
-// argon2id design this was O(N) hashes; the HMAC fix makes it O(1). A
-// regression that re-introduced per-verifier hashing trips the counter.
+// TestOneHmacPerCandidate asserts that verifyCandidate's countingHash
+// observes one tag regardless of verifier-set size. This is a reference-
+// helper result, not an actual TokenVerifier count; the production full-set
+// comparison requirement remains normative.
 func TestOneHmacPerCandidate(t *testing.T) {
 	plaintext := "aabbccddeeff00112233445566778899"
 	for _, n := range []int{1, 2, 4, 8, 16} {
@@ -120,15 +106,13 @@ func TestOneHmacPerCandidate(t *testing.T) {
 	}
 }
 
-// TestConstantTimeAcrossSet asserts the comparison visits EVERY verifier
-// regardless of which (if any) matches — the property a short-circuit
-// violates. Functional check (not timing): a candidate matches the LAST
-// verifier in a set of N just as it matches the FIRST; a short-circuit
-// that broke after the first match would miss a match at index N-1 when
-// the candidate is NOT at index 0. The all-distinct-fail case asserts no
-// spurious match. (Userland timing can't see the short-circuit over the
-// network under HMAC — leak_test.go file-header T093 note — but this unit
-// test asserts the loop's correctness directly.)
+// TestConstantTimeAcrossSet checks verifyCandidate's returned result with
+// a match placed at each position and with an all-nonmatching set. These
+// outcomes do not instrument TokenVerifier.VerifyPassword. An early return
+// after the first matching verifier can preserve all tested authentication
+// outcomes, and HMAC comparison work may be hidden by network and scheduling
+// noise. The full-set comparison requirement remains normative; neither this
+// timing band nor the reference helper establishes production loop coverage.
 func TestConstantTimeAcrossSet(t *testing.T) {
 	const plainA = "aabbccddeeff00112233445566778899"
 	verA := mintVerifier(t, testPepper, plainA)
@@ -139,8 +123,9 @@ func TestConstantTimeAcrossSet(t *testing.T) {
 		mintVerifier(t, testPepper, "33333333333333333333333333333333"),
 	}
 	// verA matches at each slot position 0..3 in turn; the other three
-	// slots hold the decoys. A short-circuit that broke after the first
-	// comparison would miss a match at a later slot.
+	// slots hold the decoys. A return after the first comparison (before any
+	// later match) would miss a match at a later slot; a return after a match
+	// can preserve these functional outcomes.
 	for slot := 0; slot < 4; slot++ {
 		set := make([][]byte, 4)
 		di := 0

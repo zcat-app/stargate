@@ -19,42 +19,43 @@ import (
 	"github.com/zcat-app/stargate/data-plane/internal/listener"
 )
 
-// The suite drives the real golang.org/x/net client (pinned by go.mod)
-// against a minimal recording SOCKS5 upstream stub — the property under
-// test is THIS package's behavior (passthrough, classification, reply
-// bytes, pipe semantics), not the upstream's. The heavier synthetic
-// backend used by the contract/integration layers is
-// tests/integration/fake_socks5_tor.go (T019a); duplicating it here
-// would drag its Docker-era API into a unit suite.
+// The suite exercises this package's SOCKS5 upstream behavior against a
+// minimal recording stub. Most cases drive Forward; the RFC 1929 length
+// guard calls socks5Connect directly. Assertions cover method selection,
+// request framing, reply classification and byte relay, not upstream
+// implementation. The heavier contract/integration backend is
+// tests/integration/fake_socks5_tor.go (T019a); duplicating its Docker-era
+// API here would drag integration concerns into this unit suite.
 
-// stub is a scripted SOCKS5 upstream. It records the greeting methods,
-// the selected method, the RFC 1929 username/password bytes, and the
-// request-phase target, then answers the BND reply with rep (0x00 →
-// echo relay, any other value → close without relaying). silent accepts
-// the TCP connection and never speaks — the surface the dial deadline
-// times out against.
+// stub is a bounded scripted SOCKS5 upstream. It records method selection,
+// RFC 1929 bytes, target framing and any payload received.
 type stub struct {
-	ln     net.Listener
-	rep    byte
-	silent bool
+	ln              net.Listener
+	rep             byte
+	silent          bool
+	preferNoAuth    bool
+	forcedMethod    *byte
+	greetingVersion byte
+	authReply       []byte
+	bndReply        []byte
+	closeAfterBND   bool
+	hold            chan struct{}
+	got             chan []byte
+	holdOnce        sync.Once
+	done            chan struct{}
 
-	// hold, when non-nil, withholds the BND reply until it is closed: the
-	// request stays pending at the upstream the way it does at Tor while
-	// a connect is unresolved (T208). got, when non-nil, replaces the
-	// echo relay: it receives every byte that reached the upstream after
-	// the reply, delivered once the data plane closed the connection.
-	hold chan struct{}
-	got  chan []byte
-
-	mu       sync.Mutex
-	offered  []byte
-	selected byte
-	hasSub   bool
-	uname    []byte
-	plen     int
-	atyp     byte
-	host     string
-	port     int
+	mu          sync.Mutex
+	active      net.Conn
+	offered     []byte
+	selected    byte
+	hasSub      bool
+	uname       []byte
+	plen        int
+	atyp        byte
+	host        string
+	port        int
+	requestSeen bool
+	received    []byte
 }
 
 func newStub(t *testing.T, rep byte, silent bool) *stub {
@@ -77,32 +78,88 @@ func newStubUnix(t *testing.T, rep byte) *stub {
 
 func newStubOnListener(t *testing.T, ln net.Listener, rep byte, silent bool) *stub {
 	t.Helper()
-	return startStub(t, &stub{ln: ln, rep: rep, silent: silent})
+	return startStub(t, &stub{ln: ln, rep: rep, silent: silent, greetingVersion: 0x05,
+		authReply: []byte{0x01, 0x00}, done: make(chan struct{})})
 }
 
-// newHoldingStub is a success-replying upstream that withholds its BND
-// reply until the test closes hold, then reports what it received.
+func TestSOCKS5ConnectRequestBoundsAndEncodesPort(t *testing.T) {
+	for _, tc := range []struct {
+		target string
+		want   []byte
+	}{
+		{target: "example.test:1", want: []byte{0, 1}},
+		{target: "example.test:65535", want: []byte{0xff, 0xff}},
+	} {
+		request, err := socks5ConnectRequest(tc.target)
+		if err != nil {
+			t.Fatalf("socks5ConnectRequest(%q): %v", tc.target, err)
+		}
+		if got := request[len(request)-2:]; !bytes.Equal(got, tc.want) {
+			t.Errorf("socks5ConnectRequest(%q) port bytes = %x, want %x", tc.target, got, tc.want)
+		}
+	}
+	for _, target := range []string{"example.test:0", "example.test:65536", "example.test:999999999999999999999999"} {
+		if _, err := socks5ConnectRequest(target); err == nil {
+			t.Errorf("socks5ConnectRequest(%q) succeeded, want out-of-range error", target)
+		}
+	}
+}
+
+func TestSOCKS5ConnectRejectsUsernameOutsideRFC1929Length(t *testing.T) {
+	client, server := net.Pipe()
+	defer client.Close()
+	defer server.Close()
+	err := socks5Connect(client, bytes.Repeat([]byte{'x'}, 256), "example.test:443")
+	if err == nil {
+		t.Fatal("socks5Connect accepted a username longer than RFC 1929's one-byte length")
+	}
+	if err := server.SetReadDeadline(time.Now().Add(10 * time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
+	var b [1]byte
+	if _, readErr := server.Read(b[:]); readErr == nil {
+		t.Fatal("socks5Connect wrote a greeting before rejecting the oversized username")
+	}
+}
+
 func newHoldingStub(t *testing.T) *stub {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("stub listen: %v", err)
 	}
-	return startStub(t, &stub{ln: ln, hold: make(chan struct{}), got: make(chan []byte, 1)})
+	return startStub(t, &stub{ln: ln, hold: make(chan struct{}), got: make(chan []byte, 1),
+		greetingVersion: 0x05, authReply: []byte{0x01, 0x00}, done: make(chan struct{})})
 }
 
 func startStub(t *testing.T, s *stub) *stub {
 	t.Helper()
 	go func() {
-		for {
-			conn, err := s.ln.Accept()
-			if err != nil {
-				return
-			}
-			go s.serve(conn)
+		defer close(s.done)
+		conn, err := s.ln.Accept()
+		if err != nil {
+			return
 		}
+		s.mu.Lock()
+		s.active = conn
+		s.mu.Unlock()
+		s.serve(conn)
 	}()
-	t.Cleanup(func() { s.ln.Close() })
+	t.Cleanup(func() {
+		s.releaseHold()
+		s.mu.Lock()
+		conn := s.active
+		s.mu.Unlock()
+		if conn != nil {
+			_ = conn.Close()
+		}
+		_ = s.ln.Close()
+		select {
+		case <-s.done:
+		case <-time.After(time.Second):
+			t.Errorf("upstream stub did not stop within its cleanup bound")
+		}
+	})
 	return s
 }
 
@@ -110,49 +167,51 @@ func (s *stub) addr() string { return s.ln.Addr().String() }
 
 func (s *stub) serve(conn net.Conn) {
 	defer conn.Close()
+	if err := conn.SetDeadline(time.Now().Add(12 * time.Second)); err != nil {
+		return
+	}
 	if s.silent {
-		time.Sleep(2 * time.Second) // outlives every injected test deadline
+		_, _ = io.Copy(io.Discard, conn)
 		return
 	}
 	br := bufio.NewReader(conn)
-
-	// Greeting (RFC 1928 §3): record the offered methods, prefer
-	// USERNAME/PASSWORD when offered (mirrors the fake Tor and lets the
-	// passthrough asserts fire), reply with the selection.
 	var hdr [2]byte
-	if _, err := io.ReadFull(br, hdr[:]); err != nil {
-		return
-	}
-	if hdr[0] != 0x05 {
+	if _, err := io.ReadFull(br, hdr[:]); err != nil || hdr[0] != 0x05 {
 		return
 	}
 	methods := make([]byte, hdr[1])
 	if _, err := io.ReadFull(br, methods); err != nil {
 		return
 	}
-	selected := byte(0x00)
-	for _, m := range methods {
-		if m == 0x02 {
-			selected = 0x02
+	selected := byte(0xff)
+	for _, method := range methods {
+		if s.preferNoAuth && method == 0x00 {
+			selected = 0x00
 			break
 		}
+		if method == 0x02 {
+			selected = 0x02
+			if !s.preferNoAuth {
+				break
+			}
+		}
+	}
+	if s.forcedMethod != nil {
+		selected = *s.forcedMethod
 	}
 	s.mu.Lock()
 	s.offered = append([]byte(nil), methods...)
 	s.selected = selected
 	s.mu.Unlock()
-	if _, err := conn.Write([]byte{0x05, selected}); err != nil {
+	if _, err := conn.Write([]byte{s.greetingVersion, selected}); err != nil {
 		return
 	}
-
-	// Sub-negotiation (RFC 1929), when selected: record UNAME/PLEN
-	// verbatim, always reply success.
 	if selected == 0x02 {
-		var v [2]byte
-		if _, err := io.ReadFull(br, v[:]); err != nil {
+		var authHeader [2]byte
+		if _, err := io.ReadFull(br, authHeader[:]); err != nil {
 			return
 		}
-		uname := make([]byte, v[1])
+		uname := make([]byte, int(authHeader[1]))
 		if _, err := io.ReadFull(br, uname); err != nil {
 			return
 		}
@@ -160,7 +219,7 @@ func (s *stub) serve(conn net.Conn) {
 		if _, err := io.ReadFull(br, plen[:]); err != nil {
 			return
 		}
-		passwd := make([]byte, plen[0])
+		passwd := make([]byte, int(plen[0]))
 		if _, err := io.ReadFull(br, passwd); err != nil {
 			return
 		}
@@ -169,13 +228,13 @@ func (s *stub) serve(conn net.Conn) {
 		s.uname = uname
 		s.plen = int(plen[0])
 		s.mu.Unlock()
-		if _, err := conn.Write([]byte{0x01, 0x00}); err != nil {
+		if _, err := conn.Write(s.authReply); err != nil || len(s.authReply) != 2 || s.authReply[0] != 0x01 || s.authReply[1] != 0x00 {
 			return
 		}
+	} else if selected != 0x00 {
+		return
 	}
 
-	// Request phase (RFC 1928 §4): record ATYP + target, reply BND with
-	// the scripted REP, then echo-relay only on success.
 	var req [4]byte
 	if _, err := io.ReadFull(br, req[:]); err != nil {
 		return
@@ -187,11 +246,11 @@ func (s *stub) serve(conn net.Conn) {
 	var port int
 	switch req[3] {
 	case 0x03:
-		var l [1]byte
-		if _, err := io.ReadFull(br, l[:]); err != nil {
+		var length [1]byte
+		if _, err := io.ReadFull(br, length[:]); err != nil {
 			return
 		}
-		rest := make([]byte, int(l[0])+2)
+		rest := make([]byte, int(length[0])+2)
 		if _, err := io.ReadFull(br, rest); err != nil {
 			return
 		}
@@ -204,22 +263,41 @@ func (s *stub) serve(conn net.Conn) {
 		}
 		host = net.IP(rest[:4]).String()
 		port = int(rest[4])<<8 | int(rest[5])
+	case 0x04:
+		rest := make([]byte, 18)
+		if _, err := io.ReadFull(br, rest); err != nil {
+			return
+		}
+		host = net.IP(rest[:16]).String()
+		port = int(rest[16])<<8 | int(rest[17])
 	default:
 		return
 	}
 	s.mu.Lock()
-	s.atyp = req[3]
-	s.host = host
-	s.port = port
+	s.atyp, s.host, s.port, s.requestSeen = req[3], host, port, true
 	s.mu.Unlock()
 	if s.hold != nil {
-		<-s.hold
+		select {
+		case <-s.hold:
+		case <-time.After(10 * time.Second):
+			return
+		}
 	}
-	if _, err := conn.Write([]byte{0x05, s.rep, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); err != nil {
+	bnd := s.bndReply
+	if bnd == nil {
+		bnd = []byte{0x05, s.rep, 0x00, 0x01, 0, 0, 0, 0, 0, 0}
+	}
+	if _, err := conn.Write(bnd); err != nil {
+		return
+	}
+	if s.closeAfterBND {
 		return
 	}
 	if s.got != nil {
-		b, _ := io.ReadAll(br) // returns when the data plane closes the upstream
+		b, _ := io.ReadAll(br)
+		s.mu.Lock()
+		s.received = append([]byte(nil), b...)
+		s.mu.Unlock()
 		s.got <- b
 		return
 	}
@@ -228,16 +306,22 @@ func (s *stub) serve(conn net.Conn) {
 	}
 }
 
+func (s *stub) releaseHold() {
+	if s.hold != nil {
+		s.holdOnce.Do(func() { close(s.hold) })
+	}
+}
+
 func (s *stub) greeting() (offered []byte, selected byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.offered, s.selected
+	return append([]byte(nil), s.offered...), s.selected
 }
 
 func (s *stub) subNegotiation() (hasSub bool, uname []byte, plen int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.hasSub, s.uname, s.plen
+	return s.hasSub, append([]byte(nil), s.uname...), s.plen
 }
 
 func (s *stub) target() (atyp byte, host string, port int) {
@@ -246,26 +330,78 @@ func (s *stub) target() (atyp byte, host string, port int) {
 	return s.atyp, s.host, s.port
 }
 
-// forwardOn accepts exactly one inbound connection on a fresh loopback
-// listener and serves it with f.Forward, returning the dialable client
-// address and a channel carrying Forward's return value.
+func (s *stub) observations() (requestSeen bool, received []byte) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.requestSeen, append([]byte(nil), s.received...)
+}
+
+func awaitStub(t *testing.T, s *stub) {
+	t.Helper()
+	select {
+	case <-s.done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("upstream stub did not finish within its deadline")
+	}
+}
+
 func forwardOn(t *testing.T, f *Tor, uname []byte, target string) (string, <-chan error) {
 	t.Helper()
 	inLn, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("inbound listen: %v", err)
 	}
-	t.Cleanup(func() { inLn.Close() })
-	errc := make(chan error, 1)
+	if err := inLn.(*net.TCPListener).SetDeadline(time.Now().Add(12 * time.Second)); err != nil {
+		_ = inLn.Close()
+		t.Fatalf("inbound accept deadline: %v", err)
+	}
+	errC := make(chan error, 1)
+	done := make(chan struct{})
 	go func() {
-		c, err := inLn.Accept()
+		defer close(done)
+		conn, err := inLn.Accept()
 		if err != nil {
-			errc <- err
+			errC <- err
 			return
 		}
-		errc <- f.Forward(c, uname, target)
+		_ = conn.SetDeadline(time.Now().Add(12 * time.Second))
+		defer conn.Close()
+		errC <- f.Forward(conn, uname, target)
 	}()
-	return inLn.Addr().String(), errc
+	t.Cleanup(func() {
+		_ = inLn.Close()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Errorf("Forward fixture did not stop within its cleanup bound")
+		}
+	})
+	return inLn.Addr().String(), errC
+}
+
+func dialForwardClient(t *testing.T, addr string) net.Conn {
+	t.Helper()
+	conn, err := net.DialTimeout("tcp", addr, time.Second)
+	if err != nil {
+		t.Fatalf("client dial: %v", err)
+	}
+	if err := conn.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		_ = conn.Close()
+		t.Fatalf("client deadline: %v", err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return conn
+}
+
+func awaitForward(t *testing.T, errC <-chan error) error {
+	t.Helper()
+	select {
+	case err := <-errC:
+		return err
+	case <-time.After(6 * time.Second):
+		t.Fatal("Forward result exceeded its fixture deadline")
+		return nil
+	}
 }
 
 // roundTrip exchanges two frames in both directions over the established
@@ -295,16 +431,170 @@ func roundTrip(t *testing.T, cli net.Conn) {
 	}
 }
 
+func TestForwardOffersOnlyRFC1929ToNoAuthPreferringUpstream(t *testing.T) {
+	s := newStub(t, 0x00, false)
+	s.preferNoAuth = true
+	counts := &stubCounter{}
+	f := New(s.addr(), counts)
+	const uname = "sg1:opaque-partition"
+	addr, errC := forwardOn(t, f, []byte(uname), "unresolvable.invalid:443")
+	client := dialForwardClient(t, addr)
+	roundTrip(t, client)
+	if err := client.Close(); err != nil {
+		t.Fatalf("client close: %v", err)
+	}
+	if err := awaitForward(t, errC); err != nil {
+		t.Fatalf("Forward: %v", err)
+	}
+	awaitStub(t, s)
+
+	offered, selected := s.greeting()
+	if !bytes.Equal(offered, []byte{0x02}) || selected != 0x02 {
+		t.Fatalf("upstream greeting methods=%x selected=0x%02x; want only 0x02 and selection 0x02", offered, selected)
+	}
+	hasSub, gotUname, plen := s.subNegotiation()
+	if !hasSub || !bytes.Equal(gotUname, []byte(uname)) || plen != 0 {
+		t.Fatalf("RFC 1929 upstream auth hasSub=%t username=%q passwordLength=%d", hasSub, gotUname, plen)
+	}
+	if counts.total() != 46 {
+		t.Fatalf("forwarded byte count=%d, want 46 healthy payload bytes", counts.total())
+	}
+}
+
+func TestForwardRejectsForcedNoAuthBeforeSuccessConnectOrPayload(t *testing.T) {
+	noAuth := byte(0x00)
+	s := newStub(t, 0x00, false)
+	s.forcedMethod = &noAuth
+	s.got = make(chan []byte, 1)
+	counts := &stubCounter{}
+	f := New(s.addr(), counts)
+	addr, errC := forwardOn(t, f, []byte("sg1:opaque-partition"), "unresolvable.invalid:443")
+	client := dialForwardClient(t, addr)
+	const payload = "opaque-payload-marker"
+	if _, err := client.Write([]byte(payload)); err != nil {
+		t.Fatalf("queue client payload: %v", err)
+	}
+	var reply [10]byte
+	n, replyErr := io.ReadFull(client, reply[:])
+	_ = client.Close()
+	err := awaitForward(t, errC)
+	awaitStub(t, s)
+
+	requestSeen, got := s.observations()
+	if err == nil {
+		t.Fatalf("forced NO_AUTH selection established a tunnel; reply=%x requestSeen=%t payload=%q forwardedBytes=%d; want ROUTE_REFUSED before CONNECT/payload",
+			reply[:n], requestSeen, got, counts.total())
+	}
+	var routeErr listener.RouteError
+	if !errors.As(err, &routeErr) || routeErr.SOCKS5Reply() != 0x04 {
+		t.Fatalf("Forward error=%v; want ROUTE_REFUSED (0x04)", err)
+	}
+	noSuccessReply := n == 0 && (errors.Is(replyErr, io.EOF) || errors.Is(replyErr, syscall.ECONNRESET))
+	if !noSuccessReply {
+		t.Fatalf("client received %d bytes before refusal (reply=%x, err=%v); want no success reply", n, reply[:n], replyErr)
+	}
+	if hasSub, _, _ := s.subNegotiation(); hasSub {
+		t.Fatal("RFC 1929 sub-negotiation followed a forbidden NO_AUTH selection")
+	}
+	if requestSeen || len(got) != 0 {
+		t.Fatalf("upstream observed CONNECT=%t payload=%q after forbidden NO_AUTH selection", requestSeen, got)
+	}
+	if counts.total() != 0 {
+		t.Fatalf("forwarded byte count=%d, want zero before authentication", counts.total())
+	}
+}
+
+func TestForwardRefusesInvalidUpstreamProtocolReplies(t *testing.T) {
+	versionOne, versionThree, noMethods := byte(0x01), byte(0x03), byte(0xff)
+	cases := []struct {
+		name      string
+		configure func(*stub)
+		want      byte
+	}{
+		{name: "forced-method-01", configure: func(s *stub) { s.forcedMethod = &versionOne }, want: 0x04},
+		{name: "forced-method-03", configure: func(s *stub) { s.forcedMethod = &versionThree }, want: 0x04},
+		{name: "forced-method-ff", configure: func(s *stub) { s.forcedMethod = &noMethods }, want: 0x04},
+		{name: "wrong-greeting-version", configure: func(s *stub) { s.greetingVersion = 0x04 }, want: 0x04},
+		{name: "wrong-auth-version", configure: func(s *stub) { s.authReply = []byte{0x02, 0x00} }, want: 0x04},
+		{name: "auth-rejected", configure: func(s *stub) { s.authReply = []byte{0x01, 0x01} }, want: 0x04},
+		{name: "wrong-bnd-version", configure: func(s *stub) { s.bndReply = []byte{0x04, 0, 0, 1, 0, 0, 0, 0, 0, 0} }, want: 0x04},
+		{name: "nonzero-bnd-reserved", configure: func(s *stub) { s.bndReply = []byte{0x05, 0, 1, 1, 0, 0, 0, 0, 0, 0} }, want: 0x04},
+		{name: "unknown-bnd-address-type", configure: func(s *stub) { s.bndReply = []byte{0x05, 0, 0, 0x7f} }, want: 0x04},
+		{name: "truncated-bnd-io", configure: func(s *stub) {
+			s.bndReply = []byte{0x05, 0}
+			s.closeAfterBND = true
+		}, want: 0x03},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newStub(t, 0x00, false)
+			tc.configure(s)
+			counts := &stubCounter{}
+			addr, errC := forwardOn(t, New(s.addr(), counts), []byte("sg1:opaque-partition"), "unresolvable.invalid:443")
+			client := dialForwardClient(t, addr)
+			var reply [10]byte
+			n, readErr := io.ReadFull(client, reply[:])
+			_ = client.Close()
+			err := awaitForward(t, errC)
+			awaitStub(t, s)
+			var routeErr listener.RouteError
+			if !errors.As(err, &routeErr) || routeErr.SOCKS5Reply() != tc.want {
+				t.Fatalf("Forward error=%v; want route class 0x%02x", err, tc.want)
+			}
+			if n != 0 || !errors.Is(readErr, io.EOF) {
+				t.Fatalf("client received %d bytes before upstream refusal (reply=%x, err=%v)", n, reply[:n], readErr)
+			}
+			if requestSeen, received := s.observations(); received != nil {
+				t.Fatalf("upstream payload=%q, requestSeen=%t; want no forwarded bytes", received, requestSeen)
+			}
+			if counts.total() != 0 {
+				t.Fatalf("forwarded byte count=%d, want zero before a successful handshake", counts.total())
+			}
+		})
+	}
+}
+
+func TestForwardPreservesIPTargetsAndConsumesAllBNDAddressForms(t *testing.T) {
+	ipv6BND := []byte{0x05, 0, 0, 0x04}
+	ipv6BND = append(ipv6BND, net.ParseIP("2001:db8::9").To16()...)
+	ipv6BND = append(ipv6BND, 0, 1)
+	cases := []struct {
+		name     string
+		target   string
+		bnd      []byte
+		wantATYP byte
+		wantHost string
+	}{
+		{name: "ipv4-target-bnd-ipv4", target: "192.0.2.7:443", bnd: []byte{0x05, 0, 0, 1, 192, 0, 2, 9, 0, 1}, wantATYP: 1, wantHost: "192.0.2.7"},
+		{name: "ipv6-target-bnd-ipv6", target: "[2001:db8::7]:443", bnd: ipv6BND, wantATYP: 4, wantHost: "2001:db8::7"},
+		{name: "domain-target-bnd-domain", target: "unresolvable.invalid:443", bnd: []byte{0x05, 0, 0, 3, 3, 'b', 'n', 'd', 0, 1}, wantATYP: 3, wantHost: "unresolvable.invalid"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newStub(t, 0x00, false)
+			s.bndReply = tc.bnd
+			addr, errC := forwardOn(t, New(s.addr(), &stubCounter{}), []byte("sg1:opaque-partition"), tc.target)
+			client := dialForwardClient(t, addr)
+			roundTrip(t, client)
+			_ = client.Close()
+			if err := awaitForward(t, errC); err != nil {
+				t.Fatalf("Forward: %v", err)
+			}
+			awaitStub(t, s)
+			atyp, host, port := s.target()
+			if atyp != tc.wantATYP || host != tc.wantHost || port != 443 {
+				t.Fatalf("upstream target = ATYP %d %q:%d; want %d %q:443", atyp, host, port, tc.wantATYP, tc.wantHost)
+			}
+		})
+	}
+}
+
 func TestForwardWritesZeroedSuccessReplyAndBridges(t *testing.T) {
 	s := newStub(t, 0x00, false)
 	f := New(s.addr(), &stubCounter{})
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "unresolvable.invalid:443")
 
-	cli, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
-	t.Cleanup(func() { cli.Close() })
+	cli := dialForwardClient(t, addr)
 	roundTrip(t, cli)
 
 	// Either end closing ends the tunnel; Forward's return is nil —
@@ -328,17 +618,13 @@ func TestForwardPassesUNAMEVerbatimAsUpstreamUsername(t *testing.T) {
 	const uname = "firstparty.example"
 	addr, errc := forwardOn(t, f, []byte(uname), "unresolvable.invalid:443")
 
-	cli, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
-	t.Cleanup(func() { cli.Close() })
+	cli := dialForwardClient(t, addr)
 	roundTrip(t, cli)
 	// Forward returns only when the tunnel ends — close the client first.
 	if err := cli.Close(); err != nil {
 		t.Fatalf("client close: %v", err)
 	}
-	if err := <-errc; err != nil {
+	if err := awaitForward(t, errc); err != nil {
 		t.Fatalf("Forward: %v", err)
 	}
 
@@ -367,16 +653,12 @@ func TestForwardSendsDomainTargetUnresolved(t *testing.T) {
 	const target = "unresolvable.invalid:443" // RFC 6761: cannot resolve
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), target)
 
-	cli, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
-	t.Cleanup(func() { cli.Close() })
+	cli := dialForwardClient(t, addr)
 	roundTrip(t, cli) // completes ⇒ nothing tried to resolve the target
 	if err := cli.Close(); err != nil {
 		t.Fatalf("client close: %v", err)
 	}
-	if err := <-errc; err != nil {
+	if err := awaitForward(t, errc); err != nil {
 		t.Fatalf("Forward: %v", err)
 	}
 
@@ -554,11 +836,7 @@ func TestForwardUnixSocketPreservesSOCKS5hAuth(t *testing.T) {
 	s := newStubUnix(t, 0x00)
 	f := New("unix://"+s.addr(), &stubCounter{})
 	addr, errc := forwardOn(t, f, []byte("sg1:opaque-partition"), "unresolvable.invalid:443")
-	cli, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
-	t.Cleanup(func() { cli.Close() })
+	cli := dialForwardClient(t, addr)
 	if err := cli.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
 		t.Fatalf("client deadline: %v", err)
 	}
@@ -566,7 +844,7 @@ func TestForwardUnixSocketPreservesSOCKS5hAuth(t *testing.T) {
 	if err := cli.Close(); err != nil {
 		t.Fatalf("client close: %v", err)
 	}
-	if err := <-errc; err != nil {
+	if err := awaitForward(t, errc); err != nil {
 		t.Fatalf("Forward: %v", err)
 	}
 	_, username, plen := s.subNegotiation()
@@ -609,11 +887,7 @@ func TestForwardUpstreamRefusalIsRouteRefused(t *testing.T) {
 	f := New(s.addr(), &stubCounter{})
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "deadmeta.onion:443")
 
-	cli, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
-	t.Cleanup(func() { cli.Close() })
+	_ = dialForwardClient(t, addr)
 
 	select {
 	case err := <-errc:
@@ -638,11 +912,7 @@ func TestForwardDialDeadlineIsRouteTimeout(t *testing.T) {
 	f.dialTimeout = 250 * time.Millisecond // injected short deadline
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "slow.onion:443")
 
-	cli, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
-	t.Cleanup(func() { cli.Close() })
+	_ = dialForwardClient(t, addr)
 
 	select {
 	case err := <-errc:
@@ -688,11 +958,7 @@ func TestForwardUpstreamTTLExpiredReplyIsRouteRefused(t *testing.T) {
 	f := New(s.addr(), &stubCounter{})
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "deadmeta.onion:443")
 
-	cli, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
-	t.Cleanup(func() { cli.Close() })
+	_ = dialForwardClient(t, addr)
 
 	select {
 	case err := <-errc:
@@ -733,10 +999,7 @@ func TestForwardAbandonedClientPendingBytesForwardedThenUpstreamClosed(t *testin
 	f := New(s.addr(), &stubCounter{})
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "unresolvable.invalid:443")
 
-	cli, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
+	cli := dialForwardClient(t, addr)
 	const early = "bytes-sent-before-the-reply"
 	if _, err := cli.Write([]byte(early)); err != nil {
 		t.Fatalf("client write: %v", err)
@@ -759,7 +1022,7 @@ func TestForwardAbandonedClientPendingBytesForwardedThenUpstreamClosed(t *testin
 	case <-time.After(100 * time.Millisecond):
 	}
 
-	close(s.hold) // the upstream answers after the client has gone
+	s.releaseHold() // the upstream answers after the client has gone
 	select {
 	case got := <-s.got:
 		if string(got) != early {
@@ -785,10 +1048,7 @@ func TestForwardResetClientReturnsWriteErrorAndClosesUpstream(t *testing.T) {
 	f := New(s.addr(), &stubCounter{})
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "unresolvable.invalid:443")
 
-	cli, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
+	cli := dialForwardClient(t, addr)
 	awaitPendingAtUpstream(t, s)
 	if err := cli.(*net.TCPConn).SetLinger(0); err != nil { // close sends RST
 		t.Fatalf("SetLinger: %v", err)
@@ -798,7 +1058,7 @@ func TestForwardResetClientReturnsWriteErrorAndClosesUpstream(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond) // let the RST land on the data-plane side
 
-	close(s.hold)
+	s.releaseHold()
 	select {
 	case err := <-errc:
 		if err == nil {
@@ -848,11 +1108,7 @@ func TestByteFlushAtCloseBothDirections(t *testing.T) {
 	f := New(s.addr(), counts)
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "unresolvable.invalid:443")
 
-	cli, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
-	t.Cleanup(func() { cli.Close() })
+	cli := dialForwardClient(t, addr)
 	roundTrip(t, cli) // 11+12 bytes each way = 46 tunnel bytes
 
 	// data-model.md §3: byte_count increments AT REQUEST CLOSE, not per
@@ -865,7 +1121,7 @@ func TestByteFlushAtCloseBothDirections(t *testing.T) {
 	if err := cli.Close(); err != nil {
 		t.Fatalf("client close: %v", err)
 	}
-	if err := <-errc; err != nil {
+	if err := awaitForward(t, errc); err != nil {
 		t.Fatalf("Forward: %v", err)
 	}
 	// Both pumps can request shutdown; a flush per pump would double the
@@ -881,11 +1137,7 @@ func TestUpstreamRelayCountsTunnelBytesExactly(t *testing.T) {
 	f := New(s.addr(), counts)
 	addr, errc := forwardOn(t, f, []byte("firstparty.example"), "unresolvable.invalid:443")
 
-	cli, err := net.Dial("tcp", addr)
-	if err != nil {
-		t.Fatalf("client dial: %v", err)
-	}
-	t.Cleanup(func() { cli.Close() })
+	cli := dialForwardClient(t, addr)
 
 	// Success reply first, byte-exact — and NOT counted (the listener's
 	// synthesised bytes never cross the upstream conn).
@@ -910,7 +1162,7 @@ func TestUpstreamRelayCountsTunnelBytesExactly(t *testing.T) {
 	if err := cli.Close(); err != nil {
 		t.Fatalf("client close: %v", err)
 	}
-	if err := <-errc; err != nil {
+	if err := awaitForward(t, errc); err != nil {
 		t.Fatalf("Forward: %v", err)
 	}
 

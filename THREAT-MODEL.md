@@ -915,6 +915,12 @@ Across all modes, the user trusts:
 - The browser (Mullvad Browser is the reference target; constitution
   Tech Stack section).
 
+The data plane admits at most 200 concurrent inbound framing handlers; queued
+connections wait for capacity, while completed framing releases capacity before
+upstream forwarding. The 30-second framing deadline remains. This bounds the
+handler count, not total process or kernel memory; authenticated connection
+pressure and local resource exhaustion remain availability limits.
+
 ---
 
 ### 3.5 Release artifacts, evidence and installer authority (T081)
@@ -1615,10 +1621,9 @@ six relays (three on each side) selected by Tor's path-selection algorithm
   - Also found live: Firefox rejects `requireInteraction` in `notifications.create`, so the
     existing WebRTC hardening notification (`background/hardening.js`) is never displayed; its
     routing block is unaffected. Pre-existing (T034b/T055), outside T188: reported for remediation.
-- The data plane forwards SOCKS5 with the SOCKS5 username set to the
-  first-party domain (architecture spec §14.3). For onion services, the
-  "first-party domain" is the onion address itself, giving distinct
-  circuits per onion service.
+- The browser supplies the fixed 68-byte `sg1:` HMAC representation as the SOCKS5 username;
+  the data plane forwards it unchanged as Tor's stream-isolation key. The first-party domain
+  is not sent as the username.
 - DNS resolution for `.onion` names is **always** Tor-internal — the
   proxy never resolves them locally (Principle III; SOCKS5h enforced).
 - **The safe `torrc` is baked into the Tor image at build time** (FR-011,
@@ -2328,8 +2333,9 @@ inter-plane UDS sockets (`/run/stargate/control.sock` or
   `stargate-ipc` GID.
 - **Peer public-key pinning** (not CA-chain, not hostname): the verifier
   byte-equal-compares the peer cert's extracted public key against the
-  installed `/etc/stargate/keys/<peer>.pub`. A wrong-key peer is rejected
-  at the TLS handshake (`alert: unknown ca`) before any RPC dispatches.
+  installed `/etc/stargate/keys/<peer>.pub`. A peer certificate whose public
+  key does not match the pinned peer key is rejected during the TLS handshake;
+  no application RPC is dispatched.
 - **Schema-version interceptor**: every RPC carries `x-stargate-proto-major`
   / `-minor` / `-capabilities` gRPC metadata; a server interceptor rejects
   an unknown major with `FailedPrecondition` before invoking application
@@ -2434,9 +2440,12 @@ log.
   `stargate-keys`), every persisted verifier becomes uncomputable and all
   stored tokens effectively revoke — the operator must re-issue tokens.
   Documented in `quickstart.md`; the pepper MUST be in any operator backup.
-- **Constant-time comparison** over the verifier set is functionally tested
-  (T093); adversarial confirmation of the timing side-channel bound is a
-  `stargate-redteam` residue (functional tests do not fully capture timing).
+- The current production verifier compares the candidate against every
+  enrolled verifier without short-circuiting. T093's functional tests exercise
+  a reference helper; they do not instrument production verifier visits.
+  Adversarial confirmation of the timing side-channel bound remains a
+  `stargate-redteam` residue; functional tests do not measure it.
+- Each well-formed authentication attempt compares the candidate against every enrolled verifier, so comparison work grows with the enrolled set size. A same-host process that averages many failed attempts could in principle estimate that count from failure latency; this timing effect has not been measured.
 
 **Ownership / export / wipe.** `/etc/stargate/keys/pepper.key`, mode `0640`,
 owned by the reading plane's UID, group `stargate-ipc` (GID 5100) so both
