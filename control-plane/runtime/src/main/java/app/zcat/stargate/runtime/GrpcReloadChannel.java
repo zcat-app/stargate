@@ -50,19 +50,16 @@ import stargate.v1.ControlOuterClass.TokenVerifier;
  * startup with a static error (wire-auth §5.2), without retaining peer detail.
  *
  * <p><strong>Current delivery state (T187, Constitution II failure table).</strong>
- * This adapter observes every delivery outcome — the synchronous push, the
- * redelivery worker and reconnect replays — so it alone owns the operator-
- * readable state: {@code PENDING} (no exact acknowledgement yet),
- * {@code ACKNOWLEDGED(<generation>)} (the DP durably applied exactly this
- * candidate) or {@code STALE_CONFLICT} (the DP refused it as stale; terminal
- * for this CP process — recovery is the explicit operator procedure). The
- * state is one overwritten line in a CP-private volatile file: no history,
- * timestamps, labels or counts (Constitution III current-lifecycle-enum
- * allowance). PENDING publication is attempted before the first RPC.
- * UNKNOWN can also occur while a delivery is in flight if status publication fails.
- * A failed status
- * write withdraws the previous value and is retried; it is silent and never
- * affects delivery.
+ * Durable state in the injected {@link TokenLoaderContract.GenerationStore}
+ * gates every RPC. A process starting with UNRESOLVED or STALE never replays
+ * automatically; operator recovery is explicit. The operator-readable status
+ * remains a CP-private volatile line: PENDING means unresolved delivery,
+ * ACKNOWLEDGED means exact ACK plus committed local clear, and STALE_CONFLICT
+ * means a stale refusal was durably recorded. The file is not authority and
+ * carries no history, timestamps, labels or counts (Constitution III).
+ * UNKNOWN can also occur when the durable state cannot be read. A failed status
+ * write withdraws the previous value and retries silently; it never changes
+ * delivery authority.
  * Deferred {@code enrolled}/{@code revoked} counts registered through
  * {@link #whenAcknowledged} run once on the exact acknowledgement and are
  * dropped on a stale reply.
@@ -74,6 +71,7 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
     private static final long STATUS_REPUBLISH_MILLIS = 1_000L;
 
     private final ReloadTokensClient client;
+    private final TokenLoaderContract.GenerationStore generations;
     private final AtomicReference<PendingPush> pending = new AtomicReference<>();
     private final AtomicReference<PendingPush> current = new AtomicReference<>();
     private final AtomicBoolean retryWorkerRunning = new AtomicBoolean();
@@ -85,11 +83,17 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
     private long reportedGeneration;
     private long acknowledgedGeneration;
     private long staleGeneration;
+    /** Guarded by outcomeLock; reconnect admission supersedes older ACK bookkeeping. */
+    private long admissionRevision;
     private long waiterGeneration;
     private @Nullable Runnable waiter;
+    /** Set for a restart barrier, terminal stale outcome, or unreadable marker. */
+    private volatile boolean stopped;
     /** Latest state whose status write failed; retried until written (T187 r1). */
     private volatile @Nullable String unpublished;
     private final AtomicBoolean republisherRunning = new AtomicBoolean();
+    private final Runnable beforeAcknowledgementClear;
+    private final Runnable afterAcknowledgementClear;
 
     private record PendingPush(long generation, List<byte[]> verifiers) {
         PendingPush {
@@ -98,8 +102,8 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
     }
 
     /** A channel that publishes no operator status (tests and non-deployed callers). */
-    public GrpcReloadChannel(ReloadTokensClient client) {
-        this(client, null);
+    public GrpcReloadChannel(ReloadTokensClient client, TokenLoaderContract.GenerationStore generations) {
+        this(client, generations, null);
     }
 
     /**
@@ -107,19 +111,59 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
      *        content is removed so a new CP process never reports a previous
      *        process's state (T187)
      */
-    public GrpcReloadChannel(ReloadTokensClient client, @Nullable Path deliveryStatus) {
+    public GrpcReloadChannel(ReloadTokensClient client, TokenLoaderContract.GenerationStore generations,
+            @Nullable Path deliveryStatus) {
+        this(client, generations, deliveryStatus, () -> { }, () -> { });
+    }
+
+    /** Package-private boundary seam for deterministic T201 concurrency coverage. */
+    GrpcReloadChannel(ReloadTokensClient client, TokenLoaderContract.GenerationStore generations,
+            @Nullable Path deliveryStatus, Runnable afterAcknowledgementClear) {
+        this(client, generations, deliveryStatus, () -> { }, afterAcknowledgementClear);
+    }
+
+    /** Package-private boundary seams remain inert in production. */
+    GrpcReloadChannel(ReloadTokensClient client, TokenLoaderContract.GenerationStore generations,
+            @Nullable Path deliveryStatus, Runnable beforeAcknowledgementClear,
+            Runnable afterAcknowledgementClear) {
         this.client = client;
+        this.generations = generations;
         this.deliveryStatus = deliveryStatus;
+        this.beforeAcknowledgementClear = beforeAcknowledgementClear;
+        this.afterAcknowledgementClear = afterAcknowledgementClear;
         clearStatus();
+        try {
+            TokenLoaderContract.GenerationStore.DeliveryMarker marker = generations.deliveryMarker();
+            synchronized (outcomeLock) {
+                reportedGeneration = marker.generation();
+                if (marker.state() == TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED) {
+                    stopped = true;
+                    publish("PENDING");
+                } else if (marker.state() == TokenLoaderContract.GenerationStore.DeliveryState.STALE) {
+                    stopped = true;
+                    staleGeneration = marker.generation();
+                    publish("STALE_CONFLICT");
+                }
+            }
+        } catch (RuntimeException unavailable) {
+            stopped = true;
+            synchronized (outcomeLock) {
+                publish("UNKNOWN");
+            }
+        }
         client.onReconnect(this::redeliverCurrent);
     }
 
     @Override
     public TokenLoaderContract.PushResult push(long generation, List<byte[]> verifiers) {
         PendingPush candidate = new PendingPush(generation, verifiers);
+        if (stopped) {
+            return new TokenLoaderContract.PushResult(false, 0L);
+        }
         // An outstanding initial RPC (up to its deadline) is already a pending
         // delivery: the status is never absent while credentials are in flight.
         recordPending(generation);
+        long attemptRevision = admissionRevision();
         TokenLoaderContract.PushResult result = deliver(candidate);
         if (result.stale()) {
             forget(candidate);
@@ -127,10 +171,19 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
             recordStale(generation);
         }
         else {
+            if (stopped) {
+                return new TokenLoaderContract.PushResult(false, 0L);
+            }
             remember(candidate);
             if (acknowledged(candidate, result)) {
-                clearPendingThrough(generation);
-                recordAcknowledged(generation);
+                if (!completeAcknowledgement(candidate, attemptRevision)) {
+                    enqueue(candidate);
+                    return new TokenLoaderContract.PushResult(false, 0L);
+                }
+                if (!finishAcknowledgement(candidate, attemptRevision)) {
+                    // A reconnect already admitted this candidate for replay.
+                    return new TokenLoaderContract.PushResult(false, 0L);
+                }
             }
             else {
                 enqueue(candidate);
@@ -143,7 +196,9 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
     public void whenAcknowledged(long generation, Runnable onAcknowledged) {
         boolean runNow = false;
         synchronized (outcomeLock) {
-            if (acknowledgedGeneration == generation) {
+            if (stopped) {
+                return;
+            } else if (acknowledgedGeneration == generation) {
                 // The redelivery worker may acknowledge before the loader registers.
                 runNow = true;
             }
@@ -159,6 +214,14 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
 
     private TokenLoaderContract.PushResult deliver(PendingPush candidate) {
         try {
+            if (!prearm(candidate.generation())) {
+                return new TokenLoaderContract.PushResult(false, 0L);
+            }
+        } catch (RuntimeException storageFailure) {
+            // No RPC follows an unsuccessful or ambiguous durable prearm.
+            return new TokenLoaderContract.PushResult(false, 0L);
+        }
+        try {
             var attempt = client.reloadAttempt(candidate.generation(), toVerifiers(candidate.verifiers()));
             return toPushResult(candidate.generation(), attempt.commitment(), attempt.response());
         } catch (StatusRuntimeException transport) {
@@ -172,10 +235,103 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
         }
     }
 
+    private boolean prearm(long generation) {
+        synchronized (outcomeLock) {
+            if (stopped) {
+                return false;
+            }
+            if (generations.prearmDelivery(generation)) {
+                // Constitution V: durable UNRESOLVED must replace an old ACK before replay.
+                recordPending(generation);
+                return true;
+            }
+            TokenLoaderContract.GenerationStore.DeliveryMarker marker = generations.deliveryMarker();
+            stopped = true;
+            reportedGeneration = Math.max(reportedGeneration, marker.generation());
+            if (marker.state() == TokenLoaderContract.GenerationStore.DeliveryState.STALE) {
+                staleGeneration = marker.generation();
+                clearPendingThrough(marker.generation());
+                current.set(null);
+                waiter = null;
+                publish("STALE_CONFLICT");
+            } else if (marker.state() == TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED) {
+                publish("PENDING");
+            } else {
+                publish("UNKNOWN");
+            }
+            return false;
+        }
+    }
+
+    private boolean completeAcknowledgement(PendingPush candidate, long attemptRevision) {
+        // Test-only boundary seam; deployed instances supply the no-op callback.
+        beforeAcknowledgementClear.run();
+        boolean cleared;
+        synchronized (outcomeLock) {
+            // Admission and this durable clear share outcomeLock: an older ACK
+            // cannot clear the unresolved marker armed by a reconnect replay.
+            if (stopped || admissionRevision != attemptRevision) {
+                return false;
+            }
+            try {
+                cleared = generations.acknowledgeDelivery(candidate.generation());
+            } catch (RuntimeException storageFailure) {
+                return false;
+            }
+        }
+        if (cleared) {
+            afterAcknowledgementClear.run();
+        }
+        return cleared;
+    }
+
+    private long admissionRevision() {
+        synchronized (outcomeLock) {
+            return admissionRevision;
+        }
+    }
+
+    /** Completes ACK bookkeeping only if no reconnect admitted a newer replay. */
+    private boolean finishAcknowledgement(PendingPush candidate, long attemptRevision) {
+        Runnable deferred = null;
+        synchronized (outcomeLock) {
+            if (stopped || admissionRevision != attemptRevision) {
+                return false;
+            }
+            clearPendingThrough(candidate.generation());
+            if (candidate.generation() < reportedGeneration) {
+                return false;
+            }
+            reportedGeneration = candidate.generation();
+            acknowledgedGeneration = candidate.generation();
+            publish("ACKNOWLEDGED(" + candidate.generation() + ")");
+            if (waiter != null && waiterGeneration == candidate.generation()) {
+                deferred = waiter;
+                waiter = null;
+            }
+        }
+        if (deferred != null) {
+            runQuietly(deferred);
+        }
+        return true;
+    }
+
     private void enqueue(PendingPush candidate) {
-        pending.accumulateAndGet(candidate, (current, proposed) ->
-                current == null || proposed.generation() >= current.generation() ? proposed : current);
-        startRetryWorker();
+        synchronized (outcomeLock) {
+            // Order queue admission with the stale-stop and pending clear.
+            if (stopped) {
+                return;
+            }
+            admissionRevision++;
+            if (candidate.generation() >= reportedGeneration) {
+                reportedGeneration = candidate.generation();
+                acknowledgedGeneration = 0L;
+                publish("PENDING");
+            }
+            pending.accumulateAndGet(candidate, (current, proposed) ->
+                    current == null || proposed.generation() >= current.generation() ? proposed : current);
+            startRetryWorker();
+        }
     }
 
     private void startRetryWorker() {
@@ -195,6 +351,7 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
                 }
                 Thread.sleep(delayMillis);
                 TokenLoaderContract.PushResult result;
+                long attemptRevision = admissionRevision();
                 try {
                     result = deliver(candidate);
                 } catch (IncompatiblePeerVersionException incompatible) {
@@ -214,11 +371,14 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
                     recordStale(candidate.generation());
                     delayMillis = INITIAL_RETRY_MILLIS;
                 }
-                else if (acknowledged(candidate, result)) {
+                else if (acknowledged(candidate, result)
+                        && completeAcknowledgement(candidate, attemptRevision)
+                        && finishAcknowledgement(candidate, attemptRevision)) {
                     remember(candidate);
-                    pending.compareAndSet(candidate, null);
-                    recordAcknowledged(candidate.generation());
                     delayMillis = INITIAL_RETRY_MILLIS;
+                }
+                else if (acknowledged(candidate, result)) {
+                    delayMillis = Math.min(delayMillis * 2L, MAX_RETRY_MILLIS);
                 }
                 else {
                     delayMillis = Math.min(delayMillis * 2L, MAX_RETRY_MILLIS);
@@ -235,6 +395,9 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
     }
 
     private void redeliverCurrent() {
+        if (stopped) {
+            return;
+        }
         PendingPush candidate = current.get();
         if (candidate != null) {
             enqueue(candidate);
@@ -268,35 +431,21 @@ public final class GrpcReloadChannel implements TokenLoaderContract.ReloadChanne
         }
     }
 
-    private void recordAcknowledged(long generation) {
-        Runnable deferred = null;
-        synchronized (outcomeLock) {
-            if (generation < reportedGeneration) {
-                return;
-            }
-            reportedGeneration = generation;
-            acknowledgedGeneration = generation;
-            publish("ACKNOWLEDGED(" + generation + ")");
-            if (waiter != null && waiterGeneration == generation) {
-                deferred = waiter;
-                waiter = null;
-            }
-        }
-        if (deferred != null) {
-            runQuietly(deferred);
-        }
-    }
-
     private void recordStale(long generation) {
         synchronized (outcomeLock) {
-            if (generation < reportedGeneration) {
-                return;
-            }
-            reportedGeneration = generation;
-            staleGeneration = generation;
-            publish("STALE_CONFLICT");
-            if (waiterGeneration == generation) {
-                waiter = null;
+            stopped = true;
+            pending.set(null);
+            current.set(null);
+            waiter = null;
+            waiterGeneration = 0;
+            reportedGeneration = Math.max(reportedGeneration, generation);
+            try {
+                if (generations.recordStaleDelivery(generation)) {
+                    staleGeneration = generation;
+                    publish("STALE_CONFLICT");
+                }
+            } catch (RuntimeException storageFailure) {
+                // The committed UNRESOLVED prearm remains the restart barrier.
             }
         }
     }

@@ -657,6 +657,54 @@ class TokenLoaderTest {
             hexSet(restarted.reload.pushes.get(0).verifiers()));
     }
 
+    @Test
+    void unresolvedAndStaleDeliveryGateBeforeYamlParsingOrTokenEffects(@TempDir Path dir)
+            throws Throwable {
+        Path malformed = dir.resolve("malformed.yaml");
+        Files.writeString(malformed, "tokens: [\n", UTF_8);
+        Path empty = dir.resolve("empty.yaml");
+        Files.writeString(empty, "", UTF_8);
+        Path changed = dir.resolve("changed.yaml");
+        Files.writeString(changed, "tokens:\n  - label: changed\n    token: " + TOKEN_B + "\n", UTF_8);
+        Path missing = dir.resolve("missing.yaml");
+        List<Path> configurations = List.of(missing, empty, malformed, changed);
+        for (TokenLoaderContract.GenerationStore.DeliveryMarker marker : List.of(
+                new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, 7L),
+                new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.STALE, 7L))) {
+            for (Path configuration : configurations) {
+                Harness h = runLoad(configuration, Map.of(LABEL_A, expectedVerifier(TOKEN_A)), 7L, null, marker);
+                assertEquals(List.of("gen.delivery()"), h.journal.lines,
+                        "the durable gate is read before config diagnostics, row reads, minting, or delivery: "
+                                + marker.state() + " / " + configuration.getFileName());
+                assertTrue(h.audit.rows.isEmpty(), "blocked YAML is not parsed into config_error events");
+                assertTrue(h.store.upsertedLabels.isEmpty());
+                assertTrue(h.store.deletedLabels.isEmpty());
+                assertTrue(h.reload.pushes.isEmpty());
+                assertTrue(h.minter.minted.isEmpty());
+                assertFalse(h.gens.recordedSet);
+            }
+        }
+    }
+
+    @Test
+    void unreadableDeliveryMarkerDoesNotReadYamlOrMutateTokenState(@TempDir Path dir) throws Throwable {
+        Path malformed = dir.resolve("malformed.yaml");
+        Files.writeString(malformed, "tokens: [\n", UTF_8);
+        Harness h = runLoad(malformed, Map.of(LABEL_A, expectedVerifier(TOKEN_A)), 7L, null,
+                new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0), true);
+        assertEquals(List.of("gen.delivery()"), h.journal.lines,
+                "storage failure withdraws delivery before file parsing or token effects");
+        assertTrue(h.audit.rows.isEmpty());
+        assertTrue(h.store.upsertedLabels.isEmpty());
+        assertTrue(h.store.deletedLabels.isEmpty());
+        assertTrue(h.reload.pushes.isEmpty());
+        assertTrue(h.minter.minted.isEmpty());
+        assertFalse(h.gens.recordedSet);
+    }
+
     // --- reflective probe (the self-skip + conformance gate) ----------------
 
     private static final Class<?>[] PINNED_PARAM_TYPES = {
@@ -724,6 +772,21 @@ class TokenLoaderTest {
 
     private Harness runLoad(Path tokensYaml, Map<String, byte[]> initialStore, long lastGeneration,
             TokenLoaderContract.@Nullable PushResult forcedResult) throws Throwable {
+        return runLoad(tokensYaml, initialStore, lastGeneration, forcedResult,
+                new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                        TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0));
+    }
+
+    private Harness runLoad(Path tokensYaml, Map<String, byte[]> initialStore, long lastGeneration,
+            TokenLoaderContract.@Nullable PushResult forcedResult,
+            TokenLoaderContract.GenerationStore.DeliveryMarker deliveryMarker) throws Throwable {
+        return runLoad(tokensYaml, initialStore, lastGeneration, forcedResult, deliveryMarker, false);
+    }
+
+    private Harness runLoad(Path tokensYaml, Map<String, byte[]> initialStore, long lastGeneration,
+            TokenLoaderContract.@Nullable PushResult forcedResult,
+            TokenLoaderContract.GenerationStore.DeliveryMarker deliveryMarker, boolean failDeliveryRead)
+            throws Throwable {
         Class<?> cls = loaderClass().orElse(null);
         assumeTrue(cls != null, SKIP_UNTIL_T035);
 
@@ -736,7 +799,8 @@ class TokenLoaderTest {
                 + ". A genuinely different surface is a refine escalation against T035a, "
                 + "not a test edit (T035a §Out-of-scope)."));
 
-        Harness h = new Harness(initialStore, lastGeneration, forcedResult);
+        Harness h = new Harness(initialStore, lastGeneration, forcedResult, deliveryMarker);
+        h.gens.failDeliveryRead = failDeliveryRead;
         Object[] args = new Object[ctor.getParameterCount()];
         for (int i = 0; i < args.length; i++) {
             Class<?> p = ctor.getParameterTypes()[i];
@@ -795,9 +859,10 @@ class TokenLoaderTest {
         final FakeMinter minter;
 
         Harness(Map<String, byte[]> initialStore, long lastGeneration,
-                TokenLoaderContract.@Nullable PushResult forcedResult) {
+                TokenLoaderContract.@Nullable PushResult forcedResult,
+                TokenLoaderContract.GenerationStore.DeliveryMarker deliveryMarker) {
             store = new FakeStore(journal, initialStore);
-            gens = new FakeGens(journal, lastGeneration);
+            gens = new FakeGens(journal, lastGeneration, deliveryMarker);
             audit = new FakeAudit(journal);
             reload = new FakeReload(journal, forcedResult);
             minter = new FakeMinter(journal);
@@ -875,10 +940,13 @@ class TokenLoaderTest {
         long last;
         long recordedValue;
         boolean recordedSet;
+        TokenLoaderContract.GenerationStore.DeliveryMarker delivery;
+        boolean failDeliveryRead;
 
-        FakeGens(Journal journal, long last) {
+        FakeGens(Journal journal, long last, TokenLoaderContract.GenerationStore.DeliveryMarker delivery) {
             this.journal = journal;
             this.last = last;
+            this.delivery = delivery;
         }
 
         @Override
@@ -892,6 +960,56 @@ class TokenLoaderTest {
             recordedSet = true;
             last = generation;
             journal.add("gen.record(" + generation + ")");
+        }
+
+        @Override
+        public TokenLoaderContract.GenerationStore.DeliveryMarker deliveryMarker() {
+            journal.add("gen.delivery()");
+            if (failDeliveryRead) {
+                throw new IllegalStateException("synthetic state read failure");
+            }
+            return delivery;
+        }
+
+        @Override
+        public boolean prearmDelivery(long generation) {
+            if (delivery.state() == TokenLoaderContract.GenerationStore.DeliveryState.STALE
+                    || (delivery.state() == TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED
+                            && delivery.generation() != generation)) {
+                return false;
+            }
+            delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED, generation);
+            journal.add("gen.prearm(" + generation + ")");
+            return true;
+        }
+
+        @Override
+        public boolean acknowledgeDelivery(long generation) {
+            if (delivery.state() != TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED
+                    || delivery.generation() != generation) {
+                return false;
+            }
+            delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.CLEAR, 0);
+            journal.add("gen.ack(" + generation + ")");
+            return true;
+        }
+
+        @Override
+        public boolean recordStaleDelivery(long generation) {
+            if (delivery.state() == TokenLoaderContract.GenerationStore.DeliveryState.STALE
+                    && delivery.generation() == generation) {
+                return true;
+            }
+            if (delivery.state() != TokenLoaderContract.GenerationStore.DeliveryState.UNRESOLVED
+                    || delivery.generation() != generation) {
+                return false;
+            }
+            delivery = new TokenLoaderContract.GenerationStore.DeliveryMarker(
+                    TokenLoaderContract.GenerationStore.DeliveryState.STALE, generation);
+            journal.add("gen.stale(" + generation + ")");
+            return true;
         }
     }
 
