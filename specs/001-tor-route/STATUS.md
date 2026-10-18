@@ -13,11 +13,11 @@
 
 | Status | Count |
 |---|---|
-| pending | 11 |
-| in-progress | 1 |
+| pending | 10 |
+| in-progress | 0 |
 | in-review | 0 |
-| escalated | 1 |
-| done | 233 |
+| escalated | 2 |
+| done | 234 |
 | deferred | 13 |
 | **total** | **259** |
 
@@ -29,8 +29,6 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Phase | Priv? | Parallel? |
 |---|---|---|---|---|
-| T190 | Resolve surviving control-plane and browser redteam minors | Foundation audit remediation | ✓ | ✓ |
-| T197 | Reset the route indicator on no-request commits; fix prose | Foundation audit remediation | ✓ | ✓ |
 | T225 | Establish the shared Go qualification admission component | Qualification reconciliation | ✓ |  |
 | T226 | Prepare and validate internal qualification artifacts | Qualification reconciliation | ✓ |  |
 | T227 | Qualify the finite artifact and runtime platform boundary | Qualification reconciliation | ✓ |  |
@@ -41,8 +39,8 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 | ID | Title | Status | Privacy | Phase |
 |---|---|---|---|---|
+| T197 | Reset the route indicator on no-request commits; fix prose | escalated | ✓ | Foundation audit remediation |
 | T199 | Count continuation pushes; bundle-ref red; verify CI toolcha | escalated | ✓ | Foundation audit remediation |
-| T200 | Ship DoH-off and HTTP/3-off in the browser profile; truthful | in-progress | ✓ | Foundation audit remediation |
 
 ---
 
@@ -68,7 +66,7 @@ Tickets where `status: pending` AND every `blocked_by` is `done`.
 
 ## Done
 
-_233 ticket(s) done._
+_234 ticket(s) done._
 
 - T001 — Create the top-level directory skeleton from plan.md §"Project Structu
 - T002 — Author `data-plane/go.mod` with `go 1.26` and `toolchain go1.26.3` (la
@@ -286,6 +284,7 @@ _233 ticket(s) done._
 - T195 — Ship WebRTC off and make the hardening failure visible and truthful
 - T196 — Repair live-evidence harness defects found by the T155 pass
 - T198 — Gate init on af_unix mediation; truthful init and quickstart
+- T200 — Ship DoH-off and HTTP/3-off in the browser profile; truthful claims
 - T201 — Durable STALE_CONFLICT marker: no changed push until recovery
 - T203 — Remove observer raw Tor authority with finite health publication
 - T204 — Enforce control-plane HTTP listener boundary at startup

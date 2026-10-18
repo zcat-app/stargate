@@ -104,5 +104,382 @@
         "probe_and_test_diff_sha256": "1cc040e843bd06886bdd78059e2612ce29c381cdc9d1dbe515d894a2afc8a304"
       }
     }
+  },
+  "live_requalification_2026-10-17": {
+    "candidate_commit": "10fbf0a95c81c6596c7f5507b099b791fea6e337",
+    "date": "2026-10-17",
+    "decision": "T200 remains in progress. The real-extension blocked-proxy mode passes, but descriptor-matrix D5 live-socket calibration and T188 baseline live-sink delivery fail; do not claim T186/T188 requalification. Raw reports and traces remain under this candidate\u2019s ignored target/runs directory and are bound above by report hashes.",
+    "diagnostic_comparison": {
+      "browser": "system Mullvad Browser 140.17.0, build 20261011223000; below extension Gecko minimum 153",
+      "classification": "Diagnostic only; not accepted as T200/T186 release evidence.",
+      "report": {
+        "failures": [
+          "t186-positive-controls",
+          "t186-d5-unix-sink"
+        ],
+        "path": "target/runs/T200-system-browser-descriptor-matrix.json",
+        "result": "RED",
+        "scenario_passed": {
+          "t186-d1-null-comparison": true,
+          "t186-d1-socks-impostor-comparison": true,
+          "t186-d4-https-privileged": true,
+          "t186-d5-unix-sink": false,
+          "t186-positive-controls": false
+        },
+        "sha256": "dd10b15c09b35e04894180e63c7bcdd1fbfe3ff2660e9b5135cf01466109dd10"
+      }
+    },
+    "inputs": {
+      "packaged_extension_sha256": "0679428943b8dc25a399ab918666fb25f97bc9a8348c7519cb25ff546f2cf00b",
+      "profile_template_sha256": "c54736756f77e1c9ee461711cc2a8551d6762553b59f0ae9aaa544d1c4d156f8",
+      "template_check_automated_floor": "GREEN: DoH, DoT, HTTP/3 and WebRTC preference checks passed.",
+      "template_check_exit_code": 0,
+      "template_check_manual_part_2": "NOT RUN: runtime gate plus allowlisted/disallowed foreign-extension inventory remains manual.",
+      "template_check_output_sha256": "16bcccd352b9926a674dd90a4bb03cadffedb97de479fd1ea7bad0e82055bd8c",
+      "template_only_profile_prefs_sha256": "a417f19edec582de41bc16552c47fc7463743f2af38d35205fac23648195b926"
+    },
+    "live_runs": {
+      "T186_blocked_proxy": {
+        "failures": [],
+        "path": "target/runs/T200-T186-blocked-proxy.json",
+        "result": "GREEN",
+        "scenario_passed": {
+          "t186-blocked-hardening-closed-no-direct-proxy-or-dns": true,
+          "t186-blocked-missing-token-no-direct-proxy-or-dns": true,
+          "t186-tor-route-positive-control": true
+        },
+        "sha256": "5fe28819b891a521d6172be077eb02a29c95f07e0168578447a9318519942b0a"
+      },
+      "T186_descriptor_matrix": {
+        "failures": [
+          "t186-d5-unix-sink"
+        ],
+        "path": "target/runs/T200-T186-descriptor-matrix.json",
+        "result": "RED",
+        "scenario_passed": {
+          "t186-d1-null-comparison": true,
+          "t186-d1-socks-impostor-comparison": true,
+          "t186-d4-https-privileged": true,
+          "t186-d5-unix-sink": false,
+          "t186-positive-controls": true
+        },
+        "sha256": "3512e05d4edd2602ad4bef64622f8fcbe2e57d3970ab132caedaa8eac33c4be8"
+      },
+      "T188_private_access": {
+        "failures": [
+          "t188-baseline-sink-receives-protected-names-remotely"
+        ],
+        "path": "target/runs/T200-T188-private-access.json",
+        "result": "RED",
+        "scenario_passed": {
+          "t188-baseline-drift-warned": true,
+          "t188-baseline-sink-receives-protected-names-remotely": false,
+          "t188-forced-direct-onion-reaches-the-sink": true,
+          "t188-ordinary-windows-without-access-detected-and-blocked": true,
+          "t188-ordinary-with-access-tor-and-direct": true,
+          "t188-positive-controls": true,
+          "t188-ppb-extension-without-access-protected-fail-closed-clearnet-direct": true,
+          "t188-ppb-no-extension-protected-fail-closed-clearnet-direct": true,
+          "t188-ppb-with-access-tor-and-direct": true,
+          "t188-socks-pref-and-ip-literal-observations": true
+        },
+        "sha256": "c69652dda8232d70474d089cc3364b6f3b564e6f0749bdb8e1d9ebf87ba8ff2b"
+      }
+    },
+    "pinned_browser": {
+      "application_ini_sha256": "c7f1e8d5ba9b476ac81b1c3b1c5f0febded0a1fe2a22426750aa7d70b57713a0",
+      "archive_executable_matches_extracted_binary": true,
+      "archive_sha256": "9039e153d19c8ec734c985ff3b6f42050edd48b65099dd58d251044c35d183ab",
+      "binary_sha256": "fbd57a3554dd9af4b8e0f793ade50411576aa5eae30732cd602f4270dad8fb4b",
+      "build_id": "20260921103000",
+      "driver_sha256": "23c877d64e37e1558ae41fffa1f629a7f937dac45c5accb59e5d2f9c6a9af0e5",
+      "driver_version": "geckodriver 0.37.0",
+      "version": "Mullvad Browser Alpha 16.0a12 / Gecko 153.3.0"
+    },
+    "scope": "Local live requalification after T200 source approval; exact outcomes are not a stable-release certification."
+  },
+  "live_requalification_2026-10-17_corrected_socket_path": {
+    "candidate_commit": "10fbf0a95c81c6596c7f5507b099b791fea6e337",
+    "date": "2026-10-17",
+    "scope": "Pinned Mullvad Browser Alpha 16.0a12 / Gecko 153.3.0 only; not stable-channel or release-cadence certification.",
+    "diagnosis": "The prior D5 and T188 sink-calibration RED reports used Unix-domain socket paths derived from long report-out paths. Those paths exceeded Linux sun_path[108], so the browser could not reach the calibration sinks. The original RED reports and traces remain preserved in the preceding live_requalification_2026-10-17 entry.",
+    "corrective_control": "Reran the same candidate and probe modes with reports and derived work directories under /tmp/sg-t200-20261017, keeping generated AF_UNIX paths below 108 bytes. No assertion, browser preference, extension, profile-template content, probe source, or product source was changed for these reruns.",
+    "runs": {
+      "T186_descriptor_matrix": {
+        "path": "target/runs/T200-corrected-path-20261017/T186_descriptor_matrix.json",
+        "sha256": "adb176584acb6e94c55b8a4c10b22fe67ab3c978b70c81edc0d250775a63a116",
+        "result": "GREEN",
+        "failures": [],
+        "trace_directory": "target/runs/T200-corrected-path-20261017/T186_descriptor_matrix.traces",
+        "trace_file_count": 9,
+        "trace_bytes": 35818799,
+        "non_regular_runtime_artifacts_omitted": [
+          {
+            "path": "live-socks.sock",
+            "type": "socket"
+          }
+        ],
+        "browser_version": "[2455660] Sandbox: CanCreateUserNamespace() unshare(CLONE_NEWPID): EPERM\nMullvad MullvadBrowser 153.3.0esr",
+        "driver_version": "geckodriver 0.37.0",
+        "extension_sha256": "0679428943b8dc25a399ab918666fb25f97bc9a8348c7519cb25ff546f2cf00b",
+        "profile_template_sha256": null,
+        "command": [
+          "tests/live-e2e/mullvad-browser-hardening/probe.py",
+          "--browser",
+          "/home/claudia/stargate/target/t157-tools/mullvad-browser/Browser/mullvadbrowser",
+          "--driver",
+          "/home/claudia/stargate/target/t157-tools/geckodriver",
+          "--extension",
+          "extension/dist/stargate-extension.zip",
+          "--only",
+          "descriptor-matrix",
+          "--driver-log",
+          "/home/claudia/stargate/target/runs/T200-candidate-rootpath-matrix.geckodriver.log",
+          "--report-out",
+          "/home/claudia/stargate/target/runs/T200-candidate-rootpath-matrix.json"
+        ]
+      },
+      "T188_private_access": {
+        "path": "target/runs/T200-corrected-path-20261017/T188_private_access.json",
+        "sha256": "92c99dfb220de2b215a105be5c0286554d72624677e677835261d7aad55ca226",
+        "result": "GREEN",
+        "failures": [],
+        "trace_directory": "target/runs/T200-corrected-path-20261017/T188_private_access.traces",
+        "trace_file_count": 46,
+        "trace_bytes": 89678658,
+        "non_regular_runtime_artifacts_omitted": [
+          {
+            "path": "live-sink.sock",
+            "type": "socket"
+          }
+        ],
+        "browser_version": "[2457944] Sandbox: CanCreateUserNamespace() unshare(CLONE_NEWPID): EPERM\nMullvad MullvadBrowser 153.3.0esr",
+        "driver_version": "geckodriver 0.37.0",
+        "extension_sha256": "0679428943b8dc25a399ab918666fb25f97bc9a8348c7519cb25ff546f2cf00b",
+        "profile_template_sha256": "c54736756f77e1c9ee461711cc2a8551d6762553b59f0ae9aaa544d1c4d156f8",
+        "command": [
+          "tests/live-e2e/mullvad-browser-hardening/probe.py",
+          "--browser",
+          "/home/claudia/stargate/target/t157-tools/mullvad-browser/Browser/mullvadbrowser",
+          "--driver",
+          "/home/claudia/stargate/target/t157-tools/geckodriver",
+          "--extension",
+          "extension/dist/stargate-extension.zip",
+          "--profile-template",
+          "browser-profile/user.js",
+          "--only",
+          "private-access",
+          "--report-out",
+          "/tmp/sg-t200-20261017/T188-private-access-corrected.json"
+        ]
+      },
+      "T186_blocked_proxy": {
+        "path": "target/runs/T200-corrected-path-20261017/T186_blocked_proxy.json",
+        "sha256": "5fe28819b891a521d6172be077eb02a29c95f07e0168578447a9318519942b0a",
+        "result": "GREEN",
+        "failures": [],
+        "trace_directory": "target/runs/T200-corrected-path-20261017/T186_blocked_proxy.traces",
+        "trace_file_count": 10,
+        "trace_bytes": 22812275,
+        "non_regular_runtime_artifacts_omitted": [],
+        "browser_version": "[2445969] Sandbox: CanCreateUserNamespace() unshare(CLONE_NEWPID): EPERM\nMullvad MullvadBrowser 153.3.0esr",
+        "driver_version": "geckodriver 0.37.0",
+        "extension_sha256": "0679428943b8dc25a399ab918666fb25f97bc9a8348c7519cb25ff546f2cf00b",
+        "profile_template_sha256": null,
+        "command": [
+          "tests/live-e2e/mullvad-browser-hardening/probe.py",
+          "--browser",
+          "/home/claudia/stargate/target/t157-tools/mullvad-browser/Browser/mullvadbrowser",
+          "--driver",
+          "/home/claudia/stargate/target/t157-tools/geckodriver",
+          "--extension",
+          "extension/dist/stargate-extension.zip",
+          "--artifact",
+          "/home/claudia/stargate/target/t157-tools/mullvad-browser-linux-x86_64-16.0a12.tar.xz",
+          "--only",
+          "blocked-proxy",
+          "--driver-log",
+          "target/runs/T200-T186-blocked-proxy.geckodriver.log",
+          "--report-out",
+          "target/runs/T200-T186-blocked-proxy.json"
+        ]
+      }
+    },
+    "template_only_profile_check": {
+      "result": "GREEN",
+      "checks": [
+        "network.trr.mode=5 (DoH/DoT disabled)",
+        "network.http.http3.enable=false",
+        "media.peerconnection.enabled=false (WebRTC disabled)"
+      ],
+      "template_sha256": "c54736756f77e1c9ee461711cc2a8551d6762553b59f0ae9aaa544d1c4d156f8",
+      "manual_part_2": "NOT RUN: runtime gate plus allowed/disallowed foreign-extension inventory remain manual."
+    },
+    "decision": "Corrected-path T186 descriptor-matrix, blocked-proxy and T188 private-access probes are GREEN on the pinned Alpha browser, with reports and regular trace files retained under target/runs/T200-corrected-path-20261017. Active Unix socket nodes were not copied after their runs ended. T200 remains in progress: manual Part 2 and remaining ticket lifecycle/review requirements are not complete."
+  },
+  "scoped_candidate_verification_2026-10-17": {
+    "candidate_commit": "10fbf0a95c81c6596c7f5507b099b791fea6e337",
+    "source_patch_sha256": "89caa9bf5b8cbab1d4a6213310e93eb2eddb5299127c5a78177bf003cde57e47",
+    "source_patch_matches_original_green": true,
+    "checks": {
+      "template_part_1": {
+        "command": [
+          "bash",
+          "-p",
+          "target/runs/T200-template-probe.sh"
+        ],
+        "exit_code": 0,
+        "result": "GREEN (automated floor)",
+        "part_2": "MANUAL: runtime gate and foreign-extension inventory not run",
+        "log": "target/runs/T200-scoped-template.log",
+        "sha256": "8c4a0296499d794100d68b934f177f654726855d71eb197d0bbcabc68840cdb0"
+      },
+      "probe_unittest": {
+        "command": [
+          "env",
+          "PYTHONDONTWRITEBYTECODE=1",
+          "python3",
+          "tests/live-e2e/mullvad-browser-hardening/test_probe.py"
+        ],
+        "exit_code": 0,
+        "result": "GREEN; 4 tests passed",
+        "log": "target/runs/T200-scoped-python.log",
+        "sha256": "5d8a174d448d59185fd227bcbab9c964e39b10a9c2e28965972cfb0c833dd854"
+      },
+      "hardening_node_tests": {
+        "command": [
+          "node",
+          "--test",
+          "extension/background/hardening.test.js",
+          "extension/background/hardening.edges.test.js"
+        ],
+        "exit_code": 0,
+        "result": "GREEN; 22 tests passed, 0 skipped",
+        "log": "target/runs/T200-scoped-node.log",
+        "sha256": "226dbd749f6a0b8cb8710e3020dc31b4a097e689f056039cc4acdadf88ee5b92"
+      }
+    },
+    "full_verify": "NOT RUN under the authorized affected-part verification route",
+    "test_first_helper_check": {
+      "command": [
+        "python3",
+        "scripts/test-first-evidence.py",
+        "check",
+        "T200"
+      ],
+      "result": "REFUSED",
+      "output": "test-first-evidence: HEAD no longer matches the task baseline",
+      "reason": "the original RED/GREEN record remains bound to its actual 9317d846 baseline while this historical partial source commit is already HEAD; no baseline or helper was rewritten"
+    },
+    "release_scope": "Pinned Mullvad Browser Alpha only. No stable-channel or release-cadence certification; manual Part 2 remains pending."
+  },
+  "R1_rework_false_release_claim_tests_first_2026-10-17": {
+    "scope": "Adds a negative discriminator to the in-scope hardening dialog test; no production source change retained.",
+    "test_change": "extension/background/hardening.test.js asserts that the false release-verified fixture is recognized and absent from the dialog.",
+    "controlled_mutation": {
+      "file": "extension/background/hardening.js",
+      "temporary_append": "DoH, DoT and HTTP/3 are release-verified at each Stargate release.",
+      "original_sha256": "08ca7d5dabb438faf086fe02ccf95b016e344c74557327ccd5270611775a4814",
+      "restored_sha256": "08ca7d5dabb438faf086fe02ccf95b016e344c74557327ccd5270611775a4814"
+    },
+    "red": {
+      "command": [
+        "node",
+        "--test",
+        "--test-name-pattern=failureDialogNeverClaimsDohDotHttp3RuntimeBlocks",
+        "extension/background/hardening.test.js"
+      ],
+      "exit_code": 1,
+      "result": "RED: the targeted test failed on its false runtime/release-verification claim assertion under the temporary production mutation.",
+      "log": "target/runs/T200-review-rework-20261017/false-release-claim-red.log",
+      "sha256": "70c15c603a21167c34e3a66156743785346bae72c305be7d3a90cfda478f113f"
+    },
+    "green": {
+      "command": [
+        "node",
+        "--test",
+        "--test-name-pattern=failureDialogNeverClaimsDohDotHttp3RuntimeBlocks",
+        "extension/background/hardening.test.js"
+      ],
+      "exit_code": 0,
+      "result": "GREEN: 1 targeted test passed after exact production-file restoration; 13 other tests skipped by name filter.",
+      "log": "target/runs/T200-review-rework-20261017/false-release-claim-green.log",
+      "sha256": "8bd2f2a712ec90940a4329f04fc751e7f313581ea67f76bd60cef096d50070be"
+    },
+    "affected_node_suite": {
+      "command": [
+        "node",
+        "--test",
+        "extension/background/hardening.test.js",
+        "extension/background/hardening.edges.test.js"
+      ],
+      "exit_code": 0,
+      "result": "GREEN: 22 passed, 0 failed, 0 skipped.",
+      "log": "target/runs/T200-review-rework-20261017/hardening-node-full.log",
+      "sha256": "b016091ced699757d3cda7d4b7d72cef301f862b759e657ac74f135d5350daef"
+    },
+    "production_behavior_changed": false
+  },
+  "R2_scoped_verification_2026-10-17": {
+    "candidate_source_commit": "10fbf0a95c81c6596c7f5507b099b791fea6e337",
+    "round": 2,
+    "checks": {
+      "template_part_1": {
+        "command": [
+          "bash",
+          "-p",
+          "target/runs/T200-template-probe.sh"
+        ],
+        "exit_code": 0,
+        "result": "GREEN: DoH, DoT, HTTP/3 and WebRTC prefs passed; Part 2 remains MANUAL.",
+        "log": "target/runs/T200-review-rework-20261017/template-part1.log",
+        "sha256": "5350c26f27d9cfbf4e8203661dd64671fa80d21342abcfbc1deb59fcb3db83c5"
+      },
+      "probe_unittest": {
+        "command": [
+          "env",
+          "PYTHONDONTWRITEBYTECODE=1",
+          "python3",
+          "tests/live-e2e/mullvad-browser-hardening/test_probe.py"
+        ],
+        "exit_code": 0,
+        "result": "GREEN: 4 tests passed.",
+        "log": "target/runs/T200-review-rework-20261017/probe-unittest.log",
+        "sha256": "120fcf1e1b1ef6883b716f1b33b4fbea79c7089f1d1ff950e98c9608d82abb42"
+      },
+      "hardening_node_tests": {
+        "command": [
+          "node",
+          "--test",
+          "extension/background/hardening.test.js",
+          "extension/background/hardening.edges.test.js"
+        ],
+        "exit_code": 0,
+        "result": "GREEN: 22 passed, 0 failed, 0 skipped.",
+        "log": "target/runs/T200-review-rework-20261017/hardening-node-full.log",
+        "sha256": "f03fba716a6a88158174baf64f01c4805b83e6bff3ade284b53cad8013f19cd1"
+      },
+      "ticket_lint": {
+        "command": [
+          "python3",
+          "scripts/lint-ticket.py",
+          "specs/001-tor-route/tickets/T200-ship-doh-and-http3-off-in-browser-profile.md"
+        ],
+        "exit_code": 0,
+        "result": "GREEN."
+      }
+    },
+    "full_verify": "NOT RUN: the authorized equivalent route is limited to affected-part verification; no scripts/verify.sh receipt is claimed.",
+    "scope_limits": "Pinned Mullvad Browser Alpha only; Hardening-check Part 2 is MANUAL; no stable-channel or release-cadence certification.",
+    "driver_gate": {
+      "command": [
+        "bash",
+        "scripts/run-task.sh",
+        "T200"
+      ],
+      "result": "REFUSED before scripts/verify.sh: test-first-evidence: HEAD no longer matches the task baseline",
+      "reason": "historical T200 RED/GREEN is bound to 9317d8468fec8477115c6ce952ca26acb56896b4, while the already-integrated source commit is HEAD; no baseline/helper rewrite or verify.sh PASS was claimed.",
+      "disposition": "Authorized equivalent affected-part checks are recorded above. The ticket was returned to in-review for round-2 review without recording a full verify receipt."
+    }
   }
 }

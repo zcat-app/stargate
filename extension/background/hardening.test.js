@@ -315,6 +315,16 @@ test('failureDialogNeverClaimsDohDotHttp3RuntimeBlocks', { skip: !implPresent() 
     dialogText, /WebRTC is the only hardening surface this extension can verify at runtime\. DoH, DoT and HTTP\/3 require separate browser-profile checks; this notification does not verify them\./i,
     'dialog states that DoH, DoT and HTTP/3 need external browser-profile checks'
   );
+  const falseReleaseVerificationClaim = /\b(doh|dot|trr|http\/3|http3|quic)\b.{0,160}\b(?:runtime verified|release verified|release-verified|verified at runtime|verified at each release)\b/i;
+  assert.match(
+    'DoH, DoT and HTTP/3 are release-verified at each Stargate release.',
+    falseReleaseVerificationClaim,
+    'guard recognizes the false release-verification claim T200 removes'
+  );
+  assert.doesNotMatch(
+    dialogText, falseReleaseVerificationClaim,
+    'dialog must not claim DoH/DoT/HTTP-3/QUIC is runtime- or release-verified'
+  );
   assert.doesNotMatch(
     recordText, /\b(doh|dot|trr|http\/3|http3|quic)\b/i,
     'failure record must not claim runtime DoH/DoT/HTTP-3 detection either'
